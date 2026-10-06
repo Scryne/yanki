@@ -1,0 +1,31 @@
+# ACE-Step motor ayarları. Model kimlikleri ve üretim tarifi burada yaşar, kodda değil.
+# Tarifin kaynağı: docs/arastirma/01-spike-bulgulari.md (dinleme testleri 1–4).
+
+[motor]
+# ACE-Step 1.5 klonu ve kendi venv'i (gitignore)
+klasor = "motor/ACE-Step-1.5"
+model = "acestep-v15-xl-sft"
+# 8 GB'ta XL yalnız INT8 ile sığıyor (bf16 + DiT offload: adım başı 72–150 sn)
+niceleme = "int8_weight_only"
+cpu_offload = true
+
+[cover]
+gorev = "cover"
+guc = 0.7
+adim = 100
+aday_sayisi = 2
+tohumlar = [42, 7]
+
+[onarim]
+gorev = "repaint"
+adim = 100
+# işaretlenen aralığın iki yanına eklenen pay (sn)
+pay_sn = 1.0
+
+[gpu]
+# üretime başlamadan önce kullanılan VRAM bu değerin altına inmeli (MiB); başka bir iş GPU'yu tutuyorsa beklenir
+bos_esik_mib = 2000
+bekleme_sn = 20
+
+[araclar]
+fpcalc = "araclar/fpcalc.exe"

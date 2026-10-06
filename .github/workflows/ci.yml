@@ -1,0 +1,15 @@
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+jobs:
+  test:
+    # Hat yalnız Windows'ta çalışıyor (motor venv yolu, nvidia-smi); CI aynı ortamda koşar
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --locked
+      - run: uv run ruff check .
+      - run: uv run pytest -q
