@@ -28,16 +28,17 @@ olmadığı için yükleme adımı bilerek insanda kalır.
 | Üretim motoru | ACE-Step 1.5 **XL-SFT 4B**, `int8_weight_only`, CPU offload; `motor/ACE-Step-1.5` (kendi venv'i, gitignore) | Dinleme testleri: XL en iyisi; INT8 8 GB'ta 90 sn → ~100–140 sn. bf16 sığmıyor (adım başı 72–150 sn) |
 | Motor köprüsü | `yanki/motor_isci.py`, motorun venv'iyle **iş başına alt süreç** (JSON iş → FLAC + rapor) | REST sunucusu açılışta nicelemeyi geçirmiyor (XL INT8 imkânsız). Python API'de bilinen tuzaklar (talimat, büyük harf iz, repaint aralığı) tek yerde düzeltilir. Süreç bitince GPU boşalır |
 | Cover tarifi | `cover`, güç 0,7, 100 adım, kaynağa uygun stil tanımı + BPM + ton + gerçek sözler | Dinleme testi 3: 12 numaralı aday en iyi ("az kaldı") |
-| Bölge onarımı | `repaint`, `repainting_start/end` açık, `chunk_mask_mode=explicit`, farklı tohum | Dinleme testi 4: 14 düzeldi; aralık dışı birebir aynı (r=1,0) |
+| Parçalı üretim | Vokal boşluğundan (LRCLIB zaman damgaları) ~90 sn parçalar, 1 sn bindirme, ilk parçanın çıktısı sonrakilere tını referansı; eşit güçlü geçişle dikiş | Tek parça 290 sn: adım başı 34 sn (~57 dk) ve ACE-Step 600 sn iç zaman aşımı. Parçalı: aday başı ~8 dk, söz WER 0,03 |
+| Bölge onarımı | `repaint` ±25 sn **pencerede** (kes → onar → geri dik), aralık başına iki tohum | Dinleme testi 4: 14 düzeldi. Tam şarkıda repaint de tüm şarkıyı işler; pencereli gerçek koşu: 2 sürüm 5 dk, pencere dışı r=1,0 |
 | Sözler | LRCLIB API (zaman damgalı, anahtarsız) → yoksa Scryne'ın söz dosyası → yoksa Whisper | LRCLIB bu ağdan çalışıyor; Someone Like You için süre birebir (285 sn) |
 | Künye | MusicBrainz API (kayıt → eser → söz yazarı/besteci) | Dağıtımcı cover formunda orijinal yazarlar zorunlu |
-| BPM / ton / stil tanımı | librosa (BPM, ton) + ACE-Step 5Hz LM `understand_music` (stil tanımı); Scryne'ın düzeltmesi öncelikli | Stil tanımı kaliteyi doğrudan etkiliyor (spike: yanlış vokal cinsiyeti kaliteyi düşürdü) |
+| BPM / ton / stil tanımı | Listedeki `stil`/`vokal`/`bpm`/`ton` esas; yoksa MusicBrainz sanatçı türleri (ilk iki) + solo sanatçının cinsiyeti; BPM/ton listede yoksa **gönderilmez** | ACE-Step 5Hz LM ölçüldü ve uydurdu (Viva La Vida → "İbranice Eurodance", Perfect → "saksafonlu pop-rock 130 BPM"); CLAP düz dağılım verdi. Yanlış tanım/tempo göndermek hiç göndermemekten kötü. LM yolu `analiz_yontemi = "lm"` ile seçilebilir |
 | Kaynak ses | YouTube: yt-dlp adresi bulur, medya **HTTP/3** (`curl_cffi`, QUIC) ile iner; yedek `girdi/kaynak/` klasörü; **süre kontrolü** (LRCLIB süresiyle) | Bu ağda ISS içi googlevideo düğümü TCP+TLS'i kesiyor, QUIC çalışıyor (S8: 290 sn şarkı 0,4 sn). SoundCloud 30 sn önizleme verebiliyor, kullanılmaz |
 | Otomatik kapılar | Chromaprint (`fpcalc`) parmak izi benzerliği, dalga korelasyonu, Whisper ile söz var mı, süre | Spike'ta kalibre edildi: orijinali taşıyan çıktı parmak izi ≥ 0,74, iyi cover ~0,59–0,66 |
 | Dinleme sayfası | FastAPI + tek HTML (yerel, `127.0.0.1`) | Yarı otomatik akışın kalbi: dinle, onayla, aralık işaretle, reddet |
 | Mastering | `pyloudnorm` + ffmpeg (−14 LUFS, −1 dBTP, 44,1 kHz / 16 bit WAV) | Spotify normalizasyon hedefi; dağıtımcıların istediği biçim |
 | Kapak | Pillow ile kodla üretilen tipografik kapak, 3000×3000 JPG | Orijinal sanatçı adı/logosu yok (dağıtımcı kuralı); model gerektirmez |
-| Durum | SQLite (`durum/yanki.db`) + iş klasörleri (`calisma/<şarkı>/`) | Kuyruk, adaylar, onaylar, paketler tek yerde |
+| Durum | Şarkı başına `calisma/<kimlik>/durum.json` (atomik yazım) | İnsan okunur, tek dosya; dinleme sayfası ve hat aynı kaydı okur. SQLite gereksiz çıktı |
 | Kalite | ruff, pytest; CI'da GPU'suz testler | Motor çağrısı arayüzün arkasında; testler sahte motorla |
 
 Model kimlikleri (`acestep-v15-xl-sft`, niceleme, adım, güç) kod içine gömülmez: `config/motor.toml`.
@@ -80,8 +81,9 @@ girdi/liste.toml  (Scryne: sanatçı + şarkı, isteğe bağlı stil/söz düzel
 | Cover orijinal kaydı taşır mı | ✅ ölçüldü: `cover` taşımıyor (parmak izi 0,59, dalga 0,02); `cover-nofsq`/Flow-Edit taşıyor → kullanılmaz |
 | Şarkı tanınıyor mu | ✅ Scryne: "dinleyen biri Someone Like You der" |
 | Kalite yayın seviyesinde mi | 🔄 Scryne: "az kaldı" (mırıldanma, nefes, titreme). Bölgesel onarım çalışıyor. Faz 6 |
-| Tam şarkı 8 GB'ta | ⏳ Faz 2'de ölçülür |
 | Kaynak ses edinme | ✅ S8: HTTP/3 ile YouTube'dan tam şarkı iniyor; yedek kaynak klasörü |
+| Tam şarkı 8 GB'ta | ✅ parçalı üretimle aday başı ~8 dk (S10) |
+| Otomatik stil tanımı | ⚠️ LM ve CLAP güvenilmez çıktı; MusicBrainz türleri + cinsiyet genel kalıyor ("piano ballad" gibi ayrıntı yok). Faz 6: dinleme sayfasında stili düzenleyip yeniden üretme |
 | Dağıtımcı AI cover'ı kabul eder mi | ⏳ Faz 5'te ilk gerçek yükleme. Amuse ve CD Baby reddediyor; RouteNote ve DistroKid beyanla kabul ediyor |
 
 ## Kapsam Dışı

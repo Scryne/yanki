@@ -77,3 +77,16 @@ kalibre edildi; tablo değerleri A şarkısı (B aynı yönde).
   Arıtma için doğru araç **bölgesel** repaint: yalnız bozuk saniyeler, çevresi bağlam.
 - Not: aynı tohum (42) bağımsız üretimler arasında ~0,18 dalga korelasyonu bırakıyor; dalga ölçüsünde taban bu.
 - Dinleme testi 3: 12 (güç 0,7 + 100 adım), 13 (güç 0,6 + 100 adım), ~140 sn / 90 sn ses.
+
+## S8–S11 (2026-10-07)
+- **S8 YouTube:** googlevideo ISS içi önbelleği TCP+TLS'i kesiyor, QUIC çalışıyor → yt-dlp adres + curl_cffi HTTP/3.
+- **S9 tam şarkı tek parça:** 290 sn, XL INT8, adım başı 34 sn (~57 dk/100 adım), VRAM 7,7 GB; ACE-Step iç zaman aşımı
+  (600 sn, `ACESTEP_GENERATION_TIMEOUT`) koşuyu kesti.
+- **S10 parçalı:** 3 parça (101 + 105 + 83 sn, kesimler 1:40 ve 3:23 vokal boşluğunda), aday başı ~8 dk; A (tını
+  referanslı) ve B (referanssız) ikisi de kapıdan geçti, söz WER 0,027 / 0,033. Hangisinin tını açısından tutarlı olduğu
+  Scryne'ın kulağında.
+- **Pencereli onarım (gerçek):** 0:58–1:02 için 2 sürüm 5 dk; pencere dışı ve pencere içi bölge dışı r = 1,0.
+- **S11 stil tanımı:** ACE-Step 5Hz LM (`understand_audio_from_codes`) tam şarkıda 10 dk sonuçsuz; 40 sn kesit + turbo
+  ile 2 dk ama tanımlar uydurma (Viva La Vida → "İbranice Eurodance, B♭ major"; Perfect → "saksafonlu pop-rock 130 BPM").
+  CLAP `laion/larger_clap_music` (transformers 4.57.6) bütün etiketlerde düz dağılım, logit ölçeği ~1,0 (yüklenme sorunu,
+  çözülmedi). Sonuç: MusicBrainz sanatçı türleri + solo cinsiyet, BPM/ton yalnız listeden.
