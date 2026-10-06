@@ -8,7 +8,7 @@ jobs:
     # Hat yalnız Windows'ta çalışıyor (motor venv yolu, nvidia-smi); CI aynı ortamda koşar
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v7
       - run: uv sync --locked
       - run: uv run ruff check .
