@@ -17,7 +17,7 @@ from pathlib import Path
 import numpy as np
 import soundfile as sf
 
-from yanki import durum, kapilar, motor, parcalama
+from yanki import ag, durum, kapilar, motor, parcalama, sozler
 from yanki.ayarlar import Ayarlar
 
 SR = 48000
@@ -31,8 +31,15 @@ def _soz(calisma: Path, d: durum.Durum) -> str:
     return (durum.klasor(calisma, d.kimlik) / d.soz["dosya"]).read_text(encoding="utf-8")
 
 
-def _satirlar(calisma: Path, d: durum.Durum) -> list[tuple[float, str]]:
+def _satirlar(calisma: Path, d: durum.Durum, lrclib: Callable | None = None) -> list[tuple[float, str]]:
+    """Zaman damgalı söz satırları. Dosya yoksa (eski hazırlık) ve sözler LRCLIB'denyse bir kez çekip kaydeder."""
     yol = durum.klasor(calisma, d.kimlik) / "soz_zaman.json"
+    if not yol.exists() and d.soz.get("kaynak") == "lrclib":
+        try:
+            satirlar = (lrclib or sozler.lrclib)(d.sanatci, d.ad).satirlar
+            yol.write_text(json.dumps(satirlar, ensure_ascii=False), encoding="utf-8")
+        except (ag.Bulunamadi, OSError):
+            pass
     return [tuple(x) for x in json.loads(yol.read_text(encoding="utf-8"))] if yol.exists() else []
 
 
@@ -41,11 +48,15 @@ def _ortak(d: durum.Durum) -> dict:
                 ton=d.analiz.get("ton") or "")
 
 
-def parca_plani(calisma: Path, d: durum.Durum) -> tuple[list[parcalama.Parca], list[str]]:
-    """Parçalar ve her parçanın sözü. Kısa şarkı ya da zaman damgası yoksa tek parça, tüm söz."""
+def parca_plani(calisma: Path, d: durum.Durum, lrclib: Callable | None = None
+                ) -> tuple[list[parcalama.Parca], list[str]]:
+    """Parçalar ve her parçanın sözü. Kısa şarkı ya da zaman damgası yoksa tek parça, tüm söz (sözü yanlış parçaya
+    koymaktansa yavaş yol; uzun şarkıda bu durum durum.json'a uyarı olarak yazılır)."""
     sure = d.kaynak["sure_sn"]
-    satirlar = _satirlar(calisma, d)
+    satirlar = _satirlar(calisma, d, lrclib) if sure > TEK_PARCA_SN else []
     if sure <= TEK_PARCA_SN or not satirlar:
+        if sure > TEK_PARCA_SN:
+            d.notlar.append({"uyari": f"söz zaman damgası yok: {sure:.0f} sn tek parça üretildi (yavaş yol)"})
         return [parcalama.Parca(1, 0.0, sure, 0.0, sure)], [_soz(calisma, d)]
     plan = parcalama.plan(sure, [t for t, _ in satirlar])
     return plan, parcalama.soz_dagit(plan, satirlar)

@@ -124,3 +124,23 @@ def test_pencereli_onarim_yalniz_bolgeyi_degistirir(tmp_path):
     assert np.abs(bolge).max() < 1e-3  # sahte repaint bölgeyi sıfırladı
     uretim.onarim_kabul(d, 1, o["id"])
     assert d.adaylar[0].dosya == o["dosya"] and d.adaylar[0].onarimlar[1]["durum"] == "ret"
+
+
+def test_zaman_damgasi_eksikse_lrclibden_tamamlanir(tmp_path):
+    from yanki import sozler
+
+    c = tmp_path / "c"
+    d = _sarki(c, "eski", 250)  # soz_zaman.json yok (eski hazırlık)
+    d.soz["kaynak"] = "lrclib"
+    satirlar = tuple((float(t), f"s{t}") for t in range(5, 245, 10))
+    plan, sozler_ = uretim.parca_plani(c, d, lrclib=lambda *a: sozler.Soz("x", "lrclib", 250.0, satirlar))
+    assert len(plan) == 3 and (c / "eski" / "soz_zaman.json").exists()
+    assert not d.notlar
+
+
+def test_zaman_damgasi_hic_yoksa_tek_parca_ve_uyari(tmp_path):
+    c = tmp_path / "c"
+    d = _sarki(c, "dosya", 250)
+    d.soz["kaynak"] = "dosya"
+    plan, _ = uretim.parca_plani(c, d)
+    assert len(plan) == 1 and "tek parça" in d.notlar[-1]["uyari"]
