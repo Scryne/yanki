@@ -1,0 +1,14 @@
+# Yanki şarkı listesi — hat yalnız buradakileri işler.
+# Her şarkı bir [[sarki]] bloğu. Zorunlu: sanatci, ad. Gerisi isteğe bağlı.
+#
+# [[sarki]]
+# sanatci = "Adele"
+# ad = "Someone Like You"
+# youtube = "https://www.youtube.com/watch?v=..."    # kaynak videoyu sabitlemek istersen
+# stil = "acoustic guitar ballad, warm female vocal"  # cover'ın stili (yoksa şarkıdan otomatik çıkarılır)
+# vokal = "kadin"                                     # "kadin" | "erkek"
+# bpm = 68
+# ton = "A major"
+#
+# Kaynak sesi kendin vermek istersen: girdi/kaynak/<kimlik>.mp3  (kimlik: "adele-someone-like-you")
+# Sözleri kendin vermek istersen:     girdi/sozler/<kimlik>.txt

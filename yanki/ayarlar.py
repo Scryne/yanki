@@ -13,6 +13,8 @@ class Motor:
     model: str
     niceleme: str | None
     cpu_offload: bool
+    lm_model: str
+    lm_backend: str
 
     @property
     def python(self) -> Path:
@@ -66,7 +68,8 @@ def yukle(yol: Path | None = None, kok: Path = KOK) -> Ayarlar:
         raise ValueError(f"cover.guc 0 ile 1 arasında olmalı: {c['guc']}")
     return Ayarlar(
         kok=kok,
-        motor=Motor(kok / m["klasor"], m["model"], m.get("niceleme") or None, bool(m["cpu_offload"])),
+        motor=Motor(kok / m["klasor"], m["model"], m.get("niceleme") or None, bool(m["cpu_offload"]), m["lm_model"],
+                    m.get("lm_backend", "pt")),
         cover=Cover(c["gorev"], float(c["guc"]), int(c["adim"]), int(c["aday_sayisi"]), tuple(c["tohumlar"])),
         onarim=Onarim(o["gorev"], int(o["adim"]), float(o["pay_sn"])),
         gpu=Gpu(int(g["bos_esik_mib"]), int(g["bekleme_sn"])),

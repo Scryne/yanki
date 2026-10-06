@@ -3,7 +3,10 @@ name = "yanki"
 version = "0.1.0"
 description = "Listedeki şarkıların ACE-Step ile cover'ını üretip Spotify yükleme paketi hazırlayan yarı otomatik hat"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "curl-cffi>=0.16",
+    "yt-dlp[default]>=2026.8",
+]
 
 [project.scripts]
 yanki = "yanki.cli:main"

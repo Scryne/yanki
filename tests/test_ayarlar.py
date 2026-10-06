@@ -24,6 +24,7 @@ klasor = "m"
 model = "x"
 niceleme = ""
 cpu_offload = true
+lm_model = "lm"
 [cover]
 gorev = "cover"
 guc = {guc}

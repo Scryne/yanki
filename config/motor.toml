@@ -8,6 +8,9 @@ model = "acestep-v15-xl-sft"
 # 8 GB'ta XL yalnız INT8 ile sığıyor (bf16 + DiT offload: adım başı 72–150 sn)
 niceleme = "int8_weight_only"
 cpu_offload = true
+# "anla" görevi: kaynaktan stil tanımı, BPM, ton (ACE-Step 5Hz LM). vLLM Windows'ta yok → pt
+lm_model = "acestep-5Hz-lm-1.7B"
+lm_backend = "pt"
 
 [cover]
 gorev = "cover"
