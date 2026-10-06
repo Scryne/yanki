@@ -15,6 +15,7 @@
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; min-height: 100dvh; }
+html { background: var(--zemin); }
 body {
   font: 400 14px/1.5 var(--f-govde); color: var(--metin);
   background:
@@ -27,7 +28,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 :focus-visible { outline: 2px solid var(--oynatma); outline-offset: 2px; }
 
 .duzen { display: grid; grid-template-columns: 280px 1fr; min-height: 100dvh; }
-@media (max-width: 760px) { .duzen { grid-template-columns: 1fr; } .kuyruk { position: static; height: auto; } }
+@media (max-width: 760px) { .duzen { grid-template-columns: 1fr; } }
 
 /* cam: yalnız kuyruk ve bildirim */
 .kuyruk {
@@ -36,6 +37,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
   backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
 }
 @supports not (backdrop-filter: blur(1px)) { .kuyruk { background: var(--yuzey); } }
+/* mobil: kuyruk üstte, içeriği kadar (ana kuraldan sonra gelmeli, yoksa ezilir) */
+@media (max-width: 760px) { .kuyruk { position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--cizgi); } }
 .marka { font: 600 18px/1 var(--f-baslik); letter-spacing: .02em; margin-bottom: var(--s6); }
 .liste { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s1); }
 .liste a {

@@ -7,7 +7,7 @@ const el = (etiket, ozellik = {}, ...cocuk) => {
     else if (k.startsWith("on")) e.addEventListener(k.slice(2), v);
     else if (v !== false && v != null) e.setAttribute(k, v === true ? "" : v);
   }
-  for (const c of cocuk.flat()) if (c != null) e.append(c);
+  for (const c of cocuk.flat()) if (c != null && c !== false) e.append(c);
   return e;
 };
 const sure = (s) => { s = Math.max(0, s || 0); return `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`; };
