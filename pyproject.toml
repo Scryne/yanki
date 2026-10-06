@@ -9,6 +9,7 @@ dependencies = [
     "faster-whisper>=1.2",
     "jiwer>=4",
     "numpy>=2",
+    "pillow>=11",
     "soundfile>=0.13",
     "uvicorn>=0.37",
     "yt-dlp[default]>=2026.8",

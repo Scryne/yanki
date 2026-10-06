@@ -4,7 +4,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from yanki import ayarlar, durum, hazirlik, liste, saglik, uretim
+from yanki import ayarlar, durum, hazirlik, liste, paket, saglik, uretim
 
 
 def _durum(_: argparse.Namespace) -> int:
@@ -54,9 +54,36 @@ def _uret(_: argparse.Namespace) -> int:
     return 0
 
 
+def _paketle(args: argparse.Namespace) -> int:
+    a = ayarlar.yukle()
+    islenen = paket.paketle(a.kok / "calisma", a.kok / "config" / "yayin.toml", yeniden=args.yeniden)
+    if not islenen:
+        print("paketlenecek onaylı şarkı yok")
+    for d in islenen:
+        print(f"paket hazır: {d.sanatci} — {d.ad} → calisma/{d.kimlik}/paket/YUKLE.md")
+    return 0
+
+
+def _yuklendi(args: argparse.Namespace) -> int:
+    a = ayarlar.yukle()
+    d = durum.oku(a.kok / "calisma", args.kimlik)
+    if d is None or d.asama != "paketlendi":
+        print(f"'{args.kimlik}' paketlenmiş bir şarkı değil" + (f" (aşama: {d.asama})" if d else ""))
+        return 1
+    d.gec("yuklendi")
+    durum.yaz(a.kok / "calisma", d)
+    print(f"yüklendi olarak işaretlendi: {d.sanatci} — {d.ad}")
+    return 0
+
+
 def _calistir(args: argparse.Namespace) -> int:
+    """Arka plan koşusu: yeni şarkıları hazırla, üret, onaylıları paketle."""
     kod = _hazirla(args)
-    return kod or _uret(args)
+    if kod:
+        return kod
+    _uret(args)
+    args.yeniden = False
+    return _paketle(args)
 
 
 def _dinle(args: argparse.Namespace) -> int:
@@ -91,6 +118,12 @@ def main(argv: list[str] | None = None) -> int:
     c = alt.add_parser("calistir", help="hazırla + analiz + üret: arka plan koşusu")
     c.add_argument("--liste", help="varsayılan girdi/liste.toml")
     c.set_defaults(fn=_calistir, yeniden=False, analizsiz=False)
+    p = alt.add_parser("paketle", help="onaylı şarkılardan yükleme paketi (mastering, kapak, YUKLE.md)")
+    p.add_argument("--yeniden", action="store_true", help="paketlenmişleri de yeniden paketle")
+    p.set_defaults(fn=_paketle)
+    y = alt.add_parser("yuklendi", help="dağıtımcıya yüklenen şarkıyı işaretle")
+    y.add_argument("kimlik")
+    y.set_defaults(fn=_yuklendi)
     dn = alt.add_parser("dinle", help="dinleme sayfasını aç")
     dn.add_argument("--port", type=int, default=8765)
     dn.add_argument("--tarayicisiz", action="store_true")

@@ -1,0 +1,14 @@
+# Yükleme paketi ayarları. Boş alanlar Scryne'ın kararını bekliyor (2026-10-07: "o noktaya gelince belirleriz").
+
+[yayin]
+# Spotify'da görünecek sanatçı adı. Boşsa kapakta sanatçı yazmaz, YUKLE.md eksik diye işaretler.
+sanatci_adi = ""
+# "routenote" | "distrokid" | "" — form alanlarının sırası ve cover lisans adımı buna göre yazılır
+dagitimci = ""
+# Kapakta ve metadata'da: plak şirketi yoksa sanatçı adı kullanılır
+etiket = ""
+
+[master]
+lufs = -14.0
+gercek_tepe_dbtp = -1.0
+ornekleme = 44100
