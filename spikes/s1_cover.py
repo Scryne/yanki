@@ -39,6 +39,7 @@ def main() -> None:
     ap.add_argument("--gorev", default="cover", choices=["cover", "cover-nofsq", "lego", "text2music", "repaint"])
     ap.add_argument("--flow", default=None, help="flow-edit: 'n_min,n_max' (text2music + kaynak)")
     ap.add_argument("--kaynak-stil", default="", help="flow-edit: orijinal kaydın tanımı")
+    ap.add_argument("--bolge", default=None, help="repaint: 'bas,son' saniye (varsayılan tüm parça)")
     ap.add_argument("--repaint-guc", type=float, default=0.5, help="repaint: 0 agresif, 1 muhafazakâr")
     ap.add_argument("--vae", default=None, help="official | scragvae")
     ap.add_argument("--iz", default="vocals", help="lego: üretilecek iz")
@@ -64,7 +65,8 @@ def main() -> None:
 
     bolge = {}
     if a.gorev in ("lego", "repaint"):
-        bolge = dict(repainting_start=0.0, repainting_end=float(sf.info(a.kaynak).duration), chunk_mask_mode="explicit")
+        bas, son = (float(x) for x in a.bolge.split(",")) if a.bolge else (0.0, float(sf.info(a.kaynak).duration))
+        bolge = dict(repainting_start=bas, repainting_end=son, chunk_mask_mode="explicit")
 
     akis = {}
     if a.flow:
