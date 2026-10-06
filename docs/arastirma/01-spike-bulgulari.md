@@ -49,6 +49,10 @@ kalibre edildi; tablo değerleri A şarkısı (B aynı yönde).
 - faster-whisper 1.2.1 + PyAV 19: dosya yolu verince `metadata_errors` hatası → diziyle ver.
 
 ## Kaynak edinme
+- **Çözüldü (S8, 2026-10-07):** googlevideo adı ISS içi bir önbelleğe (212.154.108.109) çözülüyor; TCP+TLS el sıkışması
+  bozuk dönüyor ("invalid session id", SNI'den bağımsız, TLS 1.2'de de reset). Chrome QUIC kullandığı için oynuyor.
+  yt-dlp adresi bulur, `curl_cffi` `http_version=V3ONLY` ile Range parçaları iner: 290 sn şarkı 0,4 sn.
+  yt-dlp JS çalışma zamanı uyarısı veriyor (deno yok) → `js_runtimes` ile node verilecek.
 - YouTube: `youtube.com` açılıyor, medya sunucusu (googlevideo, IPv4/IPv6, farklı istemciler) TLS'te sıfırlanıyor.
 - SoundCloud: bazı parçalar 30 sn önizleme (süre kontrolü şart).
 

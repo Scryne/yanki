@@ -32,7 +32,7 @@ olmadığı için yükleme adımı bilerek insanda kalır.
 | Sözler | LRCLIB API (zaman damgalı, anahtarsız) → yoksa Scryne'ın söz dosyası → yoksa Whisper | LRCLIB bu ağdan çalışıyor; Someone Like You için süre birebir (285 sn) |
 | Künye | MusicBrainz API (kayıt → eser → söz yazarı/besteci) | Dağıtımcı cover formunda orijinal yazarlar zorunlu |
 | BPM / ton / stil tanımı | librosa (BPM, ton) + ACE-Step 5Hz LM `understand_music` (stil tanımı); Scryne'ın düzeltmesi öncelikli | Stil tanımı kaliteyi doğrudan etkiliyor (spike: yanlış vokal cinsiyeti kaliteyi düşürdü) |
-| Kaynak ses | `girdi/kaynak/` klasörü (Scryne bırakır) → yt-dlp (YouTube, SoundCloud) denemesi; **süre kontrolü** | Bu ağda YouTube medyası inmiyor; SoundCloud 30 sn önizleme verebiliyor |
+| Kaynak ses | YouTube: yt-dlp adresi bulur, medya **HTTP/3** (`curl_cffi`, QUIC) ile iner; yedek `girdi/kaynak/` klasörü; **süre kontrolü** (LRCLIB süresiyle) | Bu ağda ISS içi googlevideo düğümü TCP+TLS'i kesiyor, QUIC çalışıyor (S8: 290 sn şarkı 0,4 sn). SoundCloud 30 sn önizleme verebiliyor, kullanılmaz |
 | Otomatik kapılar | Chromaprint (`fpcalc`) parmak izi benzerliği, dalga korelasyonu, Whisper ile söz var mı, süre | Spike'ta kalibre edildi: orijinali taşıyan çıktı parmak izi ≥ 0,74, iyi cover ~0,59–0,66 |
 | Dinleme sayfası | FastAPI + tek HTML (yerel, `127.0.0.1`) | Yarı otomatik akışın kalbi: dinle, onayla, aralık işaretle, reddet |
 | Mastering | `pyloudnorm` + ffmpeg (−14 LUFS, −1 dBTP, 44,1 kHz / 16 bit WAV) | Spotify normalizasyon hedefi; dağıtımcıların istediği biçim |
@@ -81,7 +81,7 @@ girdi/liste.toml  (Scryne: sanatçı + şarkı, isteğe bağlı stil/söz düzel
 | Şarkı tanınıyor mu | ✅ Scryne: "dinleyen biri Someone Like You der" |
 | Kalite yayın seviyesinde mi | 🔄 Scryne: "az kaldı" (mırıldanma, nefes, titreme). Bölgesel onarım çalışıyor. Faz 6 |
 | Tam şarkı 8 GB'ta | ⏳ Faz 2'de ölçülür |
-| Kaynak ses edinme | ⚠️ YouTube bu ağda inmiyor; ana yol kaynak klasörü |
+| Kaynak ses edinme | ✅ S8: HTTP/3 ile YouTube'dan tam şarkı iniyor; yedek kaynak klasörü |
 | Dağıtımcı AI cover'ı kabul eder mi | ⏳ Faz 5'te ilk gerçek yükleme. Amuse ve CD Baby reddediyor; RouteNote ve DistroKid beyanla kabul ediyor |
 
 ## Kapsam Dışı
@@ -94,4 +94,3 @@ girdi/liste.toml  (Scryne: sanatçı + şarkı, isteğe bağlı stil/söz düzel
 
 - Sanatçı adı (Spotify'da cover'ların çıkacağı ad) — Faz 5'ten önce.
 - Dağıtımcı hesabı (öneri: RouteNote ücretsiz plan; DistroKid $23/yıl + parça başı cover lisansı) — Faz 5'ten önce.
-- Kaynak ses: YouTube tarayıcıda oynuyor mu (A-1).
