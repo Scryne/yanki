@@ -77,10 +77,9 @@ def _yuklendi(args: argparse.Namespace) -> int:
 
 
 def _calistir(args: argparse.Namespace) -> int:
-    """Arka plan koşusu: yeni şarkıları hazırla, üret, onaylıları paketle."""
-    kod = _hazirla(args)
-    if kod:
-        return kod
+    """Arka plan koşusu: yeni şarkıları hazırla, üret (bekleyen onarımlar dahil), onaylıları paketle.
+    Liste boş olsa da onarım ve paketleme yapılır."""
+    _hazirla(args)
     _uret(args)
     args.yeniden = False
     return _paketle(args)
@@ -129,7 +128,19 @@ def main(argv: list[str] | None = None) -> int:
     dn.add_argument("--tarayicisiz", action="store_true")
     dn.set_defaults(fn=_dinle)
     args = ap.parse_args(argv)
+    if args.komut in YAZAN_KOMUTLAR:
+        from yanki import kilit
+
+        # gece görevi ile elle başlatılan komut aynı durum dosyalarına yazmasın
+        with kilit.tek_kosu(ayarlar.yukle().kok / "calisma" / ".yanki.kilit") as alindi:
+            if not alindi:
+                print("başka bir yanki koşusu sürüyor (gece görevi ya da elle başlatılan); bitince tekrar dene")
+                return 0 if args.komut == "calistir" else 3
+            return args.fn(args)
     return args.fn(args)
+
+
+YAZAN_KOMUTLAR = {"hazirla", "uret", "calistir", "paketle", "yuklendi"}
 
 
 if __name__ == "__main__":
