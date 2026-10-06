@@ -40,6 +40,7 @@ olmadığı için yükleme adımı bilerek insanda kalır.
 | Kapak | Pillow ile kodla üretilen tipografik kapak, 3000×3000 JPG | Orijinal sanatçı adı/logosu yok (dağıtımcı kuralı); model gerektirmez |
 | Durum | Şarkı başına `calisma/<kimlik>/durum.json` (atomik yazım) | İnsan okunur, tek dosya; dinleme sayfası ve hat aynı kaydı okur. SQLite gereksiz çıktı |
 | Kalite | ruff, pytest; CI'da GPU'suz testler | Motor çağrısı arayüzün arkasında; testler sahte motorla |
+| Zamanlama | Görev Zamanlayıcı `\Yanki\Gece` 03:00 → `scripts/gece.ps1` → `yanki calistir`; yazan komutlar tek işletim sistemi kilidi | "Her şey arkada" (Scryne); bilgisayar yerelde GPU'lu olduğu için bulut cron değil. Kilit süreç ölünce kalkar |
 
 Model kimlikleri (`acestep-v15-xl-sft`, niceleme, adım, güç) kod içine gömülmez: `config/motor.toml`.
 

@@ -7,9 +7,11 @@ yüklenmeye hazır bir pakete çevirir. Yükleme adımı insanda kalır: dağıt
 ## Günlük akış
 
 1. `girdi/liste.toml`'a şarkı ekle (sanatçı + şarkı adı yeter).
-2. `yanki calistir` → kaynak ses (YouTube), sözler (LRCLIB), künye (MusicBrainz), stil/BPM/ton analizi, iki cover adayı,
-   kapılar, onaylılar için paket. GPU başka bir işle doluysa boşalmasını bekler. Şarkı başı ~20 dk.
-3. `yanki dinle` → tarayıcıda dinleme odası. Orijinalle karşılaştır; bozuk yer varsa dalga üzerinde sürükleyip
+2. Her gece 03:00'te zamanlanmış görev (`\Yanki\Gece`, `scripts/gece.ps1`; pilde başlamaz, kaçırırsa açılınca yetişir)
+   `yanki calistir` koşar: kaynak ses (YouTube), sözler (LRCLIB), künye ve stil (MusicBrainz), iki cover adayı, kapılar,
+   bekleyen onarımlar, onaylılar için paket. GPU başka bir işle doluysa boşalmasını bekler; şarkı başı ~20 dk.
+   Günlük: `calisma/gunluk/<tarih>.log`. Hemen istersen elle `uv run yanki calistir` (aynı anda tek koşu, kilitli).
+3. `yanki dinle` (ya da Kokpit → Yanki → Çalıştır) → tarayıcıda dinleme odası. Orijinalle karşılaştır; bozuk yer varsa dalga üzerinde sürükleyip
    **Bu aralığı onar**; iyi olanı **Bu adayı onayla**.
 4. Onarım istendiyse bir sonraki `yanki calistir` (ya da `yanki uret`) iki onarım sürümü üretir; dinleme odasında iyisini
    **Bunu kabul et**.
