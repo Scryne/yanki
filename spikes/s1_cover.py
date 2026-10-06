@@ -36,7 +36,11 @@ def main() -> None:
     ap.add_argument("--nicem", default=None, help="int8_weight_only | fp8_weight_only | w8a8_dynamic")
     ap.add_argument("--bpm", type=int, default=None)
     ap.add_argument("--ton", default="", help="ör. 'A major'")
-    ap.add_argument("--gorev", default="cover", choices=["cover", "cover-nofsq", "lego"])
+    ap.add_argument("--gorev", default="cover", choices=["cover", "cover-nofsq", "lego", "text2music", "repaint"])
+    ap.add_argument("--flow", default=None, help="flow-edit: 'n_min,n_max' (text2music + kaynak)")
+    ap.add_argument("--kaynak-stil", default="", help="flow-edit: orijinal kaydın tanımı")
+    ap.add_argument("--repaint-guc", type=float, default=0.5, help="repaint: 0 agresif, 1 muhafazakâr")
+    ap.add_argument("--vae", default=None, help="official | scragvae")
     ap.add_argument("--iz", default="vocals", help="lego: üretilecek iz")
     ap.add_argument("--rehber", type=float, default=7.0, help="guidance (turbo yok sayar)")
     a = ap.parse_args()
@@ -48,6 +52,7 @@ def main() -> None:
         project_root=str(MOTOR), config_path=a.model, device="cuda", offload_to_cpu=a.offload,
         offload_dit_to_cpu=a.dit_offload,
         quantization=a.nicem,
+        vae_checkpoint=a.vae,
     )
     t_yukle = time.perf_counter() - t0
     print("init:", ok, durum[:300])
@@ -58,16 +63,28 @@ def main() -> None:
     import soundfile as sf
 
     bolge = {}
-    if a.gorev == "lego":
+    if a.gorev in ("lego", "repaint"):
         bolge = dict(repainting_start=0.0, repainting_end=float(sf.info(a.kaynak).duration), chunk_mask_mode="explicit")
 
+    akis = {}
+    if a.flow:
+        n_min, n_max = (float(x) for x in a.flow.split(","))
+        akis = dict(flow_edit_morph=True, flow_edit_source_caption=a.kaynak_stil, flow_edit_n_min=n_min, flow_edit_n_max=n_max)
+
     soz = Path(a.soz).read_text(encoding="utf-8") if a.soz else ""
+    if a.flow:
+        akis["flow_edit_source_lyrics"] = soz
     params = GenerationParams(
         task_type=a.gorev,
         # Python API talimatı görev türüne göre kendisi seçmiyor; varsayılan text2music talimatıdır
         instruction=TASK_INSTRUCTIONS[a.gorev].format(TRACK_NAME=a.iz.upper()),  # API de büyük harfle veriyor
         guidance_scale=a.rehber,
-        src_audio=a.kaynak,
+        # text2music kaynak sesi kullanmaz; süre kaynaktan alınır (karşılaştırma aynı uzunlukta olsun)
+        src_audio=None if (a.gorev == "text2music" and not a.flow) else a.kaynak,
+        duration=float(sf.info(a.kaynak).duration) if a.gorev == "text2music" else -1.0,
+        repaint_strength=a.repaint_guc,
+        **akis,
+        thinking=False,
         caption=a.stil,
         lyrics=soz,
         vocal_language="en",

@@ -62,3 +62,14 @@ kalibre edildi; tablo değerleri A şarkısı (B aynı yönde).
 - XL-SFT 8 GB'ta: bf16 + DiT offload adım başı 72–150 sn (kullanılamaz); **INT8 (`int8_weight_only`) 90 sn → 100 sn,
   VRAM 7,55 GB** (kullanılabilir). SFT 2B 50 adım: 31 sn.
 - Dinleme testi 2: `6_YENI_sft_dogru_stil`, `7_YENI_xl_buyuk_model`.
+
+## Tur 3–4 (2026-10-06 gece)
+- Scryne: **11 (text2music, cover değil) temiz**; cover'larda 9 (güç 0,7) ve 10 (100 adım) en iyi, arkada mırıldanma
+  azalmış, ama bazı yerlerde hâlâ çok kötü. → Model temiz üretebiliyor; kirlilik cover yolundan (kaynak koşullaması) geliyor.
+- ScragVAE yüklendi ve denendi (8); öne çıkmadı.
+- Flow-Edit (text2music + `flow_edit_morph`, n_max 0,6/0,8): parmak izi 0,87–0,91, dalga 0,84–0,91 → orijinal kaydın
+  kendisi; elendi, dinletilmedi.
+- Tam aralık repaint 9'u arıtmıyor, sıfırdan üretiyor (`repaint_strength` 0,3 ve 0,5 birebir aynı çıktı; sözler wer 0,01).
+  Arıtma için doğru araç **bölgesel** repaint: yalnız bozuk saniyeler, çevresi bağlam.
+- Not: aynı tohum (42) bağımsız üretimler arasında ~0,18 dalga korelasyonu bırakıyor; dalga ölçüsünde taban bu.
+- Dinleme testi 3: 12 (güç 0,7 + 100 adım), 13 (güç 0,6 + 100 adım), ~140 sn / 90 sn ses.
