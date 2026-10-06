@@ -2,7 +2,7 @@
 proje: Yanki
 created: 2026-10-06
 type: proje-fikri
-status: taslak
+status: denetlendi
 ---
 # Yanki — Proje Fikri
 
@@ -53,7 +53,7 @@ Scryne (tek operatör). Dinleyici: Spotify'da cover arayanlar.
 - **Temel özellikler:**
   1. Liste dosyası → kaynak ses edinme (+ elle bırakılan dosya yedeği)
   2. Söz: kaynaktan çıkarma + Scryne'ın verdiği söz dosyası önceliği
-  3. Kılavuz ses (ayrım + MIDI + sentez) ve ACE-Step ile birden çok aday üretimi
+  3. ACE-Step XL ile cover adayları + Scryne'ın işaretlediği aralığın bölgesel onarımı
   4. Otomatik kalite kapısı: armoni korunmuş, orijinal kayıt taşınmıyor, sözler anlaşılır; en iyi aday seçilir
   5. Mastering (loudness hedefi) + kapak + dağıtımcı metadata'sı → yükleme paketi
   6. Haftalık "hazır paketler" özeti; Scryne dinleyip onaylar/reddeder
@@ -67,4 +67,5 @@ Scryne (tek operatör). Dinleyici: Spotify'da cover arayanlar.
 
 - A-1: Kaynak sesi nereden alacağız (YouTube bu ağda kapalı, SoundCloud önizleme verebiliyor)?
 - A-2: Dağıtımcı: RouteNote (ücretsiz, %15) mı DistroKid ($23/yıl + cover lisansı) mı? Hesap Scryne'da.
-- A-3: Kılavuzdan üretilen cover'ın kalitesi kulakla yeterli mi? (Scryne dinleme testi)
+- ~~A-3: Kalite kulakla yeterli mi?~~ Kapandı (2026-10-07): dört dinleme testi; cover tanınıyor, XL güç 0,7 + 100 adım +
+  bölge onarımı "az kaldı". Kılavuz ses yolu vokal üretmedi, elendi. Ayrıntı: `docs/arastirma/01`, karar: `Final-Dokuman.md`.
