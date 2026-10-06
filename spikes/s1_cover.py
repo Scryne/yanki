@@ -32,7 +32,9 @@ def main() -> None:
     ap.add_argument("--adim", type=int, default=8)
     ap.add_argument("--tohum", type=int, default=42)
     ap.add_argument("--offload", action="store_true")
-    ap.add_argument("--gorev", default="cover", choices=["cover", "cover-nofsq"])
+    ap.add_argument("--gorev", default="cover", choices=["cover", "cover-nofsq", "lego"])
+    ap.add_argument("--iz", default="vocals", help="lego: üretilecek iz")
+    ap.add_argument("--rehber", type=float, default=7.0, help="guidance (turbo yok sayar)")
     a = ap.parse_args()
     Path(a.cikti).mkdir(parents=True, exist_ok=True)
 
@@ -46,11 +48,19 @@ def main() -> None:
     if not ok:
         sys.exit(1)
 
+    # lego: belge repainting_end=-1 "sona kadar" diyor ama kod end > start şartı arıyor; süreyi açıkça ver
+    import soundfile as sf
+
+    bolge = {}
+    if a.gorev == "lego":
+        bolge = dict(repainting_start=0.0, repainting_end=float(sf.info(a.kaynak).duration), chunk_mask_mode="explicit")
+
     soz = Path(a.soz).read_text(encoding="utf-8") if a.soz else ""
     params = GenerationParams(
         task_type=a.gorev,
         # Python API talimatı görev türüne göre kendisi seçmiyor; varsayılan text2music talimatıdır
-        instruction=TASK_INSTRUCTIONS[a.gorev],
+        instruction=TASK_INSTRUCTIONS[a.gorev].format(TRACK_NAME=a.iz.upper()),  # API de büyük harfle veriyor
+        guidance_scale=a.rehber,
         src_audio=a.kaynak,
         caption=a.stil,
         lyrics=soz,
@@ -58,6 +68,7 @@ def main() -> None:
         audio_cover_strength=a.guc,
         inference_steps=a.adim,
         seed=a.tohum,
+        **bolge,
     )
     config = GenerationConfig(batch_size=1, use_random_seed=False, seeds=[a.tohum], audio_format="flac")
 
