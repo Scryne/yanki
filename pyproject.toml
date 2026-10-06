@@ -5,6 +5,12 @@ description = "Listedeki şarkıların ACE-Step ile cover'ını üretip Spotify 
 requires-python = ">=3.12"
 dependencies = [
     "curl-cffi>=0.16",
+    "fastapi>=0.118",
+    "faster-whisper>=1.2",
+    "jiwer>=4",
+    "numpy>=2",
+    "soundfile>=0.13",
+    "uvicorn>=0.37",
     "yt-dlp[default]>=2026.8",
 ]
 
@@ -12,7 +18,11 @@ dependencies = [
 yanki = "yanki.cli:main"
 
 [dependency-groups]
-dev = ["pytest>=8", "ruff>=0.13"]
+dev = [
+    "httpx>=0.28",
+    "pytest>=8",
+    "ruff>=0.13",
+]
 
 [build-system]
 requires = ["hatchling"]

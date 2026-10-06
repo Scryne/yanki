@@ -35,6 +35,7 @@ tohumlar = {tohumlar}
 gorev = "repaint"
 adim = 10
 pay_sn = 1.0
+tohumlar = [3]
 [gpu]
 bos_esik_mib = 2000
 bekleme_sn = 1

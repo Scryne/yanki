@@ -4,6 +4,7 @@ Söz ya da kaynak yoksa şarkı `hata` aşamasında durur (neden yazılı). Kün
 paketlemeden önce Scryne'dan istenir.
 """
 
+import json
 from dataclasses import asdict
 from pathlib import Path
 
@@ -25,6 +26,8 @@ def girdi_hazirla(a: Ayarlar, s: Sarki, calisma: Path, girdi: Path) -> durum.Dur
         return d
     (k / "soz.txt").parent.mkdir(parents=True, exist_ok=True)
     (k / "soz.txt").write_text(soz.metin, encoding="utf-8")
+    # parçalı üretim sözleri parçalara bu damgalarla dağıtır
+    (k / "soz_zaman.json").write_text(json.dumps(soz.satirlar, ensure_ascii=False), encoding="utf-8")
     d.soz = {"kaynak": soz.kaynak, "sure_sn": soz.sure_sn, "dosya": "soz.txt"}
 
     try:

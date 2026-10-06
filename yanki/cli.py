@@ -4,7 +4,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from yanki import ayarlar, durum, hazirlik, liste, saglik
+from yanki import ayarlar, durum, hazirlik, liste, saglik, uretim
 
 
 def _durum(_: argparse.Namespace) -> int:
@@ -42,6 +42,40 @@ def _hazirla(args: argparse.Namespace) -> int:
     return 0
 
 
+def _uret(_: argparse.Namespace) -> int:
+    a = ayarlar.yukle()
+    islenen = uretim.uret(a, a.kok / "calisma")
+    if not islenen:
+        print("üretilecek bir şey yok (analiz ya da onarım bekleyen şarkı yok)")
+    for d in islenen:
+        gecen = sum(x.gecti for x in d.adaylar)
+        ek = f" ({d.hata})" if d.hata else ""
+        print(f"{d.asama:9} {d.sanatci} — {d.ad}: {gecen}/{len(d.adaylar)} aday kapıdan geçti{ek}")
+    return 0
+
+
+def _calistir(args: argparse.Namespace) -> int:
+    kod = _hazirla(args)
+    return kod or _uret(args)
+
+
+def _dinle(args: argparse.Namespace) -> int:
+    import threading
+    import webbrowser
+
+    import uvicorn
+
+    from yanki import sunucu
+
+    a = ayarlar.yukle()
+    adres = f"http://127.0.0.1:{args.port}/"
+    if not args.tarayicisiz:
+        threading.Timer(1.0, lambda: webbrowser.open(adres)).start()
+    print(f"dinleme odası: {adres}  (durdurmak için Ctrl+C)")
+    uvicorn.run(sunucu.uygulama(a, a.kok / "calisma"), host="127.0.0.1", port=args.port, log_level="warning")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
@@ -53,6 +87,14 @@ def main(argv: list[str] | None = None) -> int:
     h.add_argument("--yeniden", action="store_true", help="hazır şarkıları da baştan hazırla")
     h.add_argument("--analizsiz", action="store_true", help="GPU analizini atla")
     h.set_defaults(fn=_hazirla)
+    alt.add_parser("uret", help="cover adaylarını ve bekleyen onarımları üret (GPU)").set_defaults(fn=_uret)
+    c = alt.add_parser("calistir", help="hazırla + analiz + üret: arka plan koşusu")
+    c.add_argument("--liste", help="varsayılan girdi/liste.toml")
+    c.set_defaults(fn=_calistir, yeniden=False, analizsiz=False)
+    dn = alt.add_parser("dinle", help="dinleme sayfasını aç")
+    dn.add_argument("--port", type=int, default=8765)
+    dn.add_argument("--tarayicisiz", action="store_true")
+    dn.set_defaults(fn=_dinle)
     args = ap.parse_args(argv)
     return args.fn(args)
 

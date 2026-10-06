@@ -39,6 +39,7 @@ class Onarim:
     gorev: str
     adim: int
     pay_sn: float
+    tohumlar: tuple[int, ...]
 
 
 @dataclass(frozen=True)
@@ -71,7 +72,7 @@ def yukle(yol: Path | None = None, kok: Path = KOK) -> Ayarlar:
         motor=Motor(kok / m["klasor"], m["model"], m.get("niceleme") or None, bool(m["cpu_offload"]), m["lm_model"],
                     m.get("lm_backend", "pt")),
         cover=Cover(c["gorev"], float(c["guc"]), int(c["adim"]), int(c["aday_sayisi"]), tuple(c["tohumlar"])),
-        onarim=Onarim(o["gorev"], int(o["adim"]), float(o["pay_sn"])),
+        onarim=Onarim(o["gorev"], int(o["adim"]), float(o["pay_sn"]), tuple(o["tohumlar"])),
         gpu=Gpu(int(g["bos_esik_mib"]), int(g["bekleme_sn"])),
         fpcalc=kok / d["araclar"]["fpcalc"],
     )

@@ -122,3 +122,19 @@ def test_klasorde_kaynak(tmp_path):
     (tmp_path / "a-b.mp3").write_bytes(b"x")
     assert kaynak.klasorden(tmp_path, "a-b") == tmp_path / "a-b.mp3"
     assert kaynak.klasorden(tmp_path, "c-d") is None
+
+
+def test_senkron_satirlar():
+    lrc = "[00:14.08] I heard\n[01:02.5]  that you\n[ar:Adele]\n"
+    assert sozler.senkron(lrc) == ((14.08, "I heard"), (62.5, "that you"))
+    assert sozler.senkron(None) == ()
+
+
+def test_dosya_sozu_lrclib_damgalarini_yalniz_uyusursa_alir(tmp_path):
+    uzak = {"plainLyrics": "x", "duration": 180, "syncedLyrics": "[00:01.00] Hello there\n[00:05.00] General Kenobi"}
+    ayni, farkli = tmp_path / "a.txt", tmp_path / "b.txt"
+    ayni.write_text("hello there!\ngeneral kenobi", encoding="utf-8")
+    farkli.write_text("tamamen\nbaşka söz", encoding="utf-8")
+    beklenen = ((1.0, "Hello there"), (5.0, "General Kenobi"))
+    assert sozler.bul("A", "B", ayni, json_al=lambda *a, **k: uzak).satirlar == beklenen
+    assert sozler.bul("A", "B", farkli, json_al=lambda *a, **k: uzak).satirlar == ()

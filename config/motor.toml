@@ -24,6 +24,8 @@ gorev = "repaint"
 adim = 100
 # işaretlenen aralığın iki yanına eklenen pay (sn)
 pay_sn = 1.0
+# her aralık için bu tohumlarla birer sürüm (dinleme testi 4: biri düzeltti, öbürü düzeltmedi)
+tohumlar = [42, 7]
 
 [gpu]
 # üretime başlamadan önce kullanılan VRAM bu değerin altına inmeli (MiB); başka bir iş GPU'yu tutuyorsa beklenir

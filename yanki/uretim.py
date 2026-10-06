@@ -1,0 +1,224 @@
+"""Üretim: `analiz` şarkılarına cover adayları, bekleyen bölge onarımlarına repaint; ardından kapılar.
+
+Parçalı üretim (yanki/parcalama.py): uzun şarkı vokal boşluklarından ~90 sn'lik parçalara bölünür. İki tur:
+  1. tur: her adayın ilk parçası + bütün onarımlar
+  2. tur: kalan parçalar, ilk parçanın çıktısı tını referansı olarak (ses parçadan parçaya değişmesin)
+Sonra parçalar dikilir, kapılar tam şarkı üzerinde çalışır.
+
+Onarım pencerelidir: işaretli aralığın ±PENCERE_PAYI sn'lik penceresi kesilir, repaint yalnız orada yapılır, pencere
+şarkıya geri dikilir. Tam şarkıda repaint de tüm şarkıyı işler (290 sn'de ~57 dk, ACE-Step zaman aşımı).
+Scryne iyi sürümü kabul eder → adayın dosyası o sürüm olur (dinleme testi 4: bir tohum düzeltti, öbürü düzeltmedi).
+"""
+
+import json
+from collections.abc import Callable
+from pathlib import Path
+
+import numpy as np
+import soundfile as sf
+
+from yanki import durum, kapilar, motor, parcalama
+from yanki.ayarlar import Ayarlar
+
+SR = 48000
+TEK_PARCA_SN = 110  # bundan kısa şarkı bölünmez
+PENCERE_PAYI = 25.0
+# 90–110 sn'lik parça XL INT8 100 adımda ~2,5–3 dk (Faz 2 ölçümü); iş başına cömert pay
+ZAMAN_ASIMI_SN_IS_BASI = 15 * 60
+
+
+def _soz(calisma: Path, d: durum.Durum) -> str:
+    return (durum.klasor(calisma, d.kimlik) / d.soz["dosya"]).read_text(encoding="utf-8")
+
+
+def _satirlar(calisma: Path, d: durum.Durum) -> list[tuple[float, str]]:
+    yol = durum.klasor(calisma, d.kimlik) / "soz_zaman.json"
+    return [tuple(x) for x in json.loads(yol.read_text(encoding="utf-8"))] if yol.exists() else []
+
+
+def _ortak(d: durum.Durum) -> dict:
+    return dict(stil=d.analiz["stil"], dil=d.analiz.get("dil", "en"), bpm=d.analiz.get("bpm"),
+                ton=d.analiz.get("ton") or "")
+
+
+def parca_plani(calisma: Path, d: durum.Durum) -> tuple[list[parcalama.Parca], list[str]]:
+    """Parçalar ve her parçanın sözü. Kısa şarkı ya da zaman damgası yoksa tek parça, tüm söz."""
+    sure = d.kaynak["sure_sn"]
+    satirlar = _satirlar(calisma, d)
+    if sure <= TEK_PARCA_SN or not satirlar:
+        return [parcalama.Parca(1, 0.0, sure, 0.0, sure)], [_soz(calisma, d)]
+    plan = parcalama.plan(sure, [t for t, _ in satirlar])
+    return plan, parcalama.soz_dagit(plan, satirlar)
+
+
+def _kes(kaynak: Path, bas: float, son: float, hedef: Path) -> Path:
+    bilgi = sf.info(str(kaynak))
+    ses, sr = sf.read(str(kaynak), dtype="float32", always_2d=True,
+                      start=int(bas * bilgi.samplerate), stop=int(son * bilgi.samplerate))
+    hedef.parent.mkdir(parents=True, exist_ok=True)
+    sf.write(str(hedef), ses, sr)
+    return hedef
+
+
+def onarim_iste(a: Ayarlar, d: durum.Durum, aday_no: int, bas: float, son: float) -> None:
+    if not 0 <= bas < son:
+        raise ValueError(f"geçersiz aralık: {bas}–{son}")
+    aday = next(x for x in d.adaylar if x.no == aday_no)
+    sira = len(aday.onarimlar)
+    for i, tohum in enumerate(a.onarim.tohumlar):
+        aday.onarimlar.append({"id": f"{aday_no}-{sira + i + 1}", "bolge": [bas, son], "tohum": tohum,
+                               "temel": aday.dosya, "durum": "bekliyor", "dosya": None, "kapilar": {}, "hata": None})
+    d.gec("onarim")
+
+
+def onarim_kabul(d: durum.Durum, aday_no: int, onarim_id: str) -> None:
+    aday = next(x for x in d.adaylar if x.no == aday_no)
+    secilen = next(o for o in aday.onarimlar if o["id"] == onarim_id)
+    if secilen["durum"] != "hazir":
+        raise ValueError(f"onarım {onarim_id} kabul edilemez: {secilen['durum']}")
+    for o in aday.onarimlar:
+        if o["bolge"] == secilen["bolge"] and o["temel"] == secilen["temel"] and o["durum"] == "hazir":
+            o["durum"] = "ret"
+    secilen["durum"] = "kabul"
+    aday.dosya = secilen["dosya"]
+    aday.kapilar, aday.gecti = secilen["kapilar"], kapilar.hepsi_gecti(secilen["kapilar"])
+
+
+def _goreli(k: Path, yol: Path | str) -> str:
+    return Path(yol).resolve().relative_to(k.resolve()).as_posix()
+
+
+def _dik_pencere(temel: Path, pencere: Path, bas: float, hedef: Path, gecis_sn: float = 0.5) -> Path:
+    """Onarılmış pencereyi temel dosyaya geri koyar; kenarlarda kısa eşit güçlü geçiş."""
+    t, sr = sf.read(str(temel), dtype="float32", always_2d=True)
+    p, _ = sf.read(str(pencere), dtype="float32", always_2d=True)
+    i = int(round(bas * sr))
+    p = p[: max(0, len(t) - i)]
+    n = min(int(gecis_sn * sr), len(p) // 4)
+    kazanc = np.ones(len(p), dtype=np.float32)
+    if n:
+        kazanc[:n] = np.sin(np.linspace(0, np.pi / 2, n))
+        kazanc[-n:] = np.cos(np.linspace(0, np.pi / 2, n))
+    cikti = t.copy()
+    cikti[i: i + len(p)] = t[i: i + len(p)] * (1 - kazanc[:, None] ** 2) ** 0.5 + p * kazanc[:, None]
+    hedef.parent.mkdir(parents=True, exist_ok=True)
+    sf.write(str(hedef), cikti, sr)
+    return hedef
+
+
+def uret(a: Ayarlar, calisma: Path, kimlikler: list[str] | None = None,
+         calistir: Callable[..., list[motor.Sonuc]] = motor.calistir,
+         degerlendir: Callable[..., dict] | None = None) -> list[durum.Durum]:
+    degerlendir = degerlendir or (lambda aday, kaynak, soz: kapilar.degerlendir(aday, kaynak, soz, a.fpcalc))
+    hedef = [d for d in durum.hepsi(calisma) if d.asama in ("analiz", "onarim")
+             and (kimlikler is None or d.kimlik in kimlikler)]
+    if not hedef:
+        return []
+
+    def motor_turu(isler: list[motor.Is], ad: str) -> dict[str, motor.Sonuc]:
+        if not isler:
+            return {}
+        return {r.id: r for r in calistir(a, isler, calisma / "_motor" / ad, ZAMAN_ASIMI_SN_IS_BASI * len(isler))}
+
+    planlar, tur1, onarim_pencere = {}, [], {}
+    for d in hedef:
+        k = durum.klasor(calisma, d.kimlik)
+        if d.asama == "analiz":
+            plan, sozler_ = parca_plani(calisma, d)
+            planlar[d.kimlik] = (plan, sozler_)
+            kaynak = k / d.kaynak["dosya"]
+            for p in plan:
+                if len(plan) > 1:
+                    _kes(kaynak, p.bas, p.son, k / "parcalar" / f"kaynak_{p.no}.wav")
+            ilk = k / "parcalar" / "kaynak_1.wav" if len(plan) > 1 else kaynak
+            for n in range(1, a.cover.aday_sayisi + 1):
+                tur1.append(motor.Is(id=f"{d.kimlik}|cover|{n}|1", gorev="cover", kaynak=str(ilk),
+                                     cikti_klasor=str(k / "adaylar" / str(n) / "p1"), soz=sozler_[0],
+                                     adim=a.cover.adim, tohum=a.cover.tohumlar[n - 1], guc=a.cover.guc, **_ortak(d)))
+        else:
+            satirlar = _satirlar(calisma, d)
+            for aday in d.adaylar:
+                for o in aday.onarimlar:
+                    if o["durum"] != "bekliyor":
+                        continue
+                    temel = k / o["temel"]
+                    sure = sf.info(str(temel)).duration
+                    bas, son = o["bolge"]
+                    pb, ps = max(0.0, bas - PENCERE_PAYI), min(sure, son + PENCERE_PAYI)
+                    pencere = _kes(temel, pb, ps, k / "onarimlar" / o["id"] / "pencere_temel.wav")
+                    icindeki = [m for t, m in satirlar if pb <= t < ps and m.strip()]
+                    soz = "[verse]\n" + "\n".join(icindeki) if icindeki else _soz(calisma, d)
+                    onarim_pencere[o["id"]] = pb
+                    tur1.append(motor.Is(
+                        id=f"{d.kimlik}|onarim|{aday.no}|{o['id']}", gorev="repaint", kaynak=str(pencere),
+                        cikti_klasor=str(k / "onarimlar" / o["id"]), soz=soz, adim=a.onarim.adim, tohum=o["tohum"],
+                        bolge=(max(0.0, bas - a.onarim.pay_sn - pb), min(ps - pb, son + a.onarim.pay_sn - pb)),
+                        **_ortak(d)))
+    s1 = motor_turu(tur1, "tur1")
+
+    tur2 = []
+    for d in hedef:
+        if d.kimlik not in planlar:
+            continue
+        k = durum.klasor(calisma, d.kimlik)
+        plan, sozler_ = planlar[d.kimlik]
+        for n in range(1, a.cover.aday_sayisi + 1):
+            ilk = s1[f"{d.kimlik}|cover|{n}|1"]
+            if not ilk.basari:
+                continue
+            for p in plan[1:]:
+                tur2.append(motor.Is(id=f"{d.kimlik}|cover|{n}|{p.no}", gorev="cover",
+                                     kaynak=str(k / "parcalar" / f"kaynak_{p.no}.wav"),
+                                     cikti_klasor=str(k / "adaylar" / str(n) / f"p{p.no}"), soz=sozler_[p.no - 1],
+                                     adim=a.cover.adim, tohum=a.cover.tohumlar[n - 1], guc=a.cover.guc,
+                                     referans=ilk.cikti, **_ortak(d)))
+    s2 = motor_turu(tur2, "tur2")
+    sonuclar = {**s1, **s2}
+
+    for d in hedef:
+        k = durum.klasor(calisma, d.kimlik)
+        kaynak, soz = k / d.kaynak["dosya"], _soz(calisma, d)
+        if d.kimlik in planlar:
+            plan, _ = planlar[d.kimlik]
+            for n in range(1, a.cover.aday_sayisi + 1):
+                rs = [sonuclar.get(f"{d.kimlik}|cover|{n}|{p.no}") for p in plan]
+                aday = durum.Aday(n, "", a.cover.tohumlar[n - 1])
+                hatali = [f"parça {p.no}: {r.hata if r else 'üretilmedi'}" for p, r in zip(plan, rs, strict=True)
+                          if not (r and r.basari)]
+                if hatali:
+                    aday.kapilar = {"motor": {"gecti": False, "hata": "; ".join(hatali)}}
+                else:
+                    tam = k / "adaylar" / str(n) / "tam.flac"
+                    if len(plan) == 1:
+                        ses, sr = sf.read(rs[0].cikti, dtype="float32", always_2d=True)
+                    else:
+                        sesler = [sf.read(r.cikti, dtype="float32", always_2d=True)[0] for r in rs]
+                        ses, sr = parcalama.birlestir(sesler, plan, SR), SR
+                    sf.write(str(tam), ses, sr)
+                    aday.dosya = _goreli(k, tam)
+                    aday.kapilar = degerlendir(tam, kaynak, soz)
+                    aday.gecti = kapilar.hepsi_gecti(aday.kapilar)
+                d.adaylar = [x for x in d.adaylar if x.no != n] + [aday]
+        else:
+            for aday in d.adaylar:
+                for o in aday.onarimlar:
+                    r = sonuclar.get(f"{d.kimlik}|onarim|{aday.no}|{o['id']}")
+                    if o["durum"] != "bekliyor" or r is None:
+                        continue
+                    if r.basari:
+                        tam = _dik_pencere(k / o["temel"], Path(r.cikti), onarim_pencere[o["id"]],
+                                           k / "onarimlar" / o["id"] / "tam.flac")
+                        o["dosya"] = _goreli(k, tam)
+                        o["kapilar"] = degerlendir(tam, kaynak, soz)
+                        o["durum"] = "hazir"
+                    else:
+                        o["durum"], o["hata"] = "hata", r.hata
+        d.adaylar.sort(key=lambda x: x.no)
+        if any(x.gecti for x in d.adaylar):
+            d.gec("uretildi")
+        else:
+            nedenler = "; ".join(f"aday {x.no}: " + ", ".join(n for n, v in x.kapilar.items() if not v.get("gecti"))
+                                 for x in d.adaylar)
+            d.gec("hata", f"hiçbir aday kapıdan geçmedi ({nedenler})")
+        durum.yaz(calisma, d)
+    return hedef

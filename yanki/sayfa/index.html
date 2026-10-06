@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Yanki · dinleme odası</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500&family=Space+Grotesk:wght@600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="stil.css">
+</head>
+<body>
+  <div class="duzen">
+    <nav class="kuyruk" aria-label="Şarkılar">
+      <div class="marka">Yanki</div>
+      <ul id="liste" class="liste"></ul>
+      <p id="liste-bos" class="ipucu" hidden>Henüz şarkı yok. <code>girdi/liste.toml</code>'a şarkı ekleyip
+        <code>yanki calistir</code> çalıştır.</p>
+    </nav>
+    <main id="ana" class="ana" tabindex="-1">
+      <p class="ipucu bos-durum">Soldan bir şarkı seç.</p>
+    </main>
+  </div>
+  <div id="bildirim" class="bildirim" role="status" aria-live="polite"></div>
+  <script src="uygulama.js" type="module"></script>
+</body>
+</html>

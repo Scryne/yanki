@@ -33,6 +33,7 @@ class Is:
     bpm: int | None = None
     ton: str = ""
     bolge: tuple[float, float] | None = None
+    referans: str | None = None  # tını referansı (parçalı üretimde ilk parçanın çıktısı)
 
     def __post_init__(self):
         if self.gorev not in ("cover", "repaint", "anla"):
@@ -149,4 +150,6 @@ def _ortam() -> dict[str, str]:
     e = dict(os.environ)
     e["PYTHONUTF8"] = "1"
     e["PYTHONIOENCODING"] = "utf-8"
+    # ACE-Step'in iç üretim zaman aşımı varsayılan 600 sn; parça başına bizim zaman aşımımız esas
+    e.setdefault("ACESTEP_GENERATION_TIMEOUT", "1800")
     return e

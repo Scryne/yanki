@@ -25,7 +25,9 @@ class Aday:
     tohum: int
     kapilar: dict = field(default_factory=dict)  # ad → {"gecti": bool, "deger": float, "esik": float}
     gecti: bool = False
-    onarimlar: list = field(default_factory=list)  # [{"bolge": [bas, son], "tohum", "dosya"}]
+    # [{"id", "bolge": [bas, son], "tohum", "temel": onarılan dosya, "durum": bekliyor|hazir|kabul|ret|hata,
+    #   "dosya", "kapilar", "hata"}]
+    onarimlar: list = field(default_factory=list)
 
 
 @dataclass

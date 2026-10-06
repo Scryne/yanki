@@ -6,7 +6,7 @@ is.json:
   {"motor": {"klasor": ..., "model": ..., "niceleme": "int8_weight_only" | null, "cpu_offload": true,
               "lm_model": ..., "lm_backend": "pt"},
    "isler": [{"id", "gorev": "cover" | "repaint" | "anla", "kaynak", "cikti_klasor", "stil", "soz", "dil", "bpm", "ton",
-              "guc", "adim", "tohum", "bolge": [bas, son] | null}]}
+              "guc", "adim", "tohum", "bolge": [bas, son] | null, "referans": yol | null}]}
 
 Model bir kez yüklenir, işler sırayla yapılır; her işin sonucu (başarı, hata, süre, VRAM tepe, çıktı dosyası)
 sonuc.json'a yazılır. Bir işin hatası diğerlerini durdurmaz.
@@ -99,6 +99,7 @@ def main() -> int:
                 task_type=gorev,
                 instruction=TASK_INSTRUCTIONS[gorev],
                 src_audio=i["kaynak"],
+                reference_audio=i.get("referans") or None,
                 caption=i["stil"],
                 lyrics=i["soz"],
                 vocal_language=i.get("dil", "en"),
