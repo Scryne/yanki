@@ -112,3 +112,23 @@ def test_gpu_bekle_zaman_asimi():
 def test_gpu_okunamazsa_hata():
     with pytest.raises(RuntimeError, match="okunamadı"):
         motor.gpu_bekle(ayarlar.yukle(), 10, okuyucu=lambda: None)
+
+
+def test_motor_kurulu_degilse_acik_hata(tmp_path, monkeypatch):
+    a = ayarlar.yukle()
+    from dataclasses import replace
+
+    a = replace(a, motor=replace(a.motor, klasor=tmp_path / "olmayan"))
+    s = motor.calistir(a, [_is()], tmp_path / "is", zaman_asimi_sn=5, bekle=lambda *_: 0)
+    assert "motor bulunamadı" in s[0].hata
+
+
+def test_motor_klasoru_yoksa_is_klasorunde_baslar(tmp_path, isci):
+    # CI'da motor klasörü yok: işçi orada başlatılamazdı (NotADirectoryError)
+    from dataclasses import replace
+
+    a = ayarlar.yukle()
+    a = replace(a, motor=replace(a.motor, klasor=tmp_path / "olmayan"))
+    s = motor.calistir(a, [_is("a", cikti=str(tmp_path / "c"))], tmp_path / "is", zaman_asimi_sn=20,
+                       python=Path(sys.executable), isci=isci, bekle=lambda *_: 0)
+    assert s[0].basari, s[0].hata

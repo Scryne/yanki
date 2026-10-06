@@ -122,6 +122,9 @@ def calistir(
         ),
         encoding="utf-8",
     )
+    if python is None and not a.motor.python.exists():
+        hata = f"motor bulunamadı: {a.motor.python} (README: motor kurulumu)"
+        return [Sonuc(i.id, False, hata) for i in isler]
     bekle(a, gpu_bekleme_sn)
     gunluk = klasor / "motor.log"
     with open(gunluk, "wb") as log:
@@ -129,7 +132,7 @@ def calistir(
             surec = subprocess.run(
                 [str(python or a.motor.python), str(isci), str(is_yolu), str(sonuc_yolu)],
                 stdout=log, stderr=subprocess.STDOUT, timeout=zaman_asimi_sn,
-                env=_ortam(), cwd=str(a.motor.klasor),
+                env=_ortam(a), cwd=str(a.motor.klasor if a.motor.klasor.is_dir() else klasor),
             )
             cikis = surec.returncode
         except subprocess.TimeoutExpired:
@@ -144,10 +147,12 @@ def calistir(
     return [sonuclar.get(i.id) or Sonuc(i.id, False, genel or f"sonuç yazılmadı, ayrıntı: {gunluk}") for i in isler]
 
 
-def _ortam() -> dict[str, str]:
+def _ortam(a: Ayarlar) -> dict[str, str]:
     import os
 
     e = dict(os.environ)
+    # ACE-Step checkpoints'i proje kökünden bulur; kök yoksa çalışma klasörünü kullanıyor
+    e["ACESTEP_PROJECT_ROOT"] = str(a.motor.klasor)
     e["PYTHONUTF8"] = "1"
     e["PYTHONIOENCODING"] = "utf-8"
     # ACE-Step'in iç üretim zaman aşımı varsayılan 600 sn; parça başına bizim zaman aşımımız esas
