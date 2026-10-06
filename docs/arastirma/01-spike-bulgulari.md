@@ -51,3 +51,14 @@ kalibre edildi; tablo değerleri A şarkısı (B aynı yönde).
 ## Kaynak edinme
 - YouTube: `youtube.com` açılıyor, medya sunucusu (googlevideo, IPv4/IPv6, farklı istemciler) TLS'te sıfırlanıyor.
 - SoundCloud: bazı parçalar 30 sn önizleme (süre kontrolü şart).
+
+## Dinleme testi 1 ve kalite turu (2026-10-06 gece)
+- Scryne: cover'lar **tanınıyor** ("bu Someone Like You" denir) ama kalite çok kötü: vokal metalik/robotik, sözler
+  yutuluyor, müzik bulanık, detone/ritim kayıyor. → Armoni/melodi ölçülerim gereğinden kötümserdi; kulak esas.
+- Kalite vekilleri kulağı tutmadı: Audiobox Aesthetics cover'lara orijinalden yüksek PQ verdi (8,0–8,3 / 7,6); S7
+  (WER, perde sapması, vuruş CV, tiz oranı) cover'ları orijinal düzeyinde gösterdi. Bu ölçüler kalite kapısı olamaz.
+- Kalite kolları: model (sft 2B, XL-SFT 4B), kaynağa uygun stil tanımı (önceki denemede kadın vokal "male" yazılmıştı),
+  BPM + ton, 50 adım.
+- XL-SFT 8 GB'ta: bf16 + DiT offload adım başı 72–150 sn (kullanılamaz); **INT8 (`int8_weight_only`) 90 sn → 100 sn,
+  VRAM 7,55 GB** (kullanılabilir). SFT 2B 50 adım: 31 sn.
+- Dinleme testi 2: `6_YENI_sft_dogru_stil`, `7_YENI_xl_buyuk_model`.

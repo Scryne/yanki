@@ -32,6 +32,10 @@ def main() -> None:
     ap.add_argument("--adim", type=int, default=8)
     ap.add_argument("--tohum", type=int, default=42)
     ap.add_argument("--offload", action="store_true")
+    ap.add_argument("--dit-offload", action="store_true", help="DiT de CPU'ya (XL, 8 GB)")
+    ap.add_argument("--nicem", default=None, help="int8_weight_only | fp8_weight_only | w8a8_dynamic")
+    ap.add_argument("--bpm", type=int, default=None)
+    ap.add_argument("--ton", default="", help="ör. 'A major'")
     ap.add_argument("--gorev", default="cover", choices=["cover", "cover-nofsq", "lego"])
     ap.add_argument("--iz", default="vocals", help="lego: üretilecek iz")
     ap.add_argument("--rehber", type=float, default=7.0, help="guidance (turbo yok sayar)")
@@ -41,7 +45,9 @@ def main() -> None:
     t0 = time.perf_counter()
     dit = AceStepHandler()
     durum, ok = dit.initialize_service(
-        project_root=str(MOTOR), config_path=a.model, device="cuda", offload_to_cpu=a.offload
+        project_root=str(MOTOR), config_path=a.model, device="cuda", offload_to_cpu=a.offload,
+        offload_dit_to_cpu=a.dit_offload,
+        quantization=a.nicem,
     )
     t_yukle = time.perf_counter() - t0
     print("init:", ok, durum[:300])
@@ -65,6 +71,8 @@ def main() -> None:
         caption=a.stil,
         lyrics=soz,
         vocal_language="en",
+        bpm=a.bpm,
+        keyscale=a.ton,
         audio_cover_strength=a.guc,
         inference_steps=a.adim,
         seed=a.tohum,
