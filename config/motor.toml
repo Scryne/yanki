@@ -11,6 +11,14 @@ cpu_offload = true
 # "anla" görevi: kaynaktan stil tanımı, BPM, ton (ACE-Step 5Hz LM). vLLM Windows'ta yok → pt
 lm_model = "acestep-5Hz-lm-1.7B"
 lm_backend = "pt"
+# Stil/BPM/ton nereden: "musicbrainz" (sanatçı türleri + solo sanatçının cinsiyeti; BPM/ton yalnız listeden) ya da "lm"
+# (ACE-Step 5Hz LM). LM ölçüldü ve uydurdu (2026-10-07: Viva La Vida → "İbranice Eurodance", Perfect → "saksafonlu
+# pop-rock, 130 BPM"); varsayılan musicbrainz.
+analiz_yontemi = "musicbrainz"
+# analizde XL + LM birlikte 8 GB'ı taşırıyor (285 sn'lik şarkıda 10 dk sonuç yok): 2B turbo ve şarkının ortasından kesit.
+# 5Hz anlamsal kodlar DiT sürümlerinde ortak (LM'nin kodları her DiT'e gidiyor).
+analiz_model = "acestep-v15-turbo"
+analiz_kesit_sn = 40
 
 [cover]
 gorev = "cover"

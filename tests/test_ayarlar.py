@@ -25,6 +25,7 @@ model = "x"
 niceleme = ""
 cpu_offload = true
 lm_model = "lm"
+analiz_model = "t"
 [cover]
 gorev = "cover"
 guc = {guc}

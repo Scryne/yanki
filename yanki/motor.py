@@ -95,8 +95,10 @@ def calistir(
     python: Path | None = None,
     isci: Path = ISCI,
     bekle: Callable[..., int] = gpu_bekle,
+    model: str | None = None,
 ) -> list[Sonuc]:
-    """İşleri tek işçi sürecinde (tek model yüklemesi) çalıştırır."""
+    """İşleri tek işçi sürecinde (tek model yüklemesi) çalıştırır. `model` verilirse ayardaki model yerine o
+    (nicelemesiz) yüklenir — analiz gibi hafif işler için."""
     if not isler:
         return []
     # işçi motor klasöründe başlar (cwd); göreli yol orada çözülemez
@@ -109,8 +111,8 @@ def calistir(
             {
                 "motor": {
                     "klasor": str(a.motor.klasor),
-                    "model": a.motor.model,
-                    "niceleme": a.motor.niceleme,
+                    "model": model or a.motor.model,
+                    "niceleme": None if model else a.motor.niceleme,
                     "cpu_offload": a.motor.cpu_offload,
                     "lm_model": a.motor.lm_model,
                     "lm_backend": a.motor.lm_backend,

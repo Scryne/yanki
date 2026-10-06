@@ -23,11 +23,41 @@ def test_bilinmeyen_asama_reddedilir():
         durum.Durum("a", "A", "B").gec("bitti")
 
 
+def _lm_ayarlari():
+    from dataclasses import replace
+
+    a = ayarlar.yukle()
+    return replace(a, motor=replace(a.motor, analiz_yontemi="lm"))
+
+
 def test_stil_kur():
     assert hazirlik.stil_kur(Sarki("A", "B", stil="benim stilim"), "lm") == "benim stilim"
     assert hazirlik.stil_kur(Sarki("A", "B", vokal="kadin"), "piano ballad.") == (
         "piano ballad, female lead vocal, clean modern studio recording")
     assert hazirlik.stil_kur(Sarki("A", "B"), None) == "clean modern studio recording"
+
+
+def test_stil_kur_musicbrainz():
+    solo = {"sanatci_turleri": ["pop", "soul", "r&b"], "sanatci_tipi": "Person", "sanatci_cinsiyeti": "Female"}
+    beklenen = "pop, soul song, female lead vocal, clean modern studio recording"
+    assert hazirlik.stil_kur(Sarki("A", "B"), kunye=solo) == beklenen
+    grup = {"sanatci_turleri": ["alternative rock"], "sanatci_tipi": "Group", "sanatci_cinsiyeti": None}
+    assert hazirlik.stil_kur(Sarki("A", "B"), kunye=grup) == "alternative rock song, clean modern studio recording"
+    # liste vokali sanatçı cinsiyetini ezer (ör. düet ya da grup)
+    assert "male lead vocal" in hazirlik.stil_kur(Sarki("A", "B", vokal="erkek"), kunye=grup)
+
+
+def test_musicbrainz_analizi_gpu_kullanmaz_ve_tahmin_gondermez(tmp_path, monkeypatch):
+    c = tmp_path / "c"
+    _hazir_sarki(c)
+    d = durum.oku(c, S.kimlik)
+    d.kunye = {"sanatci_turleri": ["pop"], "sanatci_tipi": "Person", "sanatci_cinsiyeti": "Female"}
+    durum.yaz(c, d)
+    monkeypatch.setattr(motor, "calistir", lambda *a, **k: (_ for _ in ()).throw(AssertionError("motor çağrıldı")))
+    hazirlik.analiz_et(ayarlar.yukle(), [S], c)
+    o = durum.oku(c, S.kimlik)
+    assert o.asama == "analiz" and o.analiz["bpm"] is None and o.analiz["ton"] == ""
+    assert o.analiz["stil"] == "pop song, female lead vocal, clean modern studio recording"
 
 
 def _sahteler(monkeypatch, soz_hata=False, kaynak_hata=False, kunye_hata=False):
@@ -81,33 +111,46 @@ def test_kunye_yoksa_uyari_ama_devam(tmp_path, monkeypatch):
     assert d.asama == "hazir" and "uyari" in d.kunye
 
 
-def test_analiz_lm_ve_liste_birlesir(tmp_path, monkeypatch):
-    c = tmp_path / "c"
+def _hazir_sarki(c, sure=120):
+    import numpy as np
+    import soundfile as sf
+
     d = durum.Durum(S.kimlik, S.sanatci, S.ad, kaynak={"dosya": "kaynak.wav"})
     d.gec("hazir")
     durum.yaz(c, d)
-    gorulen = []
+    sf.write(str(c / S.kimlik / "kaynak.wav"), np.zeros((int(sure * 8000), 2), "float32"), 8000)
 
-    def sahte_calistir(a, isler, klasor, zaman_asimi_sn):
+
+def test_analiz_lm_ve_liste_birlesir(tmp_path, monkeypatch):
+    import soundfile as sf
+
+    c = tmp_path / "c"
+    _hazir_sarki(c)
+    gorulen, modeller = [], []
+
+    def sahte_calistir(a, isler, klasor, zaman_asimi_sn, model=None):
+        modeller.append(model)
         gorulen.extend(isler)
         return [motor.Sonuc(i.id, True, analiz={"caption": "piano ballad", "bpm": "67.5", "keyscale": "A major"})
                 for i in isler]
 
     monkeypatch.setattr(motor, "calistir", sahte_calistir)
-    hazirlik.analiz_et(ayarlar.yukle(), [Sarki("Adele", "Someone Like You", vokal="kadin", bpm=68)], c)
+    hazirlik.analiz_et(_lm_ayarlari(), [Sarki("Adele", "Someone Like You", vokal="kadin", bpm=68)], c)
     o = durum.oku(c, S.kimlik)
-    assert o.asama == "analiz" and gorulen[0].gorev == "anla" and Path(gorulen[0].kaynak).name == "kaynak.wav"
+    assert o.asama == "analiz" and gorulen[0].gorev == "anla"
+    # tüm şarkı değil, ayardaki uzunlukta kesit; ağır XL değil analiz modeli
+    assert Path(gorulen[0].kaynak).name == "analiz_kesit.wav"
+    assert sf.info(gorulen[0].kaynak).duration == ayarlar.yukle().motor.analiz_kesit_sn
+    assert modeller == [ayarlar.yukle().motor.analiz_model]
     assert o.analiz["bpm"] == 68 and o.analiz["ton"] == "A major"
     assert o.analiz["stil"] == "piano ballad, female lead vocal, clean modern studio recording"
 
 
 def test_analiz_basarisizsa_liste_degerleri_kalir(tmp_path, monkeypatch):
     c = tmp_path / "c"
-    d = durum.Durum(S.kimlik, S.sanatci, S.ad, kaynak={"dosya": "kaynak.wav"})
-    d.gec("hazir")
-    durum.yaz(c, d)
+    _hazir_sarki(c, sure=20)  # kesitten kısa şarkı: tamamı kullanılır
     monkeypatch.setattr(motor, "calistir",
-                        lambda a, isler, k, z: [motor.Sonuc(i.id, False, "LM yüklenemedi") for i in isler])
-    hazirlik.analiz_et(ayarlar.yukle(), [S], c)
+                        lambda a, isler, k, z, model=None: [motor.Sonuc(i.id, False, "LM yüklenemedi") for i in isler])
+    hazirlik.analiz_et(_lm_ayarlari(), [S], c)
     o = durum.oku(c, S.kimlik)
     assert o.analiz["lm_hata"] == "LM yüklenemedi" and o.analiz["bpm"] is None

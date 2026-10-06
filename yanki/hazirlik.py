@@ -48,15 +48,24 @@ def girdi_hazirla(a: Ayarlar, s: Sarki, calisma: Path, girdi: Path) -> durum.Dur
     return d
 
 
-def stil_kur(s: Sarki, lm_caption: str | None) -> str:
-    """Scryne'ın stili esastır; yoksa LM tanımı + listedeki vokal cinsiyeti + temiz kayıt soneki."""
+def stil_kur(s: Sarki, lm_caption: str | None = None, kunye: dict | None = None) -> str:
+    """Scryne'ın stili esastır. Yoksa: (LM tanımı ya da sanatçının ilk iki MusicBrainz türü) + vokal cinsiyeti
+    (liste; yoksa solo sanatçının cinsiyeti, grupta söylenmez) + temiz kayıt soneki."""
     if s.stil:
         return s.stil
-    parcalar = [lm_caption.strip().rstrip(".")] if lm_caption else []
-    if s.vokal:
-        parcalar.append(f"{VOKAL[s.vokal]} lead vocal")
+    kunye = kunye or {}
+    parcalar = []
+    if lm_caption:
+        parcalar.append(lm_caption.strip().rstrip("."))
+    elif turler := list(kunye.get("sanatci_turleri") or [])[:2]:
+        parcalar.append(", ".join(turler) + " song")
+    vokal = VOKAL.get(s.vokal or "") or (
+        {"Female": "female", "Male": "male"}.get(kunye.get("sanatci_cinsiyeti") or "")
+        if kunye.get("sanatci_tipi") == "Person" else None)
+    if vokal:
+        parcalar.append(f"{vokal} lead vocal")
     parcalar.append(STIL_SONEKI)
-    return ", ".join(p for p in parcalar if p)
+    return ", ".join(parcalar)
 
 
 def analiz_et(a: Ayarlar, sarkilar: list[Sarki], calisma: Path, zaman_asimi_sn: float = 1800) -> None:
@@ -64,14 +73,26 @@ def analiz_et(a: Ayarlar, sarkilar: list[Sarki], calisma: Path, zaman_asimi_sn: 
     hedef = [(s, d) for s in sarkilar if (d := durum.oku(calisma, s.kimlik)) and d.asama == "hazir"]
     if not hedef:
         return
-    isler = [motor.Is(id=s.kimlik, gorev="anla", kaynak=str(durum.klasor(calisma, s.kimlik) / d.kaynak["dosya"]))
-             for s, d in hedef]
-    sonuclar = {r.id: r for r in motor.calistir(a, isler, calisma / "_motor" / "analiz", zaman_asimi_sn)}
+    if a.motor.analiz_yontemi == "musicbrainz":
+        for s, d in hedef:
+            # BPM/ton yalnız listeden: yanlış değer modeli detone eder, tahmin göndermek göndermemekten kötü
+            d.analiz = {"stil": stil_kur(s, kunye=d.kunye), "bpm": s.bpm, "ton": s.ton or "", "dil": "en",
+                        "kaynak": "musicbrainz"}
+            d.gec("analiz")
+            durum.yaz(calisma, d)
+        return
+    isler = []
+    for s, d in hedef:
+        k = durum.klasor(calisma, s.kimlik)
+        kesit = _kesit(k / d.kaynak["dosya"], k / "analiz_kesit.wav", a.motor.analiz_kesit_sn)
+        isler.append(motor.Is(id=s.kimlik, gorev="anla", kaynak=str(kesit)))
+    sonuclar = {r.id: r for r in motor.calistir(a, isler, calisma / "_motor" / "analiz", zaman_asimi_sn,
+                                                model=a.motor.analiz_model)}
     for s, d in hedef:
         r = sonuclar[s.kimlik]
         lm = r.analiz if r.basari else {}
         d.analiz = {
-            "stil": stil_kur(s, lm.get("caption")),
+            "stil": stil_kur(s, lm.get("caption"), d.kunye),
             "bpm": s.bpm or _tam(lm.get("bpm")),
             "ton": s.ton or (lm.get("keyscale") or ""),
             "dil": "en",
@@ -80,6 +101,18 @@ def analiz_et(a: Ayarlar, sarkilar: list[Sarki], calisma: Path, zaman_asimi_sn: 
         }
         d.gec("analiz")
         durum.yaz(calisma, d)
+
+
+def _kesit(kaynak: Path, hedef: Path, sure_sn: float) -> Path:
+    """Şarkının ~%40'ından başlayan kesit (çoğu şarkıda nakarat bölgesi; giriş sessizliği değil)."""
+    import soundfile as sf
+
+    bilgi = sf.info(str(kaynak))
+    bas = max(0.0, min(bilgi.duration * 0.4, bilgi.duration - sure_sn))
+    ses, sr = sf.read(str(kaynak), dtype="float32", always_2d=True, start=int(bas * bilgi.samplerate),
+                      stop=int(min(bilgi.duration, bas + sure_sn) * bilgi.samplerate))
+    sf.write(str(hedef), ses, sr)
+    return hedef
 
 
 def _tam(x) -> int | None:

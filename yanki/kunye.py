@@ -21,6 +21,10 @@ class Kunye:
     yazarlar: tuple[str, ...] = field(default=())
     isrc: tuple[str, ...] = field(default=())
     ilk_yayin: str | None = None
+    # stil tanımı için: sanatçının MusicBrainz türleri (oy sırasıyla), tür (Person/Group) ve cinsiyet
+    sanatci_turleri: tuple[str, ...] = field(default=())
+    sanatci_tipi: str | None = None
+    sanatci_cinsiyeti: str | None = None
 
 
 def bul(sanatci: str, ad: str, json_al=ag.json_al, uyku=time.sleep) -> Kunye:
@@ -43,6 +47,14 @@ def bul(sanatci: str, ad: str, json_al=ag.json_al, uyku=time.sleep) -> Kunye:
         for r in e.get("relations", []):
             if r.get("type") in YAZAR_ROLLERI and r.get("artist", {}).get("name") not in yazarlar:
                 yazarlar.append(r["artist"]["name"])
+        turler, tip, cinsiyet = (), None, None
+        kredi = (kayit.get("artist-credit") or [{}])[0].get("artist", {})
+        # yalnız aranan sanatçının kendisiyse (başka birinin cover kaydının türleri yanıltır)
+        if kredi.get("id") and kredi.get("name", "").casefold() == sanatci.casefold():
+            uyku(1.1)
+            sn = json_al(f"{MB}/artist/{kredi['id']}", {"inc": "genres", "fmt": "json"})
+            turler = tuple(g["name"] for g in sorted(sn.get("genres", []), key=lambda g: -g.get("count", 0)))
+            tip, cinsiyet = sn.get("type"), sn.get("gender")
         return Kunye(kayit["id"], eser["id"], eser.get("title"), tuple(yazarlar), tuple(ayrinti.get("isrcs", [])),
-                     kayit.get("first-release-date"))
+                     kayit.get("first-release-date"), turler, tip, cinsiyet)
     raise ag.Bulunamadi(f"MusicBrainz kaydında eser bağlantısı yok: {sanatci} — {ad}")
