@@ -22,6 +22,7 @@ FONT_KALIN = Path("C:/Windows/Fonts/bahnschrift.ttf")
 # Dağıtımcıya özel ayrıntılar: docs/arastirma/02-dagitimci-karsilastirmasi.md (2026-10-07). RouteNote WAV almıyor
 # (FLAC/MP3 44,1); bilgi 2023 tarihli, yükleme ekranında doğrulanır.
 SES_BICIMI = {"routenote": "flac", "distrokid": "wav", "": "wav"}
+DAGITIMCI_ADI = {"distrokid": "DistroKid", "routenote": "RouteNote"}
 DAGITIMCI_NOTU = {
     "distrokid": [
         "Yapay zekâ sorusu (\"Is any part of this track AI-generated?\"): **all of the audio**. Ardından sanatçının"
@@ -188,7 +189,7 @@ def yukle_md(meta: dict, y: Yayin, dosyalar: dict[str, str]) -> str:
         "",
     ]
     if notlar := DAGITIMCI_NOTU.get(y.dagitimci):
-        satir += [f"{y.dagitimci.capitalize()} formuna özel:", "", *[f"- {n}" for n in notlar], ""]
+        satir += [f"{DAGITIMCI_ADI[y.dagitimci]} formuna özel:", "", *[f"- {n}" for n in notlar], ""]
     satir += [
         "Yükledikten sonra: `yanki yuklendi <kimlik>`",
     ]

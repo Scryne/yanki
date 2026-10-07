@@ -10,5 +10,6 @@ etiket = ""
 
 [master]
 lufs = -14.0
-gercek_tepe_dbtp = -1.0
+# Spotify sınırı −1 dBTP; doğrusal loudnorm bazı şarkılarda 0,06 dB aşıyordu (2026-10-07) → pay
+gercek_tepe_dbtp = -1.2
 ornekleme = 44100
