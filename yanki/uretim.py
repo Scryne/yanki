@@ -178,8 +178,7 @@ def uret(a: Ayarlar, calisma: Path, kimlikler: list[str] | None = None,
                     bas, son = o["bolge"]
                     pb, ps = max(0.0, bas - PENCERE_PAYI), min(sure, son + PENCERE_PAYI)
                     pencere = _kes(temel, pb, ps, k / "onarimlar" / o["id"] / "pencere_temel.wav")
-                    icindeki = [m for t, m in satirlar if pb <= t < ps and m.strip()]
-                    soz = "[verse]\n" + "\n".join(icindeki) if icindeki else _soz(calisma, d)
+                    soz = sozler.aralik_sozu(satirlar, pb, ps) or _soz(calisma, d)
                     onarim_pencere[o["id"]] = pb
                     tur1.append(motor.Is(
                         id=f"{d.kimlik}|onarim|{aday.no}|{o['id']}", gorev="repaint", kaynak=str(pencere),

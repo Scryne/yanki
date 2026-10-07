@@ -1,6 +1,10 @@
 """Sözler: Scryne'ın söz dosyası → LRCLIB → yok.
 
 ACE-Step söz olmadan anlamsız vokal üretiyor (spike S1); söz bulunamayan şarkı hazırlıkta durur.
+
+LRCLIB enstrümantal araları `♪` satırıyla yazıyor, düz sözde kıtalar arasında boş satır yok. `♪` modele söz olarak
+gidip şarkı tek `[verse]` olunca söz WER'i 0,099; `♪`'ta kıta bölüp nakaratı etiketleyince 0,042 (S12; Scryne
+dinledi: "gayet güzel").
 """
 
 import re
@@ -10,6 +14,7 @@ from pathlib import Path
 from yanki import ag
 
 LRCLIB = "https://lrclib.net/api"
+NOTA = frozenset("♪♫♬♩")
 
 
 @dataclass(frozen=True)
@@ -21,13 +26,48 @@ class Soz:
     satirlar: tuple[tuple[float, str], ...] = field(default=())
 
 
+def _ara_mi(satir: str) -> bool:
+    """Boş ya da yalnız nota işaretlerinden oluşan satır: kıta sınırı, söz değil."""
+    s = "".join(satir.split())
+    return not s or set(s) <= NOTA
+
+
 def etiketle(duz: str) -> str:
-    """Kıtaları etiketler: birden çok geçen kıta [chorus], diğerleri [verse]. Var olan etiketlere dokunmaz."""
+    """Kıtaları etiketler: birden çok geçen kıta [chorus], diğerleri [verse]. `♪` satırları kıta sınırıdır.
+    Var olan etiketlere dokunmaz (yalnız `♪` satırlarını çıkarır)."""
+    satirlar = duz.replace("\r", "").split("\n")
     if "[" in duz and "]" in duz.split("\n", 1)[0]:
-        return duz.strip()
-    kitalar = [k.strip() for k in duz.replace("\r", "").split("\n\n") if k.strip()]
+        return "\n".join(x for x in satirlar if not x.strip() or not _ara_mi(x)).strip()
+    duz = "\n".join("" if _ara_mi(x) else x for x in satirlar)
+    kitalar = [k.strip() for k in duz.split("\n\n") if k.strip()]
     tekrar = {k for k in kitalar if kitalar.count(k) > 1}
     return "\n\n".join(("[chorus]" if k in tekrar else "[verse]") + "\n" + k for k in kitalar)
+
+
+def bolumler(satirlar: list[tuple[float, str]]) -> list[tuple[str, list[tuple[float, str]]]]:
+    """Zaman damgalı satırları `♪`/boş satırda kıtalara böler; birden çok geçen kıta [chorus], diğerleri [verse]."""
+    kitalar, kita = [], []
+    for t, m in satirlar:
+        if _ara_mi(m):
+            if kita:
+                kitalar.append(kita)
+            kita = []
+        else:
+            kita.append((t, m.strip()))
+    if kita:
+        kitalar.append(kita)
+    metinler = [tuple(m for _, m in k) for k in kitalar]
+    tekrar = {k for k in metinler if metinler.count(k) > 1}
+    return [("[chorus]" if mt in tekrar else "[verse]", k) for k, mt in zip(kitalar, metinler, strict=True)]
+
+
+def aralik_sozu(satirlar: list[tuple[float, str]], bas: float, son: float) -> str:
+    """[bas, son) aralığında başlayan satırlar, bölüm etiketleriyle; aralıkta söz yoksa boş."""
+    bloklar = []
+    for etiket, kita in bolumler(satirlar):
+        if icinde := [m for t, m in kita if bas <= t < son]:
+            bloklar.append(etiket + "\n" + "\n".join(icinde))
+    return "\n\n".join(bloklar)
 
 
 def senkron(lrc: str | None) -> tuple[tuple[float, str], ...]:

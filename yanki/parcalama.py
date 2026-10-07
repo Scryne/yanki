@@ -12,6 +12,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from yanki import sozler
+
 KESIM_ONCESI = 0.8
 BINDIRME = 1.0  # kesimin iki yanına
 
@@ -55,12 +57,8 @@ def plan(sure: float, satir_baslari: list[float], **k) -> list[Parca]:
 
 
 def soz_dagit(parcalar: list[Parca], satirlar: list[tuple[float, str]]) -> list[str]:
-    """Her parçaya çekirdek aralığında başlayan satırlar. Boş parça: enstrümantal etiketi."""
-    sonuc = []
-    for p in parcalar:
-        icindeki = [m for t, m in satirlar if p.cekirdek_bas <= t < p.cekirdek_son and m.strip()]
-        sonuc.append("[verse]\n" + "\n".join(icindeki) if icindeki else "[instrumental]")
-    return sonuc
+    """Her parçaya çekirdek aralığında başlayan satırlar, bölüm etiketleriyle. Boş parça: enstrümantal etiketi."""
+    return [sozler.aralik_sozu(satirlar, p.cekirdek_bas, p.cekirdek_son) or "[instrumental]" for p in parcalar]
 
 
 def birlestir(sesler: list[np.ndarray], parcalar: list[Parca], sr: int) -> np.ndarray:

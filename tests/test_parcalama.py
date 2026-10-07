@@ -61,3 +61,11 @@ def test_birlestirme_konumlari_dogru():
     sesler = [np.full((int(round((x.son - x.bas) * sr)), 1), x.no, np.float32) for x in p]
     c = parcalama.birlestir(sesler, p, sr)[:, 0]
     assert c[45 * sr] == 1 and c[135 * sr] == 2 and c[215 * sr] == 3
+
+
+def test_soz_dagitimi_nota_ve_nakarat():
+    p = parcalama.plan(250, [10, 50, 90, 95, 130, 170, 210])
+    satirlar = [(10, "bir"), (50, "♪"), (90, "n"), (95, "♪"), (130, "iki"), (170, "♪"), (210, "n")]
+    sonuc = parcalama.soz_dagit(p, satirlar)
+    assert all("♪" not in s for s in sonuc)
+    assert "[chorus]\nn" in "\n".join(sonuc) and "[verse]\nbir" in sonuc[0]
