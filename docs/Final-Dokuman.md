@@ -14,7 +14,7 @@ Otomat'ın yapısı kopyalanmaz (Scryne, 2026-10-06): mimari aşağıdaki gereks
 ## Özet
 
 Yanki, Scryne'ın listesine yazdığı yabancı şarkıların cover'ını yerel GPU'da (RTX 4060 Laptop, 8 GB) ACE-Step 1.5
-XL-SFT ile üretir; her şarkı için iki aday çıkarır, otomatik kapılardan (orijinal kaydı taşımıyor, sözler var, süre
+XL-SFT ile üretir; her şarkı için üç aday çıkarır (S13: tohum en büyük kalite etkeni), otomatik kapılardan (orijinal kaydı taşımıyor, sözler var, süre
 doğru) geçirir ve yerel bir dinleme sayfasına koyar. Scryne dinler: onaylar, bozuk aralığı işaretler (hat yalnız o
 aralığı yeniden üretir) ya da reddeder. Onaylanan cover mastering, kapak ve dağıtımcı metadata'sıyla bir **yükleme
 paketine** dönüşür; Scryne paketi dağıtımcı arayüzünden yükler (şarkı başı ~3–5 dk). Dağıtımcılarda yükleme API'si

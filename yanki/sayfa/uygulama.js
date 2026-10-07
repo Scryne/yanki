@@ -140,7 +140,7 @@ async function sarkiGoster(kimlik) {
   if (d.hata) parcalar.push(el("p", { class: "uyari", role: "alert" }, d.hata));
   if (["uretildi", "hata"].includes(d.asama) && d.analiz?.stil) parcalar.push(stilKutu(d));
   if (d.asama === "analiz" && d.adaylar.length) parcalar.push(el("p", { class: "ipucu bekleyen" },
-    "Yeni stille iki aday sırada; sonraki koşuda üretilir. O zamana kadar mevcut adaylar yalnız dinlenebilir."));
+    "Yeni stille adaylar sırada; sonraki koşuda üretilir. O zamana kadar mevcut adaylar yalnız dinlenebilir."));
   if (d.kaynak?.dosya) parcalar.push(seritKutu({ kimlik, dosya: d.kaynak.dosya, baslik: "Orijinal", alt: "karşılaştırma için" }));
   const duzenlenebilir = ["uretildi", "onarim"].includes(d.asama);
   const stilFarkli = new Set(d.adaylar.map((a) => a.stil || "")).size > 1;
@@ -170,7 +170,7 @@ function stilKutu(d) {
   const gonder = (e) => {
     e.preventDefault();
     eylem(d, "stil", { stil: stil.value, bpm: bpm.value ? +bpm.value : null, ton: ton.value },
-      "Yeni stil kaydedildi. İki aday sonraki koşuda üretilecek; mevcut adaylar yerinde kalır.");
+      "Yeni stil kaydedildi. Adaylar sonraki koşuda üretilecek; mevcut adaylar yerinde kalır.");
   };
   return el("details", { class: "stil-duzen" },
     el("summary", {}, "Stili düzenle ve yeniden üret"),
@@ -182,7 +182,7 @@ function stilKutu(d) {
         el("label", { for: "stil-ton" }, "Ton", ton),
         el("span", { class: "bosluk" }),
         el("button", { class: "dugme ikincil", type: "submit" }, "Bu stille yeniden üret")),
-      el("p", { class: "ipucu" }, "Mevcut adaylar silinmez; yeni iki aday onların ardından eklenir. Boş bırakılan BPM ve ton modele bırakılır.")));
+      el("p", { class: "ipucu" }, "Mevcut adaylar silinmez; yeni adaylar onların ardından eklenir. Boş bırakılan BPM ve ton modele bırakılır.")));
 }
 
 function rozetler(kapilar) {

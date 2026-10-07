@@ -1,4 +1,5 @@
 import json
+from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
@@ -6,6 +7,12 @@ import pytest
 import soundfile as sf
 
 from yanki import ayarlar, durum, motor, uretim
+
+
+def _ayar() -> ayarlar.Ayarlar:
+    """Testler gerçek config'teki aday sayısından bağımsız: 2 aday, tohumlar 42 ve 7."""
+    a = ayarlar.yukle()
+    return replace(a, cover=replace(a.cover, aday_sayisi=2, tohumlar=(42, 7)))
 
 
 def _sarki(c: Path, kimlik: str, sure: float, satirlar=None) -> durum.Durum:
@@ -58,7 +65,7 @@ def test_kisa_sarki_tek_parca(tmp_path):
     c = tmp_path / "c"
     _sarki(c, "kisa", 60)
     m = SahteMotor()
-    uretim.uret(ayarlar.yukle(), c, calistir=m, degerlendir=GECER)
+    uretim.uret(_ayar(), c, calistir=m, degerlendir=GECER)
     d = durum.oku(c, "kisa")
     assert d.asama == "uretildi" and [x.gecti for x in d.adaylar] == [True, True]
     assert len(m.turlar) == 1 and len(m.turlar[0]) == 2  # tek tur, aday başına bir iş
@@ -70,7 +77,7 @@ def test_uzun_sarki_parcali_ve_referansli(tmp_path):
     satirlar = [[t, f"satır {t}"] for t in range(5, 245, 10)]
     _sarki(c, "uzun", 250, satirlar)
     m = SahteMotor()
-    uretim.uret(ayarlar.yukle(), c, calistir=m, degerlendir=GECER)
+    uretim.uret(_ayar(), c, calistir=m, degerlendir=GECER)
     d = durum.oku(c, "uzun")
     assert d.asama == "uretildi"
     tur1, tur2 = m.turlar
@@ -85,7 +92,7 @@ def test_uzun_sarki_parcali_ve_referansli(tmp_path):
 def test_motor_hatasi_adayi_dusurur_digerini_birakir(tmp_path):
     c = tmp_path / "c"
     _sarki(c, "kisa", 60)
-    uretim.uret(ayarlar.yukle(), c, calistir=SahteMotor({"kisa|cover|2|1"}), degerlendir=GECER)
+    uretim.uret(_ayar(), c, calistir=SahteMotor({"kisa|cover|2|1"}), degerlendir=GECER)
     d = durum.oku(c, "kisa")
     assert d.asama == "uretildi" and [x.gecti for x in d.adaylar] == [True, False]
     assert "bozuk" in d.adaylar[1].kapilar["motor"]["hata"]
@@ -94,14 +101,14 @@ def test_motor_hatasi_adayi_dusurur_digerini_birakir(tmp_path):
 def test_hicbir_aday_gecmezse_hata(tmp_path):
     c = tmp_path / "c"
     _sarki(c, "kisa", 60)
-    uretim.uret(ayarlar.yukle(), c, calistir=SahteMotor(), degerlendir=DUSER)
+    uretim.uret(_ayar(), c, calistir=SahteMotor(), degerlendir=DUSER)
     d = durum.oku(c, "kisa")
     assert d.asama == "hata" and "aday 1: dalga" in d.hata
 
 
 def test_pencereli_onarim_yalniz_bolgeyi_degistirir(tmp_path):
     c = tmp_path / "c"
-    a = ayarlar.yukle()
+    a = _ayar()
     _sarki(c, "uzun", 250, [[t, f"satır {t}"] for t in range(5, 245, 10)])
     uretim.uret(a, c, calistir=SahteMotor(), degerlendir=GECER)
     d = durum.oku(c, "uzun")
@@ -147,7 +154,7 @@ def test_zaman_damgasi_hic_yoksa_tek_parca_ve_uyari(tmp_path):
 
 
 def test_stil_degisince_yeni_adaylar_eskilerin_ardindan(tmp_path):
-    c, a = tmp_path / "c", ayarlar.yukle()
+    c, a = tmp_path / "c", _ayar()
     _sarki(c, "s", 60)
     uretim.uret(a, c, calistir=SahteMotor(), degerlendir=GECER)
     d = durum.oku(c, "s")
@@ -165,10 +172,20 @@ def test_stil_degisince_yeni_adaylar_eskilerin_ardindan(tmp_path):
 
 
 def test_stil_degisimi_onarim_beklerken_reddedilir(tmp_path):
-    c, a = tmp_path / "c", ayarlar.yukle()
+    c, a = tmp_path / "c", _ayar()
     _sarki(c, "s", 60)
     uretim.uret(a, c, calistir=SahteMotor(), degerlendir=GECER)
     d = durum.oku(c, "s")
     uretim.onarim_iste(a, d, 1, 10, 12)
     with pytest.raises(ValueError):
         uretim.stil_degistir(d, "rock", None, "")
+
+
+def test_gercek_configteki_aday_sayisi_kadar_aday(tmp_path):
+    c, a = tmp_path / "c", ayarlar.yukle()
+    _sarki(c, "s", 60)
+    m = SahteMotor()
+    uretim.uret(a, c, calistir=m, degerlendir=GECER)
+    d = durum.oku(c, "s")
+    assert [x.no for x in d.adaylar] == list(range(1, a.cover.aday_sayisi + 1))
+    assert [x.tohum for x in d.adaylar] == list(a.cover.tohumlar[: a.cover.aday_sayisi])
