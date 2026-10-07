@@ -125,6 +125,15 @@ def _sar(metin: str, font, ciz, en: int) -> list[str]:
     return satirlar + [s] if s else satirlar
 
 
+# Mağazaların "explicit" saydığı sözcükler; damn/hell gibi hafifler sayılmaz (drivers license: "fucking", 2026-10-08)
+ACIK_SOZ = re.compile(r"\b((?:mother)?fuck\w*|shit\w*|bitch\w*|cunt\w*|pussy|dick|cock|nigga\w*)\b", re.I)
+
+
+def acik_sozler(metin: str) -> list[str]:
+    """Sözlerde geçen açık içerikli sözcükler (küçük harf, tekrarsız, ilk geçiş sırasıyla)."""
+    return list(dict.fromkeys(m.group(1).lower() for m in ACIK_SOZ.finditer(metin)))
+
+
 def nakarat_baslangici(satirlar: list) -> float | None:
     """Önizleme (preview) başlangıcı: en az 3 kez tekrarlanan sözlerden şarkıda en erken geleni, nakaratın ilk
     satırı sayılır. Zaman damgası kaynağın; parçalı üretim kaynağın zamanlamasını izlediği için cover'da da tutar."""
@@ -135,7 +144,8 @@ def nakarat_baslangici(satirlar: list) -> float | None:
     return next((t for t, s in temiz if sayim[s] >= 3), None)
 
 
-def metadata(d: durum.Durum, y: Yayin, master_olcum: dict, sure_sn: float, onizleme_sn: float | None = None) -> dict:
+def metadata(d: durum.Durum, y: Yayin, master_olcum: dict, sure_sn: float, onizleme_sn: float | None = None,
+             acik: list[str] | None = None) -> dict:
     k = d.kunye or {}
     return {
         "baslik": d.ad,  # dağıtımcı kuralı: orijinal başlıkla aynı, "(Cover)" eki yok, orijinal sanatçı adı yok
@@ -152,7 +162,9 @@ def metadata(d: durum.Durum, y: Yayin, master_olcum: dict, sure_sn: float, onizl
         "onizleme_sn": onizleme_sn,
         "yapay_zeka": {"kullanildi": True, "arac": "ACE-Step 1.5 (XL-SFT)", "kapsam": "vokal ve enstrümantal üretim",
                        "baglanti": "https://github.com/ace-step/ACE-Step-1.5"},
-        "acik_icerik": None,  # Scryne işaretler; sözlerde küfür taraması yapılmadı
+        # sözler tarandıysa (acik bir liste) karar ondan; taranmadıysa None → formda elle bakılır
+        "acik_icerik": None if acik is None else bool(acik),
+        "acik_sozcukler": acik or [],
         "master": master_olcum,
         # hangi adaydan paketlendi (yeniden üretimden sonra eski/yeni ayırt edilsin)
         "kaynak_aday": next(({"no": x.no, "tohum": x.tohum, "dosya": x.dosya} for x in d.adaylar if x.no == d.secilen),
@@ -208,6 +220,13 @@ def yukle_md(meta: dict, y: Yayin, dosyalar: dict[str, str]) -> str:
     return "\n".join(satir) + "\n"
 
 
+def _acik_satiri(meta: dict) -> str:
+    if meta.get("acik_icerik") is True:
+        return f"**Explicit** (sözlerde: {', '.join(meta['acik_sozcukler'])})"
+    temiz = "Not Explicit" + (" (sözlerde küfür yok)" if meta.get("acik_icerik") is False else " (sözlere bak)")
+    return temiz + "; \"Clean\" seçme, o açık içeriğin temizlenmiş sürümü demek"
+
+
 def _ad_soyad(ad: str) -> tuple[str, str]:
     """RouteNote yazar alanı ad + soyad ister; MusicBrainz sahne adı verir ("Adele" → soyadı elle: Adkins)."""
     parca = ad.rsplit(" ", 1)
@@ -244,7 +263,7 @@ def _routenote_formu(meta: dict, dosyalar: dict[str, str]) -> list[str]:
         f"13. **Record Label Name:** `{meta['etiket'] or sanatci}`",
         "14. **Originally Released** = **Sales Start Date**: aynı gün, en az 2–3 hafta sonrası (ücretsiz inceleme "
         "günler sürüyor; Spotify pitch için ≥7 gün). **Pre Order Date:** boş.",
-        "15. **Explicit Content:** Not Explicit (sözlere bak; \"Clean\" seçme, o açık içeriğin temiz sürümü demek)",
+        f"15. **Explicit Content:** {_acik_satiri(meta)}",
         "",
         "## 2. Add Audio",
         f"16. **Ses dosyası:** `{dosyalar['ses']}` ({ses_bilgi})",
@@ -311,7 +330,9 @@ def paketle(calisma: Path, yayin_yolu: Path, kimlikler: list[str] | None = None,
             kapak(d.ad, sunucu.dalga(kaynak)["tepe"], kapak_yolu, y.sanatci_adi)
         zaman = k / "soz_zaman.json"
         onizleme = nakarat_baslangici(json.loads(zaman.read_text(encoding="utf-8"))) if zaman.exists() else None
-        meta = metadata(d, y, olcum, ses.sure(ses_yolu), onizleme)
+        soz = k / "soz.txt"
+        acik = acik_sozler(soz.read_text(encoding="utf-8")) if soz.exists() else None
+        meta = metadata(d, y, olcum, ses.sure(ses_yolu), onizleme, acik)
         (p / "metadata.json").write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
         (p / "YUKLE.md").write_text(yukle_md(meta, y, {"ses": ses_yolu.name, "kapak": kapak_yolu.name}),
                                     encoding="utf-8")

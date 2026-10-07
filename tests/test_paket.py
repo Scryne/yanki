@@ -161,3 +161,14 @@ def test_paketle_ozel_kapagi_korur(tmp_path):
     durum.yaz(c, d)
     paket.paketle(c, _yayin(tmp_path))
     assert (k / "paket" / "SANATCI_-_Someone_Like_You.jpg").read_bytes() == b"ozel"
+
+
+def test_acik_icerik_sozlerden(tmp_path):
+    assert paket.acik_sozler("But I still Fucking love you\nfucking again, damn, hello shitty") == ["fucking", "shitty"]
+    assert paket.acik_sozler("Never mind, I'll find someone like you; Dickens") == []
+    y = paket.yayin_ayarlari(_yayin(tmp_path, "Orvane", "routenote"))
+    m = paket.metadata(_durum(), y, {"lufs": -14.0, "gercek_tepe_dbtp": -1.2}, 200.0, acik=["fucking"])
+    dosya = {"ses": "a.flac", "kapak": "k"}
+    assert m["acik_icerik"] is True and "**Explicit** (sözlerde: fucking)" in paket.yukle_md(m, y, dosya)
+    temiz = paket.metadata(_durum(), y, {"lufs": -14.0, "gercek_tepe_dbtp": -1.2}, 200.0, acik=[])
+    assert temiz["acik_icerik"] is False and "Not Explicit (sözlerde küfür yok)" in paket.yukle_md(temiz, y, dosya)
