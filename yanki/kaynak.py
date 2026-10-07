@@ -72,7 +72,22 @@ def youtube_adaylari(sorgu: str, adet: int = 8) -> list[Aday]:
             for g in girdiler if g]
 
 
-def youtube_indir(video_id: str, hedef: Path) -> Path:
+def youtube_indir(video_id: str, hedef: Path, deneme: int = 3, bekleme_sn: float = 10.0) -> Path:
+    """İlk parçada boş/403 dönen indirmeler (2026-10-08 gecesi 12 şarkının 2'si, 0 bayt) yeni imzalı adresle
+    tekrar denenir."""
+    import time
+
+    for i in range(deneme):
+        try:
+            return _indir_bir(video_id, hedef)
+        except OSError:
+            if i == deneme - 1:
+                raise
+            time.sleep(bekleme_sn * (i + 1))
+    raise AssertionError("ulaşılmaz")
+
+
+def _indir_bir(video_id: str, hedef: Path) -> Path:
     import yt_dlp
     from curl_cffi import CurlHttpVersion, requests
 
@@ -80,19 +95,21 @@ def youtube_indir(video_id: str, hedef: Path) -> Path:
         bilgi = ydl.extract_info(f"https://www.youtube.com/watch?v={video_id}", download=False)
     url, boyut = bilgi["url"], bilgi.get("filesize") or bilgi.get("filesize_approx")
     hedef.parent.mkdir(parents=True, exist_ok=True)
+    son = ""
     with requests.Session(impersonate="chrome") as s, open(hedef, "wb") as f:
         bas = 0
         while boyut is None or bas < boyut:
             r = s.get(url, headers={"Range": f"bytes={bas}-{bas + PARCA - 1}"},
                       http_version=CurlHttpVersion.V3ONLY, timeout=60)
             if r.status_code not in (200, 206) or not r.content:
+                son = f", HTTP {r.status_code}"
                 break
             f.write(r.content)
             bas += len(r.content)
             if len(r.content) < PARCA:
                 break
     if boyut and bas < boyut:
-        raise OSError(f"eksik indirme: {bas}/{boyut} bayt")
+        raise OSError(f"eksik indirme: {bas}/{boyut} bayt{son}")
     return hedef
 
 

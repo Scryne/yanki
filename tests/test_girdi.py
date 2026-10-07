@@ -152,3 +152,21 @@ def test_aralik_sozu_bolum_etiketli():
     assert sozler.aralik_sozu(satirlar, 0, 20) == "[verse]\na\nb\n\n[chorus]\nn1\nn2\n\n[verse]\nc\n\n[chorus]\nn1\nn2"
     assert sozler.aralik_sozu(satirlar, 2, 5) == "[verse]\nb\n\n[chorus]\nn1"  # ♪ söz olarak gitmez
     assert sozler.aralik_sozu(satirlar, 11, 20) == ""
+
+
+def test_youtube_indir_bos_parcada_yeniden_dener(tmp_path, monkeypatch):
+    cagri = []
+
+    def bir(video_id, hedef):
+        cagri.append(video_id)
+        if len(cagri) < 3:
+            raise OSError("eksik indirme: 0/100 bayt, HTTP 403")
+        return hedef
+
+    monkeypatch.setattr(kaynak, "_indir_bir", bir)
+    assert kaynak.youtube_indir("v", tmp_path / "a.m4a", bekleme_sn=0) == tmp_path / "a.m4a"
+    assert len(cagri) == 3
+    cagri.clear()
+    monkeypatch.setattr(kaynak, "_indir_bir", lambda v, h: (_ for _ in ()).throw(OSError("eksik")))
+    with pytest.raises(OSError):
+        kaynak.youtube_indir("v", tmp_path / "a.m4a", deneme=2, bekleme_sn=0)
