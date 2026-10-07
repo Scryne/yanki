@@ -85,12 +85,26 @@ def onarim_iste(a: Ayarlar, d: durum.Durum, aday_no: int, bas: float, son: float
     d.gec("onarim")
 
 
-def stil_degistir(d: durum.Durum, stil: str, bpm: int | None, ton: str) -> None:
-    """Yeni stil tanımıyla yeniden üretim ister; eski tanım notlara yazılır (hangi stilin işe yaradığı izlensin)."""
-    if d.asama not in ("uretildi", "hata") or not d.analiz.get("stil"):
-        raise ValueError(f"bu aşamada stil değiştirilemez: {d.asama}")
+def _yeniden_uretilebilir(d: durum.Durum, asamalar: tuple[str, ...]) -> None:
+    if d.asama not in asamalar or not d.analiz.get("stil"):
+        raise ValueError(f"bu aşamada yeniden üretilemez: {d.asama}")
     if any(o["durum"] == "bekliyor" for a in d.adaylar for o in a.onarimlar):
         raise ValueError("bekleyen onarım var; önce üretilmesini bekle")
+
+
+def yeniden_uretime_al(d: durum.Durum) -> None:
+    """Hat iyileşince (ör. temiz söz, aday sayısı) onaylı şarkıya da yeni adaylar: mevcut adaylar, seçim ve paket
+    yerinde kalır; yeni adaylar ardından eklenir, Scryne hangisini yükleyeceğini yeniden seçer. Yüklenmiş şarkı geri
+    alınmaz."""
+    _yeniden_uretilebilir(d, ("uretildi", "hata", "onaylandi", "paketlendi"))
+    d.notlar.append({"yeniden_uretim": {"onceki_asama": d.asama, "onceki_secilen": d.secilen}})
+    d.secilen = None
+    d.gec("analiz")
+
+
+def stil_degistir(d: durum.Durum, stil: str, bpm: int | None, ton: str) -> None:
+    """Yeni stil tanımıyla yeniden üretim ister; eski tanım notlara yazılır (hangi stilin işe yaradığı izlensin)."""
+    _yeniden_uretilebilir(d, ("uretildi", "hata"))
     stil = " ".join(stil.split())
     if not stil:
         raise ValueError("stil boş olamaz")

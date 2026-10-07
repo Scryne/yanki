@@ -140,7 +140,7 @@ async function sarkiGoster(kimlik) {
   if (d.hata) parcalar.push(el("p", { class: "uyari", role: "alert" }, d.hata));
   if (["uretildi", "hata"].includes(d.asama) && d.analiz?.stil) parcalar.push(stilKutu(d));
   if (d.asama === "analiz" && d.adaylar.length) parcalar.push(el("p", { class: "ipucu bekleyen" },
-    "Yeni stille adaylar sırada; sonraki koşuda üretilir. O zamana kadar mevcut adaylar yalnız dinlenebilir."));
+    "Yeni adaylar sırada; sonraki koşuda üretilir. O zamana kadar mevcut adaylar yalnız dinlenebilir."));
   if (d.kaynak?.dosya) parcalar.push(seritKutu({ kimlik, dosya: d.kaynak.dosya, baslik: "Orijinal", alt: "karşılaştırma için" }));
   const duzenlenebilir = ["uretildi", "onarim"].includes(d.asama);
   const stilFarkli = new Set(d.adaylar.map((a) => a.stil || "")).size > 1;

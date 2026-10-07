@@ -54,6 +54,27 @@ def _uret(_: argparse.Namespace) -> int:
     return 0
 
 
+def _yeniden(args: argparse.Namespace) -> int:
+    a = ayarlar.yukle()
+    calisma = a.kok / "calisma"
+    kod = 0
+    for kimlik in args.kimlik:
+        d = durum.oku(calisma, kimlik)
+        if d is None:
+            print(f"'{kimlik}' bulunamadı")
+            kod = 1
+            continue
+        try:
+            uretim.yeniden_uretime_al(d)
+        except ValueError as e:
+            print(f"{kimlik}: {e}")
+            kod = 1
+            continue
+        durum.yaz(calisma, d)
+        print(f"yeniden üretime alındı: {d.sanatci} — {d.ad} (sonraki `yanki uret` ya da gece görevi)")
+    return kod
+
+
 def _paketle(args: argparse.Namespace) -> int:
     a = ayarlar.yukle()
     islenen = paket.paketle(a.kok / "calisma", a.kok / "config" / "yayin.toml", yeniden=args.yeniden)
@@ -117,6 +138,9 @@ def main(argv: list[str] | None = None) -> int:
     c = alt.add_parser("calistir", help="hazırla + analiz + üret: arka plan koşusu")
     c.add_argument("--liste", help="varsayılan girdi/liste.toml")
     c.set_defaults(fn=_calistir, yeniden=False, analizsiz=False)
+    yn = alt.add_parser("yeniden", help="onaylı/paketli şarkıya güncel hatla yeni adaylar (eskiler kalır)")
+    yn.add_argument("kimlik", nargs="+")
+    yn.set_defaults(fn=_yeniden)
     p = alt.add_parser("paketle", help="onaylı şarkılardan yükleme paketi (mastering, kapak, YUKLE.md)")
     p.add_argument("--yeniden", action="store_true", help="paketlenmişleri de yeniden paketle")
     p.set_defaults(fn=_paketle)
@@ -140,7 +164,7 @@ def main(argv: list[str] | None = None) -> int:
     return args.fn(args)
 
 
-YAZAN_KOMUTLAR = {"hazirla", "uret", "calistir", "paketle", "yuklendi"}
+YAZAN_KOMUTLAR = {"hazirla", "uret", "calistir", "yeniden", "paketle", "yuklendi"}
 
 
 if __name__ == "__main__":

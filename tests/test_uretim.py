@@ -189,3 +189,29 @@ def test_gercek_configteki_aday_sayisi_kadar_aday(tmp_path):
     d = durum.oku(c, "s")
     assert [x.no for x in d.adaylar] == list(range(1, a.cover.aday_sayisi + 1))
     assert [x.tohum for x in d.adaylar] == list(a.cover.tohumlar[: a.cover.aday_sayisi])
+
+
+def test_onayli_sarki_yeniden_uretimde_eskileri_korur(tmp_path):
+    c, a = tmp_path / "c", _ayar()
+    _sarki(c, "s", 60)
+    uretim.uret(a, c, calistir=SahteMotor(), degerlendir=GECER)
+    d = durum.oku(c, "s")
+    d.secilen = 1
+    d.gec("paketlendi")
+    uretim.yeniden_uretime_al(d)
+    assert d.asama == "analiz" and d.secilen is None
+    assert d.notlar[-1]["yeniden_uretim"] == {"onceki_asama": "paketlendi", "onceki_secilen": 1}
+    durum.yaz(c, d)
+    uretim.uret(a, c, calistir=SahteMotor(), degerlendir=GECER)
+    d = durum.oku(c, "s")
+    assert [x.no for x in d.adaylar] == [1, 2, 3, 4] and d.asama == "uretildi"
+
+
+def test_yuklenmis_sarki_yeniden_uretilmez(tmp_path):
+    c, a = tmp_path / "c", _ayar()
+    _sarki(c, "s", 60)
+    uretim.uret(a, c, calistir=SahteMotor(), degerlendir=GECER)
+    d = durum.oku(c, "s")
+    d.gec("yuklendi")
+    with pytest.raises(ValueError):
+        uretim.yeniden_uretime_al(d)
