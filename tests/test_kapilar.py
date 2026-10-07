@@ -57,3 +57,7 @@ def test_bozuk_aday_orijinalin_kendisi_kapidan_dusmeli(tmp_path):
     assert not k["parmak_izi"]["gecti"] and k["parmak_izi"]["deger"] > 0.9
     assert not k["dalga"]["gecti"] and k["dalga"]["deger"] > 0.9
     assert not kapilar.hepsi_gecti(k)
+
+
+def test_kesme_isareti_bicimi_wer_artirmaz():
+    assert kapilar.soz_wer("[verse]\nI don’t know\n'Cause we're kids", "i don't know cause were kids") == 0.0

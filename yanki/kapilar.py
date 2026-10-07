@@ -75,8 +75,11 @@ def dalga_korelasyonu(a: np.ndarray, b: np.ndarray, sr: int, en_fazla_kayma_sn: 
 
 
 def normalle(s: str) -> str:
+    """Bölüm etiketleri ve noktalama çıkar; kesme işareti silinir ("don't"/"don’t" → "dont", "'cause" → "cause"):
+    LRCLIB kıvrık kesme kullanıyor, Whisper düz — ikisi eşleşmeyince söz WER'i boşuna artıyordu (2026-10-07)."""
     s = re.sub(r"\[[^\]]*\]", " ", s.lower())
-    return re.sub(r"\s+", " ", re.sub(r"[^a-z0-9' ]+", " ", s)).strip()
+    s = re.sub(r"['’‘`]", "", s)
+    return re.sub(r"\s+", " ", re.sub(r"[^a-z0-9 ]+", " ", s)).strip()
 
 
 _whisper = None
