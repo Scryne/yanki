@@ -86,5 +86,8 @@ Durum sütunu session-start hook'u tarafından otomatik okunur — format bozulm
   **Karar (Scryne dinledi):** "çok az nefes yerlerinde ve mırıldanmalarda kötü, onun dışında gayet güzel" → temiz söz
   hatta (`sozler.aralik_sozu`; parça, onarım penceresi ve tam söz aynı kuraldan; Adele kesitinde dinlenen metinle birebir).
   Kalan: nefes ve mırıldanma yerleri (bölge onarımı + sıradaki denemeler).
+- **S13 (2026-10-07):** temiz söz üstünde tohum, güç, CFG, net vokal stili. Örnekleme kolları ve stil eki tohumdan
+  küçük ve tutarsız (`docs/arastirma/01`); tarif değişmedi. Tohum en büyük kol → aday sayısını artırmak (2 → 3–4)
+  dinleme yükü karşılığında daha çok şans; dinleme: `calisma/dinleme/s13/`.
 - **Denenecekler:** tohum/aday sayısı, stil tanımı varyantları, adım/kaydırma (`shift`), güç 0,6–0,8 şarkıya göre,
   vokal izi son işlemi (nefes/sibilans), LoRA (8–20 şarkı) ihtiyacı.

@@ -111,3 +111,21 @@ kalibre edildi; tablo değerleri A şarkısı (B aynı yönde).
 
 - Hepsi kapılardan geçti (parmak izi 0,58–0,62, dalga 0,04–0,05). WER aynı referansla yeniden ölçüldü, fark referans
   farkından gelmiyor. Otomatik ölçüler kulağı tutmadığı için (tur 1) karar dinlemede: `calisma/dinleme/s12/`.
+
+## S13 temiz söz üstünde kollar (2026-10-07)
+- Taban: temiz söz + tarif + tohum 42 (S12 `8_soz_temiz`; Scryne: "çok az nefes yerlerinde ve mırıldanmalarda kötü,
+  onun dışında gayet güzel"). Aynı kesit, her varyantta tek kol. Hepsi kapılardan geçti.
+
+| Varyant | Söz WER |
+|---|---|
+| taban (tohum 42) | 0,042 |
+| tohum 7 / 123 / 2024 | 0,070 / 0,085 / 0,113 |
+| güç 0,6 / güç 0,8 / CFG 5 | 0,056 / 0,056 / 0,056 |
+| stil + "clear close-miked lead vocal, crisp diction, no humming, no background vocals" | 0,014 |
+| aynı stil + CFG 5 | 0,070 |
+| aynı stil, tohum 7 / 123 | 0,070 / 0,070 |
+
+- Eşleşmiş tohumlarda net vokal stili: 42 → 0,042→0,014; 7 → 0,070→0,070; 123 → 0,085→0,070. Ortalama 0,066 → 0,051:
+  küçük ve tutarsız, tarife alınmadı. **Tohum en büyük kol** (aynı ayarla 0,042–0,113). WER nefesi ve mırıldanmayı
+  ölçmüyor; karar dinlemede (`calisma/dinleme/s13/`). Stil eki gerekirse şarkı başına dinleme sayfasından verilir.
+
