@@ -3,6 +3,7 @@
 $kok = Split-Path -Parent $PSScriptRoot
 Set-Location $kok
 $env:PYTHONUTF8 = "1"
+$env:PYTHONUNBUFFERED = "1"  # günlük satırları anında düşsün (boruya yazınca Python tamponluyor)
 $uv = (Get-Command uv -ErrorAction SilentlyContinue).Source
 if (-not $uv) { $uv = Join-Path $env:USERPROFILE ".local\bin\uv.exe" }
 $gunluk = Join-Path $kok "calisma\gunluk"
