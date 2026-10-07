@@ -28,6 +28,7 @@ class Aday:
     # [{"id", "bolge": [bas, son], "tohum", "temel": onarılan dosya, "durum": bekliyor|hazir|kabul|ret|hata,
     #   "dosya", "kapilar", "hata"}]
     onarimlar: list = field(default_factory=list)
+    stil: str | None = None  # üretildiği stil tanımı (stil değiştirilip yeniden üretilince adaylar ayırt edilsin)
 
 
 @dataclass

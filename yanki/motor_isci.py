@@ -6,7 +6,8 @@ is.json:
   {"motor": {"klasor": ..., "model": ..., "niceleme": "int8_weight_only" | null, "cpu_offload": true,
               "lm_model": ..., "lm_backend": "pt"},
    "isler": [{"id", "gorev": "cover" | "repaint" | "anla", "kaynak", "cikti_klasor", "stil", "soz", "dil", "bpm", "ton",
-              "guc", "adim", "tohum", "bolge": [bas, son] | null, "referans": yol | null}]}
+              "guc", "adim", "tohum", "bolge": [bas, son] | null, "referans": yol | null,
+              "ek": {GenerationParams alanı: değer}}]}
 
 Model bir kez yüklenir, işler sırayla yapılır; her işin sonucu (başarı, hata, süre, VRAM tepe, çıktı dosyası)
 sonuc.json'a yazılır. Bir işin hatası diğerlerini durdurmaz.
@@ -110,6 +111,7 @@ def main() -> int:
                 seed=int(i["tohum"]),
                 thinking=False,
                 **bolge,
+                **i.get("ek", {}),
             )
             config = GenerationConfig(batch_size=1, use_random_seed=False, seeds=[int(i["tohum"])], audio_format="flac")
             Path(i["cikti_klasor"]).mkdir(parents=True, exist_ok=True)

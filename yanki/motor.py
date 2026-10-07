@@ -34,6 +34,8 @@ class Is:
     ton: str = ""
     bolge: tuple[float, float] | None = None
     referans: str | None = None  # tını referansı (parçalı üretimde ilk parçanın çıktısı)
+    # ACE-Step GenerationParams'a olduğu gibi giden ek ayarlar (shift, guidance_scale, use_adg, sampler_mode …)
+    ek: dict = field(default_factory=dict, hash=False)
 
     def __post_init__(self):
         if self.gorev not in ("cover", "repaint", "anla"):

@@ -28,7 +28,12 @@ function bildir(mesaj, hata = false) {
 
 async function api(yol, govde) {
   const r = await fetch(yol, govde ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(govde) } : {});
-  if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(d.detail || `${r.status}`); }
+  if (!r.ok) {
+    const d = await r.json().catch(() => ({}));
+    // 422: alan doğrulaması liste döner
+    const ayrinti = Array.isArray(d.detail) ? `Geçersiz değer: ${d.detail.map((x) => x.loc?.at(-1)).join(", ")}` : d.detail;
+    throw new Error(ayrinti || `${r.status}`);
+  }
   return r.json();
 }
 
@@ -133,9 +138,13 @@ async function sarkiGoster(kimlik) {
       el("span", {}, "Kaynak: ", el("b", {}, d.kaynak?.baslik || "—"))),
   ];
   if (d.hata) parcalar.push(el("p", { class: "uyari", role: "alert" }, d.hata));
+  if (["uretildi", "hata"].includes(d.asama) && d.analiz?.stil) parcalar.push(stilKutu(d));
+  if (d.asama === "analiz" && d.adaylar.length) parcalar.push(el("p", { class: "ipucu bekleyen" },
+    "Yeni stille iki aday sırada; sonraki koşuda üretilir. O zamana kadar mevcut adaylar yalnız dinlenebilir."));
   if (d.kaynak?.dosya) parcalar.push(seritKutu({ kimlik, dosya: d.kaynak.dosya, baslik: "Orijinal", alt: "karşılaştırma için" }));
   const duzenlenebilir = ["uretildi", "onarim"].includes(d.asama);
-  for (const a of d.adaylar) parcalar.push(adayKutu(d, a, duzenlenebilir));
+  const stilFarkli = new Set(d.adaylar.map((a) => a.stil || "")).size > 1;
+  for (const a of d.adaylar) parcalar.push(adayKutu(d, a, duzenlenebilir, stilFarkli));
   if (!d.adaylar.length && !d.hata) parcalar.push(el("p", { class: "ipucu" }, "Adaylar henüz üretilmedi. Üretim GPU boşken arka planda çalışır."));
   if (!["reddedildi", "yuklendi"].includes(d.asama)) {
     parcalar.push(el("div", { class: "alt-cubuk" },
@@ -153,12 +162,35 @@ function seritKutu({ kimlik, dosya, baslik, alt }) {
     s.kap, el("div", { class: "serit-alt" }, s.calDugme, s.zaman, s.ses));
 }
 
+function stilKutu(d) {
+  const an = d.analiz;
+  const stil = el("textarea", { id: "stil-metin", rows: 3, maxlength: 500, required: true }, an.stil);
+  const bpm = el("input", { id: "stil-bpm", type: "number", min: 30, max: 300, inputmode: "numeric", value: an.bpm ?? "" });
+  const ton = el("input", { id: "stil-ton", type: "text", maxlength: 20, placeholder: "ör. A major", value: an.ton || "" });
+  const gonder = (e) => {
+    e.preventDefault();
+    eylem(d, "stil", { stil: stil.value, bpm: bpm.value ? +bpm.value : null, ton: ton.value },
+      "Yeni stil kaydedildi. İki aday sonraki koşuda üretilecek; mevcut adaylar yerinde kalır.");
+  };
+  return el("details", { class: "stil-duzen" },
+    el("summary", {}, "Stili düzenle ve yeniden üret"),
+    el("form", { onsubmit: gonder },
+      el("label", { for: "stil-metin" }, "Stil tanımı ", el("span", { class: "ipucu" }, "(İngilizce; tür, vokal, çalgılar, hava)")),
+      stil,
+      el("div", { class: "stil-satir" },
+        el("label", { for: "stil-bpm" }, "BPM", bpm),
+        el("label", { for: "stil-ton" }, "Ton", ton),
+        el("span", { class: "bosluk" }),
+        el("button", { class: "dugme ikincil", type: "submit" }, "Bu stille yeniden üret")),
+      el("p", { class: "ipucu" }, "Mevcut adaylar silinmez; yeni iki aday onların ardından eklenir. Boş bırakılan BPM ve ton modele bırakılır.")));
+}
+
 function rozetler(kapilar) {
   return Object.entries(kapilar || {}).map(([ad, v]) => el("span", { class: `rozet ${v.gecti ? "ok" : "no"}` },
     `${KAPI[ad] || ad} ${v.deger != null ? String(v.deger).replace(".", ",") : ""} ${v.gecti ? "✓" : "✗"}`));
 }
 
-function adayKutu(d, a, duzenlenebilir) {
+function adayKutu(d, a, duzenlenebilir, stilFarkli) {
   const baslik = `Aday ${a.no}`;
   if (!a.dosya) return el("section", { class: "serit dusen" }, el("div", { class: "serit-ust" }, el("h2", {}, baslik), ...rozetler(a.kapilar)));
   const s = new Serit({ kimlik: d.kimlik, dosya: a.dosya, secilebilir: duzenlenebilir && a.gecti, etiket: baslik });
@@ -170,6 +202,7 @@ function adayKutu(d, a, duzenlenebilir) {
   const kutu = el("section", { class: "serit" + (a.gecti ? "" : " dusen"), "aria-label": baslik },
     el("div", { class: "serit-ust" }, el("h2", {}, baslik), el("span", { class: "tohum" }, `tohum ${a.tohum}`),
       ...rozetler(a.kapilar), !a.gecti && el("span", { class: "rozet no" }, "kapıdan geçmedi")),
+    stilFarkli && el("p", { class: "aday-stil" }, "Stil: ", a.stil || "ilk otomatik tanım"),
     s.kap,
     el("div", { class: "serit-alt" }, s.calDugme, s.zaman, s.secimYazi, el("span", { class: "bosluk" }),
       a.gecti && duzenlenebilir ? [secimCal, onar, onayla] : null, s.ses));

@@ -144,3 +144,31 @@ def test_zaman_damgasi_hic_yoksa_tek_parca_ve_uyari(tmp_path):
     d.soz["kaynak"] = "dosya"
     plan, _ = uretim.parca_plani(c, d)
     assert len(plan) == 1 and "tek parça" in d.notlar[-1]["uyari"]
+
+
+def test_stil_degisince_yeni_adaylar_eskilerin_ardindan(tmp_path):
+    c, a = tmp_path / "c", ayarlar.yukle()
+    _sarki(c, "s", 60)
+    uretim.uret(a, c, calistir=SahteMotor(), degerlendir=GECER)
+    d = durum.oku(c, "s")
+    eski_dosya = d.adaylar[0].dosya
+    uretim.stil_degistir(d, "acoustic guitar ballad", 70, "A major")
+    durum.yaz(c, d)
+    m = SahteMotor()
+    uretim.uret(a, c, calistir=m, degerlendir=DUSER)  # yeni stil kötü çıksa da eski adaylar şarkıyı taşır
+    d = durum.oku(c, "s")
+    assert [x.no for x in d.adaylar] == [1, 2, 3, 4]
+    assert [x.stil for x in d.adaylar] == ["s", "s", "acoustic guitar ballad", "acoustic guitar ballad"]
+    assert [i.stil for i in m.turlar[0]] == ["acoustic guitar ballad"] * 2 and [i.bpm for i in m.turlar[0]] == [70, 70]
+    assert d.adaylar[0].dosya == eski_dosya and (c / "s" / eski_dosya).exists()
+    assert d.asama == "uretildi" and [x.gecti for x in d.adaylar] == [True, True, False, False]
+
+
+def test_stil_degisimi_onarim_beklerken_reddedilir(tmp_path):
+    c, a = tmp_path / "c", ayarlar.yukle()
+    _sarki(c, "s", 60)
+    uretim.uret(a, c, calistir=SahteMotor(), degerlendir=GECER)
+    d = durum.oku(c, "s")
+    uretim.onarim_iste(a, d, 1, 10, 12)
+    with pytest.raises(ValueError):
+        uretim.stil_degistir(d, "rock", None, "")

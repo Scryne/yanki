@@ -1,6 +1,7 @@
-"""Dinleme sayfası sunucusu (yalnız 127.0.0.1): Scryne adayları dinler, onaylar, aralık işaretler, reddeder.
+"""Dinleme sayfası sunucusu (yalnız 127.0.0.1): Scryne adayları dinler, onaylar, aralık işaretler, stili değiştirir,
+reddeder.
 
-Sunucu motoru çalıştırmaz; onarım isteği durum.json'a "bekliyor" diye yazılır, `yanki uret` onu işler.
+Sunucu motoru çalıştırmaz; onarım ve yeniden üretim istekleri durum.json'a yazılır, `yanki uret` onları işler.
 """
 
 import json
@@ -33,6 +34,12 @@ class KabulIstegi(BaseModel):
 
 class OnayIstegi(BaseModel):
     aday: int
+
+
+class StilIstegi(BaseModel):
+    stil: str = Field(min_length=3, max_length=500)
+    bpm: int | None = Field(default=None, ge=30, le=300)
+    ton: str = Field(default="", max_length=20)
 
 
 class RetIstegi(BaseModel):
@@ -129,6 +136,16 @@ def uygulama(a: Ayarlar, calisma: Path) -> FastAPI:
             raise HTTPException(409, "bu adayın bekleyen onarımı var; önce üretilmesini bekle")
         d.secilen = istek.aday
         d.gec("onaylandi")
+        durum.yaz(calisma, d)
+        return _ozet(d)
+
+    @app.post("/api/sarki/{kimlik}/stil")
+    def stil(kimlik: str, istek: StilIstegi):
+        d = oku(kimlik)
+        try:
+            uretim.stil_degistir(d, istek.stil, istek.bpm, istek.ton.strip())
+        except ValueError as e:
+            raise HTTPException(409, str(e)) from e
         durum.yaz(calisma, d)
         return _ozet(d)
 

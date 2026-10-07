@@ -82,3 +82,33 @@ def test_reddet(ortam):
 def test_sayfa_sunulur(ortam):
     istemci, _ = ortam
     assert "Yanki" in istemci.get("/").text and istemci.get("/uygulama.js").status_code == 200
+
+
+def test_stil_degisince_yeniden_uretime_doner(ortam):
+    istemci, c = ortam
+    d = durum.oku(c, "a-b")
+    d.analiz = {"stil": "piano ballad", "bpm": 68, "ton": "A major"}
+    durum.yaz(c, d)
+    r = istemci.post("/api/sarki/a-b/stil", json={"stil": "  acoustic   guitar ballad ", "bpm": 70, "ton": "A major"})
+    assert r.status_code == 200 and r.json()["asama"] == "analiz"
+    d = durum.oku(c, "a-b")
+    assert d.analiz["stil"] == "acoustic guitar ballad" and d.analiz["bpm"] == 70
+    assert d.notlar[-1]["stil_degisti"]["eski"]["stil"] == "piano ballad"
+    # analizdeyken ikinci istek ve onay yok
+    assert istemci.post("/api/sarki/a-b/stil", json={"stil": "rock"}).status_code == 409
+    assert istemci.post("/api/sarki/a-b/onar", json={"aday": 1, "bas": 1, "son": 2}).status_code == 409
+
+
+@pytest.mark.parametrize("govde", [{"stil": ""}, {"stil": "ok stil", "bpm": 5}, {"stil": "x" * 501}])
+def test_stil_gecersiz(ortam, govde):
+    istemci, _ = ortam
+    assert istemci.post("/api/sarki/a-b/stil", json=govde).status_code == 422
+
+
+def test_bekleyen_onarim_varken_stil_degismez(ortam):
+    istemci, c = ortam
+    d = durum.oku(c, "a-b")
+    d.analiz = {"stil": "piano ballad"}
+    durum.yaz(c, d)
+    istemci.post("/api/sarki/a-b/onar", json={"aday": 1, "bas": 0.2, "son": 0.5})
+    assert istemci.post("/api/sarki/a-b/stil", json={"stil": "rock ballad"}).status_code == 409

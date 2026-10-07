@@ -68,6 +68,21 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .uyari { border: 1px solid color-mix(in srgb, var(--dustu) 50%, transparent); border-radius: var(--r-kucuk);
   padding: var(--s3) var(--s4); margin-bottom: var(--s6); color: var(--metin); }
 
+/* stil düzenleme: kapalı gelir, ikincil iş */
+.stil-duzen { border: 1px solid var(--cizgi); border-radius: var(--r-panel); padding: var(--s3) var(--s4); margin-bottom: var(--s6); }
+.stil-duzen summary { cursor: pointer; font-weight: 500; }
+.stil-duzen form { display: grid; gap: var(--s2); margin-top: var(--s3); }
+.stil-duzen label { color: var(--metin-2); font-size: 12px; display: grid; gap: var(--s1); }
+.stil-duzen textarea, .stil-duzen input { font: inherit; color: var(--metin); background: rgba(0, 0, 0, .25);
+  border: 1px solid var(--cizgi); border-radius: var(--r-kucuk); padding: var(--s2) var(--s3); width: 100%; }
+.stil-duzen textarea { resize: vertical; min-height: 4.5em; }
+.stil-duzen input[type="number"] { width: 9ch; }
+.stil-duzen input[type="text"] { width: 14ch; }
+.stil-satir { display: flex; flex-wrap: wrap; align-items: end; gap: var(--s3); }
+.stil-duzen .ipucu { font-size: 12px; margin: 0; }
+.bekleyen { margin: 0 0 var(--s6); }
+.aday-stil { color: var(--metin-2); font-size: 12px; margin: 0 0 var(--s3); }
+
 /* şerit: opak, dalga net okunsun */
 .serit { background: var(--yuzey); border: 1px solid var(--cizgi); border-radius: var(--r-panel); padding: var(--s4); margin-bottom: var(--s4); }
 .serit.dusen { opacity: .62; }

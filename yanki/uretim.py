@@ -8,6 +8,9 @@ Sonra parçalar dikilir, kapılar tam şarkı üzerinde çalışır.
 Onarım pencerelidir: işaretli aralığın ±PENCERE_PAYI sn'lik penceresi kesilir, repaint yalnız orada yapılır, pencere
 şarkıya geri dikilir. Tam şarkıda repaint de tüm şarkıyı işler (290 sn'de ~57 dk, ACE-Step zaman aşımı).
 Scryne iyi sürümü kabul eder → adayın dosyası o sürüm olur (dinleme testi 4: bir tohum düzeltti, öbürü düzeltmedi).
+
+Stil değişince (dinleme sayfası) şarkı yeniden `analiz`e döner; yeni adaylar mevcutların ardından numaralanır, eskiler
+dinlenebilir ve onaylanabilir kalır.
 """
 
 import json
@@ -82,6 +85,21 @@ def onarim_iste(a: Ayarlar, d: durum.Durum, aday_no: int, bas: float, son: float
     d.gec("onarim")
 
 
+def stil_degistir(d: durum.Durum, stil: str, bpm: int | None, ton: str) -> None:
+    """Yeni stil tanımıyla yeniden üretim ister; eski tanım notlara yazılır (hangi stilin işe yaradığı izlensin)."""
+    if d.asama not in ("uretildi", "hata") or not d.analiz.get("stil"):
+        raise ValueError(f"bu aşamada stil değiştirilemez: {d.asama}")
+    if any(o["durum"] == "bekliyor" for a in d.adaylar for o in a.onarimlar):
+        raise ValueError("bekleyen onarım var; önce üretilmesini bekle")
+    stil = " ".join(stil.split())
+    if not stil:
+        raise ValueError("stil boş olamaz")
+    eski = {k: d.analiz.get(k) for k in ("stil", "bpm", "ton")}
+    d.notlar.append({"stil_degisti": {"eski": eski, "yeni": {"stil": stil, "bpm": bpm, "ton": ton}}})
+    d.analiz.update(stil=stil, bpm=bpm, ton=ton, stil_kaynak="elle")
+    d.gec("analiz")
+
+
 def onarim_kabul(d: durum.Durum, aday_no: int, onarim_id: str) -> None:
     aday = next(x for x in d.adaylar if x.no == aday_no)
     secilen = next(o for o in aday.onarimlar if o["id"] == onarim_id)
@@ -136,16 +154,19 @@ def uret(a: Ayarlar, calisma: Path, kimlikler: list[str] | None = None,
         k = durum.klasor(calisma, d.kimlik)
         if d.asama == "analiz":
             plan, sozler_ = parca_plani(calisma, d)
-            planlar[d.kimlik] = (plan, sozler_)
+            # stil değişikliğinden sonra yeni adaylar eskilerin ardından (geçmiş adaylar dinlenebilir kalır)
+            ilk_no = max((x.no for x in d.adaylar if x.dosya), default=0)
+            numaralar = [(ilk_no + n, a.cover.tohumlar[n - 1]) for n in range(1, a.cover.aday_sayisi + 1)]
+            planlar[d.kimlik] = (plan, sozler_, numaralar)
             kaynak = k / d.kaynak["dosya"]
             for p in plan:
                 if len(plan) > 1:
                     _kes(kaynak, p.bas, p.son, k / "parcalar" / f"kaynak_{p.no}.wav")
             ilk = k / "parcalar" / "kaynak_1.wav" if len(plan) > 1 else kaynak
-            for n in range(1, a.cover.aday_sayisi + 1):
+            for n, tohum in numaralar:
                 tur1.append(motor.Is(id=f"{d.kimlik}|cover|{n}|1", gorev="cover", kaynak=str(ilk),
                                      cikti_klasor=str(k / "adaylar" / str(n) / "p1"), soz=sozler_[0],
-                                     adim=a.cover.adim, tohum=a.cover.tohumlar[n - 1], guc=a.cover.guc, **_ortak(d)))
+                                     adim=a.cover.adim, tohum=tohum, guc=a.cover.guc, **_ortak(d)))
         else:
             satirlar = _satirlar(calisma, d)
             for aday in d.adaylar:
@@ -172,8 +193,8 @@ def uret(a: Ayarlar, calisma: Path, kimlikler: list[str] | None = None,
         if d.kimlik not in planlar:
             continue
         k = durum.klasor(calisma, d.kimlik)
-        plan, sozler_ = planlar[d.kimlik]
-        for n in range(1, a.cover.aday_sayisi + 1):
+        plan, sozler_, numaralar = planlar[d.kimlik]
+        for n, tohum in numaralar:
             ilk = s1[f"{d.kimlik}|cover|{n}|1"]
             if not ilk.basari:
                 continue
@@ -181,7 +202,7 @@ def uret(a: Ayarlar, calisma: Path, kimlikler: list[str] | None = None,
                 tur2.append(motor.Is(id=f"{d.kimlik}|cover|{n}|{p.no}", gorev="cover",
                                      kaynak=str(k / "parcalar" / f"kaynak_{p.no}.wav"),
                                      cikti_klasor=str(k / "adaylar" / str(n) / f"p{p.no}"), soz=sozler_[p.no - 1],
-                                     adim=a.cover.adim, tohum=a.cover.tohumlar[n - 1], guc=a.cover.guc,
+                                     adim=a.cover.adim, tohum=tohum, guc=a.cover.guc,
                                      referans=ilk.cikti, **_ortak(d)))
     s2 = motor_turu(tur2, "tur2")
     sonuclar = {**s1, **s2}
@@ -190,10 +211,10 @@ def uret(a: Ayarlar, calisma: Path, kimlikler: list[str] | None = None,
         k = durum.klasor(calisma, d.kimlik)
         kaynak, soz = k / d.kaynak["dosya"], _soz(calisma, d)
         if d.kimlik in planlar:
-            plan, _ = planlar[d.kimlik]
-            for n in range(1, a.cover.aday_sayisi + 1):
+            plan, _, numaralar = planlar[d.kimlik]
+            for n, tohum in numaralar:
                 rs = [sonuclar.get(f"{d.kimlik}|cover|{n}|{p.no}") for p in plan]
-                aday = durum.Aday(n, "", a.cover.tohumlar[n - 1])
+                aday = durum.Aday(n, "", tohum, stil=d.analiz["stil"])
                 hatali = [f"parça {p.no}: {r.hata if r else 'üretilmedi'}" for p, r in zip(plan, rs, strict=True)
                           if not (r and r.basari)]
                 if hatali:
