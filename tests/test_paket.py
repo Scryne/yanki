@@ -96,3 +96,22 @@ def test_paketle_uctan_uca(tmp_path):
     assert meta["master"]["lufs"] == pytest.approx(-14.0, abs=0.7)
     assert durum.oku(c, "adele-someone-like-you").asama == "paketlendi"
     assert paket.paketle(c, _yayin(tmp_path)) == []  # zaten paketli
+
+
+def test_dagitimciya_ozel_notlar(tmp_path):
+    m = paket.metadata(_durum(), paket.yayin_ayarlari(_yayin(tmp_path)), {"lufs": -14.0, "gercek_tepe_dbtp": -1.2},
+                       284.98)
+    rn = paket.yukle_md(m, paket.yayin_ayarlari(_yayin(tmp_path, "S", "routenote")), {"ses": "a.flac", "kapak": "k"})
+    dk = paket.yukle_md(m, paket.yayin_ayarlari(_yayin(tmp_path, "S", "distrokid")), {"ses": "a.wav", "kapak": "k"})
+    assert "16 bit FLAC" in rn and "Pakistan" in rn and "all of the audio" not in rn
+    assert "16 bit WAV" in dk and "all of the audio" in dk and "Pakistan" not in dk
+    assert paket.SES_BICIMI["routenote"] == "flac"
+
+
+@ffmpeg_gerekli
+def test_master_flac(tmp_path):
+    _muzik(tmp_path / "g.wav")
+    o = paket.master(tmp_path / "g.wav", tmp_path / "m.flac", paket.yayin_ayarlari(_yayin(tmp_path)))
+    bilgi = sf.info(str(tmp_path / "m.flac"))
+    assert bilgi.format == "FLAC" and bilgi.subtype == "PCM_16" and bilgi.samplerate == 44100
+    assert abs(o["lufs"] - -14.0) < 0.5

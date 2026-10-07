@@ -19,6 +19,23 @@ from yanki import durum, ses
 
 FONT_KALIN = Path("C:/Windows/Fonts/bahnschrift.ttf")
 
+# Dağıtımcıya özel ayrıntılar: docs/arastirma/02-dagitimci-karsilastirmasi.md (2026-10-07). RouteNote WAV almıyor
+# (FLAC/MP3 44,1); bilgi 2023 tarihli, yükleme ekranında doğrulanır.
+SES_BICIMI = {"routenote": "flac", "distrokid": "wav", "": "wav"}
+DAGITIMCI_NOTU = {
+    "distrokid": [
+        "Yapay zekâ sorusu (\"Is any part of this track AI-generated?\"): **all of the audio**. Ardından sanatçının"
+        " insan mı AI persona mı olduğu sorulur.",
+        "Cover adımı formun Songwriter bölümünde: cover seçilir, orijinal sanatçı ve şarkı adı girilir"
+        " (DistroKid üzerinden, $12/yıl/şarkı; onay 14 iş gününe kadar sürebilir).",
+    ],
+    "routenote": [
+        "Yapay zekâ aracı kredi ya da sanatçı alanına yazılmaz; RouteNote isterse aracın bağlantısı verilir.",
+        "Cover lisansı alınmadıysa mağaza bölgelerinden ABD, Kanada, Meksika, Hindistan ve Pakistan çıkarılır.",
+        "Kore mağazaları (Melon, Genie, Bugs, Flo, Vibe) ve Amazon AI içeriği almaz; seçiliyse kaldır.",
+    ],
+}
+
 
 @dataclass(frozen=True)
 class Yayin:
@@ -49,14 +66,15 @@ def _loudnorm_olc(girdi: Path, y: Yayin) -> dict:
 
 
 def master(girdi: Path, hedef: Path, y: Yayin) -> dict:
-    """İki geçişli EBU R128 loudnorm (doğrusal mod) → 44,1 kHz 16 bit WAV. Ölçülen son değerleri döner."""
+    """İki geçişli EBU R128 loudnorm (doğrusal mod) → 44,1 kHz 16 bit WAV ya da FLAC (hedefin uzantısına göre).
+    Ölçülen son değerleri döner."""
     o = _loudnorm_olc(girdi, y)
     filtre = (f"loudnorm=I={y.lufs}:TP={y.gercek_tepe}:LRA=11:measured_I={o['input_i']}:measured_TP={o['input_tp']}"
               f":measured_LRA={o['input_lra']}:measured_thresh={o['input_thresh']}:offset={o['target_offset']}"
               ":linear=true")
     hedef.parent.mkdir(parents=True, exist_ok=True)
     subprocess.run([ses.arac("ffmpeg"), "-hide_banner", "-loglevel", "error", "-y", "-i", str(girdi), "-af", filtre,
-                    "-ar", str(y.ornekleme), "-ac", "2", "-c:a", "pcm_s16le", str(hedef)], check=True)
+                    "-ar", str(y.ornekleme), "-ac", "2", *_kodlayici(hedef), str(hedef)], check=True)
     son = _loudnorm_olc(hedef, y)
     return {"lufs": float(son["input_i"]), "gercek_tepe_dbtp": float(son["input_tp"])}
 
@@ -131,6 +149,10 @@ def metadata(d: durum.Durum, y: Yayin, master_olcum: dict, sure_sn: float) -> di
     }
 
 
+def _kodlayici(hedef: Path) -> list[str]:
+    return ["-c:a", "flac", "-sample_fmt", "s16"] if hedef.suffix == ".flac" else ["-c:a", "pcm_s16le"]
+
+
 def yukle_md(meta: dict, y: Yayin, dosyalar: dict[str, str]) -> str:
     eksik = []
     if not y.sanatci_adi:
@@ -155,13 +177,18 @@ def yukle_md(meta: dict, y: Yayin, dosyalar: dict[str, str]) -> str:
         "7. **Açık içerik (Explicit):** sözlere bakıp işaretle",
         f"8. **Yapay zekâ beyanı:** Evet — {meta['yapay_zeka']['kapsam']}; araç: {meta['yapay_zeka']['arac']} "
         f"({meta['yapay_zeka']['baglanti']})",
-        f"9. **Ses dosyası:** `{dosyalar['ses']}` (44,1 kHz / 16 bit WAV, {meta['master']['lufs']:.1f} LUFS, "
+        f"9. **Ses dosyası:** `{dosyalar['ses']}` (44,1 kHz / 16 bit {Path(dosyalar['ses']).suffix[1:].upper()}, "
+        f"{meta['master']['lufs']:.1f} LUFS, "
         f"{meta['master']['gercek_tepe_dbtp']:.1f} dBTP, {_mmss(meta['sure_sn'])})",
         f"10. **Kapak:** `{dosyalar['kapak']}` (3000×3000 JPG)",
         "",
         "Kurallar (dağıtımcı yönergelerinden): başlığa `(Cover)` ya da orijinal sanatçı adı eklenmez; kapakta orijinal",
         "sanatçının adı, fotoğrafı ya da logosu yoktur.",
         "",
+    ]
+    if notlar := DAGITIMCI_NOTU.get(y.dagitimci):
+        satir += [f"{y.dagitimci.capitalize()} formuna özel:", "", *[f"- {n}" for n in notlar], ""]
+    satir += [
         "Yükledikten sonra: `yanki yuklendi <kimlik>`",
     ]
     return "\n".join(satir) + "\n"
@@ -192,7 +219,7 @@ def paketle(calisma: Path, yayin_yolu: Path, kimlikler: list[str] | None = None,
         kaynak = k / aday.dosya
         p = k / "paket"
         ad = guvenli_ad(f"{y.sanatci_adi or 'SANATCI'} - {d.ad}")
-        ses_yolu, kapak_yolu = p / f"{ad}.wav", p / f"{ad}.jpg"
+        ses_yolu, kapak_yolu = p / f"{ad}.{SES_BICIMI[y.dagitimci]}", p / f"{ad}.jpg"
         olcum = master(kaynak, ses_yolu, y)
         kapak(d.ad, sunucu.dalga(kaynak)["tepe"], kapak_yolu, y.sanatci_adi)
         meta = metadata(d, y, olcum, ses.sure(ses_yolu))
