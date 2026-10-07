@@ -123,3 +123,41 @@ def test_metadata_kaynak_adayi_yazar(tmp_path):
     d.secilen = 4
     m = paket.metadata(d, paket.yayin_ayarlari(_yayin(tmp_path)), {"lufs": -14.0, "gercek_tepe_dbtp": -1.2}, 1.0)
     assert m["kaynak_aday"] == {"no": 4, "tohum": 7, "dosya": "adaylar/4/tam.flac"}
+
+
+def test_nakarat_baslangici_en_erken_tekrar_eden_satir():
+    satirlar = [[14.0, "Verse one"], [43.0, "Old friend"], [70.6, "♪"], [73.82, "Never mind, I'll find someone"],
+                [93.9, "Sometimes it hurts"], [101.0, "Sometimes it hurts"], [157.3, "Never mind, I'll find someone"],
+                [177.5, "Sometimes it hurts"], [204.2, "never mind, I'll find someone "], [230.0, ""]]
+    assert paket.nakarat_baslangici(satirlar) == 73.82
+    assert paket.nakarat_baslangici([[1.0, "a"], [2.0, "b"], [3.0, "a"]]) is None  # 3 tekrar yoksa elle
+
+
+def test_routenote_formu_ekran_sirasiyla(tmp_path):
+    d = _durum()
+    d.kunye["ilk_yayin"] = "2011-11-17"
+    y = paket.yayin_ayarlari(_yayin(tmp_path, "Orvane", "routenote"))
+    m = paket.metadata(d, y, {"lufs": -13.8, "gercek_tepe_dbtp": -1.2}, 284.98, onizleme_sn=73.82)
+    md = paket.yukle_md(m, y, {"ses": "Orvane_-_Someone_Like_You.flac", "kapak": "k.jpg"})
+    sira = ["## 1. Album Details", "## 2. Add Audio", "## 3. Add Artwork", "## 4. Manage Stores"]
+    assert [md.index(s) for s in sira] == sorted(md.index(s) for s in sira)
+    assert "First `Dan` · Last `Wilson`" in md and "SOYAD?" in md  # "Adele" tek kelime → soyadı elle
+    assert "yıl `2011`" in md and "Producer · `Orvane`" in md and "`1:14`" in md
+    assert "mechanical license?:** No" in md and "Pakistan" in md and "YouTube Content ID" in md
+    assert "16 bit FLAC" in md and "Eksik karar" not in md
+
+
+@ffmpeg_gerekli
+def test_paketle_ozel_kapagi_korur(tmp_path):
+    c = tmp_path / "c"
+    k = c / "adele-someone-like-you"
+    (k / "adaylar" / "1").mkdir(parents=True)
+    _muzik(k / "adaylar" / "1" / "tam.flac")
+    (k / "kapak_ozel.jpg").write_bytes(b"ozel")
+    d = _durum()
+    d.adaylar = [durum.Aday(1, "adaylar/1/tam.flac", 42, {}, True)]
+    d.secilen = 1
+    d.gec("onaylandi")
+    durum.yaz(c, d)
+    paket.paketle(c, _yayin(tmp_path))
+    assert (k / "paket" / "SANATCI_-_Someone_Like_You.jpg").read_bytes() == b"ozel"

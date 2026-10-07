@@ -30,12 +30,7 @@ DAGITIMCI_NOTU = {
         "Cover adımı formun Songwriter bölümünde: cover seçilir, orijinal sanatçı ve şarkı adı girilir"
         " (DistroKid üzerinden, $12/yıl/şarkı; onay 14 iş gününe kadar sürebilir).",
     ],
-    "routenote": [
-        "Yapay zekâ aracı kredi ya da sanatçı alanına yazılmaz; RouteNote isterse aracın bağlantısı verilir.",
-        "Mekanik lisans alınmıyor (Scryne, 2026-10-07): mağaza bölgelerinden ABD, Kanada, Meksika, Hindistan ve"
-        " Pakistan çıkarılır (RouteNote'un lisanssız cover kuralı).",
-        "Kore mağazaları (Melon, Genie, Bugs, Flo, Vibe) ve Amazon AI içeriği almaz; seçiliyse kaldır.",
-    ],
+    # RouteNote: formun tamamı ekrandaki sırayla `_routenote_formu`nda
 }
 
 
@@ -130,7 +125,17 @@ def _sar(metin: str, font, ciz, en: int) -> list[str]:
     return satirlar + [s] if s else satirlar
 
 
-def metadata(d: durum.Durum, y: Yayin, master_olcum: dict, sure_sn: float) -> dict:
+def nakarat_baslangici(satirlar: list) -> float | None:
+    """Önizleme (preview) başlangıcı: en az 3 kez tekrarlanan sözlerden şarkıda en erken geleni, nakaratın ilk
+    satırı sayılır. Zaman damgası kaynağın; parçalı üretim kaynağın zamanlamasını izlediği için cover'da da tutar."""
+    temiz = [(float(t), s.strip().lower()) for t, s in satirlar if s and s.strip() and s.strip() != "♪"]
+    sayim: dict[str, int] = {}
+    for _, s in temiz:
+        sayim[s] = sayim.get(s, 0) + 1
+    return next((t for t, s in temiz if sayim[s] >= 3), None)
+
+
+def metadata(d: durum.Durum, y: Yayin, master_olcum: dict, sure_sn: float, onizleme_sn: float | None = None) -> dict:
     k = d.kunye or {}
     return {
         "baslik": d.ad,  # dağıtımcı kuralı: orijinal başlıkla aynı, "(Cover)" eki yok, orijinal sanatçı adı yok
@@ -141,8 +146,10 @@ def metadata(d: durum.Durum, y: Yayin, master_olcum: dict, sure_sn: float) -> di
         "orijinal_yazarlar": list(k.get("yazarlar") or []),
         "orijinal_isrc": list(k.get("isrc") or []),
         "orijinal_eser_mbid": k.get("eser_mbid"),
+        "orijinal_yil": (k.get("ilk_yayin") or "")[:4] or None,  # © satırı (besteci telifi) bu yılla
         "dil": d.analiz.get("dil", "en"),
         "sure_sn": round(sure_sn, 2),
+        "onizleme_sn": onizleme_sn,
         "yapay_zeka": {"kullanildi": True, "arac": "ACE-Step 1.5 (XL-SFT)", "kapsam": "vokal ve enstrümantal üretim",
                        "baglanti": "https://github.com/ace-step/ACE-Step-1.5"},
         "acik_icerik": None,  # Scryne işaretler; sözlerde küfür taraması yapılmadı
@@ -170,6 +177,8 @@ def yukle_md(meta: dict, y: Yayin, dosyalar: dict[str, str]) -> str:
     satir = [f"# Yükleme: {meta['baslik']}", ""]
     if eksik:
         satir += ["> **Eksik karar — yüklemeden önce:**", *[f"> - {e}" for e in eksik], ""]
+    if y.dagitimci == "routenote":
+        return "\n".join(satir + _routenote_formu(meta, dosyalar)) + "\n"
     satir += [
         "Form alanları yukarıdan aşağı, kopyala-yapıştır:", "",
         f"1. **Başlık (Title):** `{meta['baslik']}`",
@@ -199,6 +208,74 @@ def yukle_md(meta: dict, y: Yayin, dosyalar: dict[str, str]) -> str:
     return "\n".join(satir) + "\n"
 
 
+def _ad_soyad(ad: str) -> tuple[str, str]:
+    """RouteNote yazar alanı ad + soyad ister; MusicBrainz sahne adı verir ("Adele" → soyadı elle: Adkins)."""
+    parca = ad.rsplit(" ", 1)
+    return (parca[0], parca[1]) if len(parca) == 2 else (ad, "SOYAD? (yasal soyadı, ör. albüm künyesi)")
+
+
+def _routenote_formu(meta: dict, dosyalar: dict[str, str]) -> list[str]:
+    """RouteNote formu, ekrandaki sırayla (ilk gerçek yükleme, Adele, 2026-10-08)."""
+    sanatci = meta["sanatci"] or "EKSİK"
+    yazarlar = [_ad_soyad(a) for a in meta["orijinal_yazarlar"]] or [("EKSİK", "")]
+    yazar_satiri = "; ".join(f"First `{a}` · Last `{s}`" for a, s in yazarlar)
+    yazar_metni = ", ".join(f"{a} {s}" for a, s in yazarlar)
+    yil = meta.get("orijinal_yil") or "ORİJİNAL YIL"
+    on = meta.get("onizleme_sn")
+    onizleme = f"`{_mmss(on)}` (ilk nakarat; Visually Select Clip ile dinleyip doğrula)" if on else "ilk nakarat, elle"
+    ses_bilgi = (f"44,1 kHz / 16 bit {Path(dosyalar['ses']).suffix[1:].upper()}, {meta['master']['lufs']:.1f} LUFS, "
+                 f"{meta['master']['gercek_tepe_dbtp']:.1f} dBTP, {_mmss(meta['sure_sn'])}")
+    return [
+        "RouteNote formu, ekrandaki sırayla (doğrulandı: ilk yükleme, 2026-10-08). Kopyala-yapıştır:", "",
+        "## 1. Album Details",
+        "1. **Language:** English" if meta["dil"] == "en" else f"1. **Language:** `{meta['dil']}`",
+        f"2. **Album/Single/EP Title:** `{meta['baslik']}`",
+        "3. **Album Version:** boş",
+        "4. **Does this release contain cover versions?:** Yes",
+        "5. **Compilation Album:** No",
+        f"6. **Artist Name (Primary):** `{sanatci}`: listeden seç ya da yeni sanatçı olarak oluştur. Yalnız yazmak "
+        "yetmez (\"Primary Artist field is required\"). Var olan bir Spotify profiline bağlama.",
+        f"7. **Writers (Composer):** her yazar bir satır (Add Composer): {yazar_satiri}",
+        f"8. **Does this release contain lyrics?:** Yes → **Lyricist** satırları aynı isimlerle: {yazar_satiri}",
+        f"9. **Contributors (zorunlu):** Producer · `{sanatci}`. Yapay zekâ aracı buraya yazılmaz.",
+        "10. **Primary Genre:** şarkının türü (Alternative varsayılanını bırakma) · **Secondary:** None",
+        f"11. **Composition Copyright (©):** yıl `{yil}` · `{yazar_metni}` (beste orijinal yazarların)",
+        f"12. **Sound Recording Copyright (℗):** yıl `{date.today().year}` · `{sanatci}`",
+        f"13. **Record Label Name:** `{meta['etiket'] or sanatci}`",
+        "14. **Originally Released** = **Sales Start Date**: aynı gün, en az 2–3 hafta sonrası (ücretsiz inceleme "
+        "günler sürüyor; Spotify pitch için ≥7 gün). **Pre Order Date:** boş.",
+        "15. **Explicit Content:** Not Explicit (sözlere bak; \"Clean\" seçme, o açık içeriğin temiz sürümü demek)",
+        "",
+        "## 2. Add Audio",
+        f"16. **Ses dosyası:** `{dosyalar['ses']}` ({ses_bilgi})",
+        f"17. **Track Name:** `{meta['baslik']}` · **Title Version:** boş",
+        "18. **Is this track a cover version?:** Yes (varsayılan No!) → **Do you have a mechanical license?:** No",
+        "19. **Writers / Lyricist / Contributors:** 7–9 ile aynı; ad yazımını kontrol et",
+        f"20. **Set Preview Start Time:** {onizleme}",
+        "21. **ISRC:** RouteNote'un atadığı kalır; orijinal kaydın ISRC'si girilmez",
+        "22. **Explicit Content / Audio Language:** 15 ve 1 ile aynı",
+        "",
+        "## 3. Add Artwork",
+        f"23. **Kapak:** `{dosyalar['kapak']}` (3000×3000 JPG; orijinal sanatçının adı, fotoğrafı, logosu yok)",
+        "",
+        "## 4. Manage Stores",
+        "24. **İşareti kaldır:** Amazon (yapay zekâ içeriği almıyor); Melon, Bugs!, VIBE, FLO, Genie Music (Kore: AI "
+        "içerik almıyor, cover için orijinal sanatçının yazılı izni); YouTube Content ID (cover orijinalle eşleşir; "
+        "YouTube Music işaretli kalır)",
+        "25. **Pricing:** Standard",
+        "26. **Managing Territories:** Exclude → United States, Canada, Mexico, India, Pakistan (mekanik lisans yok, "
+        "Scryne 2026-10-07); mağaza listesi olduğu gibi kalır",
+        "",
+        "## Yapay zekâ beyanı",
+        f"Formun 1–4. adımlarında sorulmadı (2026-10-08). Sorulursa: Evet, {meta['yapay_zeka']['kapsam']}; araç "
+        f"{meta['yapay_zeka']['arac']} ({meta['yapay_zeka']['baglanti']}). Araç kredi ya da sanatçı alanına yazılmaz.",
+        "",
+        "Kurallar: başlığa `(Cover)` ya da orijinal sanatçı adı eklenmez.",
+        "",
+        "Yükledikten sonra: `yanki yuklendi <kimlik>`",
+    ]
+
+
 def _mmss(sn: float) -> str:
     dk, s = divmod(round(sn), 60)
     return f"{dk}:{s:02d}"
@@ -226,8 +303,15 @@ def paketle(calisma: Path, yayin_yolu: Path, kimlikler: list[str] | None = None,
         ad = guvenli_ad(f"{y.sanatci_adi or 'SANATCI'} - {d.ad}")
         ses_yolu, kapak_yolu = p / f"{ad}.{SES_BICIMI[y.dagitimci]}", p / f"{ad}.jpg"
         olcum = master(kaynak, ses_yolu, y)
-        kapak(d.ad, sunucu.dalga(kaynak)["tepe"], kapak_yolu, y.sanatci_adi)
-        meta = metadata(d, y, olcum, ses.sure(ses_yolu))
+        # Scryne'ın seçtiği kapak (3000×3000'e hazırlanmış) varsa o; yoksa dalga formundan üretilir
+        if (ozel := k / "kapak_ozel.jpg").exists():
+            kapak_yolu.parent.mkdir(parents=True, exist_ok=True)
+            kapak_yolu.write_bytes(ozel.read_bytes())
+        else:
+            kapak(d.ad, sunucu.dalga(kaynak)["tepe"], kapak_yolu, y.sanatci_adi)
+        zaman = k / "soz_zaman.json"
+        onizleme = nakarat_baslangici(json.loads(zaman.read_text(encoding="utf-8"))) if zaman.exists() else None
+        meta = metadata(d, y, olcum, ses.sure(ses_yolu), onizleme)
         (p / "metadata.json").write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
         (p / "YUKLE.md").write_text(yukle_md(meta, y, {"ses": ses_yolu.name, "kapak": kapak_yolu.name}),
                                     encoding="utf-8")
