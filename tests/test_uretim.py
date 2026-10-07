@@ -215,3 +215,21 @@ def test_yuklenmis_sarki_yeniden_uretilmez(tmp_path):
     d.gec("yuklendi")
     with pytest.raises(ValueError):
         uretim.yeniden_uretime_al(d)
+
+
+def test_yeniden_komutu_eski_paketi_kenara_alir(tmp_path, monkeypatch):
+    from yanki import cli
+
+    c, a = tmp_path / "calisma", _ayar()
+    _sarki(c, "s", 60)
+    uretim.uret(a, c, calistir=SahteMotor(), degerlendir=GECER)
+    d = durum.oku(c, "s")
+    d.secilen = 1
+    d.gec("paketlendi")
+    durum.yaz(c, d)
+    (c / "s" / "paket").mkdir()
+    (c / "s" / "paket" / "YUKLE.md").write_text("eski", encoding="utf-8")
+    monkeypatch.setattr(cli.ayarlar, "yukle", lambda: replace(a, kok=tmp_path))
+    assert cli.main(["yeniden", "s"]) == 0
+    assert not (c / "s" / "paket").exists() and (c / "s" / "paket_onceki" / "YUKLE.md").exists()
+    assert durum.oku(c, "s").asama == "analiz"

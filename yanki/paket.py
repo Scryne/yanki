@@ -147,6 +147,9 @@ def metadata(d: durum.Durum, y: Yayin, master_olcum: dict, sure_sn: float) -> di
                        "baglanti": "https://github.com/ace-step/ACE-Step-1.5"},
         "acik_icerik": None,  # Scryne işaretler; sözlerde küfür taraması yapılmadı
         "master": master_olcum,
+        # hangi adaydan paketlendi (yeniden üretimden sonra eski/yeni ayırt edilsin)
+        "kaynak_aday": next(({"no": x.no, "tohum": x.tohum, "dosya": x.dosya} for x in d.adaylar if x.no == d.secilen),
+                            None),
         "hazirlanma": date.today().isoformat(),
     }
 

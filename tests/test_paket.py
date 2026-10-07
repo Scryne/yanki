@@ -115,3 +115,11 @@ def test_master_flac(tmp_path):
     bilgi = sf.info(str(tmp_path / "m.flac"))
     assert bilgi.format == "FLAC" and bilgi.subtype == "PCM_16" and bilgi.samplerate == 44100
     assert abs(o["lufs"] - -14.0) < 0.5
+
+
+def test_metadata_kaynak_adayi_yazar(tmp_path):
+    d = _durum()
+    d.adaylar = [durum.Aday(2, "adaylar/2/tam.flac", 7), durum.Aday(4, "adaylar/4/tam.flac", 7)]
+    d.secilen = 4
+    m = paket.metadata(d, paket.yayin_ayarlari(_yayin(tmp_path)), {"lufs": -14.0, "gercek_tepe_dbtp": -1.2}, 1.0)
+    assert m["kaynak_aday"] == {"no": 4, "tohum": 7, "dosya": "adaylar/4/tam.flac"}

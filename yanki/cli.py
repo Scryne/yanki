@@ -1,6 +1,7 @@
 """yanki komut satırı."""
 
 import argparse
+import shutil
 import sys
 from pathlib import Path
 
@@ -71,6 +72,11 @@ def _yeniden(args: argparse.Namespace) -> int:
             kod = 1
             continue
         durum.yaz(calisma, d)
+        # eski paket yeni seçim yapılana kadar yüklenmesin: kenara alınır (yeni onayda paket yeniden üretilir)
+        k = durum.klasor(calisma, kimlik)
+        if (k / "paket").exists():
+            shutil.rmtree(k / "paket_onceki", ignore_errors=True)
+            (k / "paket").rename(k / "paket_onceki")
         print(f"yeniden üretime alındı: {d.sanatci} — {d.ad} (sonraki `yanki uret` ya da gece görevi)")
     return kod
 
