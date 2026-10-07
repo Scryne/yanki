@@ -95,6 +95,7 @@ girdi/liste.toml  (Scryne: sanatçı + şarkı, isteğe bağlı stil/söz düzel
 
 ## Scryne'dan beklenenler (açık)
 
-- Sanatçı adı (Spotify'da cover'ların çıkacağı ad) — Faz 5'ten önce.
+- Sanatçı adı: **Orvane** (Scryne, 2026-10-07). Uydurma, gönderme taşımayan marka adı; aramada çakışma yok, "Aurane"
+  Aure/Aurora'ya yakın düştüğü için elendi.
 - Dağıtımcı: **RouteNote**, mekanik lisans alınmadan (Scryne, 2026-10-07). Lisanssız cover kuralı gereği ABD, Kanada,
   Meksika, Hindistan ve Pakistan bölgeleri çıkarılır; ses FLAC 44,1 kHz / 16 bit.

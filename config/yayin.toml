@@ -1,8 +1,8 @@
-# Yükleme paketi ayarları. Boş alanlar Scryne'ın kararını bekliyor (2026-10-07: "o noktaya gelince belirleriz").
+# Yükleme paketi ayarları. Kararlar: sanatçı adı ve dağıtımcı Scryne'ın (2026-10-07).
 
 [yayin]
 # Spotify'da görünecek sanatçı adı. Boşsa kapakta sanatçı yazmaz, YUKLE.md eksik diye işaretler.
-sanatci_adi = ""
+sanatci_adi = "Orvane"  # Scryne, 2026-10-07
 # "routenote" | "distrokid" | "" — form alanlarının sırası ve cover lisans adımı buna göre yazılır
 dagitimci = "routenote"  # Scryne, 2026-10-07: RouteNote, mekanik lisans alınmadan
 # Kapakta ve metadata'da: plak şirketi yoksa sanatçı adı kullanılır
