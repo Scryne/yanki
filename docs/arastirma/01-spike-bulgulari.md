@@ -90,3 +90,24 @@ kalibre edildi; tablo değerleri A şarkısı (B aynı yönde).
   ile 2 dk ama tanımlar uydurma (Viva La Vida → "İbranice Eurodance, B♭ major"; Perfect → "saksafonlu pop-rock 130 BPM").
   CLAP `laion/larger_clap_music` (transformers 4.57.6) bütün etiketlerde düz dağılım, logit ölçeği ~1,0 (yüklenme sorunu,
   çözülmedi). Sonuç: MusicBrainz sanatçı türleri + solo cinsiyet, BPM/ton yalnız listeden.
+
+## S12 kalite kolları (2026-10-07)
+- Kesit: Adele 0:40–1:25 (45 sn), tohum 42, tarif (XL-SFT INT8, cover, güç 0,7, 100 adım); her varyantta tek kol.
+  Motor işine `ek` alanı eklendi (GenerationParams'a olduğu gibi gider).
+- Bulgu: LRCLIB `♪` satırları (enstrümantal ara) sözün içinde modele gidiyordu ve düz sözde boş satır olmadığı için
+  bütün şarkı tek `[verse]` etiketleniyordu.
+
+| Varyant | Tarifle r | Söz WER | Süre (sn) |
+|---|---|---|---|
+| 0 tarif | 1,000 | 0,099 | 71 |
+| 1 shift 3 | 0,694 | 0,113 | 73 |
+| 2 ADG | 0,670 | 0,127 | 70 |
+| 3 CFG 9 | 0,662 | 0,127 | 72 |
+| 4 CFG 5 | 0,700 | 0,085 | 71 |
+| 5 Heun | 0,593 | 0,113 | 130 |
+| 6 hız kırpma 2 | 0,779 | 0,099 | 73 |
+| 7 shift 3 + ADG | 0,596 | 0,099 | 66 |
+| 8 temiz söz (`♪` yok, bölüm etiketli) | 0,564 | **0,042** | 69 |
+
+- Hepsi kapılardan geçti (parmak izi 0,58–0,62, dalga 0,04–0,05). WER aynı referansla yeniden ölçüldü, fark referans
+  farkından gelmiyor. Otomatik ölçüler kulağı tutmadığı için (tur 1) karar dinlemede: `calisma/dinleme/s12/`.
