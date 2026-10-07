@@ -130,3 +130,14 @@ kalibre edildi; tablo değerleri A şarkısı (B aynı yönde).
   ölçmüyor; karar dinlemede (`calisma/dinleme/s13/`). Stil eki gerekirse şarkı başına dinleme sayfasından verilir.
 - Scryne dinledi: taban ile net vokal stili "neredeyse aynı, hatta taban bazı yerlerde daha iyi" → stil eki elendi.
 
+## Söz WER'inin ölçüm gürültüsü (2026-10-07)
+- Aynı aday dosyası, aynı kod ve normalleştirmeyle farklı süreçlerde: Coldplay aday 4 0,032 → 0,067, Adele aday 3
+  0,078 → 0,030, Adele aday 4 0,015 → 0,030. Aynı süreçte üç tekrar birebir aynı (faster-whisper small.en, CPU int8;
+  sıcaklık 0 da aynı). Fark süreçler arası (çok iş parçacıklı int8 aritmetiği).
+- Orijinal kayıtların WER'i: Adele 0,063, Ed Sheeran 0,090, Coldplay 0,155 (yoğun miks; cover'lar orijinalden düşük).
+  WER şarkılar arasında karşılaştırılamaz.
+- Sonuç: WER kapı olarak geçerli (eşik bu değerlerden çok uzak), ama **±0,04 içindeki farklar sıralama yapmaz**. S12'deki
+  0,099 → 0,042 farkı aynı süreçte yeniden ölçülüp doğrulanmıştı ve Scryne'ın kulağı da onayladı; S13'teki tohum
+  farklarının çoğu bu gürültünün içinde.
+- Kesme işareti normalleştirmesi (LRCLIB ’ / Whisper ') düzeltildi; etkisi küçük (≤0,01).
+
