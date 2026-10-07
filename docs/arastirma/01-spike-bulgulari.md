@@ -128,4 +128,5 @@ kalibre edildi; tablo değerleri A şarkısı (B aynı yönde).
 - Eşleşmiş tohumlarda net vokal stili: 42 → 0,042→0,014; 7 → 0,070→0,070; 123 → 0,085→0,070. Ortalama 0,066 → 0,051:
   küçük ve tutarsız, tarife alınmadı. **Tohum en büyük kol** (aynı ayarla 0,042–0,113). WER nefesi ve mırıldanmayı
   ölçmüyor; karar dinlemede (`calisma/dinleme/s13/`). Stil eki gerekirse şarkı başına dinleme sayfasından verilir.
+- Scryne dinledi: taban ile net vokal stili "neredeyse aynı, hatta taban bazı yerlerde daha iyi" → stil eki elendi.
 
