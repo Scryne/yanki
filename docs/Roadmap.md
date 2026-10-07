@@ -90,5 +90,6 @@ Durum sütunu session-start hook'u tarafından otomatik okunur — format bozulm
   küçük ve tutarsız (`docs/arastirma/01`); tarif değişmedi. Tohum en büyük kol → aday sayısını artırmak (2 → 3–4)
   dinleme yükü karşılığında daha çok şans; dinleme: `calisma/dinleme/s13/`.
   Scryne: taban ile net vokal stili neredeyse aynı, taban bazı yerlerde daha iyi → stil eki elendi.
+  **Karar (Scryne kararı bana bıraktı):** aday sayısı 3, tohumlar 42 / 7 / 123 (gece şarkı başı ~30 dk).
 - **Denenecekler:** tohum/aday sayısı, stil tanımı varyantları, adım/kaydırma (`shift`), güç 0,6–0,8 şarkıya göre,
   vokal izi son işlemi (nefes/sibilans), LoRA (8–20 şarkı) ihtiyacı.
