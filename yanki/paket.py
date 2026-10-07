@@ -31,7 +31,8 @@ DAGITIMCI_NOTU = {
     ],
     "routenote": [
         "Yapay zekâ aracı kredi ya da sanatçı alanına yazılmaz; RouteNote isterse aracın bağlantısı verilir.",
-        "Cover lisansı alınmadıysa mağaza bölgelerinden ABD, Kanada, Meksika, Hindistan ve Pakistan çıkarılır.",
+        "Mekanik lisans alınmıyor (Scryne, 2026-10-07): mağaza bölgelerinden ABD, Kanada, Meksika, Hindistan ve"
+        " Pakistan çıkarılır (RouteNote'un lisanssız cover kuralı).",
         "Kore mağazaları (Melon, Genie, Bugs, Flo, Vibe) ve Amazon AI içeriği almaz; seçiliyse kaldır.",
     ],
 }

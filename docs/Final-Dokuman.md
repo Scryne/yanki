@@ -36,7 +36,7 @@ olmadığı için yükleme adımı bilerek insanda kalır.
 | Kaynak ses | YouTube: yt-dlp adresi bulur, medya **HTTP/3** (`curl_cffi`, QUIC) ile iner; yedek `girdi/kaynak/` klasörü; **süre kontrolü** (LRCLIB süresiyle) | Bu ağda ISS içi googlevideo düğümü TCP+TLS'i kesiyor, QUIC çalışıyor (S8: 290 sn şarkı 0,4 sn). SoundCloud 30 sn önizleme verebiliyor, kullanılmaz |
 | Otomatik kapılar | Chromaprint (`fpcalc`) parmak izi benzerliği, dalga korelasyonu, Whisper ile söz var mı, süre | Spike'ta kalibre edildi: orijinali taşıyan çıktı parmak izi ≥ 0,74, iyi cover ~0,59–0,66 |
 | Dinleme sayfası | FastAPI + tek HTML (yerel, `127.0.0.1`) | Yarı otomatik akışın kalbi: dinle, onayla, aralık işaretle, reddet |
-| Mastering | `pyloudnorm` + ffmpeg (−14 LUFS, −1 dBTP, 44,1 kHz / 16 bit WAV) | Spotify normalizasyon hedefi; dağıtımcıların istediği biçim |
+| Mastering | `pyloudnorm` + ffmpeg (−14 LUFS, −1 dBTP, 44,1 kHz / 16 bit; RouteNote için FLAC) | Spotify normalizasyon hedefi; RouteNote WAV almıyor |
 | Kapak | Pillow ile kodla üretilen tipografik kapak, 3000×3000 JPG | Orijinal sanatçı adı/logosu yok (dağıtımcı kuralı); model gerektirmez |
 | Durum | Şarkı başına `calisma/<kimlik>/durum.json` (atomik yazım) | İnsan okunur, tek dosya; dinleme sayfası ve hat aynı kaydı okur. SQLite gereksiz çıktı |
 | Kalite | ruff, pytest; CI'da GPU'suz testler | Motor çağrısı arayüzün arkasında; testler sahte motorla |
@@ -85,7 +85,7 @@ girdi/liste.toml  (Scryne: sanatçı + şarkı, isteğe bağlı stil/söz düzel
 | Kaynak ses edinme | ✅ S8: HTTP/3 ile YouTube'dan tam şarkı iniyor; yedek kaynak klasörü |
 | Tam şarkı 8 GB'ta | ✅ parçalı üretimle aday başı ~8 dk (S10) |
 | Otomatik stil tanımı | ⚠️ LM ve CLAP güvenilmez çıktı; MusicBrainz türleri + cinsiyet genel kalıyor ("piano ballad" gibi ayrıntı yok). Faz 6: dinleme sayfasında stili düzenleyip yeniden üretme |
-| Dağıtımcı AI cover'ı kabul eder mi | ⏳ Faz 5'te ilk gerçek yükleme. Amuse ve CD Baby reddediyor; RouteNote ve DistroKid beyanla kabul ediyor |
+| Dağıtımcı AI cover'ı kabul eder mi | ⏳ Faz 7'de ilk gerçek yükleme. Seçilen: RouteNote (`docs/arastirma/02`); tam AI cover için açık kabul cümlesi yok |
 
 ## Kapsam Dışı
 
@@ -96,4 +96,5 @@ girdi/liste.toml  (Scryne: sanatçı + şarkı, isteğe bağlı stil/söz düzel
 ## Scryne'dan beklenenler (açık)
 
 - Sanatçı adı (Spotify'da cover'ların çıkacağı ad) — Faz 5'ten önce.
-- Dağıtımcı hesabı (öneri: RouteNote ücretsiz plan; DistroKid $23/yıl + parça başı cover lisansı) — Faz 5'ten önce.
+- Dağıtımcı: **RouteNote**, mekanik lisans alınmadan (Scryne, 2026-10-07). Lisanssız cover kuralı gereği ABD, Kanada,
+  Meksika, Hindistan ve Pakistan bölgeleri çıkarılır; ses FLAC 44,1 kHz / 16 bit.
