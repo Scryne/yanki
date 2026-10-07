@@ -12,3 +12,67 @@
 #
 # Kaynak sesi kendin vermek istersen: girdi/kaynak/<kimlik>.mp3  (kimlik: "adele-someone-like-you")
 # Sözleri kendin vermek istersen:     girdi/sozler/<kimlik>.txt
+
+# 2026-10-08: Scryne seçimi Claude'a bıraktı ("her şeyi sana bırakıyorum"). Ölçüt: hattın iyi çıktığı türe yakın
+# (Adele söz WER 0,015, Coldplay 0,032; Ed Sheeran zayıf): tek solo vokal, piyano/akustik, yavaş-orta balad,
+# küfürsüz, çok dinlenen.
+
+[[sarki]]
+sanatci = "Lewis Capaldi"
+ad = "Someone You Loved"
+vokal = "erkek"
+
+[[sarki]]
+sanatci = "John Legend"
+ad = "All of Me"
+vokal = "erkek"
+
+[[sarki]]
+sanatci = "Christina Perri"
+ad = "A Thousand Years"
+vokal = "kadin"
+
+[[sarki]]
+sanatci = "Coldplay"
+ad = "The Scientist"
+vokal = "erkek"
+
+[[sarki]]
+sanatci = "Coldplay"
+ad = "Fix You"
+vokal = "erkek"
+
+[[sarki]]
+sanatci = "Adele"
+ad = "When We Were Young"
+vokal = "kadin"
+
+[[sarki]]
+sanatci = "Tom Odell"
+ad = "Another Love"
+vokal = "erkek"
+
+[[sarki]]
+sanatci = "Calum Scott"
+ad = "You Are the Reason"
+vokal = "erkek"
+
+[[sarki]]
+sanatci = "James Arthur"
+ad = "Say You Won't Let Go"
+vokal = "erkek"
+
+[[sarki]]
+sanatci = "Keane"
+ad = "Somewhere Only We Know"
+vokal = "erkek"
+
+[[sarki]]
+sanatci = "Olivia Rodrigo"
+ad = "drivers license"
+vokal = "kadin"
+
+[[sarki]]
+sanatci = "Lana Del Rey"
+ad = "Young and Beautiful"
+vokal = "kadin"
