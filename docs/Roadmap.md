@@ -172,7 +172,7 @@ Durum sütunu session-start hook'u tarafından otomatik okunur — format bozulm
 - **S15/S16 dinlendi (Scryne, 2026-10-08):** belirgin kazanan yok; tarif değişmedi.
 - **S17 (2026-10-08):** mırıldanma "şarkıcının sustuğu yerde vokal" değil; etiketli aralıkta orijinal de söylüyor →
   kısma/geçitleme tipi son işlem kusuru düzeltmez, yapılmadı (`docs/arastirma/01`).
-- **S18 (2026-10-08, sürüyor):** INT8 niceleme mi? FP8 (105–113 sn/iş, 7,7 GB) ve bf16 (~32 sn/adım, iş başı ~53 dk)
+- **S18 (2026-10-08; FP8 hazır, bf16 yarım):** bf16 önce VAE çözmede 48 dk takıldı (DiT 8 GB'ı dolduruyor → `dit_offload`), sonra DiT RAM'e alınınca sistem belleği yetmedi, 3/100 adımda durdu; FP8 dinlenince yeniden açılır. INT8 niceleme mi? FP8 (105–113 sn/iş, 7,7 GB) ve bf16 (~32 sn/adım, iş başı ~53 dk)
   aynı kesit ve tohumlarla; dinleme `calisma/dinleme/s18/`. bf16 belirgin iyiyse yerel tam şarkı imkânsız (aday başı
   saatler) → kiralık 24 GB GPU kararı Scryne'ın (maliyet). FP8 iyiyse bedava geçiş.
 - **Sonraki adaylar (sırayla):** MPEcho (SongEcho + fonem kodlayıcı, ACE-Step tabanlı, bulanık heceyi hedefliyor; taban
