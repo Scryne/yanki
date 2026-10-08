@@ -181,3 +181,13 @@ kalibre edildi; tablo değerleri A şarkısı (B aynı yönde).
 
 - Hepsi kapıdan geçti, hiçbiri orijinali taşımıyor (parmak izi < 0,72). WER farkları ±0,04 gürültüsü içinde → kulak.
   Not: `calisma/dinleme/16_kaynak_vokali_kisik.mp3` (2026-10-06) tek tohumla bir kez denenmiş, sonucu kayıtsızdı.
+
+## S17 hayalet vokal: mırıldanma şarkıcının sustuğu yerde mi (2026-10-08)
+- Scryne S15/S16'yı dinledi, belirgin kazanan yok. Son işlemden önce hedef daraltıldı: kaynak ve cover Demucs
+  `htdemucs_ft` (CPU, 5 dk şarkı ~10 dk) ile ayrıldı; kaynak vokali sessizken (tepe −35 dB altı) cover vokali tepe
+  −25 dB üstündeyse "hayalet". Etiket: Adele aday 1, 58–62 sn. `spikes/s17_hayalet_vokal.py`, `calisma/_spike/s17/`.
+- Sonuç **olumsuz**: etiket aralığında hayalet oranı 0 (orijinal şarkıcı orada söylüyor); şarkı boyunca hayalet toplam
+  4,7 sn ve kabul edilen / reddedilen onarımda birebir aynı (onarım hayaleti değiştirmeden kusuru düzeltti). Cover
+  kaynağın zamanlamasını izliyor (zarf korelasyonu en iyi 0 sn kaymada, r 0,68–0,78).
+- Yorum: duyulan kusur söylenen cümlenin içindeki ses kalitesi, vokalin yanlış yerde olması değil. Kısma/geçitleme tipi
+  son işlem bu kusuru düzeltmez → yapılmadı. Kalan şüpheli: modelin kendisi (INT8 niceleme, S18).

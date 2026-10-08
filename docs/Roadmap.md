@@ -169,9 +169,16 @@ Durum sütunu session-start hook'u tarafından otomatik okunur — format bozulm
 - **S15–S16 (2026-10-08, RouteNote incelemesi beklenirken):** DCW çıktıyı bozuyor (elendi), SDE sözü bozuyor; CFG
   aralığı, hız EMA'sı ve kaynağın vokal/eşlik dengesi (Demucs) ölçüde tabandan ayrışmıyor → Scryne'ın dinlemesi:
   `calisma/dinleme/s15/`, `calisma/dinleme/s16/` (her kol iki tohum, `0_taban_t42/t7` ile).
-- **Sıra:** (1) S15/S16 dinlemesi → kazanan kol tarife (`config/motor.toml` ya da kaynak ön işlemi) ve zayıf şarkılar
-  (Fix You) gece `yanki yeniden`; (2) kazanan yoksa S17: çıktının vokal izi son işlemi (Demucs ile ayır → nefes/sibilans
-  → yeniden miks); (3) LoRA ihtiyacı en son, 8 GB'ta eğitim ölçülmeden karar yok.
+- **S15/S16 dinlendi (Scryne, 2026-10-08):** belirgin kazanan yok; tarif değişmedi.
+- **S17 (2026-10-08):** mırıldanma "şarkıcının sustuğu yerde vokal" değil; etiketli aralıkta orijinal de söylüyor →
+  kısma/geçitleme tipi son işlem kusuru düzeltmez, yapılmadı (`docs/arastirma/01`).
+- **S18 (2026-10-08, sürüyor):** INT8 niceleme mi? FP8 (105–113 sn/iş, 7,7 GB) ve bf16 (~32 sn/adım, iş başı ~53 dk)
+  aynı kesit ve tohumlarla; dinleme `calisma/dinleme/s18/`. bf16 belirgin iyiyse yerel tam şarkı imkânsız (aday başı
+  saatler) → kiralık 24 GB GPU kararı Scryne'ın (maliyet). FP8 iyiyse bedava geçiş.
+- **Sonraki adaylar (sırayla):** MPEcho (SongEcho + fonem kodlayıcı, ACE-Step tabanlı, bulanık heceyi hedefliyor; taban
+  sürüm, dil ve 8 GB'a sığma doğrulanmadı); onarım akışını ucuzlatmak (hızlı panelde aralık işaretleme, gece aralık
+  başına daha çok tohum: onarım tek çalışan düzeltme). `cover_noise_strength` denenmez: kaynağın gizil sesinden başlar,
+  orijinal kaydı taşır. LoRA en son.
 - Faz 7'de açık kalan denemelerin sahibi: vokal izi son işlemi (nefes/sibilans), LoRA (8–20 şarkı) ihtiyacı,
   otomatik kusur işaretleme (S14: Whisper güveni tutmadı; onarım etiketleri birikince yeniden).
 - Kabul gelince düzenli yayın: onaylı paketlerden takvim (haftada bir), her yüklemenin bulgusu `YUKLE.md`'ye.
