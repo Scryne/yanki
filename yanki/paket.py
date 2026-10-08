@@ -15,7 +15,7 @@ from pathlib import Path
 
 import numpy as np
 
-from yanki import durum, ses
+from yanki import durum, ses, sozler
 
 FONT_KALIN = Path("C:/Windows/Fonts/bahnschrift.ttf")
 
@@ -135,13 +135,9 @@ def acik_sozler(metin: str) -> list[str]:
 
 
 def nakarat_baslangici(satirlar: list) -> float | None:
-    """Önizleme (preview) başlangıcı: en az 3 kez tekrarlanan sözlerden şarkıda en erken geleni, nakaratın ilk
-    satırı sayılır. Zaman damgası kaynağın; parçalı üretim kaynağın zamanlamasını izlediği için cover'da da tutar."""
-    temiz = [(float(t), s.strip().lower()) for t, s in satirlar if s and s.strip() and s.strip() != "♪"]
-    sayim: dict[str, int] = {}
-    for _, s in temiz:
-        sayim[s] = sayim.get(s, 0) + 1
-    return next((t for t, s in temiz if sayim[s] >= 3), None)
+    """Önizleme (preview) başlangıcı: nakaratın ilk satırı (`sozler.nakarat_gecisleri`). Zaman damgası kaynağın;
+    parçalı üretim kaynağın zamanlamasını izlediği için cover'da da tutar."""
+    return next(iter(sozler.nakarat_gecisleri(satirlar)), None)
 
 
 def metadata(d: durum.Durum, y: Yayin, master_olcum: dict, sure_sn: float, onizleme_sn: float | None = None,

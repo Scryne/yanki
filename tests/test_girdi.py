@@ -170,3 +170,29 @@ def test_youtube_indir_bos_parcada_yeniden_dener(tmp_path, monkeypatch):
     monkeypatch.setattr(kaynak, "_indir_bir", lambda v, h: (_ for _ in ()).throw(OSError("eksik")))
     with pytest.raises(OSError):
         kaynak.youtube_indir("v", tmp_path / "a.m4a", deneme=2, bekleme_sn=0)
+
+
+def _nakaratli(nakaratlar, ilk=14.0):
+    satirlar = [[ilk, "Verse one"], [ilk + 4, "Verse two"]]
+    for t in nakaratlar:
+        satirlar += [[t, "Never mind"], [t + 5, "chorus two"]]
+    return satirlar
+
+
+def test_kesitler_ilk_kita_nakarat_son_nakarat():
+    k = sozler.kesitler(_nakaratli([74.0, 157.0, 204.0, 232.0]), 285.0)
+    assert [(x["kimlik"], x["bas"], x["son"]) for x in k] == [
+        ("ilk_kita", 13.0, 43.0), ("nakarat", 73.0, 103.0), ("son_nakarat", 231.0, 261.0)]
+    # son geçişler birbirine yakınsa (nakarat içi tekrar) son nakarat kümenin başıdır; şarkı sonu keser
+    k = sozler.kesitler(_nakaratli([60.0, 130.0, 190.0, 200.0, 210.0]), 215.0)
+    assert k[-1] == {"kimlik": "son_nakarat", "ad": "Son nakarat", "bas": 189.0, "son": 215.0}
+
+
+def test_kesitler_cakisan_ilk_kita_kisalir_nakarat_kalir():
+    k = sozler.kesitler(_nakaratli([47.0, 91.0, 147.0], ilk=24.0), 236.0)
+    assert [(x["kimlik"], x["bas"], x["son"]) for x in k][:2] == [("ilk_kita", 23.0, 46.0), ("nakarat", 46.0, 76.0)]
+
+
+def test_kesitler_nakarat_yoksa_yalniz_ilk_kita_sozsuzse_bos():
+    assert [x["kimlik"] for x in sozler.kesitler([[5.0, "a"], [9.0, "b"], [12.0, "a"]], None)] == ["ilk_kita"]
+    assert sozler.kesitler([[3.0, "♪"], [8.0, ""]], 100.0) == []

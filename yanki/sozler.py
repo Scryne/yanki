@@ -70,6 +70,48 @@ def aralik_sozu(satirlar: list[tuple[float, str]], bas: float, son: float) -> st
     return "\n\n".join(bloklar)
 
 
+def nakarat_gecisleri(satirlar) -> list[float]:
+    """Nakaratın ilk satırının geçtiği anlar: en az 3 kez tekrarlanan satırlardan şarkıda en erken gelen. Kıta tabanlı
+    [chorus] etiketi 15 şarkının 12'sinde nakaratı bulamadı (LRCLIB'de kıta arası `♪` çoğu kayıtta yok); bu kural 15'te
+    15 buldu (2026-10-08)."""
+    temiz = [(float(t), s.strip().lower()) for t, s in satirlar if not _ara_mi(s)]
+    sayim: dict[str, int] = {}
+    for _, s in temiz:
+        sayim[s] = sayim.get(s, 0) + 1
+    ilk = next((s for _, s in temiz if sayim[s] >= 3), None)
+    return [t for t, s in temiz if s == ilk] if ilk else []
+
+
+def kesitler(satirlar, sure_sn: float | None, uzunluk: float = 30.0, on_pay: float = 1.0,
+             kume_arasi: float = 25.0) -> list[dict]:
+    """Hızlı dinleme kesitleri, kaynağın zaman damgalarıyla (parçalı üretim kaynağın zamanlamasını izler): ilk kıta,
+    ilk nakarat, son nakarat. Son nakarat, son geçişten geriye `kume_arasi`'ndan kısa aralıklarla gelen geçişlerin
+    ilki (nakarat içinde tekrarlanan satır ayrı nakarat sayılmasın). Çakışmada önceki kesit kısalır; yarıdan kısa
+    kalacaksa yeni kesit atlanır."""
+    temiz = [float(t) for t, s in satirlar if not _ara_mi(s)]
+    if not temiz:
+        return []
+    gecis = nakarat_gecisleri(satirlar)
+    son = len(gecis) - 1
+    while son > 0 and gecis[son] - gecis[son - 1] < kume_arasi:
+        son -= 1
+    adaylar = [("ilk_kita", "İlk kıta", temiz[0])]
+    if gecis:
+        adaylar += [("nakarat", "Nakarat", gecis[0]), ("son_nakarat", "Son nakarat", gecis[son])]
+    sonuc: list[dict] = []
+    for kimlik, ad, t in adaylar:
+        bas = max(0.0, t - on_pay)
+        bitis = bas + uzunluk if sure_sn is None else min(float(sure_sn), bas + uzunluk)
+        if bitis - bas < uzunluk / 2:
+            continue
+        if sonuc and bas < sonuc[-1]["son"]:
+            if bas - sonuc[-1]["bas"] < uzunluk / 2:
+                continue
+            sonuc[-1]["son"] = round(bas, 2)
+        sonuc.append({"kimlik": kimlik, "ad": ad, "bas": round(bas, 2), "son": round(bitis, 2)})
+    return sonuc
+
+
 def senkron(lrc: str | None) -> tuple[tuple[float, str], ...]:
     satirlar = []
     for satir in (lrc or "").splitlines():

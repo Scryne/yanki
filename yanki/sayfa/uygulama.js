@@ -138,11 +138,13 @@ async function sarkiGoster(kimlik) {
       el("span", {}, "Kaynak: ", el("b", {}, d.kaynak?.baslik || "—"))),
   ];
   if (d.hata) parcalar.push(el("p", { class: "uyari", role: "alert" }, d.hata));
+  const duzenlenebilir = ["uretildi", "onarim"].includes(d.asama);
+  panelTus = null;
+  parcalar.push(karsilastirma(d, duzenlenebilir));
   if (["uretildi", "hata"].includes(d.asama) && d.analiz?.stil) parcalar.push(stilKutu(d));
   if (d.asama === "analiz" && d.adaylar.length) parcalar.push(el("p", { class: "ipucu bekleyen" },
     "Yeni adaylar sırada; sonraki koşuda üretilir. O zamana kadar mevcut adaylar yalnız dinlenebilir."));
   if (d.kaynak?.dosya) parcalar.push(seritKutu({ kimlik, dosya: d.kaynak.dosya, baslik: "Orijinal", alt: "karşılaştırma için" }));
-  const duzenlenebilir = ["uretildi", "onarim"].includes(d.asama);
   const stilFarkli = new Set(d.adaylar.map((a) => a.stil || "")).size > 1;
   for (const a of d.adaylar) parcalar.push(adayKutu(d, a, duzenlenebilir, stilFarkli));
   if (!d.adaylar.length && !d.hata) parcalar.push(el("p", { class: "ipucu" }, "Adaylar henüz üretilmedi. Üretim GPU boşken arka planda çalışır."));
@@ -153,6 +155,116 @@ async function sarkiGoster(kimlik) {
       el("button", { class: "dugme tehlike", type: "button", onclick: () => reddet(d) }, "Şarkıyı reddet")));
   }
   ana.replaceChildren(...parcalar);
+}
+
+// ---- hızlı karşılaştırma: aynı kesit, adaylar arasında konumu koruyarak geçiş ----
+// Tam dinleme şarkı başı ~15 dk; burada 3 kesit × aday. Sıra söz WER'ine göre (yalnız öneri, ±0,04 oynuyor).
+let panelTus = null;
+addEventListener("keydown", (e) => {
+  if (!panelTus || e.ctrlKey || e.altKey || e.metaKey) return;
+  if (e.target.closest?.("input, textarea, select, summary, .dalga-kap")) return;
+  if (e.key === " " && e.target.closest?.("button, a")) return; // odaktaki düğmenin kendi tıklaması
+  panelTus(e);
+});
+
+function karsilastirma(d, duzenlenebilir) {
+  const wer = (a) => a.kapilar?.soz_wer?.deger ?? Infinity;
+  const adaylar = d.adaylar.filter((a) => a.gecti && a.dosya).sort((x, y) => wer(x) - wer(y));
+  if (!d.kesitler?.length || !adaylar.length) return null;
+  const izler = [
+    ...(d.kaynak?.dosya ? [{ tus: "0", ad: "Orijinal", dosya: d.kaynak.dosya }] : []),
+    ...adaylar.map((a) => ({ tus: a.no <= 9 ? String(a.no) : null, ad: `Aday ${a.no}`, dosya: a.dosya, aday: a })),
+  ];
+  let k = 0, aktif = null, sirayla = false;
+  const kesit = () => d.kesitler[k];
+
+  const zaman = el("span", { class: "zaman" }, "0:00 / 0:00");
+  const cubuk = el("span", { class: "ilerleme-dolu" });
+  const calDugme = el("button", { class: "dugme", type: "button", onclick: () => calDurdur() }, "Çal");
+  const siraDugme = el("button", { class: "dugme", type: "button", onclick: () => siraylaBasla() }, "Sırayla çal");
+  const onayDugme = el("button", { class: "dugme birincil", type: "button", disabled: true, onclick: () => aktif?.aday && onayVer(d, aktif.aday) }, "Onayla");
+  const kesitDugmeleri = d.kesitler.map((x, i) => el("button", { class: "kesit", type: "button", "aria-pressed": i === 0 ? "true" : "false", onclick: () => kesitSec(i) },
+    x.ad, el("span", { class: "kesit-zaman" }, aralik(x.bas, x.son))));
+
+  const goster = () => {
+    const kx = kesit(), t = aktif ? aktif.ses.currentTime : kx.bas;
+    const oran = Math.min(1, Math.max(0, (t - kx.bas) / (kx.son - kx.bas)));
+    cubuk.style.transform = `scaleX(${oran})`;
+    zaman.textContent = `${sure(Math.max(0, t - kx.bas))} / ${sure(kx.son - kx.bas)}`;
+    const caliyor = aktif && !aktif.ses.paused;
+    calDugme.textContent = caliyor ? "Durdur" : "Çal";
+    siraDugme.setAttribute("aria-pressed", sirayla ? "true" : "false");
+    for (const iz of izler) iz.dugme.setAttribute("aria-pressed", iz === aktif ? "true" : "false");
+    const a = aktif?.aday, bekleyen = a?.onarimlar.some((o) => o.durum === "bekliyor");
+    onayDugme.disabled = !duzenlenebilir || !a || bekleyen;
+    onayDugme.textContent = a ? `Onayla: aday ${a.no}` : "Onayla";
+    onayDugme.title = bekleyen ? "Bu adayın bekleyen onarımı var" : "";
+  };
+  const oynat = (iz, konum) => {
+    if (aktif && aktif !== iz) aktif.ses.pause();
+    if (calan && calan.ses !== iz.ses) calan.ses.pause();
+    calan = { ses: iz.ses };
+    aktif = iz;
+    const kx = kesit();
+    iz.ses.currentTime = Math.min(kx.son - 0.25, Math.max(kx.bas, konum));
+    iz.ses.play().catch((e) => bildir(`Çalınamadı: ${e.message}`, true));
+    goster();
+  };
+  const gec = (iz) => oynat(iz, aktif ? aktif.ses.currentTime : kesit().bas);
+  const calDurdur = () => {
+    if (!aktif) return oynat(izler.find((iz) => iz.aday) || izler[0], kesit().bas);
+    if (aktif.ses.paused) oynat(aktif, aktif.ses.currentTime >= kesit().son - 0.25 ? kesit().bas : aktif.ses.currentTime);
+    else aktif.ses.pause();
+  };
+  const siraylaBasla = () => { sirayla = true; oynat(izler.find((iz) => iz.aday), kesit().bas); };
+  const kesitSec = (i) => {
+    const caliyor = aktif && !aktif.ses.paused;
+    k = (i + d.kesitler.length) % d.kesitler.length;
+    kesitDugmeleri.forEach((b, j) => b.setAttribute("aria-pressed", j === k ? "true" : "false"));
+    if (caliyor) oynat(aktif, kesit().bas);
+    else { if (aktif) aktif.ses.currentTime = kesit().bas; goster(); }
+  };
+  const sonaGeldi = (iz) => {
+    const sonraki = sirayla && izler.slice(izler.indexOf(iz) + 1).find((x) => x.aday);
+    if (sonraki) return oynat(sonraki, kesit().bas);
+    sirayla = false; iz.ses.pause(); iz.ses.currentTime = kesit().bas; goster();
+  };
+
+  for (const iz of izler) {
+    iz.ses = el("audio", { preload: "none", src: `/ses/${d.kimlik}/${iz.dosya}` });
+    iz.ses.addEventListener("timeupdate", () => {
+      if (iz !== aktif) return;
+      if (iz.ses.currentTime >= kesit().son) sonaGeldi(iz); else goster();
+    });
+    for (const olay of ["play", "pause"]) iz.ses.addEventListener(olay, () => iz === aktif && goster());
+    const w = iz.aday ? wer(iz.aday) : null;
+    iz.dugme = el("button", { class: "iz" + (iz.aday ? "" : " orijinal"), type: "button", "aria-pressed": "false",
+      onclick: () => { sirayla = false; gec(iz); } },
+      el("kbd", {}, iz.tus ?? "·"), el("span", { class: "iz-ad" }, iz.ad),
+      iz.aday ? el("span", { class: "iz-deger" }, Number.isFinite(w) ? `söz ${String(w).replace(".", ",")}` : "söz —", ` · tohum ${iz.aday.tohum}`)
+        : el("span", { class: "iz-deger" }, "karşılaştırma için"));
+  }
+
+  panelTus = (e) => {
+    const iz = izler.find((x) => x.tus === e.key);
+    if (iz) { e.preventDefault(); sirayla = false; gec(iz); }
+    else if (e.key === " ") { e.preventDefault(); calDurdur(); }
+    else if (e.key === "ArrowRight" || e.key === "ArrowLeft") { e.preventDefault(); kesitSec(k + (e.key === "ArrowRight" ? 1 : -1)); }
+    else if (e.key === "s" || e.key === "S") { e.preventDefault(); siraylaBasla(); }
+  };
+
+  const kutu = el("section", { class: "serit karsilastir", "aria-label": "Hızlı karşılaştırma" },
+    el("div", { class: "serit-ust" }, el("h2", {}, "Hızlı karşılaştırma"),
+      el("span", { class: "ipucu kucuk-ipucu" }, "Adaylar söz hatasına göre sıralı; geçişte konum korunur")),
+    el("div", { class: "kesitler", role: "group", "aria-label": "Kesit" }, kesitDugmeleri),
+    el("ol", { class: "izler" }, izler.map((iz) => el("li", {}, iz.dugme))),
+    el("div", { class: "ilerleme", "aria-hidden": "true" }, cubuk),
+    el("div", { class: "serit-alt" }, calDugme, siraDugme, zaman, el("span", { class: "bosluk" }), duzenlenebilir ? onayDugme : null),
+    el("p", { class: "ipucu kucuk-ipucu kisayol" }, el("kbd", {}, "0–9"), " iz · ", el("kbd", {}, "←"), el("kbd", {}, "→"), " kesit · ",
+      el("kbd", {}, "Boşluk"), " çal/durdur · ", el("kbd", {}, "S"), " sırayla"),
+    izler.map((iz) => iz.ses));
+  goster();
+  return kutu;
 }
 
 function seritKutu({ kimlik, dosya, baslik, alt }) {
@@ -230,17 +342,31 @@ async function eylem(d, yol, govde, basari) {
 const onarimIste = (d, a, sec) => eylem(d, "onar", { aday: a.no, bas: +sec[0].toFixed(2), son: +sec[1].toFixed(2) },
   `Aday ${a.no}, ${aralik(...sec)} onarım sırasına alındı. Hat iki sürüm üretecek; hazır olunca burada dinlersin.`);
 const onarimKabul = (d, a, o) => eylem(d, "onarim-kabul", { aday: a.no, onarim: o.id }, `Onarım kabul edildi: aday ${a.no} artık bu sürüm.`);
-const onayVer = (d, a) => eylem(d, "onayla", { aday: a.no }, `Aday ${a.no} onaylandı. Yükleme paketi sonraki koşuda hazırlanır.`);
+// onay ve ret şarkıyı dinlemeden çıkarır: dinlemedeki sıradaki şarkıya geç
+async function eylemSonraki(d, yol, govde, basari) {
+  try {
+    await api(`/api/sarki/${d.kimlik}/${yol}`, govde);
+    const liste = await api("/api/sarkilar");
+    const i = liste.findIndex((s) => s.kimlik === d.kimlik);
+    const bekleyen = liste.filter((s) => s.asama === "uretildi" && s.kimlik !== d.kimlik);
+    const sonraki = bekleyen.find((s) => liste.indexOf(s) > i) || bekleyen[0];
+    bildir(sonraki ? `${basari} Sıradaki: ${sonraki.ad}.` : `${basari} Dinlemede başka şarkı kalmadı.`);
+    if (sonraki) location.hash = sonraki.kimlik; else await yenile(d.kimlik);
+  } catch (e) { bildir(e.message, true); }
+}
+const onayVer = (d, a) => eylemSonraki(d, "onayla", { aday: a.no }, `Aday ${a.no} onaylandı, paketi sonraki koşu hazırlar.`);
 function reddet(d) {
   const neden = prompt(`"${d.ad}" reddedilsin mi? İstersen nedenini yaz (boş bırakabilirsin).`);
   if (neden === null) return;
-  eylem(d, "reddet", { neden }, `"${d.ad}" reddedildi.`);
+  eylemSonraki(d, "reddet", { neden }, `"${d.ad}" reddedildi.`);
 }
 
 // ---- kuyruk ----
 async function listeGoster(secili) {
   const liste = await api("/api/sarkilar");
   $("#liste-bos").hidden = liste.length > 0;
+  const dinlemede = liste.filter((s) => s.asama === "uretildi").length;
+  $("#sayac").textContent = dinlemede ? `${dinlemede} şarkı dinlemede` : "";
   $("#liste").replaceChildren(...liste.map((s) => el("li", {},
     el("a", { href: `#${s.kimlik}`, "aria-current": s.kimlik === secili ? "page" : false },
       el("span", { class: "ad" }, s.ad),

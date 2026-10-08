@@ -14,7 +14,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from yanki import durum, uretim
+from yanki import durum, sozler, uretim
 from yanki.ayarlar import Ayarlar
 
 SAYFA = Path(__file__).with_name("sayfa")
@@ -92,7 +92,9 @@ def uygulama(a: Ayarlar, calisma: Path) -> FastAPI:
     @app.get("/api/sarki/{kimlik}")
     def sarki(kimlik: str):
         d = oku(kimlik)
-        return {**asdict(d), **_ozet(d)}
+        zaman = durum.klasor(calisma, kimlik) / "soz_zaman.json"
+        satirlar = json.loads(zaman.read_text(encoding="utf-8")) if zaman.exists() else []
+        return {**asdict(d), **_ozet(d), "kesitler": sozler.kesitler(satirlar, d.kaynak.get("sure_sn"))}
 
     @app.get("/ses/{kimlik}/{yol:path}")
     def ses(kimlik: str, yol: str):

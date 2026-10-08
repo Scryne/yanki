@@ -1,3 +1,5 @@
+import json
+
 import numpy as np
 import pytest
 import soundfile as sf
@@ -27,6 +29,15 @@ def test_liste_ve_ayrinti(ortam):
     assert istemci.get("/api/sarkilar").json()[0] == {"kimlik": "a-b", "sanatci": "A", "ad": "B", "asama": "uretildi",
                                                        "hata": None, "gecen_aday": 1, "bekleyen_onarim": 0}
     assert istemci.get("/api/sarki/a-b").json()["adaylar"][0]["tohum"] == 42
+    assert istemci.get("/api/sarki/a-b").json()["kesitler"] == []  # söz zamanı yoksa kesit yok
+
+
+def test_sarki_kesitleri_soz_zamanindan(ortam):
+    istemci, c = ortam
+    satirlar = [[10.0, "a"], [40.0, "n"], [45.0, "b"], [80.0, "n"], [120.0, "n"]]
+    (c / "a-b" / "soz_zaman.json").write_text(json.dumps(satirlar), encoding="utf-8")
+    k = istemci.get("/api/sarki/a-b").json()["kesitler"]
+    assert [x["kimlik"] for x in k] == ["ilk_kita", "nakarat", "son_nakarat"] and k[1]["bas"] == 39.0
     assert istemci.get("/api/sarki/yok").status_code == 404
 
 
