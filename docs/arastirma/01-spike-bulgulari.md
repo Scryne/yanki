@@ -152,3 +152,32 @@ kalibre edildi; tablo değerleri A şarkısı (B aynı yönde).
 - Yorum: Scryne'ın duyduğu kusur söz anlaşılırlığı değil, Whisper onu görmüyor. Otomatik işaretleme Whisper güveniyle
   kurulmaz. Etiket hattın kendisinde birikiyor (her onarım `bolge` + kabul/ret ile `durum.json`'da); 10–20 etiket
   olunca başka sinyaller (enerji/spektral düzlük, vokal ayrıştırma) o etiketlerle sınanır, tek örnekle değil.
+
+## S15 örnekleyici kolları (2026-10-08)
+- Aynı kesit (Adele 0:40–1:25), temiz söz + tarif, her kol tohum 42 ve 7 (tabanlar S12 `8_soz_temiz`, S13 `1_tohum7`:
+  söz WER 0,042 / 0,070). `spikes/s15_ornekleyici_kollari.py`, dinleme `calisma/dinleme/s15/`. İş başı ~72 sn.
+
+| Kol | WER t42 / t7 | Not |
+|---|---|---|
+| DCW low (0,05) | 0,986 / 0,986 | kapıdan düştü: gürültü (spektral düzlük 0,19–0,23, taban ~0,12) |
+| DCW double (0,05 / 0,02) | 0,986 / 0,972 | aynı |
+| SDE | 0,085 / 0,141 | iki tohumda da tabandan kötü |
+| CFG aralığı 0,1–0,9 | 0,014 / 0,070 | gürültü bandında |
+| hız EMA 0,1 | 0,042 / 0,056 | gürültü bandında |
+
+- DCW XL-SFT + 100 adımda çıktıyı bozuyor (ACE-Step yalnız turbo için varsayılan açık; düzeltme 100 adımda birikiyor
+  olabilir). Elendi, dinletilmez. CFG aralığı ve hız EMA'sı ölçüde ayrışmıyor → kulak.
+
+## S16 kaynakta vokal/eşlik dengesi (2026-10-08)
+- Soru: kirlilik kaynak koşullamasından geliyorsa (tur 3–4), cover'a giden kaynağın dengesini değiştirmek yardım eder mi.
+  Kesit Demucs `htdemucs_ft` (CPU, 45 sn'de ~20 sn) ile ayrıldı, −1 dBFS tepeye getirilip cover alındı. Kapılar
+  orijinal kesitle. `spikes/s16_kaynak_ayristirma.py`, dinleme `calisma/dinleme/s16/` (kaynaklar da `kaynak_*.mp3`).
+
+| Kaynak | WER t42 / t7 | Parmak izi |
+|---|---|---|
+| vokal önde (eşlik −6 dB) | 0,056 / 0,113 | 0,61 / 0,63 |
+| yalnız vokal | 0,014 / 0,085 | 0,60 / 0,64 |
+| vokal kısık (−6 dB) | 0,056 / 0,085 | 0,59 / 0,62 |
+
+- Hepsi kapıdan geçti, hiçbiri orijinali taşımıyor (parmak izi < 0,72). WER farkları ±0,04 gürültüsü içinde → kulak.
+  Not: `calisma/dinleme/16_kaynak_vokali_kisik.mp3` (2026-10-06) tek tohumla bir kez denenmiş, sonucu kayıtsızdı.
