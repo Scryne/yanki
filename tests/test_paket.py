@@ -147,6 +147,16 @@ def test_routenote_formu_ekran_sirasiyla(tmp_path):
     assert "16 bit FLAC" in md and "Eksik karar" not in md
 
 
+def test_routenote_yazarlari_kunyedeki_ad_soyaddan(tmp_path):
+    d = _durum()
+    d.kunye["yazar_adlari"] = [["Adele", "Adkins"], ["Lana", "Del Rey"], ["Mono", ""]]
+    y = paket.yayin_ayarlari(_yayin(tmp_path, "Orvane", "routenote"))
+    m = paket.metadata(d, y, {"lufs": -14.0, "gercek_tepe_dbtp": -1.2}, 1.0)
+    md = paket.yukle_md(m, y, {"ses": "a.flac", "kapak": "k.jpg"})
+    assert "First `Adele` · Last `Adkins`" in md and "First `Lana` · Last `Del Rey`" in md
+    assert "First `Mono` · Last `SOYAD?" in md
+
+
 @ffmpeg_gerekli
 def test_paketle_ozel_kapagi_korur(tmp_path):
     c = tmp_path / "c"

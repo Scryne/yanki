@@ -92,6 +92,42 @@ def test_kunye_eser_bagli_kaydi_secer():
     assert k.isrc == ("GBBKS1000351",)
 
 
+def test_kunye_en_erken_yil_tipografik_baslik_ve_yazar_adlari():
+    """Gerçek bulgular (2026-10-08): eser bağlı kayıt yeniden yayın (Keane 2021 → asıl 2004); MusicBrainz başlığı
+    ’ ile yazıyor (James Arthur'da künye hiç yoktu); "Del Rey, Lana" son boşluktan bölünemez; "Adele" yasal addan."""
+    yanitlar = {
+        "/recording/": {"recordings": [
+            {"id": "r1", "title": "Say You Won’t Let Go", "score": 100, "first-release-date": "2021-04-02"},
+            {"id": "r2", "title": "Say You Won't Let Go", "score": 99, "first-release-date": "2016-09-09"},
+            {"id": "r3", "title": "Say You Won’t Let Go", "score": 99},
+        ]},
+        "/recording/r1": {"relations": [{"type": "performance", "work": {"id": "w1", "title": "S"}}]},
+        "/work/w1": {"relations": [
+            {"type": "composer", "artist": {"id": "a1", "name": "Lana Del Rey", "sort-name": "Del Rey, Lana"}},
+            {"type": "lyricist", "artist": {"id": "a1", "name": "Lana Del Rey", "sort-name": "Del Rey, Lana"}},
+            {"type": "composer", "artist": {"id": "a2", "name": "Tim Rice‐Oxley", "sort-name": "Rice‐Oxley, Tim"}},
+            {"type": "composer", "artist": {"id": "a3", "name": "Tobias Jesso Jr.", "sort-name": "Jesso, Tobias, Jr."}},
+            {"type": "composer", "artist": {"id": "a4", "name": "Adele", "sort-name": "Adele"}},
+            {"type": "composer", "artist": {"id": "a5", "name": "Mono", "sort-name": "Mono"}},
+        ]},
+        "/artist/a4": {"aliases": [
+            {"type": "Legal name", "name": "Adele Laurie Blue Adkins", "sort-name": "Adkins, Adele Laurie Blue"},
+            {"type": "Legal name", "name": "Adele Adkins", "sort-name": "Adele Adkins"},
+            {"type": "Search hint", "name": "A"},
+        ]},
+        "/artist/a5": {"aliases": []},
+    }
+
+    def sahte(url, parametre=None, **_):
+        return yanitlar[url.split("/ws/2", 1)[1]]
+
+    k = kunye.bul("James Arthur", "Say You Won't Let Go", json_al=sahte, uyku=lambda _: None)
+    assert k.ilk_yayin == "2016-09-09"
+    assert k.yazarlar == ("Lana Del Rey", "Tim Rice-Oxley", "Tobias Jesso Jr.", "Adele", "Mono")
+    assert k.yazar_adlari == (("Lana", "Del Rey"), ("Tim", "Rice-Oxley"), ("Tobias", "Jesso Jr."),
+                              ("Adele", "Adkins"), ("Mono", ""))
+
+
 def test_kunye_kayit_yoksa_hata():
     with pytest.raises(ag.Bulunamadi):
         kunye.bul("A", "B", json_al=lambda *a, **k: {"recordings": [{"id": "x", "title": "Başka", "score": 100}]},

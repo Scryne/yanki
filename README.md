@@ -15,11 +15,12 @@ yüklenmeye hazır bir pakete çevirir. Yükleme adımı insanda kalır: dağıt
    **Bu aralığı onar**; iyi olanı **Bu adayı onayla**.
 4. Onarım istendiyse bir sonraki `yanki calistir` (ya da `yanki uret`) iki onarım sürümü üretir; dinleme odasında iyisini
    **Bunu kabul et**.
-5. Onaylanan şarkı paketlenir: `calisma/<kimlik>/paket/` → `YUKLE.md`'yi açıp formu doldur, WAV ve JPG'yi yükle.
+5. Onaylanan şarkı paketlenir: `calisma/<kimlik>/paket/` → `YUKLE.md`'yi açıp formu doldur, ses dosyasını (RouteNote: FLAC) ve JPG'yi yükle.
 6. `yanki yuklendi <kimlik>`.
 
 Diğer komutlar: `yanki durum` (motor, model, araçlar, GPU, şarkıların aşaması), `yanki hazirla`, `yanki uret`,
-`yanki paketle [--yeniden]`.
+`yanki yeniden <kimlik>` (onaylı şarkıya güncel hatla yeni adaylar), `yanki kunye [kimlik]` (yazarlar ve orijinal
+yılı yeniden çek), `yanki paketle [--yeniden]`.
 
 ## Kurulum (bir kez)
 

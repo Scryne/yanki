@@ -150,6 +150,8 @@ def metadata(d: durum.Durum, y: Yayin, master_olcum: dict, sure_sn: float, onizl
         "tur": "cover",
         "orijinal_sanatci": d.sanatci,  # formda yalnız cover bilgisi alanına (başlık/sanatçı alanlarına değil)
         "orijinal_yazarlar": list(k.get("yazarlar") or []),
+        # künyeden ad + soyad (eski künyede yok → ad boşluktan bölünür)
+        "orijinal_yazar_adlari": [list(x) for x in k.get("yazar_adlari") or []],
         "orijinal_isrc": list(k.get("isrc") or []),
         "orijinal_eser_mbid": k.get("eser_mbid"),
         "orijinal_yil": (k.get("ilk_yayin") or "")[:4] or None,  # © satırı (besteci telifi) bu yılla
@@ -223,16 +225,27 @@ def _acik_satiri(meta: dict) -> str:
     return temiz + "; \"Clean\" seçme, o açık içeriğin temizlenmiş sürümü demek"
 
 
+SOYAD_YOK = "SOYAD? (yasal soyadı, ör. albüm künyesi)"
+
+
 def _ad_soyad(ad: str) -> tuple[str, str]:
-    """RouteNote yazar alanı ad + soyad ister; MusicBrainz sahne adı verir ("Adele" → soyadı elle: Adkins)."""
+    """Künyede ad + soyad yoksa (eski paket): son boşluktan böl."""
     parca = ad.rsplit(" ", 1)
-    return (parca[0], parca[1]) if len(parca) == 2 else (ad, "SOYAD? (yasal soyadı, ör. albüm künyesi)")
+    return (parca[0], parca[1]) if len(parca) == 2 else (ad, SOYAD_YOK)
+
+
+def _yazarlar(meta: dict) -> list[tuple[str, str]]:
+    """RouteNote yazar alanı ad + soyad ister. Künye sıralama adından ("Del Rey, Lana") ya da tek sözcüklü sahne
+    adında yasal addan ("Adele" → Adele Adkins) bölmüş olur; bilinmeyen soyad elle girilir."""
+    if adlar := meta.get("orijinal_yazar_adlari"):
+        return [(a, s or SOYAD_YOK) for a, s in adlar]
+    return [_ad_soyad(a) for a in meta["orijinal_yazarlar"]]
 
 
 def _routenote_formu(meta: dict, dosyalar: dict[str, str]) -> list[str]:
     """RouteNote formu, ekrandaki sırayla (ilk gerçek yükleme, Adele, 2026-10-08)."""
     sanatci = meta["sanatci"] or "EKSİK"
-    yazarlar = [_ad_soyad(a) for a in meta["orijinal_yazarlar"]] or [("EKSİK", "")]
+    yazarlar = _yazarlar(meta) or [("EKSİK", "")]
     yazar_satiri = "; ".join(f"First `{a}` · Last `{s}`" for a, s in yazarlar)
     yazar_metni = ", ".join(f"{a} {s}" for a, s in yazarlar)
     yil = meta.get("orijinal_yil") or "ORİJİNAL YIL"

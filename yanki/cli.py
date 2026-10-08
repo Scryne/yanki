@@ -81,6 +81,30 @@ def _yeniden(args: argparse.Namespace) -> int:
     return kod
 
 
+def _kunye(args: argparse.Namespace) -> int:
+    """Hazır şarkıların künyesini yeniden çeker (ses ve adaylara dokunmaz); paket için ardından `paketle --yeniden`."""
+    from dataclasses import asdict
+
+    from yanki import ag, kunye
+
+    a = ayarlar.yukle()
+    calisma = a.kok / "calisma"
+    kod = 0
+    for d in durum.hepsi(calisma):
+        if args.kimlik and d.kimlik not in args.kimlik:
+            continue
+        try:
+            d.kunye = asdict(kunye.bul(d.sanatci, d.ad))
+        except (ag.Bulunamadi, OSError) as e:
+            print(f"✗ {d.sanatci} — {d.ad}: {e}")
+            kod = 1
+            continue
+        durum.yaz(calisma, d)
+        adlar = ", ".join(f"{x} {y}".strip() if y else f"{x} (SOYAD?)" for x, y in d.kunye["yazar_adlari"])
+        print(f"✓ {d.sanatci} — {d.ad}: {d.kunye['ilk_yayin']} | {adlar}")
+    return kod
+
+
 def _paketle(args: argparse.Namespace) -> int:
     a = ayarlar.yukle()
     islenen = paket.paketle(a.kok / "calisma", a.kok / "config" / "yayin.toml", yeniden=args.yeniden)
@@ -147,6 +171,9 @@ def main(argv: list[str] | None = None) -> int:
     yn = alt.add_parser("yeniden", help="onaylı/paketli şarkıya güncel hatla yeni adaylar (eskiler kalır)")
     yn.add_argument("kimlik", nargs="+")
     yn.set_defaults(fn=_yeniden)
+    kn = alt.add_parser("kunye", help="hazır şarkıların künyesini (yazarlar, orijinal yıl) yeniden çek")
+    kn.add_argument("kimlik", nargs="*", help="boşsa hepsi")
+    kn.set_defaults(fn=_kunye)
     p = alt.add_parser("paketle", help="onaylı şarkılardan yükleme paketi (mastering, kapak, YUKLE.md)")
     p.add_argument("--yeniden", action="store_true", help="paketlenmişleri de yeniden paketle")
     p.set_defaults(fn=_paketle)
@@ -170,7 +197,7 @@ def main(argv: list[str] | None = None) -> int:
     return args.fn(args)
 
 
-YAZAN_KOMUTLAR = {"hazirla", "uret", "calistir", "yeniden", "paketle", "yuklendi"}
+YAZAN_KOMUTLAR = {"hazirla", "uret", "calistir", "yeniden", "kunye", "paketle", "yuklendi"}
 
 
 if __name__ == "__main__":

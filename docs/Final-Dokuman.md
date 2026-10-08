@@ -53,7 +53,7 @@ girdi/liste.toml  (Scryne: sanatçı + şarkı, isteğe bağlı stil/söz düzel
        ├─ künye (MusicBrainz) → yazarlar, orijinal yayın
        └─ BPM, ton, stil tanımı (librosa + ACE-Step LM)
   └─ GPU kapısı: boş VRAM < eşik değilse bekle (Otomat vb. GPU'yu kullanıyorsa)
-  └─ motor işi (alt süreç): cover × 2 tohum → FLAC
+  └─ motor işi (alt süreç): cover × 3 tohum (parçalı) → FLAC
   └─ otomatik kapılar: parmak izi < eşik, dalga < eşik, söz var, süre ±2 sn → geçmeyen aday düşer
   └─ dinleme sayfası: Scryne → onay | bölge onar (bas–son) → motor işi: repaint → tekrar dinle | ret
   └─ paket: mastering + kapak + metadata.json + YUKLE.md (dağıtımcı formunun alan alan kopya metni)
