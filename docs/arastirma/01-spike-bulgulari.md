@@ -141,3 +141,14 @@ kalibre edildi; tablo değerleri A şarkısı (B aynı yönde).
   farklarının çoğu bu gürültünün içinde.
 - Kesme işareti normalleştirmesi (LRCLIB ’ / Whisper ') düzeltildi; etkisi küçük (≤0,01).
 
+
+## S14 Whisper kelime güveni bozuk aralığı gösterir mi (2026-10-08)
+- Soru: nefes/mırıldanma kusurunu otomatik işaretleyip gece onarmak için Whisper'ın kelime güveni (`word_timestamps`)
+  işe yarar mı. Tek etiket: Adele aday 1, 58–62 sn (Scryne işaretledi; onarım 1-1 kabul, 1-2 ret).
+  `spikes/s14_supheli_aralik.py`, çıktı `calisma/dinleme/s14.json`.
+- Sonuç **olumsuz**: onarım öncesi sürümde 58–62'deki kelimeler 0,78–1,0 güvenle duyuluyor ("But" 0,53; kabul edilen
+  onarımda 0,57, reddedilende 0,40). Ortalama güven 0,873 / 0,887 / 0,902; en düşük güvenli 4 sn pencereler üç
+  sürümde de aynı yerlerde (giriş 10–12 sn, 196 sn, çıkış 280 sn), işaretli aralıkla ilgisiz.
+- Yorum: Scryne'ın duyduğu kusur söz anlaşılırlığı değil, Whisper onu görmüyor. Otomatik işaretleme Whisper güveniyle
+  kurulmaz. Etiket hattın kendisinde birikiyor (her onarım `bolge` + kabul/ret ile `durum.json`'da); 10–20 etiket
+  olunca başka sinyaller (enerji/spektral düzlük, vokal ayrıştırma) o etiketlerle sınanır, tek örnekle değil.
