@@ -55,6 +55,7 @@ def main() -> int:
         config_path=m["model"],
         device="cuda",
         offload_to_cpu=bool(m.get("cpu_offload", True)),
+        offload_dit_to_cpu=bool(m.get("dit_offload", False)),
         quantization=m.get("niceleme") or None,
     )
     yukleme_sn = round(time.perf_counter() - t0, 1)

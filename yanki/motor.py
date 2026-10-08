@@ -116,6 +116,7 @@ def calistir(
                     "model": model or a.motor.model,
                     "niceleme": None if model else a.motor.niceleme,
                     "cpu_offload": a.motor.cpu_offload,
+                    "dit_offload": a.motor.dit_offload,
                     "lm_model": a.motor.lm_model,
                     "lm_backend": a.motor.lm_backend,
                 },

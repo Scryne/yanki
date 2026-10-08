@@ -50,7 +50,8 @@ def main() -> None:
     ozet_yolu = cikti / "ozet.json"
     ozet = json.loads(ozet_yolu.read_text(encoding="utf-8")) if ozet_yolu.exists() else {}
     for kol, niceleme in KOLLAR.items():
-        ak = dataclasses.replace(a, motor=dataclasses.replace(a.motor, niceleme=niceleme))
+        # bf16'da DiT 8 GB'ı dolduruyor, VAE çözme paylaşımlı belleğe taşıp 48 dk'da bitmedi → DiT CPU'ya
+        ak = dataclasses.replace(a, motor=dataclasses.replace(a.motor, niceleme=niceleme, dit_offload=niceleme is None))
         isler = [
             motor.Is(id=f"{kol}_t{tohum}", gorev="cover", kaynak=str(kesit), cikti_klasor=str(cikti / f"{kol}_t{tohum}"),
                      stil=d.analiz["stil"], soz=soz, adim=a.cover.adim, tohum=tohum, guc=a.cover.guc,

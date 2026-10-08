@@ -18,6 +18,8 @@ class Motor:
     analiz_model: str
     analiz_kesit_sn: float
     analiz_yontemi: str
+    # DiT'i aşamalar arasında CPU'ya al (nicelemesiz XL'de VAE çözme 8 GB'a sığmıyor, S18)
+    dit_offload: bool = False
 
     @property
     def python(self) -> Path:
@@ -76,7 +78,8 @@ def yukle(yol: Path | None = None, kok: Path = KOK) -> Ayarlar:
         kok=kok,
         motor=Motor(kok / m["klasor"], m["model"], m.get("niceleme") or None, bool(m["cpu_offload"]), m["lm_model"],
                     m.get("lm_backend", "pt"), m.get("analiz_model", m["model"]),
-                    float(m.get("analiz_kesit_sn", 40)), m.get("analiz_yontemi", "musicbrainz")),
+                    float(m.get("analiz_kesit_sn", 40)), m.get("analiz_yontemi", "musicbrainz"),
+                    bool(m.get("dit_offload", False))),
         cover=Cover(c["gorev"], float(c["guc"]), int(c["adim"]), int(c["aday_sayisi"]), tuple(c["tohumlar"])),
         onarim=Onarim(o["gorev"], int(o["adim"]), float(o["pay_sn"]), tuple(o["tohumlar"])),
         gpu=Gpu(int(g["bos_esik_mib"]), int(g["bekleme_sn"])),
