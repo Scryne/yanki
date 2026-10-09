@@ -154,3 +154,16 @@ def test_analiz_basarisizsa_liste_degerleri_kalir(tmp_path, monkeypatch):
     hazirlik.analiz_et(_lm_ayarlari(), [S], c)
     o = durum.oku(c, S.kimlik)
     assert o.analiz["lm_hata"] == "LM yüklenemedi" and o.analiz["bpm"] is None
+
+
+def test_dil_bul_esik_ve_hata(tmp_path):
+    from yanki import durum, hazirlik
+
+    d = durum.Durum("a-b", "A", "B", kaynak={"dosya": "kaynak.wav"})
+    assert hazirlik.dil_bul(d, tmp_path, lambda _: ("tr", 0.97)) == {"dil": "tr", "dil_tespit": "tr 0.97"}
+    assert hazirlik.dil_bul(d, tmp_path, lambda _: ("fr", 0.31))["dil"] == "en"  # emin değil: kalibre dil
+
+    def bozuk(_):
+        raise RuntimeError("ses okunamadı")
+
+    assert hazirlik.dil_bul(d, tmp_path, bozuk) == {"dil": "en", "dil_tespit": "başarısız: ses okunamadı"}

@@ -8,7 +8,7 @@ import json
 from dataclasses import asdict
 from pathlib import Path
 
-from yanki import ag, durum, kaynak, kunye, motor, sozler
+from yanki import ag, durum, kapilar, kaynak, kunye, motor, sozler
 from yanki.ayarlar import Ayarlar
 from yanki.liste import VOKAL, Sarki
 
@@ -76,8 +76,8 @@ def analiz_et(a: Ayarlar, sarkilar: list[Sarki], calisma: Path, zaman_asimi_sn: 
     if a.motor.analiz_yontemi == "musicbrainz":
         for s, d in hedef:
             # BPM/ton yalnız listeden: yanlış değer modeli detone eder, tahmin göndermek göndermemekten kötü
-            d.analiz = {"stil": stil_kur(s, kunye=d.kunye), "bpm": s.bpm, "ton": s.ton or "", "dil": "en",
-                        "kaynak": "musicbrainz"}
+            d.analiz = {"stil": stil_kur(s, kunye=d.kunye), "bpm": s.bpm, "ton": s.ton or "",
+                        **dil_bul(d, durum.klasor(calisma, s.kimlik)), "kaynak": "musicbrainz"}
             d.gec("analiz")
             durum.yaz(calisma, d)
         return
@@ -95,12 +95,28 @@ def analiz_et(a: Ayarlar, sarkilar: list[Sarki], calisma: Path, zaman_asimi_sn: 
             "stil": stil_kur(s, lm.get("caption"), d.kunye),
             "bpm": s.bpm or _tam(lm.get("bpm")),
             "ton": s.ton or (lm.get("keyscale") or ""),
-            "dil": "en",
+            **dil_bul(d, durum.klasor(calisma, s.kimlik)),
             "lm": lm,
             "lm_hata": None if r.basari else r.hata,
         }
         d.gec("analiz")
         durum.yaz(calisma, d)
+
+
+DIL_ESIGI = 0.5
+
+
+def dil_bul(d: durum.Durum, k: Path, tespit=None) -> dict:
+    """Söz dili kaynak sesten (keşif global: Fransızca, Türkçe… şarkılar geliyor; önce hep "en" yazılıyordu).
+    Whisper emin değilse ya da ses okunamazsa "en" (hattın kalibre olduğu dil) ve neden kayıtlı."""
+    tespit = tespit or kapilar.dil_tespit
+    try:
+        dil, olasilik = tespit(k / d.kaynak["dosya"])
+    except Exception as e:  # noqa: BLE001 — dil tespiti üretimi durdurmaz
+        return {"dil": "en", "dil_tespit": f"başarısız: {e}"}
+    if olasilik < DIL_ESIGI:
+        return {"dil": "en", "dil_tespit": f"belirsiz ({dil} {olasilik:.2f})"}
+    return {"dil": dil, "dil_tespit": f"{dil} {olasilik:.2f}"}
 
 
 def _kesit(kaynak: Path, hedef: Path, sure_sn: float) -> Path:

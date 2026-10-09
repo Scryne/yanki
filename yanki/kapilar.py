@@ -77,23 +77,44 @@ def dalga_korelasyonu(a: np.ndarray, b: np.ndarray, sr: int, en_fazla_kayma_sn: 
 def normalle(s: str) -> str:
     """Bölüm etiketleri ve noktalama çıkar; kesme işareti silinir ("don't"/"don’t" → "dont", "'cause" → "cause"):
     LRCLIB kıvrık kesme kullanıyor, Whisper düz — ikisi eşleşmeyince söz WER'i boşuna artıyordu (2026-10-07)."""
-    s = re.sub(r"\[[^\]]*\]", " ", s.lower())
+    # Unicode harfler korunur (Türkçe/Fransızca sözler; önce yalnız a-z kalıyordu, İngilizce dışı söz boş çıkardı)
+    s = re.sub(r"\[[^\]]*\]", " ", s.replace("İ", "i").lower())
     s = re.sub(r"['’‘`]", "", s)
-    return re.sub(r"\s+", " ", re.sub(r"[^a-z0-9 ]+", " ", s)).strip()
+    return re.sub(r"\s+", " ", re.sub(r"[^\w ]+|_", " ", s)).strip()
 
 
-_whisper = None
+# ACE-Step'in kabul ettiği dil kodları (motor/ACE-Step-1.5/acestep/constants.py → VALID_LANGUAGES)
+ACESTEP_DILLERI = {
+    "ar", "az", "bg", "bn", "ca", "cs", "da", "de", "el", "en", "es", "fa", "fi", "fr", "he", "hi", "hr", "ht", "hu",
+    "id", "is", "it", "ja", "ko", "la", "lt", "ms", "ne", "nl", "no", "pa", "pl", "pt", "ro", "ru", "sa", "sk", "sr",
+    "sv", "sw", "ta", "te", "th", "tl", "tr", "uk", "ur", "vi", "yue", "zh",
+}
+_modeller: dict[str, object] = {}
 
 
-def dokum(yol: Path) -> str:
-    global _whisper
-    if _whisper is None:
+def _model(ad: str):
+    """İngilizce için kalibre edilmiş `small.en` (kapı eşikleri onunla ölçüldü), diğer diller için çok dilli `small`."""
+    if ad not in _modeller:
         from faster_whisper import WhisperModel
 
-        _whisper = WhisperModel("small.en", device="cpu", compute_type="int8")
+        _modeller[ad] = WhisperModel(ad, device="cpu", compute_type="int8")
+    return _modeller[ad]
+
+
+def dokum(yol: Path, dil: str = "en") -> str:
     # dosya yolu değil dizi: faster-whisper 1.2.1, PyAV 19'da kaldırılan bir argümanı kullanıyor
-    parcalar, _ = _whisper.transcribe(mono(yol, 16000), language="en", beam_size=5)
+    model = _model("small.en" if dil == "en" else "small")
+    parcalar, _ = model.transcribe(mono(yol, 16000), language=dil if dil in ACESTEP_DILLERI else None, beam_size=5)
     return " ".join(p.text.strip() for p in parcalar)
+
+
+def dil_tespit(yol: Path, bas_orani: float = 0.4, sure_sn: float = 30.0) -> tuple[str, float]:
+    """Kaynak sesin söz dili (Whisper çok dilli `small`, şarkının ~%40'ından 30 sn: çoğunlukla vokalli bölge).
+    Dönen kod ACE-Step'in listesinde yoksa "unknown"."""
+    ses_ = mono(yol, 16000)
+    bas = int(min(len(ses_) * bas_orani, max(0, len(ses_) - sure_sn * 16000)))
+    dil, olasilik, _ = _model("small").detect_language(ses_[bas: bas + int(sure_sn * 16000)])
+    return (dil if dil in ACESTEP_DILLERI else "unknown"), float(olasilik)
 
 
 def soz_wer(soz: str, dokum_metni: str) -> float:
@@ -105,12 +126,13 @@ def soz_wer(soz: str, dokum_metni: str) -> float:
     return 1.0 if not hyp else float(jiwer.wer(ref, hyp))
 
 
-def degerlendir(aday: Path, kaynak: Path, soz: str, fpcalc: Path, dokumcu=dokum) -> dict[str, dict]:
+def degerlendir(aday: Path, kaynak: Path, soz: str, fpcalc: Path, dokumcu=dokum, dil: str = "en"
+                ) -> dict[str, dict]:
     sr = 8000
     olc = {
         "parmak_izi": parmak_izi_benzerligi(parmak_izi(fpcalc, kaynak), parmak_izi(fpcalc, aday)),
         "dalga": dalga_korelasyonu(mono(kaynak, sr), mono(aday, sr), sr),
-        "soz_wer": soz_wer(soz, dokumcu(aday)),
+        "soz_wer": soz_wer(soz, dokumcu(aday, dil)),
         "sure_fark": abs(ses.sure(aday) - ses.sure(kaynak)),
     }
     return {ad: asdict(Olcum(round(d, 3), ESIK[ad], d < ESIK[ad] if ad != "sure_fark" else d <= ESIK[ad]))

@@ -152,7 +152,8 @@ def _dik_pencere(temel: Path, pencere: Path, bas: float, hedef: Path, gecis_sn: 
 def uret(a: Ayarlar, calisma: Path, kimlikler: list[str] | None = None,
          calistir: Callable[..., list[motor.Sonuc]] = motor.calistir,
          degerlendir: Callable[..., dict] | None = None) -> list[durum.Durum]:
-    degerlendir = degerlendir or (lambda aday, kaynak, soz: kapilar.degerlendir(aday, kaynak, soz, a.fpcalc))
+    degerlendir = degerlendir or (lambda aday, kaynak, soz, dil="en":
+                                  kapilar.degerlendir(aday, kaynak, soz, a.fpcalc, dil=dil))
     hedef = [d for d in durum.hepsi(calisma) if d.asama in ("analiz", "onarim")
              and (kimlikler is None or d.kimlik in kimlikler)]
     if not hedef:
@@ -222,7 +223,7 @@ def uret(a: Ayarlar, calisma: Path, kimlikler: list[str] | None = None,
 
     for d in hedef:
         k = durum.klasor(calisma, d.kimlik)
-        kaynak, soz = k / d.kaynak["dosya"], _soz(calisma, d)
+        kaynak, soz, dil = k / d.kaynak["dosya"], _soz(calisma, d), d.analiz.get("dil", "en")
         if d.kimlik in planlar:
             plan, _, numaralar = planlar[d.kimlik]
             for n, tohum in numaralar:
@@ -241,7 +242,7 @@ def uret(a: Ayarlar, calisma: Path, kimlikler: list[str] | None = None,
                         ses, sr = parcalama.birlestir(sesler, plan, SR), SR
                     sf.write(str(tam), ses, sr)
                     aday.dosya = _goreli(k, tam)
-                    aday.kapilar = degerlendir(tam, kaynak, soz)
+                    aday.kapilar = degerlendir(tam, kaynak, soz, dil)
                     aday.gecti = kapilar.hepsi_gecti(aday.kapilar)
                 d.adaylar = [x for x in d.adaylar if x.no != n] + [aday]
         else:
@@ -254,7 +255,7 @@ def uret(a: Ayarlar, calisma: Path, kimlikler: list[str] | None = None,
                         tam = _dik_pencere(k / o["temel"], Path(r.cikti), onarim_pencere[o["id"]],
                                            k / "onarimlar" / o["id"] / "tam.flac")
                         o["dosya"] = _goreli(k, tam)
-                        o["kapilar"] = degerlendir(tam, kaynak, soz)
+                        o["kapilar"] = degerlendir(tam, kaynak, soz, dil)
                         o["durum"] = "hazir"
                     else:
                         o["durum"], o["hata"] = "hata", r.hata

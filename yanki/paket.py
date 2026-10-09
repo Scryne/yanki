@@ -34,6 +34,13 @@ DAGITIMCI_NOTU = {
 }
 
 
+# Dağıtımcı formundaki dil listesi İngilizce adlarla (kod `analiz.dil`, Whisper/ACE-Step kodu)
+DIL_ADI = {"en": "English", "tr": "Turkish", "fr": "French", "es": "Spanish", "pt": "Portuguese", "de": "German",
+           "it": "Italian", "nl": "Dutch", "ru": "Russian", "ja": "Japanese", "ko": "Korean", "zh": "Chinese",
+           "ar": "Arabic", "pl": "Polish", "sv": "Swedish", "id": "Indonesian", "hi": "Hindi", "az": "Azerbaijani",
+           "unknown": "Instrumental / Unknown"}
+
+
 @dataclass(frozen=True)
 class Yayin:
     sanatci_adi: str
@@ -256,7 +263,7 @@ def _routenote_formu(meta: dict, dosyalar: dict[str, str]) -> list[str]:
     return [
         "RouteNote formu, ekrandaki sırayla (doğrulandı: ilk yükleme, 2026-10-08). Kopyala-yapıştır:", "",
         "## 1. Album Details",
-        "1. **Language:** English" if meta["dil"] == "en" else f"1. **Language:** `{meta['dil']}`",
+        f"1. **Language:** {DIL_ADI.get(meta['dil'], meta['dil'])}",
         f"2. **Album/Single/EP Title:** `{meta['baslik']}`",
         "3. **Album Version:** boş",
         "4. **Does this release contain cover versions?:** Yes",
