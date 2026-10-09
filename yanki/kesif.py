@@ -326,9 +326,16 @@ def soz_kontrol(a: Aday, json_al=None) -> Aday:
 def _youtube_ara(sorgu: str, adet: int = 5) -> list[tuple[str, int | None, str | None, str | None]]:
     import yt_dlp
 
+    from yanki import sayac
+
     ayar = {"quiet": True, "no_warnings": True, "extract_flat": True, "skip_download": True}
-    with yt_dlp.YoutubeDL(ayar) as ydl:
-        bilgi = ydl.extract_info(f"ytsearch{adet}:{sorgu}", download=False)
+    try:
+        with yt_dlp.YoutubeDL(ayar) as ydl:
+            bilgi = ydl.extract_info(f"ytsearch{adet}:{sorgu}", download=False)
+    except Exception:
+        sayac.say("YouTube", False)
+        raise
+    sayac.say("YouTube", True)
     return [(g.get("title") or "", g.get("view_count"), g.get("id"), g.get("channel") or g.get("uploader"))
             for g in bilgi.get("entries") or [] if g]
 

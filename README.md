@@ -21,6 +21,9 @@ yüklenen parçanın Spotify'da çıkıp çıkmadığını ve adı arandığınd
    sürer ve sonunda hata bildirimi gelir. Günlük: `calisma/gunluk/<tarih>.log`. Hemen istersen elle
    `uv run yanki calistir` (aynı anda tek koşu, kilitli). Dinleme odası koşu sürerken de açık kalabilir: kararlar
    şarkı başına kilitle yazılır, gece koşusu onları ezmez.
+   **Gündüz:** `\Yanki\Gunduz` her 30 dk bakar (08:00–01:00); 20 dk klavye/fareye dokunulmadıysa, prizdeyse ve GPU
+   boşsa kuyruktan bir şarkı üretir (önce bekleyen onarımlar), bitince "dinlemeye hazır" bildirimi. Ayar:
+   `config/operasyon.toml` → `[gunduz]`, günlük: `calisma/gunluk/gunduz.log`.
 3. Dinleme odası oturum açılınca kendiliğinden başlar (`\Yanki\Oda`, `scripts/oda.ps1`): http://127.0.0.1:8765/,
    özet Windows bildirimiyle gelir, bildirime tıklayınca oda açılır. Elle: `yanki dinle` ya da Kokpit → Yanki → Çalıştır. Orijinalle karşılaştır; bozuk yer varsa dalga üzerinde sürükleyip
    **Bu aralığı onar**; iyi olanı **Bu adayı onayla**. Yanlışlıkla reddedilen şarkı **Reddi geri al** ile döner.
@@ -31,10 +34,18 @@ yüklenen parçanın Spotify'da çıkıp çıkmadığını ve adı arandığınd
    bilgiler paketin `metadata.json` → `yukleme`'sine (takip ISRC'yle çalışır). ISRC sonradan belli olursa aynı
    komut yalnız `--isrc` ile.
 7. Gece koşusu ya da `uv run yanki takip`: parça Spotify'da çıkınca aşama `yayinda`; dinleme odasında **Yayın**
-   pazar pazar arama sırasını gösterir.
+   pazar pazar arama sırasını gösterir. Bildirim gelir: yayına çıktı, en iyi arama sırası değişti, Spotify'dan kalktı,
+   yayın tarihinin üstünden 3 gün geçtiği halde yok (dağıtımcı reddi şüphesi). Reddedildiyse
+   `yanki dagitim-red <kimlik> --neden "…"`: şarkı `paketlendi`ye döner, düzeltip `yanki paketle --yeniden`.
+8. **Takvim:** `yanki takvim` paketleri yükleme sırasıyla gösterir (keşif puanı önce, haftada bir, önerilen yayın
+   tarihi +21 gün; `config/yayin.toml` → `[takvim]`). İlk parça Spotify'a çıkana kadar bekler; sonra sırası gelen
+   paket gece bildirilir (dağıtım API'si gelince kendisi yüklenecek). Dinleme odası **Yayın**'da da görünür.
 
 Spotify kotası dar: uzun 429 alınırsa kilit `calisma/.spotify_kota.json`'a yazılır ve süresi dolana kadar hiçbir
 komut Spotify'a istek atmaz; günlük tavan 400 istek. Dinleme odası Spotify'a hiç istek atmaz.
+
+Bildirimler `calisma/olaylar.jsonl`'a da yazılır (aynı olay bir kez). Gece koşusu sonunda dış servislerin (YouTube,
+LRCLIB, MusicBrainz, Deezer, Spotify) istek/hata sayısı günlüğe, günlük toplamı `calisma/gunluk/servisler.json`'a.
 
 Diğer komutlar: `yanki durum` (motor, model, araçlar, GPU, şarkıların aşaması), `yanki ozet` (tek satır),
 `yanki temizle [--uygula]` (yüklenmiş şarkıların ara sesleri; gece koşusu 14 günden eskileri kendisi siler),
@@ -54,7 +65,7 @@ uv run acestep-download
 winget install Gyan.FFmpeg.Shared                          # ffmpeg/ffprobe
 # fpcalc (Chromaprint 1.5.1, Windows x64) → araclar/fpcalc.exe
 uv run yanki durum                                         # hepsi ✓ olmalı
-powershell -File scripts/gorev_kur.ps1                     # \Yanki\Gece (03:00) ve \Yanki\Oda (oturum açılışı)
+powershell -File scripts/gorev_kur.ps1                     # \Yanki\Gece (03:00), \Yanki\Oda (oturum açılışı), \Yanki\Gunduz
 # Keşif ve takip için: developer.spotify.com → Create app (Premium hesap), Redirect URI http://127.0.0.1:8766/callback
 copy .env.example .env                                     # SPOTIFY_CLIENT_ID / SECRET, TYPESAFE_API_KEY
 uv run yanki spotify-baglan                                # yalnız kendi playlist'lerini taramak için
@@ -67,7 +78,7 @@ uv run yanki spotify-baglan                                # yalnız kendi playl
 - `config/yayin.toml` — sanatçı adı, dağıtımcı, mastering hedefi (−14 LUFS, −1 dBTP).
 - `config/kesif.toml` — keşif pazarları, taranacak playlist'ler, gece listeye kaç aday eklensin, arama derinliği.
 - `config/operasyon.toml` — yedek klasörü (varsayılan `calisma/yedek`; başka diske almak daha güvenli), sıklığı,
-  kaç yedek saklanacağı; disk temizliğinin gün eşiği.
+  kaç yedek saklanacağı; disk temizliğinin gün eşiği; gündüz üretiminin saatleri, boşta kalma eşiği.
 - Liste alanları ve kaynak/söz dosyasını elle verme: `girdi/liste.toml` başındaki açıklama.
 
 ## Nasıl çalışır

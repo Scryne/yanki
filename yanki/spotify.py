@@ -126,13 +126,18 @@ class Spotify:
 
     # ── HTTP ────────────────────────────────────────────────
     def _http(self, yontem: str, url: str, basliklar: dict, veri: bytes | None = None) -> tuple[int, dict, bytes]:
+        from yanki import sayac
+
         istek = urllib.request.Request(url, data=veri, headers=basliklar, method=yontem)
         try:
             with urllib.request.urlopen(istek, timeout=30) as r:
+                sayac.say("Spotify", True)
                 return r.status, dict(r.headers), r.read()
         except urllib.error.HTTPError as h:
+            sayac.say("Spotify", h.code in (400, 403, 404))  # 429 ve 5xx servis sorunu
             return h.code, dict(h.headers or {}), h.read() or b""
         except (urllib.error.URLError, TimeoutError, ConnectionError) as e:
+            sayac.say("Spotify", False)
             # ağ kesintisi keşfi/takibi düşürmesin: çağıranlar SpotifyHatasi'nı zaten yakalıyor
             raise SpotifyHatasi(f"Spotify'a ulaşılamadı: {getattr(e, 'reason', e)}") from e
 

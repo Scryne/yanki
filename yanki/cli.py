@@ -428,7 +428,7 @@ def _takip(args: argparse.Namespace) -> int:
     sp = spotify.Spotify(a.kok)
     try:
         sonuc = takip.takip_et(sp, calisma, y.sanatci_adi, tuple(t["pazarlar"]), args.kimlik or None,
-                               int(t["arama_derinligi"]))
+                               int(t["arama_derinligi"]), bildir=_bildirici(calisma))
     except spotify.Sinirli as e:  # kota kilidi beklenen bir durum: özet bildirimi gösterir, koşu hatası değil
         print(f"takip ertelendi: {e}")
         return 0
@@ -471,7 +471,12 @@ def ozet(kok: Path) -> dict:
     except (OSError, ValueError):
         oneri = 0
     k = spotify.Spotify(kok).kota()
-    from yanki import onay
+    from yanki import dagitim, onay
+
+    try:
+        sira = dagitim.plan(calisma, dagitim.takvim_oku(kok / "config" / "yayin.toml")).bugun_yuklenecek
+    except (OSError, ValueError):
+        sira = None
 
     try:
         yakin = len(onay.yaklasan(calisma, onay.ayar_oku(kok / "config" / "yayin.toml")))
@@ -480,7 +485,7 @@ def ozet(kok: Path) -> dict:
     return {"otomatik_onay_24sa": yakin, "dinlemede": say("uretildi"), "onarim": say("onarim"),
             "uretimde": say("yeni", "hazir", "analiz"), "paket_bekliyor": say("paketlendi"),
             "yuklendi": say("yuklendi"), "yayinda": say("yayinda"),
-            "hata": say("hata"), "kesif_onerisi": oneri,
+            "hata": say("hata"), "kesif_onerisi": oneri, "yuklenecek": f"{sira.sanatci} — {sira.ad}" if sira else None,
             "spotify_kilit_sn": max(0, int(k.get("kilit", 0) - time.time()))}
 
 
@@ -498,6 +503,8 @@ def _ozet(args: argparse.Namespace) -> int:
                                          (o["kesif_onerisi"], "keşif önerisi"), (o["hata"], "hatada"),
                                          (o["otomatik_onay_24sa"], "şarkı 24 saat içinde kendiliğinden onaylanacak"))
               if n]
+    if o.get("yuklenecek"):
+        satir.append(f"yükleme sırası geldi: {o['yuklenecek']}")
     if o["spotify_kilit_sn"]:
         satir.append(f"Spotify kilitli (~{max(1, round(o['spotify_kilit_sn'] / 3600))} sa)")
     print(" · ".join(satir))
@@ -534,7 +541,8 @@ def _calistir(args: argparse.Namespace) -> int:
         adimlar.append(("takip", lambda: _takip(argparse.Namespace(kimlik=[]))))
     else:
         print("takip atlandı: Spotify anahtarı yok (.env → SPOTIFY_CLIENT_ID/SECRET)")
-    adimlar += [("temizlik", lambda: _temizle(argparse.Namespace(uygula=True, gun=op.temizlik_gun))),
+    adimlar += [("takvim", lambda: _takvim_hatirlat(kok)),
+                ("temizlik", lambda: _temizle(argparse.Namespace(uygula=True, gun=op.temizlik_gun))),
                 ("yedek", lambda: _yedekle(argparse.Namespace(zorla=False)))]
     sorunlu = []
     for ad, fn in adimlar:
@@ -549,7 +557,118 @@ def _calistir(args: argparse.Namespace) -> int:
             sorunlu.append(ad)
             print(f"✗ {ad} adımı sorunlu bitti ({time.monotonic() - bas:.0f} sn)", flush=True)
     print(f"── koşu bitti ({datetime.now():%H:%M:%S})" + (f"; sorunlu adım: {', '.join(sorunlu)}" if sorunlu else ""))
+    _servis_ozeti(kok)
     return 1 if sorunlu else 0
+
+
+def _servis_ozeti(kok: Path) -> None:
+    from yanki import sayac
+
+    print(f"── dış servisler: {sayac.ozet()}")
+    try:
+        sayac.yaz(kok / "calisma")
+    except OSError as e:
+        print(f"servis sayaçları yazılamadı: {e}")
+
+
+def _bildirici(calisma: Path):
+    from yanki import olay
+
+    return lambda tur, baslik, metin, anahtar=None: olay.bildir(calisma, tur, baslik, metin, anahtar)
+
+
+def _takvim_hatirlat(kok: Path) -> int:
+    """Sırası gelen paket: dağıtımcının API'si varsa (Faz 10) yüklenir, yoksa bildirilir (bir kez)."""
+    from yanki import dagitim, paket
+
+    calisma = kok / "calisma"
+    p = dagitim.plan(calisma, dagitim.takvim_oku(kok / "config" / "yayin.toml"))
+    if p.beklemede:
+        print(f"takvim: {p.beklemede}; kuyrukta {len(p.sira)} paket")
+        return 0
+    s = p.bugun_yuklenecek
+    if s is None:
+        ilk = p.sira[0] if p.sira else None
+        print(f"takvim: sıradaki yükleme {ilk.yukleme:%d.%m} ({ilk.ad})" if ilk else "takvim: kuyruk boş")
+        return 0
+    d = dagitim.sec(paket.yayin_ayarlari(kok / "config" / "yayin.toml").dagitimci)
+    if d.otomatik:  # arkadaşın API'si gelince: yükle, kaydet, `yuklendi`
+        raise NotImplementedError("otomatik dağıtımcı henüz yok")
+    _bildirici(calisma)("takvim", f"yükleme sırası: {s.ad}",
+                        f"{s.sanatci} — {s.ad}: calisma/{s.kimlik}/paket/YUKLE.md hazır; önerilen yayın tarihi "
+                        f"{s.yayin_tarihi:%Y-%m-%d}. Yükleyince: yanki yuklendi {s.kimlik} --isrc …",
+                        f"takvim:{s.kimlik}:{s.yukleme}")
+    return 0
+
+
+def _takvim(args: argparse.Namespace) -> int:
+    from yanki import dagitim
+
+    a = ayarlar.yukle()
+    calisma = a.kok / "calisma"
+    p = dagitim.plan(calisma, dagitim.takvim_oku(a.kok / "config" / "yayin.toml"))
+    print(f"son yükleme: {p.son_yukleme or '—'}" + (f" · {p.beklemede}" if p.beklemede else ""))
+    if not p.sira:
+        print("kuyruk boş: paketlenmiş şarkı yok")
+    for i, x in enumerate(p.sira, 1):
+        puan = f"keşif {x.puan:,.0f}" if x.puan else "liste"
+        print(f"{i:2}. {x.yukleme:%Y-%m-%d} yükle → {x.yayin_tarihi:%Y-%m-%d} yayın  {x.sanatci} — {x.ad}  ({puan})")
+    for kimlik in p.duzeltme:
+        print(f"  ✗ {kimlik}: dağıtımcı reddetti; düzeltip `yanki paketle --yeniden` deyince kuyruğa döner")
+    return 0
+
+
+def _dagitim_red(args: argparse.Namespace) -> int:
+    from yanki import dagitim
+
+    a = ayarlar.yukle()
+    try:
+        d = dagitim.red_kaydet(a.kok / "calisma", args.kimlik, args.neden)
+    except (ValueError, durum.Yok) as e:
+        print(f"✗ {args.kimlik}: {e}")
+        return 1
+    print(f"dağıtımcı reddi kaydedildi: {d.sanatci} — {d.ad} → paketlendi (takvim yeniden paketlenene kadar atlar)")
+    return 0
+
+
+def _gunduz(args: argparse.Namespace) -> int:
+    """Gündüz boşta üretim (`\\Yanki\\Gunduz` görevi, her 30 dk): koşullar uygunsa kuyruktan bir şarkı üretir.
+    Koşul tutmazsa tek satır nedenle çıkar (görev günde ~34 kez çalışır, günlük kısa kalsın)."""
+    from datetime import datetime
+
+    from yanki import saglik, sistem
+
+    a = ayarlar.yukle()
+    calisma = a.kok / "calisma"
+    op = ayarlar.operasyon_oku(a.kok)
+    simdi = datetime.now()
+    if not op.gunduz_acik:
+        return print("gündüz üretimi kapalı (config/operasyon.toml)") or 0
+    if not op.gunduz_saatinde(simdi.hour) and not args.zorla:
+        return print(f"saat dışında ({op.gunduz_saatler[0]:02d}:00–{op.gunduz_saatler[1]:02d}:00)") or 0
+    if not args.zorla and (bosta := sistem.bosta_sn()) < op.gunduz_bosta_dk * 60:
+        return print(f"kullanıcı etkin ({bosta / 60:.0f} dk boşta, eşik {op.gunduz_bosta_dk})") or 0
+    if not sistem.prizde_mi():
+        return print("pilde: üretim yok") or 0
+    if (kullanilan := saglik.gpu_kullanilan_mib()) is None or kullanilan >= a.gpu.bos_esik_mib:
+        return print(f"GPU boş değil ({kullanilan} MiB)") or 0
+    args.yeniden, args.analizsiz = False, False
+    _hazirla(args)
+    hedef = sorted((d for d in durum.hepsi(calisma) if d.asama in ("onarim", "analiz")),
+                   key=lambda d: (d.asama != "onarim", d.gecmis[-1]["zaman"] if d.gecmis else ""))[: op.gunduz_sarki]
+    if not hedef:
+        return print("üretilecek şarkı yok") or 0
+    print(f"gündüz üretimi ({simdi:%H:%M}): " + ", ".join(f"{d.sanatci} — {d.ad}" for d in hedef), flush=True)
+    bildir = _bildirici(calisma)
+    for d in uretim.uret(a, calisma, [d.kimlik for d in hedef]):
+        gecen = sum(x.gecti for x in d.adaylar)
+        print(f"{d.asama:9} {d.sanatci} — {d.ad}: {gecen}/{len(d.adaylar)} aday kapıdan geçti")
+        if d.asama == "uretildi":
+            bildir("dinleme", f"dinlemeye hazır: {d.ad}", f"{d.sanatci} — {d.ad}: {gecen} aday kapıdan geçti",
+                   f"dinleme:{d.kimlik}:{d.gecmis[-1]['zaman']}")
+    _paketle(args)
+    _servis_ozeti(a.kok)
+    return 0
 
 
 def _otomatik_onay(kok: Path) -> int:
@@ -668,6 +787,16 @@ def main(argv: list[str] | None = None) -> int:
     tm.add_argument("--uygula", action="store_true", help="yalnız listelemek yerine sil")
     tm.add_argument("--gun", type=int, default=14, help="yüklemenin üstünden en az kaç gün geçmiş olsun")
     tm.set_defaults(fn=_temizle)
+    tv = alt.add_parser("takvim", help="paketlenmiş şarkıların yükleme sırası ve önerilen yayın tarihleri")
+    tv.set_defaults(fn=_takvim)
+    dr = alt.add_parser("dagitim-red", help="dağıtımcının reddettiği şarkıyı kaydet (paketlendi'ye döner)")
+    dr.add_argument("kimlik")
+    dr.add_argument("--neden", required=True, help="dağıtımcının red gerekçesi (ör. kapak, AI içerik)")
+    dr.set_defaults(fn=_dagitim_red)
+    gz = alt.add_parser("gunduz", help="boştayken kuyruktan bir şarkı üret (\\Yanki\\Gunduz görevi çalıştırır)")
+    gz.add_argument("--zorla", action="store_true", help="saat ve boşta kalma koşulunu atla (pil ve GPU yine bakılır)")
+    gz.add_argument("--liste", help="varsayılan girdi/liste.toml")
+    gz.set_defaults(fn=_gunduz)
     yd = alt.add_parser("yedekle", help="seçimlerin, yükleme bilgisinin ve keşif kaydının zip yedeği")
     yd.add_argument("--zorla", action="store_true", help="son yedek yeni olsa da al")
     yd.set_defaults(fn=_yedekle)
@@ -686,13 +815,13 @@ def main(argv: list[str] | None = None) -> int:
         with kilit.tek_kosu(ayarlar.yukle().kok / "calisma" / ".yanki.kilit") as alindi:
             if not alindi:
                 print("başka bir yanki koşusu sürüyor (gece görevi ya da elle başlatılan); bitince tekrar dene")
-                return 0 if args.komut == "calistir" else 3
+                return 0 if args.komut in ("calistir", "gunduz") else 3
             return args.fn(args)
     return args.fn(args)
 
 
 YAZAN_KOMUTLAR = {"hazirla", "uret", "calistir", "yeniden", "kunye", "paketle", "yuklendi", "kesif", "takip",
-                  "temizle", "yedekle"}
+                  "temizle", "yedekle", "dagitim-red", "gunduz"}
 
 
 if __name__ == "__main__":

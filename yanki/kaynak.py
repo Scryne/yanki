@@ -64,9 +64,16 @@ def klasorden(klasor: Path, kimlik: str) -> Path | None:
 def youtube_adaylari(sorgu: str, adet: int = 8) -> list[Aday]:
     import yt_dlp
 
+    from yanki import sayac
+
     hedef = sorgu if sorgu.startswith("http") else f"ytsearch{adet}:{sorgu}"
-    with yt_dlp.YoutubeDL(_ydl_ayar(extract_flat=True)) as ydl:
-        bilgi = ydl.extract_info(hedef, download=False)
+    try:
+        with yt_dlp.YoutubeDL(_ydl_ayar(extract_flat=True)) as ydl:
+            bilgi = ydl.extract_info(hedef, download=False)
+    except Exception:
+        sayac.say("YouTube", False)
+        raise
+    sayac.say("YouTube", True)
     girdiler = bilgi.get("entries") or [bilgi]
     return [Aday(g["id"], g.get("title") or "", g.get("duration"), g.get("channel") or g.get("uploader") or "")
             for g in girdiler if g]
@@ -77,10 +84,15 @@ def youtube_indir(video_id: str, hedef: Path, deneme: int = 3, bekleme_sn: float
     tekrar denenir."""
     import time
 
+    from yanki import sayac
+
     for i in range(deneme):
         try:
-            return _indir_bir(video_id, hedef)
+            sonuc = _indir_bir(video_id, hedef)
+            sayac.say("YouTube indirme", True)
+            return sonuc
         except OSError:
+            sayac.say("YouTube indirme", False)
             if i == deneme - 1:
                 raise
             time.sleep(bekleme_sn * (i + 1))

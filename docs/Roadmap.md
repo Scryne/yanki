@@ -288,6 +288,13 @@ veto eder.
   kapak varsayılan; görsel kapak üretimi (yerel model ya da şablon havuzu) ayrı deneme.
 - **Önce:** arkadaşın API dokümanı. RouteNote incelemesinin sonucu (kabul/red) bu fazın dağıtımcı seçimini etkiler.
 
+- **Dağıtım arayüzü ve takvim (yapıldı, 2026-10-09, `yanki/dagitim.py`):** `Dagitimci` (`ad`, `otomatik`,
+  `yukle`); bugün `ElleRouteNote` (otomatik değil: hat sırası geleni bildirir). Takvim `config/yayin.toml` →
+  `[takvim]`: haftada 1, keşif puanı önce sonra onay sırası, yayın tarihi yüklemeden +21 gün, `baslangic =
+  "ilk_kabul"` (Faz 7 kararı: ilk kabul gelmeden yükleme yok). `yanki takvim`, gece koşusunda takvim adımı, özet
+  satırında "yükleme sırası geldi", dinleme odası Yayın'da sıra. `yanki dagitim-red` reddedileni `paketlendi`ye
+  döndürür, yükleme bilgisini `yukleme_gecmisi`'ne taşır; takvim yeniden paketlenene kadar atlar. API gelince:
+  `otomatik = True` bir `Dagitimci` + gece koşusunda `yukle` çağrısı (takvim, kuyruk, bildirim aynı).
 - **Hazırlık (2026-10-09, API'den bağımsız kısımlar):** veto penceresi `yanki/onay.py` (gece koşusu paketlemeden
   önce; `config/yayin.toml` → `[otomatik_onay]` **kapalı**, 72 sa), dinleme odasında "karar vermezsen … aday N
   kendiliğinden onaylanır" satırı, oturum özetinde "24 saat içinde kendiliğinden onaylanacak" sayısı. Öneri kuralı en
@@ -338,9 +345,17 @@ dönüşür. Jev **metnin ne dediğini** yargılar (özgünlük, düzenleme, eş
   günlük yolu; oturum açılışında özet (`\Yanki\Oda`).
 - **Bildirim:** oturum açılış özeti var (`\Yanki\Oda`). **Yapıldı (2026-10-09):** gece koşusu adımları yalıtıldı,
   sorunlu adım koşuyu 1 ile bitirir → "gece koşusu hata verdi" bildirimi; özet satırında Spotify kilidi ("Spotify
-  kilitli (~19 sa)"). Eklenecek: dağıtımcı reddi, "şarkı yayında / arama sırası değişti".
-- **Gündüz boşta üretim:** GPU boş ve kullanıcı uzun süre etkin değilken kuyruğu eritmek (gece tek koşu sınırı yerine).
-- **Kota bütçeleri:** Spotify günlük 400 (2026-10-09 kilidinden), YouTube/LRCLIB/Deezer hata oranları günlükte.
+  kilitli (~19 sa)"). **Yapıldı (2026-10-09, `yanki/olay.py`):** yayına çıktı, en iyi arama sırası değişti,
+  Spotify'dan kalktı, yayın tarihi +3 gün geçtiği halde yok (dağıtımcı reddi/gecikme şüphesi; RouteNote'ta API yok,
+  red e-postayla geliyor → `yanki dagitim-red`), takvimde yükleme sırası geldi, gündüz üretimi bitti. Her olay
+  `calisma/olaylar.jsonl`'a, tekrar anahtarıyla bir kez bildirilir; dinleme odası Yayın'da son bildirimler.
+  Zamanlayıcıdan gerçek bildirim denendi.
+- **Gündüz boşta üretim (yapıldı, 2026-10-09):** `yanki gunduz` + `\Yanki\Gunduz` (08:00'den 17 saat, her 30 dk):
+  20 dk klavye/fare yoksa (GetLastInputInfo), prizdeyse ve GPU eşiğin altındaysa kuyruktan bir şarkı (önce bekleyen
+  onarımlar); 01:00'den sonra başlamaz (03:00 gece koşusu kilide takılmasın), 2 saat sınırı. Zamanlayıcıdan elle
+  tetiklendi: "kullanıcı etkin (8 dk boşta)" ile doğru çıktı. İlk gerçek gündüz üretimi bekleniyor.
+- **Kota bütçeleri:** Spotify günlük 400 (2026-10-09 kilidinden). **Yapıldı:** dış servis sayaçları (`yanki/sayac.py`):
+  koşu sonunda istek/hata özeti, günlük toplam `calisma/gunluk/servisler.json` (90 gün).
 - **Karar bekleyen (Scryne):** (1) sanatçı kimliği: tüm tür ve diller tek "Orvane" mı, tür/dil başına ayrı ad mı
   (Spotify'ın öneri algoritması profilin tutarlılığına bakıyor); (2) tam global: mekanik lisanslı dağıtımla ABD/
   Kanada/Meksika/Hindistan/Pakistan (maliyet).

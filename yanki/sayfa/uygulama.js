@@ -454,7 +454,32 @@ async function yayinGoster() {
     `Sanatçı profili bölünmüş: parçalar ${d.profiller.length} ayrı Spotify profilinde. Dağıtımcıdan birleştirme iste.`));
   parcalar.push(d.sarkilar.length ? el("ul", { class: "kayitlar" }, ...d.sarkilar.map(yayinSatiri))
     : el("p", { class: "ipucu" }, "Henüz yüklenmiş şarkı yok. Paketi yükleyince: yanki yuklendi <kimlik>"));
+  parcalar.push(takvimBolumu(d.takvim));
+  if (d.olaylar?.length) parcalar.push(el("section", { class: "bolum", "aria-label": "Son bildirimler" },
+    el("h2", { class: "bolum-baslik" }, "Son bildirimler"),
+    el("ul", { class: "olaylar" }, ...d.olaylar.map((o) => el("li", {},
+      el("span", { class: "olay-zaman" }, tarih(o.zaman)), el("b", {}, o.baslik), " ", el("span", { class: "olay-metin" }, o.metin))))));
   ana.replaceChildren(...parcalar);
+}
+
+// paketlenmiş şarkıların yükleme sırası (yanki/dagitim.py; ölçüm değil, durumdan hesap)
+function takvimBolumu(t) {
+  if (!t) return null;
+  const ust = el("h2", { class: "bolum-baslik" }, "Yükleme sırası", el("span", { class: "g-sayi" }, t.sira.length ? String(t.sira.length) : ""));
+  const not = t.hata ? el("p", { class: "uyari" }, `Takvim okunamadı: ${t.hata}`)
+    : t.beklemede ? el("p", { class: "ipucu" }, `Takvim bekliyor: ${t.beklemede}. Tarihler o zamana kadar öneri.`) : null;
+  const sira = t.sira.length ? el("ol", { class: "kayitlar" }, ...t.sira.map((x, i) => el("li", { class: "kayit" + (t.beklemede ? " soluk" : "") },
+    el("div", { class: "kayit-ad" }, el("a", { class: "ad", href: `#${x.kimlik}` }, x.ad), el("span", { class: "sanatci" }, x.sanatci)),
+    el("div", { class: "olculer" },
+      el("span", { class: "rozet " + (i === 0 && !t.beklemede ? "ok" : "") }, i === 0 ? "sıradaki" : `${i + 1}.`),
+      el("span", {}, "yükle ", el("b", {}, tarih(x.yukleme))),
+      el("span", {}, "yayın ", el("b", {}, tarih(x.yayin_tarihi))),
+      x.kesif ? el("span", { class: "rozet ok", title: "Keşiften: Spotify'da kaldırılmış, hâlâ aranan şarkı" }, "keşif") : null),
+    el("div", { class: "kayit-eylem" }))))
+    : el("p", { class: "ipucu" }, "Kuyrukta paket yok. Onayladığın şarkılar paketlenince buraya girer.");
+  const duzeltme = t.duzeltme?.length ? el("p", { class: "uyari" },
+    `Dağıtımcının reddettiği, düzeltilmeyi bekleyen: ${t.duzeltme.join(", ")}. Düzeltip yanki paketle --yeniden deyince sıraya döner.`) : null;
+  return el("section", { class: "bolum", "aria-label": "Yükleme sırası" }, ust, not, duzeltme, sira);
 }
 
 function yayinSatiri(s) {

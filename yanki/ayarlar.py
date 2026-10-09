@@ -94,12 +94,24 @@ class Operasyon:
     yedek_gun: int = 7
     yedek_sakla: int = 8
     temizlik_gun: int = 14
+    gunduz_acik: bool = True
+    gunduz_bosta_dk: int = 20
+    gunduz_sarki: int = 1
+    gunduz_saatler: tuple[int, int] = (8, 1)  # [başlangıç, bitiş) saat; gece yarısını geçebilir
+
+    def gunduz_saatinde(self, saat: int) -> bool:
+        bas, son = self.gunduz_saatler
+        return bas <= saat < son if bas < son else saat >= bas or saat < son
 
 
 def operasyon_oku(kok: Path = KOK) -> Operasyon:
     yol = kok / "config" / "operasyon.toml"
     d = tomllib.loads(yol.read_text(encoding="utf-8")) if yol.exists() else {}
-    y, t = d.get("yedek", {}), d.get("temizlik", {})
+    y, t, g = d.get("yedek", {}), d.get("temizlik", {}), d.get("gunduz", {})
     klasor = Path(y.get("klasor", "calisma/yedek"))
+    saatler = tuple(int(x) % 24 for x in g.get("saatler", (8, 1)))
+    if len(saatler) != 2:
+        raise ValueError(f"gunduz.saatler [başlangıç, bitiş] olmalı: {g.get('saatler')}")
     return Operasyon(klasor if klasor.is_absolute() else kok / klasor, max(1, int(y.get("gun", 7))),
-                     max(1, int(y.get("sakla", 8))), max(0, int(t.get("gun", 14))))
+                     max(1, int(y.get("sakla", 8))), max(0, int(t.get("gun", 14))), bool(g.get("acik", True)),
+                     max(1, int(g.get("bosta_dk", 20))), max(1, int(g.get("sarki", 1))), saatler)

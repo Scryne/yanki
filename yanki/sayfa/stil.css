@@ -62,6 +62,12 @@ button { font: inherit; color: inherit; cursor: pointer; }
 
 /* keşif / yayın satırları: opak yüzey, tek sütun liste (kart dizisi değil) */
 .kota { font-size: 12px; margin: 0 0 var(--s4); }
+.bolum { margin-top: var(--s8); }
+.bolum-baslik { font: 600 16px/1.2 var(--f-baslik); margin: 0 0 var(--s3); display: flex; gap: var(--s2); align-items: baseline; }
+.olaylar { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s2); font-size: 13px; }
+.olaylar li { overflow-wrap: anywhere; }
+.olay-zaman { font: 500 12px/1.4 var(--f-zaman); color: var(--metin-2); margin-right: var(--s2); }
+.olay-metin { color: var(--metin-2); }
 .kayitlar { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s2); }
 .kayit { display: grid; grid-template-columns: minmax(12rem, 1fr) minmax(0, 2fr) auto; align-items: center; gap: var(--s2) var(--s4);
   padding: var(--s3) var(--s4); background: var(--yuzey); border: 1px solid var(--cizgi); border-radius: var(--r-panel); }

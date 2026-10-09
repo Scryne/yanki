@@ -20,3 +20,12 @@ ornekleme = 44100
 # kadar) → kapalı; dağıtım API'siyle tam otomasyonda açılır (Roadmap Faz 10).
 acik = false
 sure_saat = 72
+
+[takvim]
+# Yayın takvimi (yanki/dagitim.py): paketlenmiş şarkılar kuyruk, sıra keşif puanı sonra onay sırası. Sırası gelen paket
+# bildirilir (RouteNote'ta API yok, yükleme elle); dağıtım API'si gelince gece koşusu kendisi yükler (Roadmap Faz 10).
+acik = true
+haftada = 1  # Roadmap Faz 8: kabul gelince düzenli yayın, haftada bir
+yayin_on_gun = 21  # yüklemeden kaç gün sonrası yayın tarihi önerilsin (ücretsiz inceleme günler sürüyor; pitch ≥ 7 gün)
+# "ilk_kabul": ilk parça Spotify'a çıkana kadar bekle (Faz 7: kabul gelmeden RouteNote'a daha fazla yükleme yok)
+baslangic = "ilk_kabul"

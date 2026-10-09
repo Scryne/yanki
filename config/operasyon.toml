@@ -13,3 +13,12 @@ sakla = 8
 [temizlik]
 # Yüklenmiş şarkılarda seçilmeyen adayların ve ara seslerin silinmesi için yüklemenin üstünden geçmesi gereken gün
 gun = 14
+
+[gunduz]
+# Gündüz boşta üretim (`yanki gunduz`, \Yanki\Gunduz görevi her 30 dk): kullanıcı `bosta_dk` dakikadır klavye/fareye
+# dokunmadıysa, bilgisayar prizdeyse ve GPU boşsa kuyruktan `sarki` şarkı üretir (önce bekleyen onarımlar). Şarkı başı
+# ~30 dk; dönünce GPU bir süre dolu kalabilir. Gece koşusuyla (03:00) çakışmasın diye yalnız `saatler` arasında başlar.
+acik = true
+bosta_dk = 20
+sarki = 1
+saatler = [8, 1]  # 08:00'den 01:00'e

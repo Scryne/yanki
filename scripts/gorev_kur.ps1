@@ -25,3 +25,15 @@ $ayar = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Seconds 
 Register-ScheduledTask -TaskPath "\Yanki\" -TaskName "Oda" -Action $eylem -Trigger $zaman -Settings $ayar `
     -Principal $kim -Force | Out-Null
 "Yanki\Oda kuruldu: oturum açılınca → $kok\scripts\oda.ps1 (http://127.0.0.1:8765/)"
+
+# Yanki\Gunduz: gündüz boşta üretim (Roadmap Faz 13). 08:00'den itibaren 17 saat boyunca her 30 dk; koşulları
+# `yanki gunduz` denetler (saat penceresi, 20 dk boşta, priz, GPU). Pilde başlamaz; 2 saatten uzun sürerse durdurulur.
+$arg = "--headless `"$ps`" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File `"$kok\scripts\gunduz.ps1`""
+$eylem = New-ScheduledTaskAction -Execute (Join-Path $env:WINDIR "System32\conhost.exe") -Argument $arg -WorkingDirectory $kok
+$zaman = New-ScheduledTaskTrigger -Daily -At 08:00
+$zaman.Repetition = (New-ScheduledTaskTrigger -Once -At 08:00 -RepetitionInterval (New-TimeSpan -Minutes 30) `
+    -RepetitionDuration (New-TimeSpan -Hours 17)).Repetition
+$ayar = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Hours 2) -MultipleInstances IgnoreNew
+Register-ScheduledTask -TaskPath "\Yanki\" -TaskName "Gunduz" -Action $eylem -Trigger $zaman -Settings $ayar `
+    -Principal $kim -Force | Out-Null
+"Yanki\Gunduz kuruldu: 08:00–01:00 her 30 dk → $kok\scripts\gunduz.ps1"

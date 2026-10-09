@@ -14,7 +14,7 @@ Sonuç şarkının `durum.json` → `yayin` alanında: `son` (en son kontrol) ve
 
 import json
 import re
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 from yanki import dosya, durum
@@ -132,8 +132,40 @@ def kaydet(d: durum.Durum, son: dict) -> list[str]:
     return uyarilar
 
 
+GECIKME_GUN = 3  # yayın tarihinden bu kadar gün sonra hâlâ yoksa: dağıtımcı reddi ya da gecikme şüphesi
+
+
+def _siralar_metni(siralar: dict) -> str:
+    return ", ".join(f"{m} {s or '—'}" for m, s in (siralar or {}).items())
+
+
+def olaylar(d: durum.Durum, onceki: dict, son: dict, bugun: date | None = None) -> list[tuple[str, str, str, str]]:
+    """Bildirilecek değişiklikler: (tür, başlık, metin, tekrar anahtarı). Arama sırası her gün oynayabilir; yalnız en
+    iyi sıra değişince bildirilir."""
+    bugun = bugun or date.today()
+    sonuc = []
+    if son["canli"] and not onceki.get("canli"):
+        sonuc.append(("yayinda", f"yayında: {d.ad}", f"Spotify'da çıktı. '{d.ad}' aramasında sıra: "
+                      f"{_siralar_metni(son.get('siralar'))}", f"yayinda:{d.kimlik}:{son.get('spotify_id')}"))
+    elif son["canli"] and onceki.get("canli") and son.get("arama_sirasi") != onceki.get("arama_sirasi"):
+        eski, yeni = onceki.get("arama_sirasi"), son.get("arama_sirasi")
+        sonuc.append(("sira", f"arama sırası değişti: {d.ad}",
+                      f"en iyi sıra {eski or '—'} → {yeni or '—'} ({_siralar_metni(son.get('siralar'))})",
+                      f"sira:{d.kimlik}:{son['zaman'][:10]}:{yeni}"))
+    if son.get("kayip"):
+        sonuc.append(("kayip", f"Spotify'dan kalktı: {d.ad}", "Önceden canlıydı, ISRC artık bulunmuyor; dağıtımcı "
+                      "panelinden bak", f"kayip:{d.kimlik}:{son['zaman'][:10]}"))
+    tarih = son.get("yayin_tarihi")
+    if not son["canli"] and tarih and bugun >= date.fromisoformat(tarih) + timedelta(days=GECIKME_GUN):
+        sonuc.append(("gecikme", f"yayın tarihi geçti: {d.ad}", f"{tarih} yayın tarihine rağmen Spotify'da yok: "
+                      "dağıtımcı panelinde red ya da gecikme olabilir. Reddedildiyse: yanki dagitim-red "
+                      f"{d.kimlik} --neden …", f"gecikme:{d.kimlik}:{tarih}"))
+    return sonuc
+
+
 def takip_et(sp, calisma: Path, sanatci_adi: str, pazarlar, kimlikler: list[str] | None = None,
-             arama_limiti: int = 20) -> list[tuple[durum.Durum, list[str]]]:
+             arama_limiti: int = 20, bildir=None) -> list[tuple[durum.Durum, list[str]]]:
+    """`bildir(tur, baslik, metin, anahtar)` verilirse değişiklikler bildirilir (gece koşusu, `yanki takip`)."""
     sonuc = []
     for d in durum.hepsi(calisma):
         if d.asama not in ("yuklendi", "yayinda") or (kimlikler and d.kimlik not in kimlikler):
@@ -145,7 +177,11 @@ def takip_et(sp, calisma: Path, sanatci_adi: str, pazarlar, kimlikler: list[str]
         son = kontrol_et(sp, d, y["isrc"].upper(), sanatci_adi, pazarlar, arama_limiti)
         son["yayin_tarihi"] = y.get("yayin_tarihi")
         with durum.guncelle(calisma, d.kimlik) as taze:
+            onceki = dict((taze.yayin or {}).get("son") or {})
             uyarilar = kaydet(taze, son)
+        if bildir:
+            for olay in olaylar(taze, onceki, son):
+                bildir(*olay)
         sonuc.append((taze, uyarilar))
     return sonuc
 

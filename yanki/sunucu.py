@@ -17,7 +17,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from yanki import durum, kesif, kilit, sozler, uretim
+from yanki import durum, kesif, kilit, olay, sozler, uretim
 from yanki.ayarlar import Ayarlar
 
 SAYFA = Path(__file__).with_name("sayfa")
@@ -76,6 +76,19 @@ def _kota(kok: Path) -> dict:
     kalan = int(k.get("kilit", 0) - time.time())
     return {"bagli": bool(sp.client_id), "kilit_sn": max(0, kalan), "neden": k.get("neden") if kalan > 0 else None,
             "bugun": k.get("sayi", 0), "tavan": sp.gunluk_butce}
+
+
+def _takvim(kok: Path, calisma: Path) -> dict:
+    """Yükleme sırası (yalnız durumdan hesaplanır, ağa çıkmaz)."""
+    from yanki import dagitim
+
+    try:
+        p = dagitim.plan(calisma, dagitim.takvim_oku(kok / "config" / "yayin.toml"))
+    except (OSError, ValueError) as e:
+        return {"hata": str(e), "sira": [], "beklemede": None, "duzeltme": []}
+    return {"beklemede": p.beklemede, "duzeltme": p.duzeltme,
+            "sira": [{"kimlik": x.kimlik, "sanatci": x.sanatci, "ad": x.ad, "yukleme": x.yukleme.isoformat(),
+                      "yayin_tarihi": x.yayin_tarihi.isoformat(), "kesif": x.puan > 0} for x in p.sira]}
 
 
 def _ozet(d: durum.Durum) -> dict:
@@ -284,7 +297,8 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None) -> FastA
                              "isrc": y.get("isrc"), "son": (d.yayin or {}).get("son"),
                              "gecmis": (d.yayin or {}).get("gecmis", [])})
         sarkilar.sort(key=lambda s: s["yayin_tarihi"] or "")
-        return {"sarkilar": sarkilar, "kota": _kota(a.kok), "profiller": sorted(takip.profil_kimlikleri(calisma))}
+        return {"sarkilar": sarkilar, "kota": _kota(a.kok), "profiller": sorted(takip.profil_kimlikleri(calisma)),
+                "takvim": _takvim(a.kok, calisma), "olaylar": olay.oku(calisma, son=8)[::-1]}
 
     app.mount("/", StaticFiles(directory=SAYFA, html=True), name="sayfa")
     return app
