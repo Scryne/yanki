@@ -21,7 +21,7 @@ Durum sütunu session-start hook'u tarafından otomatik okunur — format bozulm
 | 6 | Kalite turu | ✅ Tamamlandı | Mırıldanma, nefes, titreme için denemeler; Scryne bir şarkıda "yayınlanabilir" dedi |
 | 7 | Gerçek kullanım | 🔄 Devam Ediyor | Scryne listeden bir şarkıyı yükledi, dağıtımcı kabul etti, parça Spotify'da dinlenebilir; bulgular roadmap'e işlendi |
 | 8 | Kalite ve düzenli yayın | 🔄 Devam Ediyor | En az 3 parça Spotify'da; yükleme takvimi işliyor; vokal son işlemi ve LoRA dinleme testiyle karara bağlandı; ≥ 10 onarım etiketiyle otomatik kusur işaretleme denendi (sonuç kayıtlı) |
-| 9 | Kaldırılmış şarkı keşfi ve yayın takibi | 🔄 Devam Ediyor | Spotify anahtarı bağlı; `yanki kesif` gerçek bir STILLMORE CSV'si ya da kendi playlist'le ≥ 5 doğrulanmış (geri gelmemiş) aday buldu; en az biri üretilip yüklendi; `yanki takip` yüklenen parçaların canlılığını ve ad aramasındaki sırasını kaydetti |
+| 9 | Kaldırılmış şarkı keşfi ve yayın takibi | 🔄 Devam Ediyor | Spotify anahtarı bağlı; `yanki kesif` (STILLMORE CSV'si, kendi playlist ya da Deezer katalog farkı) ≥ 5 doğrulanmış (geri gelmemiş) aday buldu; en az biri üretilip yüklendi; `yanki takip` yüklenen parçaların canlılığını ve ad aramasındaki sırasını pazar pazar kaydetti |
 | 10 | Otomatik yükleme (dağıtım API'si) | ⏳ Bekliyor | Arkadaşın dağıtım sitesinin API'siyle onaylı bir paket elle dokunmadan yüklendi; durum kendiliğinden `yuklendi`, red/hata `durum.json`'a düşüyor |
 
 ## Faz Detayları
@@ -214,6 +214,27 @@ Durum sütunu session-start hook'u tarafından otomatik okunur — format bozulm
 - **Sonuç:** Scryne'ın playlist'leri zayıf kaynak (55'te 3, talep düşük). Büyük, eski playlist'lerin STILLMORE
   CSV'si gerekiyor (arkadaştan) → `girdi/kesif/`. İlk Türkçe adayda Türkçe cover dinleme
   testi (ACE-Step'te denenmedi). Sıra formülü ilk yayınların arama sırasıyla düzeltilir.
+- **Kendi keşfimiz ve global (Scryne, 2026-10-09: "kendimiz yapamaz mıyız", "sadece TR'ye bakma, global"):**
+  - `yanki/katalog.py`, **Deezer katalog farkı**: Deezer'da çok dinlenen (rank) ama Spotify'da kapalı/olmayan
+    şarkılar; tohum öncelik sırası elle (kataloğunu çekenler) → playlist sanatçıları → benzerleri → tür listeleri.
+    İlk koşu: bütçe 146 güncel hite gitti, hepsi Spotify'da → öncelik sırası eklendi. Deezer listeleri IP'ye göre
+    (bu ağda Fransa). Apple Music RSS denendi: aynı adres bazen cevap veriyor bazen vermiyor, kullanılmadı.
+  - **Pazar seti** (`config/kesif.toml`, US/GB/DE/FR/BR/MX/JP/TR): kaldırılmış / kısmen kapalı / Spotify'da yok;
+    puan kapalı pazar oranıyla. Takipte arama sırası yayınladığımız pazarlarda tek tek.
+  - **Spotify kotası:** bir günde ~1.000 istekte 23 saatlik 429 (Retry-After 83.595). Kalıcı kilit
+    (`calisma/.spotify_kota.json`, kilitliyken hiç istek yok), günlük tavan 400, ücretsiz elemeler (YouTube, sanatçı,
+    LRCLIB) Spotify'dan önce (57 aday → ~5 Spotify'a), playlist snapshot önbelleği, ölçüm/doğrulama ayrı zamanlı.
+    Kilitli koşu 15 sn, sıfır istek, çökmüyor (canlı denendi).
+  - **Çok dilli hat:** dil `"en"` sabitti, söz kapısı small.en + a-z normalleştirme. Şimdi kaynak sesten dil tespiti
+    (Whisper small; canlı: Adele en 0,93, HAARPER en 0,95, Gülümse tr 0,94, Stromae fr 0,93), ACE-Step'e doğru dil,
+    İngilizce dışında çok dilli döküm + Unicode normalleştirme. Gülümse orijinal kaydı: eski kapı WER 1,0 (düşerdi),
+    yeni 0,238. Paket formuna dil adı.
+  - **Stil yedeği:** MusicBrainz türü yoksa Deezer albüm türleri (üç rap şarkısı "clean modern studio recording" →
+    "rap, hip hop song, …").
+  - **Dinleme odası:** Keşif (süzgeç, rozet, talep/rakip/pazar, Dinle/Listeye ekle/Ele; elenen gece eklenmez) ve
+    Yayın (durum, çıkış, pazar pazar sıra, profil bölünmesi) görünümleri; görsel doğrulama 24 kare 0 sorun.
+  - Gece: `gece_ekle = 2` (doğrulanmış en iyi iki aday kendiliğinden listeye). İlk otomatik ekleme Spotify kilidi
+    kalkınca (2026-10-10 ~16:00) sonraki gece.
 
 ### Faz 10: Otomatik yükleme (dağıtım API'si) ⏳
 - Arkadaşın dağıtım sitesi API'sini gönderecek (Scryne, 2026-10-09). Gelince: paket → API yükleme,

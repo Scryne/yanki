@@ -47,8 +47,9 @@ gelince otomatik yüklemeye geçilir (Scryne, 2026-10-09); o zamana kadar insand
 | Kapak | Pillow ile kodla üretilen tipografik kapak, 3000×3000 JPG | Orijinal sanatçı adı/logosu yok (dağıtımcı kuralı); model gerektirmez |
 | Durum | Şarkı başına `calisma/<kimlik>/durum.json` (atomik yazım) | İnsan okunur, tek dosya; dinleme sayfası ve hat aynı kaydı okur. SQLite gereksiz çıktı |
 | Kalite | ruff, pytest; CI'da GPU'suz testler | Motor çağrısı arayüzün arkasında; testler sahte motorla |
-| Şarkı keşfi | STILLMORE CSV'si (`girdi/kesif/`) + Web API ile kendi playlist'ler → boşluk doğrulama (ISRC ve sanatçı + ad araması) → talep (YouTube izlenmesi, yt-dlp) → `calisma/kesif/adaylar.json`; `--ekle N` ya da `gece_ekle` | Başkasının playlist'ini Şubat 2026'dan beri yalnız Spotify istemcisi okuyor (STILLMORE); Yanki'yi Spicetify yamasına ve lisansa bağlamamak için sözleşme CSV. Spotify dinlenme sayısı herkese açık API'de yok, YouTube anahtarsız |
-| Yayın takibi | Spotify Web API (client credentials): ISRC araması → canlı, ad araması → sıra, sanatçı kimliği → profil tek mi; `durum.json` → `yayin` | Faz 7 bitti kriterini (Spotify'da dinlenebilir) ve stratejinin başarısını elle bakmadan ölçer. Anahtar `.env`'de |
+| Şarkı keşfi | Üç kaynak: STILLMORE CSV'si (`girdi/kesif/`), Web API ile kendi playlist'ler, **Deezer katalog farkı** (`yanki/katalog.py`). Ücretsiz elemeler önce (düzenleme adı, YouTube talebi + sanatçı eşleşmesi, LRCLIB sözü ve süre), Spotify en son: boşluk (ISRC ve sanatçı + ad) ve pazar başına kapalılık. `calisma/kesif/adaylar.json`; `--ekle N`, `gece_ekle` ya da dinleme odası | Başkasının playlist'ini Şubat 2026'dan beri yalnız Spotify istemcisi okuyor (STILLMORE); Deezer anahtarsız, popülerlik + ISRC veriyor. Spotify kotası dar (bir günde ~1.000 istekte 23 saat kilit) → kalıcı kilit, günlük tavan 400 |
+| Dil | Kaynak sesten Whisper `small` ile dil tespiti → ACE-Step `vocal_language`; söz kapısı İngilizcede `small.en` (eşikler onunla), diğer dillerde `small`; Unicode normalleştirme | Keşif global; sabit `en` Türkçe/Fransızca adayı söz kapısında düşürüyordu (Gülümse: WER 1,0 → 0,238) |
+| Yayın takibi | Spotify Web API (client credentials): ISRC araması → canlı, ad araması → sıra (yayınladığımız her pazarda), sanatçı kimliği → profil tek mi; `durum.json` → `yayin`; dinleme odasında Yayın görünümü | Faz 7 bitti kriterini (Spotify'da dinlenebilir) ve stratejinin başarısını elle bakmadan ölçer. Anahtar `.env`'de |
 | Zamanlama | Görev Zamanlayıcı `\Yanki\Gece` 03:00 → `scripts/gece.ps1` → `yanki calistir`; yazan komutlar tek işletim sistemi kilidi | "Her şey arkada" (Scryne); bilgisayar yerelde GPU'lu olduğu için bulut cron değil. Kilit süreç ölünce kalkar |
 
 Model kimlikleri (`acestep-v15-xl-sft`, niceleme, adım, güç) kod içine gömülmez: `config/motor.toml`.
@@ -95,6 +96,7 @@ girdi/liste.toml  (Scryne: sanatçı + şarkı, isteğe bağlı stil/söz düzel
 | Tam şarkı 8 GB'ta | ✅ parçalı üretimle aday başı ~8 dk (S10) |
 | Otomatik stil tanımı | ⚠️ LM ve CLAP güvenilmez çıktı; MusicBrainz türleri + cinsiyet genel kalıyor ("piano ballad" gibi ayrıntı yok). Faz 6: dinleme sayfasında stili düzenleyip yeniden üretme |
 | Kaldırılmış şarkı stratejisi aramada üste çıkar mı | ⏳ ilk yayınlar canlı olunca `yanki takip` ölçer |
+| Keşif adayları cover'lanabilir mi (rap, İngilizce dışı) | ⏳ hat balad için kalibre; ilk üç keşif şarkısı rap (2026-10-10 gecesi üretim), ilk Türkçe/Fransızca aday dinleme testiyle |
 | Spotify API kısıtları (Şubat 2026) keşfi engeller mi | ⚠️ başkasının playlist'i API'de 403 → STILLMORE CSV'si; arama ve ISRC çalışıyor (dokümana göre, canlı doğrulanmadı) |
 | Dağıtımcı AI cover'ı kabul eder mi | ⏳ Faz 7'de ilk gerçek yükleme. Seçilen: RouteNote (`docs/arastirma/02`); tam AI cover için açık kabul cümlesi yok |
 

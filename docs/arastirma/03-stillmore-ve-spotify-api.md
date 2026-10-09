@@ -74,5 +74,14 @@ Kaynaklar developer.spotify.com (erişim 2026-10-09):
 - Boşluk doğrulama canlıda: Adele "Someone Like You" geri gelmiş (aynı sanatçı + ad) → elendi, rakip 4.
 - `yanki takip`: üç yükleme henüz canlı değil (yayın 2026-10-28 / 11-04 / 11-11), beklenen sonuç.
 
+**Kota (2026-10-09, kendi ölçümümüz):** testler + üç keşif koşusu, bir günde ~1.000 istek → 429,
+`Retry-After: 83595` (23,2 saat). Development Mode kotası belgelenmiyor; günlük tavan 400 bu ölçüme göre konuldu
+(yarısının altı). STILLMORE aynı tür kilidi 13 saat ölçmüştü.
+
+**Deezer (2026-10-09):** anahtarsız; `/chart/{tür}/artists` IP'ye göre ülke listesi veriyor (bu ağda Fransa: Tiakola,
+Jul, GIMS…), `/artist/{id}/top` → `rank` (0–1M), `/track/{id}` → ISRC; hata 200 içinde (`code 4` kota, 800 yok).
+Kaldırılmış underground şarkılar Deezer'da da yok, sanatçıları var → stil yedeği sanatçı albüm türlerinden.
+Apple Music RSS (`rss.marketingtools.apple.com`) bu ağdan güvenilmez (aynı adres bir 200, sonra zaman aşımı).
+
 **Hâlâ doğrulanmadı:** `/items` yanıtındaki parça alanının adı (`item` / `track`; kod ikisini okuyor) ve kullanıcı
 token'ı akışı (`yanki spotify-baglan`, Scryne'ın tarayıcıda izni gerekiyor; yalnız kendi playlist'lerini taramak için).

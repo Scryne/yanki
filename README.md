@@ -8,9 +8,11 @@ yüklenen parçanın Spotify'da çıkıp çıkmadığını ve adı arandığınd
 
 ## Günlük akış
 
-0. **Keşif:** STILLMORE → playlist → "Kaldırılmış şarkıları bul" → "CSV indir" → dosyayı `girdi/kesif/`'e bırak (ya da
-   `config/kesif.toml` → `playlistler` ile kendi playlist'lerin). `uv run yanki kesif` adayları doğrular (şarkı geri
-   gelmiş mi, kaç rakip cover var) ve YouTube talebine göre sıralar; `--ekle 3` en iyi üçünü listeye yazar.
+0. **Keşif (kendiliğinden):** gece koşusu üç kaynaktan kaldırılmış şarkı arar: Deezer katalog farkı (Deezer'da
+   dinlenen ama Spotify'da kapalı/olmayan), `config/kesif.toml` → `playlistler`, ve varsa `girdi/kesif/`'teki STILLMORE
+   CSV'leri. Adaylar ücretsiz elemelerden (düzenleme, YouTube talebi, sanatçı, söz) sonra Spotify'da doğrulanır
+   (geri gelmiş mi, hangi pazarlarda kapalı, kaç rakip cover) ve en iyi `gece_ekle` tanesi listeye girer. Dinleme
+   odasında **Keşif**: adayı dinle, listeye ekle ya da ele. Elle: `uv run yanki kesif [--ekle N]`.
 1. `girdi/liste.toml`'a şarkı ekle (sanatçı + şarkı adı yeter) ya da 0. adımdaki gibi keşiften.
 2. Her gece 03:00'te zamanlanmış görev (`\Yanki\Gece`, `scripts/gece.ps1`; pilde başlamaz, kaçırırsa açılınca yetişir)
    `yanki calistir` koşar: kaynak ses (YouTube), sözler (LRCLIB), künye ve stil (MusicBrainz), üç cover adayı, kapılar,
@@ -22,7 +24,11 @@ yüklenen parçanın Spotify'da çıkıp çıkmadığını ve adı arandığınd
    **Bunu kabul et**.
 5. Onaylanan şarkı paketlenir: `calisma/<kimlik>/paket/` → `YUKLE.md`'yi açıp formu doldur, ses dosyasını (RouteNote: FLAC) ve JPG'yi yükle.
 6. `yanki yuklendi <kimlik>`.
-7. Gece koşusu ya da `uv run yanki takip`: parça Spotify'da çıkınca aşama `yayinda`, `yanki durum` arama sırasını gösterir.
+7. Gece koşusu ya da `uv run yanki takip`: parça Spotify'da çıkınca aşama `yayinda`; dinleme odasında **Yayın**
+   pazar pazar arama sırasını gösterir.
+
+Spotify kotası dar: uzun 429 alınırsa kilit `calisma/.spotify_kota.json`'a yazılır ve süresi dolana kadar hiçbir
+komut Spotify'a istek atmaz; günlük tavan 400 istek. Dinleme odası Spotify'a hiç istek atmaz.
 
 Diğer komutlar: `yanki durum` (motor, model, araçlar, GPU, şarkıların aşaması), `yanki hazirla`, `yanki uret`,
 `yanki yeniden <kimlik>` (onaylı şarkıya güncel hatla yeni adaylar), `yanki kunye [kimlik]` (yazarlar ve orijinal
@@ -62,7 +68,10 @@ uv run yanki spotify-baglan                                # yalnız kendi playl
 - **Kapılar:** orijinal kaydı taşıyan (parmak izi ≥ 0,72 ya da dalga korelasyonu ≥ 0,25), sözsüz (WER ≥ 0,5) ya da yanlış
   süreli aday dinlemeye çıkmaz. "İyi"yi kulak seçer: otomatik kalite ölçüleri dinlemeyle uyuşmadı.
 - **Keşif:** kaldırılmış = Spotify'da çalınamayan (`is_playable: false`). Aynı ISRC ya da aynı sanatçı + ad çalınabilir
-  durumda geri geldiyse aday düşer; sıra YouTube izlenmesi / (1 + rakip cover). Ayrıntı: `docs/arastirma/03`.
+  durumda geri geldiyse aday düşer; sıra YouTube izlenmesi × kapalı pazar oranı / (1 + rakip cover). Takma adla
+  yüklenmiş sızıntılar YouTube başlığındaki sanatçıyla, düzenlemeler (sped up, remix) adla elenir. Ayrıntı:
+  `docs/arastirma/03`.
+- **Dil:** kaynak sesten tespit edilir (Whisper); ACE-Step'e ve söz kapısına o dil gider.
 - **Motor ayrı süreç:** hat torch yüklemez; ACE-Step işçisi (`yanki/motor_isci.py`) motorun kendi ortamında çalışır.
 
 Kararlar ve gerekçeler: `docs/Final-Dokuman.md`, yol haritası: `docs/Roadmap.md`.
