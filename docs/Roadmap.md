@@ -201,8 +201,10 @@ Durum sütunu session-start hook'u tarafından otomatik okunur — format bozulm
   STILLMORE başlığı birebir); testler gerçek bir hata buldu (YouTube başlığındaki "Sanatçı - Şarkı" sonek sanılıp
   siliniyordu). Canlı: YouTube talep ölçümü doğru (Adele 2,58 milyar, "Gülümse" 6,95 milyon); CSV → kayıt → liste
   akışı anahtarsız uçtan uca çalıştı, doğrulanmamış aday listeye girmedi.
-- **Bekleyen:** Scryne'dan Spotify geliştirici uygulaması (`.env.example`; Premium hesapla) → ilk canlı doğrulama
-  (`is_playable`, `/items` alan adı); ilk STILLMORE CSV'si (`girdi/kesif/`). İlk Türkçe adayda Türkçe cover dinleme
+- **Canlı (2026-10-09, Scryne'ın Spotify uygulaması):** token, ISRC ve ad araması, `is_playable: false` doğrulandı;
+  `restrictions.reason` kaldırılmışı ayırmıyor ("market") → US/GB/DE kontrolü eklendi. Boşluk doğrulama Adele SLY'yi
+  doğru eledi (rakip 4). `yanki takip`: üç yükleme yayın tarihinden önce, canlı değil.
+- **Bekleyen:** ilk STILLMORE CSV'si (`girdi/kesif/`); kendi playlist taraması için `yanki spotify-baglan`. İlk Türkçe adayda Türkçe cover dinleme
   testi (ACE-Step'te denenmedi). Sıra formülü ilk yayınların arama sırasıyla düzeltilir.
 
 ### Faz 10: Otomatik yükleme (dağıtım API'si) ⏳

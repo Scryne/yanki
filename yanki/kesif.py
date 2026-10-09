@@ -98,20 +98,32 @@ def stillmore_csv(yol: Path) -> list[Aday]:
     return adaylar
 
 
+# Kaldırılmış ile "yalnız bu ülkede kapalı"yı ayırmak için bakılan pazarlar. `restrictions.reason` ikisinde de
+# "market" dönüyor (2026-10-09 ölçümü: Spotify'ın olmadığı CN'de her parça is_playable false, reason market).
+DIS_PAZARLAR = ("US", "GB", "DE")
+
+
+def baska_pazarda_acik(sp, parca_id: str, pazarlar: tuple[str, ...] = DIS_PAZARLAR) -> bool:
+    for m in pazarlar:
+        if sp.parca(parca_id, m).get("is_playable") is not False:
+            return True
+    return False
+
+
 def playlist_tara(sp, playlist_id: str, market: str) -> list[Aday]:
     """Playlist'te `market`te çalınamayan parçalar. Spotify bir parçayı kaldırınca listede gri bırakır; Web API'de
-    `is_playable: false` (ve çoğunlukla `restrictions.reason`) olarak görünür."""
+    `is_playable: false` görünür. Başka büyük pazarlarda açıksa `ulkede_kapali`, hiçbirinde değilse `kaldirildi`."""
     adaylar = []
     for t in sp.playlist_parcalari(playlist_id, market):
         if t.get("is_playable") is not False:
             continue
-        neden = (t.get("restrictions") or {}).get("reason")
+        acik = bool(t.get("id")) and baska_pazarda_acik(sp, t["id"], tuple(m for m in DIS_PAZARLAR if m != market))
         adaylar.append(Aday(
             sanatci=(t.get("artists") or [{}])[0].get("name") or "", ad=t.get("name") or "",
             kaynak=f"playlist:{playlist_id}", spotify_id=t.get("id"),
             isrc=((t.get("external_ids") or {}).get("isrc") or "").upper() or None,
             album=(t.get("album") or {}).get("name"), cikis=(t.get("album") or {}).get("release_date"),
-            neden="ulkede_kapali" if neden == "market" else "kaldirildi",
+            neden="ulkede_kapali" if acik else "kaldirildi",
         ))
     return [a for a in adaylar if a.sanatci and a.ad]
 

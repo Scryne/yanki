@@ -181,6 +181,9 @@ class Spotify:
     def isrc_ara(self, isrc: str, market: str) -> list[dict]:
         return self.ara(f"isrc:{isrc}", market)
 
+    def parca(self, parca_id: str, market: str) -> dict:
+        return self._get(f"/tracks/{parca_id}", {"market": market}, self.uygulama_token())
+
     def playlist(self, playlist_id: str) -> dict:
         return self._get(f"/playlists/{playlist_id}", {"fields": "name,owner(display_name),tracks(total)"},
                          self.kullanici_token())

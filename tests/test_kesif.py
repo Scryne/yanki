@@ -33,6 +33,9 @@ class SahteSpotify:
     def playlist_parcalari(self, pid, market):
         yield from self.pl
 
+    def parca(self, pid, market):
+        return {"id": pid, "is_playable": pid in getattr(self, "baska_yerde_acik", set())}
+
 
 def test_sade_ad():
     assert kesif.sade_ad("Mr. Brightside - Remastered 2011") == "mr brightside"
@@ -59,8 +62,10 @@ def test_stillmore_csv_yalniz_calinamayan_ve_geri_gelmemis(tmp_path):
 
 
 def test_playlist_tara_calinamayanlari_alir():
-    sp = SahteSpotify(playlist=[_parca("1" * 22, "Var", "X"), _parca("2" * 22, "Yok", "Y", False, "ISRC1"),
+    # ikisinin de nedeni "market" (Spotify ikisini ayırmıyor); ayrım başka pazarlara bakarak
+    sp = SahteSpotify(playlist=[_parca("1" * 22, "Var", "X"), _parca("2" * 22, "Yok", "Y", False, "ISRC1", "market"),
                                 _parca("3" * 22, "Kapalı", "Z", False, neden="market")])
+    sp.baska_yerde_acik = {"3" * 22}
     a = kesif.playlist_tara(sp, "p" * 22, "TR")
     assert [(x.ad, x.neden, x.isrc) for x in a] == [("Yok", "kaldirildi", "ISRC1"), ("Kapalı", "ulkede_kapali", None)]
 

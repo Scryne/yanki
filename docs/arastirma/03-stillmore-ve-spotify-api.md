@@ -64,6 +64,15 @@ Kaynaklar developer.spotify.com (erişim 2026-10-09):
 | Redirect URI | `http://127.0.0.1:PORT/...` kabul, `localhost` yasak | `http://127.0.0.1:8766/callback` |
 | Hız sınırı | 30 sn kayan pencere, 429 + `Retry-After`; kota aşımında `QUOTA_EXCEEDED` (Temmuz 2026). STILLMORE tek uygulamada 13 saatlik 429 ölçtü (2026-08) | İstekler sıralı; kısa bekleme bir kez, uzunsa `Sinirli` ve koşu kalanı sonraya bırakır |
 
-**Doğrulanmadı (ilk canlı koşuda bakılacak):** client credentials ile aramada `is_playable`'ın gerçekten döndüğü;
-`/items` yanıtında parça alanının adı (`item` mı `track` mı; kod ikisini de okuyor); kaldırılmış parçanın kendi
-playlist'imizde `is_playable: false` göründüğü.
+**Canlı doğrulama (2026-10-09, Scryne'ın uygulamasıyla, client credentials):**
+- Token, ISRC araması (`external_ids.isrc` ve `is_playable` dönüyor) ve ad araması (sayfa 10) çalışıyor.
+- `is_playable: false` geliyor: Spotify'ın olmadığı CN'de tek parça ve arama sonuçları `false`, `restrictions.reason`
+  = `market`. **Bulgu:** "bu ülkede kapalı" da "market" döndüğü için gerekçe kaldırılmışı ayırmıyor → `playlist_tara`
+  parçayı US/GB/DE'de de sorar; hiçbirinde açık değilse `kaldirildi`.
+- ISRC araması aynı ISRC'yi başka sanatçı adıyla taşıyan kopyaları da döndürüyor (Rolling in the Deep: 4 sonuç,
+  biri başka sanatçı) → bu durumda kayıt Spotify'da çalınabiliyor, boşluk kapalı sayılır.
+- Boşluk doğrulama canlıda: Adele "Someone Like You" geri gelmiş (aynı sanatçı + ad) → elendi, rakip 4.
+- `yanki takip`: üç yükleme henüz canlı değil (yayın 2026-10-28 / 11-04 / 11-11), beklenen sonuç.
+
+**Hâlâ doğrulanmadı:** `/items` yanıtındaki parça alanının adı (`item` / `track`; kod ikisini okuyor) ve kullanıcı
+token'ı akışı (`yanki spotify-baglan`, Scryne'ın tarayıcıda izni gerekiyor; yalnız kendi playlist'lerini taramak için).
