@@ -83,5 +83,15 @@ Jul, GIMS…), `/artist/{id}/top` → `rank` (0–1M), `/track/{id}` → ISRC; h
 Kaldırılmış underground şarkılar Deezer'da da yok, sanatçıları var → stil yedeği sanatçı albüm türlerinden.
 Apple Music RSS (`rss.marketingtools.apple.com`) bu ağdan güvenilmez (aynı adres bir 200, sonra zaman aşımı).
 
+**TypeSafe özgünlük spike'ı (2026-10-09, jev-1.13.0):** 30 gerçek keşif adayı elle etiketlendi (10 gerçek sanatçı,
+17 takma adlı sızıntı, 3 oyun müziği hayran yapımı). State: listedeki sanatçı + ad + YouTube ilk 5 sonucu (başlık,
+kanal, izlenme). Sorular: `kimin` Choice (listed_artist / other_artist / unclear) ve `hayran` Noul. Sonuç:
+"listed_artist ≥ 0,90 ve hayran < 0,5" kabul kuralıyla sızıntı/hayranda yanlış kabul 0/20 (en yüksek sızıntı L. Del
+Rei 0,77–0,85); gerçeklerde HAARPER/1nonly/Day$okee/GY!BE/Adele/Sezen Aksu ≥ 0,98, Vinnie Vincent Invasion 0,98
+(regex kaçırıyordu). Vipraz "Ainsi Bas La Vida" other_artist 0,94: şarkı Indila'nın, elle konan "gerçek" etiketi
+yanlıştı (regex de kabul etmişti). Belirsiz kanıt: 505bubble unclear, ¥$ other_artist 0,80 (yanlış ret; tutucu yön,
+zararsız). İstek ~600 token, ~0,3 sn (IPv4 taşımayla; IPv6 DNS ilk bağlantıyı 12 sn bekletiyor). Ham sonuç:
+oturum notu, karar kayıtları `calisma/kesif/adaylar.json` → `ozgunluk`.
+
 **Hâlâ doğrulanmadı:** `/items` yanıtındaki parça alanının adı (`item` / `track`; kod ikisini okuyor) ve kullanıcı
 token'ı akışı (`yanki spotify-baglan`, Scryne'ın tarayıcıda izni gerekiyor; yalnız kendi playlist'lerini taramak için).

@@ -22,7 +22,10 @@ Durum sütunu session-start hook'u tarafından otomatik okunur — format bozulm
 | 7 | Gerçek kullanım | 🔄 Devam Ediyor | Scryne listeden bir şarkıyı yükledi, dağıtımcı kabul etti, parça Spotify'da dinlenebilir; bulgular roadmap'e işlendi |
 | 8 | Kalite ve düzenli yayın | 🔄 Devam Ediyor | En az 3 parça Spotify'da; yükleme takvimi işliyor; vokal son işlemi ve LoRA dinleme testiyle karara bağlandı; ≥ 10 onarım etiketiyle otomatik kusur işaretleme denendi (sonuç kayıtlı) |
 | 9 | Kaldırılmış şarkı keşfi ve yayın takibi | 🔄 Devam Ediyor | Spotify anahtarı bağlı; `yanki kesif` (STILLMORE CSV'si, kendi playlist ya da Deezer katalog farkı) ≥ 5 doğrulanmış (geri gelmemiş) aday buldu; en az biri üretilip yüklendi; `yanki takip` yüklenen parçaların canlılığını ve ad aramasındaki sırasını pazar pazar kaydetti |
-| 10 | Otomatik yükleme (dağıtım API'si) | ⏳ Bekliyor | Arkadaşın dağıtım sitesinin API'siyle onaylı bir paket elle dokunmadan yüklendi; durum kendiliğinden `yuklendi`, red/hata `durum.json`'a düşüyor |
+| 10 | Tam otomatik yayın (dağıtım API'si) | ⏳ Bekliyor | Arkadaşın API'siyle onaylı bir paket elle dokunmadan yüklendi; inceleme → kabul/red → canlı durumu kendiliğinden izlendi ve kayda düştü; yayın takvimi en az 2 hafta kesintisiz işledi; veto penceresi (otomatik onay) bir şarkıda uçtan uca çalıştı |
+| 11 | Öğrenen şarkı seçimi | ⏳ Bekliyor | Puan formülü en az 10 yayının ölçülen arama sırası/dinlenmesiyle karşılaştırılıp güncellendi; tür/dil başına üretilebilirlik çarpanı Scryne'ın onay/ret verisinden; en az bir yeni keşif kaynağı (YouTube'da olup Spotify'da olmayan) canlı aday üretti |
+| 12 | Kalite otomasyonu | ⏳ Bekliyor | Otomatik aday seçimi Scryne'ın geçmiş seçimleriyle ölçüldü (isabet kayıtlı) ve ≥ %70 ise veto penceresinde varsayılan; rap ve İngilizce dışı en az bir dil için tarif dinleme testiyle karara bağlandı |
+| 13 | Operasyon ve dayanıklılık | ⏳ Bekliyor | Disk temizliği ve yedek işliyor; gece koşusu/Spotify kilidi/dağıtımcı reddi bildirim olarak geliyor; GPU boştayken gündüz üretimi kuyruğu eritiyor; bir haftalık kesintisiz otomatik koşu günlükte hatasız |
 
 ## Faz Detayları
 
@@ -235,9 +238,76 @@ Durum sütunu session-start hook'u tarafından otomatik okunur — format bozulm
     Yayın (durum, çıkış, pazar pazar sıra, profil bölünmesi) görünümleri; görsel doğrulama 24 kare 0 sorun.
   - Gece: `gece_ekle = 2` (doğrulanmış en iyi iki aday kendiliğinden listeye). İlk otomatik ekleme Spotify kilidi
     kalkınca (2026-10-10 ~16:00) sonraki gece.
+- **Özgünlük kararı TypeSafe (Jev), 2026-10-09:** regex sanatçı eşleşmesi bir günde dört kez yamandı. Spike
+  (jev-1.13.0, 30 elle etiketli örnek, `docs/arastirma/03`): "listedeki sanatçı ≥ 0,90 ve hayran < 0,5" kuralıyla 20
+  sızıntı/hayran örneğinde sıfır yanlış kabul; regex'in kaçırdığı Vinnie Vincent Invasion'ı (0,98) buldu, regex'in
+  kabul ettiği Vipraz "Ainsi Bas La Vida"yı (Indila'nın şarkısı) reddetti. `yanki/yargi.py`, resmi SDK, kanıt ve karar
+  model sürümüyle adaya dondurulur, anahtar yoksa regex yedeği. Kayıttaki 55 aday yeniden ölçüldü: 4 kabul, 8 belirsiz
+  (kendiliğinden eklenmez), 4 hayran yapımı, 23 başka sanatçının. Yeni lider: Vinnie Vincent Invasion "Love Kills"
+  (678 bin, rakip 4; önceki Spotify doğrulamasıyla 2026-10-10 gecesi kendiliğinden listeye girer).
+- **Oturum açılınca Yanki (Scryne, 2026-10-09):** `\Yanki\Oda` görevi dinleme odasını arka planda açar
+  (127.0.0.1:8765) ve özeti Windows bildirimiyle gösterir (`yanki ozet`); elle tetiklenip doğrulandı. Oda `python -m`
+  ile çalışır: `yanki.exe` açıkken kilitleniyor, bağımlılık değişince `uv` senkronu düşüyordu (bulundu, düzeltildi).
 
-### Faz 10: Otomatik yükleme (dağıtım API'si) ⏳
-- Arkadaşın dağıtım sitesi API'sini gönderecek (Scryne, 2026-10-09). Gelince: paket → API yükleme,
-  durum `yuklendi`, ISRC/UPC `metadata.json` → `yukleme`'ye; RouteNote'un elle akışı yedek kalır.
-- Önce: API dokümanı, kimlik doğrulama, AI cover kuralları (operasyonel), bölge/mağaza seçimi, kapak ve ses biçimi.
+### Faz 10: Tam otomatik yayın (dağıtım API'si) ⏳
+Hedef (Scryne, 2026-10-09): "arkadaşımın API'si gelince her şeyin otomatik olması". Uçtan uca: keşif → üretim →
+onay (insan ya da veto penceresi) → paket → API ile yükleme → durum izleme → takip. İnsan yalnız dinler ve isterse
+veto eder.
+- **Dağıtım arayüzü** `yanki/dagitim/`: `Dagitimci` protokolü (`yukle(paket) → YuklemeKimligi`,
+  `durum(kimlik) → inceleme | kabul | red(neden) | canli(upc, isrc)`, `kaldir`). Uygulamalar: `routenote` (bugünkü elle
+  akış: YUKLE.md üretir, `yanki yuklendi` bekler) ve arkadaşın API'si. Hangi dağıtımcının kullanılacağı
+  `config/yayin.toml`'da; paket biçimi dağıtımcıya göre (bugün olduğu gibi).
+- **API gelince ilk iş (yarım gün):** dokümanı oku → kimlik doğrulama, yükleme alanları, AI/cover kuralları
+  (operasyonel), bölge/mağaza seçimi, ses/kapak biçimi, oran sınırı; sandbox ya da tek parçalık gerçek deneme;
+  RouteNote formundaki alanların (yazarlar ad+soyad, © ℗ ayrı, preview başlangıcı) API karşılıkları.
+- **Yayın takvimi:** `paketlendi` şarkılardan kuyruk (öncelik keşif puanı; keşifsiz liste şarkıları sonra), günlük/
+  haftalık sınır (`config/yayin.toml` → `takvim`), yayın tarihi otomatik (+N gün, dağıtımcının asgarisi). Bugün 12
+  paket bekliyor: ilk kabul gelince takvim bunları sırayla eritir.
+- **Durum yoklama:** gece koşusu yüklenenlerin durumunu sorar; red nedeni `durum.json`'a ve keşfe geri besleme
+  (aynı nedenle reddedilen sanatçı/eser bir daha önerilmez). Kabulde UPC/ISRC `metadata.json` → `yukleme`, ardından
+  `yanki takip` canlılığı ve arama sırasını izler (Faz 9).
+- **Veto penceresi (otomatik onay):** kapılardan geçen adaylar arasından öneri (bugün söz WER'i; Faz 12'de seçim
+  modeli) `dinlemede` olarak bekler; Scryne N saat (varsayılan 72) içinde onaylamaz ya da reddetmezse öneri onaylanır.
+  `config/yayin.toml` → `otomatik_onay`; açılmadan önce Faz 12'deki isabet ölçümü. Bildirim: "X şarkı 24 saat sonra
+  kendiliğinden onaylanacak".
+- **Kapak:** bugün Scryne Pinterest fotoğrafı seçiyor (red riski, iki kez söylendi). Otomatik yolda üretilen tipografik
+  kapak varsayılan; görsel kapak üretimi (yerel model ya da şablon havuzu) ayrı deneme.
+- **Önce:** arkadaşın API dokümanı. RouteNote incelemesinin sonucu (kabul/red) bu fazın dağıtımcı seçimini etkiler.
 
+### Faz 11: Öğrenen şarkı seçimi ⏳
+Bugünkü puan (YouTube izlenmesi × kapalı pazar oranı / (1 + rakip)) sezgisel; ölçüm geldikçe öğrenen bir seçime
+dönüşür. Jev **metnin ne dediğini** yargılar (özgünlük, düzenleme, eşleşme), **ne kadar dinleneceğini** tahmin etmez
+(TypeSafe notu: ScryneQuant yön ekseni %49); tahmin, ölçülen yayın sonuçlarıyla kodda kalibre edilir.
+- **Talep v2:** güncellik (YouTube izlenme/gün, yükleme tarihi; eski hit ile hâlâ aranan şarkıyı ayırır), Last.fm
+  dinleyici/scrobble (ücretsiz anahtar, Scryne açar), Deezer rank (varsa), STILLMORE CSV'sindeki Spotify dinlenmesi.
+- **Rekabet v2:** başlık aramasında ilk rakip cover'ın sırası (pazar pazar); rakip zaten 1. sıradaysa boşluk dar.
+- **Üretilebilirlik:** tür/dil/vokal başına Scryne'ın onay oranı ve ortalama söz WER'i (`durum.json` geçmişi) → puana
+  çarpan; hattın iyi olduğu türler öne çıkar (bugün balad iyi; rap ve Türkçe ilk ölçümde).
+- **Geri besleme:** yayın sonrası arama sırası (Faz 9 takip) ve dinlenme (dağıtımcı API'si ya da STILLMORE/
+  Soundcharts) → en az 10 yayında hangi özelliğin sonucu açıkladığı; ağırlıklar ölçüme göre (aşırı uydurma yok: basit
+  doğrusal/sıralama modeli, kayıtlı).
+- **Yeni kaynaklar:** (1) YouTube'da çok izlenen ama Spotify'da olmayan şarkılar: sanatçının resmi kanal videoları ile
+  Spotify kataloğu farkı; (2) film/dizi/anime/oyun müzikleri (Jev'in hayran yapımı kararı burada da süzgeç);
+  (3) bölgesel boşluklar: bir pazarda kapalı, diğerlerinde açık şarkılar (yalnız kapalı pazarlarda yayın, dağıtımcı
+  bölge seçimiyle).
+- **Jev genişletme (spike ile):** talep ölçümündeki "bu YouTube sonucu orijinal kayıt mı (cover/remix/canlı değil)"
+  kararı regex `ISTENMEYEN` yerine; STILLMORE/Deezer adaylarında "bu bir düzenleme mi" (bugün ad regex'i).
+
+### Faz 12: Kalite otomasyonu ⏳
+- **Seçim modeli:** Scryne'ın 17 şarkıdaki seçimleri (hangi aday) ile kapı ölçüleri (söz WER, parmak izi, dalga,
+  tohum) arasındaki ilişki; otomatik seçimin isabeti kayıtlı. ≥ %70 ise veto penceresinde öneri bu model; değilse söz
+  WER'i ve insan.
+- **Tür/dil tarifi:** rap (HAARPER, 1nonly, Day$okee, 2026-10-10 gecesi ilk üretim) ve ilk Türkçe/Fransızca aday için
+  stil/güç/adım dinleme testi; gerekirse tür başına `config/motor.toml` profili.
+- Faz 8'den devralınanlar: vokal son işlemi, LoRA ihtiyacı, onarım etiketleriyle otomatik kusur işaretleme.
+
+### Faz 13: Operasyon ve dayanıklılık ⏳
+- **Disk:** reddedilen/eski adayların sesleri (aday başı onlarca MB) N gün sonra silinir, onaylı + paket kalır; yedek
+  (`durum.json`'lar, paketler, `calisma/kesif/`) haftalık.
+- **Bildirim:** oturum açılış özeti var (`\Yanki\Oda`); eklenecek: gece koşusu hatası, Spotify kilidi, dağıtımcı
+  reddi, "şarkı yayında / arama sırası değişti".
+- **Gündüz boşta üretim:** GPU boş ve kullanıcı uzun süre etkin değilken kuyruğu eritmek (gece tek koşu sınırı yerine).
+- **Kota bütçeleri:** Spotify günlük 400 (2026-10-09 kilidinden), YouTube/LRCLIB/Deezer hata oranları günlükte.
+- **Karar bekleyen (Scryne):** (1) sanatçı kimliği: tüm tür ve diller tek "Orvane" mı, tür/dil başına ayrı ad mı
+  (Spotify'ın öneri algoritması profilin tutarlılığına bakıyor); (2) tam global: mekanik lisanslı dağıtımla ABD/
+  Kanada/Meksika/Hindistan/Pakistan (maliyet).
