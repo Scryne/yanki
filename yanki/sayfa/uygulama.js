@@ -361,8 +361,122 @@ function reddet(d) {
   eylemSonraki(d, "reddet", { neden }, `"${d.ad}" reddedildi.`);
 }
 
+// ---- görünümler: keşif ve yayın (#_kesif, #_yayin; şarkı kimliğinde "_" geçmez) ----
+const kisaSayi = (n) => n == null ? "—" : n >= 1e9 ? `${(n / 1e9).toFixed(1)} mr` : n >= 1e6 ? `${(n / 1e6).toFixed(1)} mn`
+  : n >= 1e3 ? `${Math.round(n / 1e3)} bin` : String(n);
+const saatYazi = (sn) => sn >= 3600 ? `${Math.floor(sn / 3600)} sa ${Math.floor((sn % 3600) / 60)} dk` : `${Math.max(1, Math.ceil(sn / 60))} dk`;
+const tarih = (iso) => iso ? new Date(iso).toLocaleDateString("tr-TR", { day: "numeric", month: "short" }) : "—";
+
+function kotaSatiri(k) {
+  if (!k.bagli) return el("p", { class: "uyari" }, "Spotify anahtarı yok: keşif doğrulaması ve yayın takibi kapalı. Kurulum README'de.");
+  if (k.kilit_sn) return el("p", { class: "uyari" }, `Spotify istek sınırı: ${saatYazi(k.kilit_sn)} sonra açılır. Ölçümler o zamana kadar bekler; bu sayfadaki kayıtlar son ölçümden.`);
+  return el("p", { class: "ipucu kota" }, `Spotify bugün ${k.bugun}/${k.tavan} istek kullandı. Ölçümleri gece koşusu yapar; bu sayfa istek atmaz.`);
+}
+
+const SUZGEC = {
+  oneri: { ad: "Önerilen", f: (x) => x.puan > 0 && !x.listede && !x.elendi,
+    bos: "Şu an önerilecek aday yok. Gece koşusu keşfe devam ediyor; Tümü'nde elenenlerin nedenini görebilirsin." },
+  listede: { ad: "Listede", f: (x) => x.listede, bos: "Keşiften listeye eklenmiş şarkı yok." },
+  elenen: { ad: "Elenen", f: (x) => x.elendi && !x.listede, bos: "Elediğin aday yok." },
+  hepsi: { ad: "Tümü", f: () => true, bos: "Keşif henüz çalışmadı: uv run yanki kesif" },
+};
+let suzgec = "oneri";
+
+async function kesifGoster() {
+  const ana = $("#ana");
+  let d;
+  try { d = await api("/api/kesif"); } catch (e) { ana.replaceChildren(el("p", { class: "ipucu" }, `Keşif açılamadı: ${e.message}`)); return; }
+  // ilk açılışta öneri yoksa boş ekran yerine tüm kayıtlar (neden elendikleri görünsün)
+  if (!kesifGoster.acildi && !d.adaylar.some(SUZGEC.oneri.f)) suzgec = "hepsi";
+  kesifGoster.acildi = true;
+  const ciz = () => {
+    const gorunen = d.adaylar.filter(SUZGEC[suzgec].f);
+    ana.replaceChildren(
+      el("header", { class: "baslik" }, el("h1", {}, "Keşif"),
+        el("span", { class: "sanatci" }, "Spotify'dan kalkmış, hâlâ aranan şarkılar")),
+      kotaSatiri(d.kota),
+      el("div", { class: "kesitler", role: "group", "aria-label": "Süzgeç" }, ...Object.entries(SUZGEC).map(([k, s]) =>
+        el("button", { class: "kesit", type: "button", "aria-pressed": k === suzgec ? "true" : "false", onclick: () => { suzgec = k; ciz(); } },
+          s.ad, el("span", { class: "kesit-zaman" }, String(d.adaylar.filter(s.f).length))))),
+      gorunen.length ? el("ul", { class: "kayitlar" }, ...gorunen.map((x) => kesifSatiri(x, async (yeni) => {
+        Object.assign(x, yeni); ciz(); gorunumSayilari();
+      }))) : el("p", { class: "ipucu" }, SUZGEC[suzgec].bos));
+  };
+  ciz();
+}
+
+function kesifSatiri(x, guncelle) {
+  const iyi = x.puan > 0 && !x.elendi;
+  const pazar = x.bakilan_pazarlar?.length ? `${x.kapali_pazarlar.length}/${x.bakilan_pazarlar.length}` : "—";
+  const dinle = x.youtube_id ? `https://www.youtube.com/watch?v=${encodeURIComponent(x.youtube_id)}`
+    : `https://www.youtube.com/results?search_query=${encodeURIComponent(`${x.sanatci} ${x.ad}`)}`;
+  const islem = async (yol, govde, basari) => {
+    try { guncelle(await api(`/api/kesif/${x.kimlik}/${yol}`, govde)); bildir(basari); } catch (e) { bildir(e.message, true); }
+  };
+  return el("li", { class: "kayit" + (iyi || x.listede ? "" : " soluk") },
+    el("div", { class: "kayit-ad" }, el("span", { class: "ad" }, x.ad), el("span", { class: "sanatci" }, x.sanatci)),
+    el("div", { class: "olculer" },
+      el("span", { class: "rozet " + (iyi ? "ok" : "no") }, x.elendi ? "elendi" : x.hal),
+      el("span", { title: "YouTube'daki orijinal yüklemenin izlenmesi" }, "YouTube ", el("b", {}, kisaSayi(x.youtube_izlenme))),
+      el("span", { title: "Aynı adla Spotify'da çalınabilen başka parça sayısı" }, "rakip ", el("b", {}, x.rakip_cover ?? "—")),
+      el("span", { title: "Kapalı olduğu pazar / bakılan pazar" }, "pazar ", el("b", {}, pazar))),
+    el("div", { class: "kayit-eylem" },
+      el("a", { class: "dugme", href: dinle, target: "_blank", rel: "noopener" }, "Dinle"),
+      // amber yalnız önerilende; boşluğu kapanmış (geri gelmiş) ya da düzenleme olan şarkı eklenemez
+      x.listede ? el("span", { class: "rozet ok" }, "listede")
+        : x.geri_geldi || x.hal === "düzenleme" ? null
+        : el("button", { class: iyi ? "dugme ikincil" : "dugme", type: "button",
+          onclick: () => islem("ekle", null, `"${x.ad}" listeye eklendi; adaylar sonraki gece koşusunda üretilir.`) },
+          iyi ? "Listeye ekle" : "Yine de ekle"),
+      x.listede ? null : el("button", { class: "dugme tehlike", type: "button",
+        onclick: () => islem("ele", { elendi: !x.elendi }, x.elendi ? `"${x.ad}" yeniden aday.` : `"${x.ad}" elendi; gece koşusu onu listeye eklemez.`) },
+        x.elendi ? "Geri al" : "Ele")));
+}
+
+async function yayinGoster() {
+  const ana = $("#ana");
+  let d;
+  try { d = await api("/api/yayin"); } catch (e) { ana.replaceChildren(el("p", { class: "ipucu" }, `Yayın durumu açılamadı: ${e.message}`)); return; }
+  const parcalar = [
+    el("header", { class: "baslik" }, el("h1", {}, "Yayın"), el("span", { class: "sanatci" }, "Yüklenenler Spotify'da çıktı mı, adı arandığında kaçıncı")),
+    kotaSatiri(d.kota),
+  ];
+  if (d.profiller.length > 1) parcalar.push(el("p", { class: "uyari", role: "alert" },
+    `Sanatçı profili bölünmüş: parçalar ${d.profiller.length} ayrı Spotify profilinde. Dağıtımcıdan birleştirme iste.`));
+  parcalar.push(d.sarkilar.length ? el("ul", { class: "kayitlar" }, ...d.sarkilar.map(yayinSatiri))
+    : el("p", { class: "ipucu" }, "Henüz yüklenmiş şarkı yok. Paketi yükleyince: yanki yuklendi <kimlik>"));
+  ana.replaceChildren(...parcalar);
+}
+
+function yayinSatiri(s) {
+  const son = s.son;
+  const hal = !son ? ["ölçülmedi", ""] : son.kayip ? ["kayıp", "no"] : son.canli ? ["yayında", "ok"] : ["yayın bekliyor", ""];
+  const siralar = Object.entries(son?.siralar || {});
+  return el("li", { class: "kayit" },
+    el("div", { class: "kayit-ad" }, el("a", { class: "ad", href: `#${s.kimlik}` }, s.ad), el("span", { class: "sanatci" }, s.sanatci)),
+    el("div", { class: "olculer" },
+      el("span", { class: "rozet " + hal[1] }, hal[0]),
+      el("span", {}, "çıkış ", el("b", {}, tarih(s.yayin_tarihi))),
+      el("span", {}, "son bakış ", el("b", {}, tarih(son?.zaman))),
+      siralar.length ? el("span", { class: "siralar", title: `Şarkının adı arandığında ilk ${son.arama_limiti} sonuçtaki sıramız` },
+        ...siralar.map(([m, n]) => el("span", { class: "sira" + (n && n <= 3 ? " iyi" : "") }, `${m} ${n ?? "—"}`))) : null),
+    el("div", { class: "kayit-eylem" },
+      son?.spotify_id ? el("a", { class: "dugme", href: `https://open.spotify.com/track/${son.spotify_id}`, target: "_blank", rel: "noopener" }, "Spotify'da aç") : null));
+}
+
+async function gorunumSayilari() {
+  try {
+    const [k, y] = await Promise.all([api("/api/kesif"), api("/api/yayin")]);
+    $("#g-kesif").textContent = String(k.adaylar.filter(SUZGEC.oneri.f).length || "");
+    $("#g-yayin").textContent = y.sarkilar.length ? `${y.sarkilar.filter((s) => s.son?.canli).length}/${y.sarkilar.length}` : "";
+  } catch { /* sayılar ikincil: sunucu yoksa ana hata zaten bildirilir */ }
+}
+
 // ---- kuyruk ----
 async function listeGoster(secili) {
+  for (const a of document.querySelectorAll(".gorunumler a")) {
+    if (a.dataset.g === secili) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
+  }
   const liste = await api("/api/sarkilar");
   $("#liste-bos").hidden = liste.length > 0;
   const dinlemede = liste.filter((s) => s.asama === "uretildi").length;
@@ -373,9 +487,12 @@ async function listeGoster(secili) {
       el("span", { class: "alt" }, s.sanatci, el("span", { class: "asama", "data-a": s.asama }, ASAMA[s.asama] || s.asama))))));
 }
 
+const GORUNUM = { _kesif: kesifGoster, _yayin: yayinGoster };
 async function yenile(kimlik = decodeURIComponent(location.hash.slice(1))) {
   await listeGoster(kimlik);
-  if (kimlik) await sarkiGoster(kimlik);
+  gorunumSayilari();
+  if (GORUNUM[kimlik]) await GORUNUM[kimlik]();
+  else if (kimlik) await sarkiGoster(kimlik);
 }
 addEventListener("hashchange", () => { calan?.ses.pause(); yenile().then(() => $("#ana").focus()); });
 yenile().catch((e) => bildir(`Sunucuya ulaşılamadı: ${e.message}`, true));

@@ -123,3 +123,63 @@ def test_bekleyen_onarim_varken_stil_degismez(ortam):
     durum.yaz(c, d)
     istemci.post("/api/sarki/a-b/onar", json={"aday": 1, "bas": 0.2, "son": 0.5})
     assert istemci.post("/api/sarki/a-b/stil", json={"stil": "rock ballad"}).status_code == 409
+
+
+@pytest.fixture
+def kesif_ortami(tmp_path):
+    from yanki import kesif
+
+    c = tmp_path / "calisma"
+    c.mkdir()
+    liste_yolu = tmp_path / "liste.toml"
+    liste_yolu.write_text("# liste\n", encoding="utf-8")
+    adaylar = [kesif.Aday("HAARPER", "Cadavers in My Cadillac", "playlist:p", youtube_izlenme=76938, geri_geldi=False,
+                          sanatci_uyusuyor=True, soz_var=True, sure_sn=110, rakip_cover=0, youtube_id="HCHkoIfw8JA"),
+               kesif.Aday("Del", "Put Me in a Movie", "playlist:p", youtube_izlenme=119125, sanatci_uyusuyor=False)]
+    kesif.birlestir(c, adaylar)
+    return TestClient(sunucu.uygulama(ayarlar.yukle(), c, liste_yolu)), c, liste_yolu
+
+
+def test_kesif_listesi_ekle_ele(kesif_ortami):
+    from yanki import kesif, liste
+
+    istemci, c, liste_yolu = kesif_ortami
+    d = istemci.get("/api/kesif").json()
+    assert [(x["sanatci"], x["hal"], x["listede"]) for x in d["adaylar"]] == [
+        ("HAARPER", "kaldırılmış", False), ("Del", "sanatçı uymuyor", False)]
+    assert d["adaylar"][0]["puan"] == 76938 and d["adaylar"][0]["youtube_id"] == "HCHkoIfw8JA"
+    assert set(d["kota"]) == {"bagli", "kilit_sn", "neden", "bugun", "tavan"}
+    r = istemci.post("/api/kesif/haarper-cadavers-in-my-cadillac/ekle")
+    assert r.status_code == 200 and r.json()["listede"] is True
+    assert liste.yukle(liste_yolu) == [liste.Sarki("HAARPER", "Cadavers in My Cadillac")]
+    assert istemci.post("/api/kesif/haarper-cadavers-in-my-cadillac/ekle").status_code == 409  # iki kez eklenmez
+    assert istemci.post("/api/kesif/del-put-me-in-a-movie/ele", json={"elendi": True}).json()["elendi"] is True
+    assert kesif.oku(c)["del-put-me-in-a-movie"].elendi is True
+    assert istemci.post("/api/kesif/del-put-me-in-a-movie/ele", json={"elendi": False}).json()["elendi"] is False
+    assert istemci.post("/api/kesif/yok/ele", json={}).status_code == 404
+
+
+def test_kesif_eklemesi_gece_kosusunu_bekler(kesif_ortami):
+    from yanki import kilit
+
+    istemci, c, _ = kesif_ortami
+    with kilit.tek_kosu(c / ".yanki.kilit") as alindi:
+        assert alindi
+        r = istemci.post("/api/kesif/haarper-cadavers-in-my-cadillac/ekle")
+    assert r.status_code == 409 and "gece" in r.json()["detail"]
+
+
+def test_yayin_listesi(tmp_path):
+    c = tmp_path / "calisma"
+    d = durum.Durum("adele-x", "Adele", "X", asama="yayinda",
+                    yayin={"son": {"canli": True, "siralar": {"GB": 2}, "sanatci_id": "orv"}, "gecmis": []})
+    durum.yaz(c, d)
+    (c / "adele-x" / "paket").mkdir()
+    (c / "adele-x" / "paket" / "metadata.json").write_text(
+        json.dumps({"yukleme": {"yayin_tarihi": "2026-10-28", "isrc": "GX1", "dagitimci": "routenote"}}),
+        encoding="utf-8")
+    durum.yaz(c, durum.Durum("b-c", "B", "C", asama="uretildi"))
+    istemci = TestClient(sunucu.uygulama(ayarlar.yukle(), c, tmp_path / "liste.toml"))
+    y = istemci.get("/api/yayin").json()
+    assert [s["kimlik"] for s in y["sarkilar"]] == ["adele-x"] and y["sarkilar"][0]["yayin_tarihi"] == "2026-10-28"
+    assert y["sarkilar"][0]["son"]["siralar"] == {"GB": 2} and y["profiller"] == ["orv"]

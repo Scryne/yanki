@@ -60,6 +60,7 @@ class Aday:
     spotify_dinlenme: int | None = None  # STILLMORE CSV'sinden (kaldırılmadan önceki toplam)
     youtube_izlenme: int | None = None
     youtube_baslik: str | None = None
+    youtube_id: str | None = None  # dinleme odasında "Dinle" bağlantısı
     # YouTube'daki en çok izlenen yüklemede listedeki sanatçı geçiyor mu. Geçmiyorsa takma adla yüklenmiş bir sızıntı
     # ya da taklit olabilir (2026-10-09: "Lizzy Rey", "Del" adıyla Lana Del Rey sızıntıları) → listeye eklenmez
     sanatci_uyusuyor: bool | None = None
@@ -70,6 +71,7 @@ class Aday:
     rakip_cover: int | None = None
     kontrol: str | None = None
     ilk_gorulme: str | None = None
+    elendi: bool = False  # Scryne dinleme odasında eledi: listeye kendiliğinden girmez
 
     @property
     def kimlik(self) -> str:
@@ -252,15 +254,15 @@ def talep_olc(a: Aday, arama=None) -> Aday:
     if arama is None:
         arama = _youtube_ara
     sade = sade_ad(a.ad)
-    en_iyi: tuple[int, str] | None = None
-    for baslik, izlenme in arama(f"{a.sanatci} {a.ad}"):
+    en_iyi: tuple[int, str, str | None] | None = None
+    for baslik, izlenme, *kimlik in arama(f"{a.sanatci} {a.ad}"):
         # YouTube başlığı "Sanatçı - Şarkı (Official Video)": sonek silinmeden, kelime sınırıyla aranır
         if izlenme is None or kaynak.ISTENMEYEN.search(baslik) or f" {sade} " not in f" {_duz(baslik)} ":
             continue
         if en_iyi is None or izlenme > en_iyi[0]:
-            en_iyi = (izlenme, baslik)
+            en_iyi = (izlenme, baslik, kimlik[0] if kimlik else None)
     if en_iyi:
-        a.youtube_izlenme, a.youtube_baslik = en_iyi
+        a.youtube_izlenme, a.youtube_baslik, a.youtube_id = en_iyi
         a.sanatci_uyusuyor = sanatci_eslesir(a.sanatci, en_iyi[1])
     return a
 
@@ -305,13 +307,13 @@ def soz_kontrol(a: Aday, json_al=None) -> Aday:
     return a
 
 
-def _youtube_ara(sorgu: str, adet: int = 5) -> list[tuple[str, int | None]]:
+def _youtube_ara(sorgu: str, adet: int = 5) -> list[tuple[str, int | None, str | None]]:
     import yt_dlp
 
     ayar = {"quiet": True, "no_warnings": True, "extract_flat": True, "skip_download": True}
     with yt_dlp.YoutubeDL(ayar) as ydl:
         bilgi = ydl.extract_info(f"ytsearch{adet}:{sorgu}", download=False)
-    return [(g.get("title") or "", g.get("view_count")) for g in bilgi.get("entries") or [] if g]
+    return [(g.get("title") or "", g.get("view_count"), g.get("id")) for g in bilgi.get("entries") or [] if g]
 
 
 # ── Kayıt ve liste ──────────────────────────────────────────
@@ -336,21 +338,26 @@ def birlestir(calisma: Path, yeniler: list[Aday]) -> dict[str, Aday]:
         if eski:
             if not a.bakilan_pazarlar and eski.bakilan_pazarlar:
                 a.bakilan_pazarlar, a.kapali_pazarlar = eski.bakilan_pazarlar, eski.kapali_pazarlar
+            a.elendi = a.elendi or eski.elendi
             for alan in ("spotify_dinlenme", "isrc", "spotify_id", "album", "cikis", "youtube_izlenme",
-                         "youtube_baslik", "sanatci_uyusuyor", "soz_var", "sure_sn", "geri_geldi", "rakip_cover",
-                         "kontrol"):
+                         "youtube_baslik", "youtube_id", "sanatci_uyusuyor", "soz_var", "sure_sn", "geri_geldi",
+                         "rakip_cover", "kontrol"):
                 if getattr(a, alan) is None and getattr(eski, alan) is not None:
                     setattr(a, alan, getattr(eski, alan))
             if not a.geri_gelen and eski.geri_gelen:
                 a.geri_gelen = eski.geri_gelen
         kayit[a.kimlik] = a
+    kaydet(calisma, kayit)
+    return kayit
+
+
+def kaydet(calisma: Path, kayit: dict[str, Aday]) -> None:
     yol = kayit_yolu(calisma)
     yol.parent.mkdir(parents=True, exist_ok=True)
     gecici = yol.with_suffix(".tmp")
     gecici.write_text(json.dumps({k: asdict(v) for k, v in sorted(kayit.items())}, ensure_ascii=False, indent=2),
                       encoding="utf-8")
     gecici.replace(yol)
-    return kayit
 
 
 def sirala(kayit: dict[str, Aday]) -> list[Aday]:
@@ -360,11 +367,22 @@ def sirala(kayit: dict[str, Aday]) -> list[Aday]:
 def listeye_ekle(adaylar: list[Aday], liste_yolu: Path, calisma: Path, adet: int) -> list[Aday]:
     """Doğrulanmış (geri gelmemiş, talebi ölçülmüş) ilk `adet` adayı `liste.toml`'un sonuna ekler. Listede ya da
     çalışma alanında zaten olan şarkı atlanır. Dosyanın açıklamaları korunur (sona metin eklenir)."""
-    mevcut = {s.kimlik for s in liste.yukle(liste_yolu)} | {p.name for p in calisma.iterdir() if p.is_dir()}
-    secilen = [a for a in adaylar if a.geri_geldi is False and a.puan > 0 and a.kimlik not in mevcut][:adet]
+    mevcut = listedekiler(liste_yolu, calisma)
+    secilen = [a for a in adaylar if a.geri_geldi is False and a.puan > 0 and not a.elendi
+               and a.kimlik not in mevcut][:adet]
+    return listeye_yaz(secilen, liste_yolu)
+
+
+def listedekiler(liste_yolu: Path, calisma: Path) -> set[str]:
+    """Listede ya da çalışma alanında olan şarkı kimlikleri (eklenmiş sayılır)."""
+    return {s.kimlik for s in liste.yukle(liste_yolu)} | {p.name for p in calisma.iterdir() if p.is_dir()}
+
+
+def listeye_yaz(secilen: list[Aday], liste_yolu: Path, not_: str = "yanki kesif") -> list[Aday]:
+    """Adayları `liste.toml`'un sonuna ekler (eleme yapmaz; çağıran seçer). Dosyanın açıklamaları korunur."""
     if not secilen:
         return []
-    bloklar = [f"\n# kesif {datetime.now():%Y-%m-%d}: Spotify'da kaldırılmış şarkılar (yanki kesif)"]
+    bloklar = [f"\n# kesif {datetime.now():%Y-%m-%d}: Spotify'da kaldırılmış şarkılar ({not_})"]
     for a in secilen:
         ek = f", rakip cover {a.rakip_cover}" if a.rakip_cover else ""
         bloklar.append(f"\n[[sarki]]  # YouTube {a.youtube_izlenme:,} izlenme{ek}; {a.kaynak}\n"
