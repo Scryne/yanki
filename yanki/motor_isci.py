@@ -45,8 +45,10 @@ def main() -> int:
 
     sonuclar = []
 
-    def yaz():
-        sonuc_yolu.write_text(json.dumps(sonuclar, ensure_ascii=False, indent=2), encoding="utf-8")
+    def yaz():  # atomik: zaman aşımında süreç öldürülürse hat yarım JSON okumasın
+        gecici = sonuc_yolu.with_name(sonuc_yolu.name + ".tmp")
+        gecici.write_text(json.dumps(sonuclar, ensure_ascii=False, indent=2), encoding="utf-8")
+        gecici.replace(sonuc_yolu)
 
     t0 = time.perf_counter()
     dit = AceStepHandler()

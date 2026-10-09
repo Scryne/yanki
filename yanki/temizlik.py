@@ -52,23 +52,25 @@ def plan(calisma: Path, d: durum.Durum, gun: int = 14, simdi: datetime | None = 
 
 def uygula(calisma: Path, d: durum.Durum, p: Plan) -> int:
     k = durum.klasor(calisma, d.kimlik)
-    bayt = p.bayt
-    silinen = {f.resolve() for f in p.dosyalar}
-    for f in p.dosyalar:
-        f.unlink(missing_ok=True)
-    for a in d.adaylar:
-        if a.dosya and (k / a.dosya).resolve() in silinen:
-            a.dosya = ""
-        for o in a.onarimlar:
-            if o.get("dosya") and (k / o["dosya"]).resolve() in silinen:
-                o["dosya"] = ""
-    for alt in ARA_KLASORLER:  # boş kalan klasörler, en derinden üste (ara klasörün kendisi dahil)
-        if not (k / alt).exists():
-            continue
-        for klasor in [*sorted((k / alt).rglob("*"), key=lambda x: -len(x.parts)), k / alt]:
-            if klasor.is_dir() and not any(klasor.iterdir()):
-                klasor.rmdir()
-    d.notlar.append({"temizlik": {"zaman": datetime.now().isoformat(timespec="seconds"), "dosya": len(p.dosyalar),
-                                  "mb": round(bayt / 1e6)}})
-    durum.yaz(calisma, d)
+    with durum.guncelle(calisma, d.kimlik) as taze:
+        if taze.asama not in ("yuklendi", "yayinda") or taze.secilen != d.secilen:
+            return 0  # plan yapıldıktan sonra şarkı değişti: silme
+        bayt = p.bayt
+        silinen = {f.resolve() for f in p.dosyalar}
+        for f in p.dosyalar:
+            f.unlink(missing_ok=True)
+        for a in taze.adaylar:
+            if a.dosya and (k / a.dosya).resolve() in silinen:
+                a.dosya = ""
+            for o in a.onarimlar:
+                if o.get("dosya") and (k / o["dosya"]).resolve() in silinen:
+                    o["dosya"] = ""
+        for alt in ARA_KLASORLER:  # boş kalan klasörler, en derinden üste (ara klasörün kendisi dahil)
+            if not (k / alt).exists():
+                continue
+            for klasor in [*sorted((k / alt).rglob("*"), key=lambda x: -len(x.parts)), k / alt]:
+                if klasor.is_dir() and not any(klasor.iterdir()):
+                    klasor.rmdir()
+        taze.notlar.append({"temizlik": {"zaman": datetime.now().isoformat(timespec="seconds"),
+                                         "dosya": len(p.dosyalar), "mb": round(bayt / 1e6)}})
     return bayt

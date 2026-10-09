@@ -28,13 +28,25 @@ def gpu_kullanilan_mib() -> int | None:
         return None
 
 
+def _arac_kontrol(ad: str) -> Kontrol:
+    """Hattın kullandığı yolla (`ses.arac`: PATH, yoksa winget kurulum yeri); yalnız PATH'e bakınca winget'le
+    kurulmuş ffmpeg yeni kabuk açılana kadar ✗ görünüyordu, oysa hat onu buluyordu."""
+    from yanki import ses
+
+    try:
+        return Kontrol(ad, True, ses.arac(ad))
+    except FileNotFoundError as e:
+        return Kontrol(ad, False, str(e))
+
+
 def kontroller(a: Ayarlar) -> list[Kontrol]:
     sonuc = [
         Kontrol("motor venv", a.motor.python.exists(), str(a.motor.python)),
         Kontrol(f"model {a.motor.model}", (a.motor.checkpoints / a.motor.model).is_dir(),
                 str(a.motor.checkpoints / a.motor.model)),
         Kontrol("VAE", (a.motor.checkpoints / "vae").is_dir(), str(a.motor.checkpoints / "vae")),
-        Kontrol("ffmpeg", shutil.which("ffmpeg") is not None, shutil.which("ffmpeg") or "PATH'te yok"),
+        _arac_kontrol("ffmpeg"),
+        _arac_kontrol("ffprobe"),
         Kontrol("fpcalc", a.fpcalc.exists(), str(a.fpcalc)),
     ]
     kullanilan = gpu_kullanilan_mib()

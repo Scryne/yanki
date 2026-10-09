@@ -60,14 +60,17 @@ def uygula(calisma: Path, ayar: Ayar, simdi: datetime | None = None) -> list[tup
     onaylanan = []
     for d in durum.hepsi(calisma):
         zaman = onay_zamani(d, ayar)
-        if zaman is None or zaman > simdi or (a := oneri(d)) is None:
+        if zaman is None or zaman > simdi or oneri(d) is None:
             continue
-        d.secilen = a.no
-        d.notlar.append({"otomatik_onay": {"zaman": simdi.isoformat(timespec="seconds"), "aday": a.no,
-                                           "kural": "en düşük söz WER", "sure_saat": ayar.sure_saat}})
-        d.gec("onaylandi")
-        durum.yaz(calisma, d)
-        onaylanan.append((d, a))
+        with durum.guncelle(calisma, d.kimlik) as taze:  # tam o anda Scryne karar verdiyse onunki geçerli
+            zaman = onay_zamani(taze, ayar)
+            if zaman is None or zaman > simdi or (a := oneri(taze)) is None:
+                continue
+            taze.secilen = a.no
+            taze.notlar.append({"otomatik_onay": {"zaman": simdi.isoformat(timespec="seconds"), "aday": a.no,
+                                                  "kural": "en düşük söz WER", "sure_saat": ayar.sure_saat}})
+            taze.gec("onaylandi")
+        onaylanan.append((taze, a))
     return onaylanan
 
 

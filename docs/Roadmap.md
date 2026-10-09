@@ -25,7 +25,7 @@ Durum sütunu session-start hook'u tarafından otomatik okunur — format bozulm
 | 10 | Tam otomatik yayın (dağıtım API'si) | ⏳ Bekliyor | Arkadaşın API'siyle onaylı bir paket elle dokunmadan yüklendi; inceleme → kabul/red → canlı durumu kendiliğinden izlendi ve kayda düştü; yayın takvimi en az 2 hafta kesintisiz işledi; veto penceresi (otomatik onay) bir şarkıda uçtan uca çalıştı |
 | 11 | Öğrenen şarkı seçimi | ⏳ Bekliyor | Puan formülü en az 10 yayının ölçülen arama sırası/dinlenmesiyle karşılaştırılıp güncellendi; tür/dil başına üretilebilirlik çarpanı Scryne'ın onay/ret verisinden; en az bir yeni keşif kaynağı (YouTube'da olup Spotify'da olmayan) canlı aday üretti |
 | 12 | Kalite otomasyonu | ⏳ Bekliyor | Otomatik aday seçimi Scryne'ın geçmiş seçimleriyle ölçüldü (isabet kayıtlı) ve ≥ %70 ise veto penceresinde varsayılan; rap ve İngilizce dışı en az bir dil için tarif dinleme testiyle karara bağlandı |
-| 13 | Operasyon ve dayanıklılık | ⏳ Bekliyor | Disk temizliği ve yedek işliyor; gece koşusu/Spotify kilidi/dağıtımcı reddi bildirim olarak geliyor; GPU boştayken gündüz üretimi kuyruğu eritiyor; bir haftalık kesintisiz otomatik koşu günlükte hatasız |
+| 13 | Operasyon ve dayanıklılık | 🔄 Devam Ediyor | Disk temizliği ve yedek işliyor; gece koşusu/Spotify kilidi/dağıtımcı reddi bildirim olarak geliyor; GPU boştayken gündüz üretimi kuyruğu eritiyor; bir haftalık kesintisiz otomatik koşu günlükte hatasız |
 
 ## Faz Detayları
 
@@ -324,19 +324,51 @@ dönüşür. Jev **metnin ne dediğini** yargılar (özgünlük, düzenleme, eş
   stil/güç/adım dinleme testi; gerekirse tür başına `config/motor.toml` profili.
 - Faz 8'den devralınanlar: vokal son işlemi, LoRA ihtiyacı, onarım etiketleriyle otomatik kusur işaretleme.
 
-### Faz 13: Operasyon ve dayanıklılık ⏳
+### Faz 13: Operasyon ve dayanıklılık 🔄
 - **Disk:** reddedilen/eski adayların sesleri (aday başı onlarca MB) N gün sonra silinir, onaylı + paket kalır; yedek
   (`durum.json`'lar, paketler, `calisma/kesif/`) haftalık.
   **Yapıldı (2026-10-09):** `yanki temizle [--uygula] [--gun 14]` (`yanki/temizlik.py`): yalnız yüklenmiş ve
   yüklemesinin üstünden 14 gün geçmiş şarkılarda seçilmeyen adaylar, kabul edilmeyen onarımlar ve parçalar; seçilen
   aday, paket, kaynak kalır. Gece koşusu sonunda uygular. Ön izleme: yüklü üç şarkıdan 693 MB (ilk silme ~2026-10-22).
-  Yedek henüz yok.
+  **Yedek (yapıldı, 2026-10-09):** `yanki yedekle` (`yanki/yedek.py`, `config/operasyon.toml`): şarkıların
+  `durum.json`'u, sözler, paket `metadata.json`/`YUKLE.md`, özel kapaklar, keşif kaydı, liste, ayarlar; ses ve sır
+  yok. Gece koşusu haftada bir alır, en yeni 8 kalır. İlk gerçek yedek 95 dosya, 6,2 MB. Klasör aynı diskte
+  (`calisma/yedek`); başka diske almak Scryne'ın kararı.
 - **Bildirim (yapıldı, 2026-10-09):** `scripts/bildirim.ps1` ortak; gece koşusu bitince özet, hata verirse kod +
   günlük yolu; oturum açılışında özet (`\Yanki\Oda`).
-- **Bildirim:** oturum açılış özeti var (`\Yanki\Oda`); eklenecek: gece koşusu hatası, Spotify kilidi, dağıtımcı
-  reddi, "şarkı yayında / arama sırası değişti".
+- **Bildirim:** oturum açılış özeti var (`\Yanki\Oda`). **Yapıldı (2026-10-09):** gece koşusu adımları yalıtıldı,
+  sorunlu adım koşuyu 1 ile bitirir → "gece koşusu hata verdi" bildirimi; özet satırında Spotify kilidi ("Spotify
+  kilitli (~19 sa)"). Eklenecek: dağıtımcı reddi, "şarkı yayında / arama sırası değişti".
 - **Gündüz boşta üretim:** GPU boş ve kullanıcı uzun süre etkin değilken kuyruğu eritmek (gece tek koşu sınırı yerine).
 - **Kota bütçeleri:** Spotify günlük 400 (2026-10-09 kilidinden), YouTube/LRCLIB/Deezer hata oranları günlükte.
 - **Karar bekleyen (Scryne):** (1) sanatçı kimliği: tüm tür ve diller tek "Orvane" mı, tür/dil başına ayrı ad mı
   (Spotify'ın öneri algoritması profilin tutarlılığına bakıyor); (2) tam global: mekanik lisanslı dağıtımla ABD/
   Kanada/Meksika/Hindistan/Pakistan (maliyet).
+
+## Denetim (2026-10-09, Scryne: "baştan sona incele, eksikleri ve hataları çöz")
+
+Kodun tamamı okundu; bulgular ve çözümleri (testler `tests/test_dayaniklilik.py`; yeni testlerin 8'i eski kodda
+kırmızıydı):
+- **Eşzamanlı yazım (veri kaybı):** gece koşusu şarkıları başta okuyup saatlerce üretimden sonra eski kopyayı
+  yazıyordu; o arada dinleme odasında verilen ret, yeni onarım isteği ya da not eziliyordu. Şimdi şarkı başına
+  süreçler arası kilit + taze oku-değiştir-yaz (`durum.guncelle`); üretim sonuçları taze kopyaya işlenir, Scryne'ın
+  aşaması korunur. Keşif kaydındaki "Ele/Geri al" da kilitli.
+- **Güvenlik:** `/ses/%2E%2E/.env` proje kökündeki `.env`'yi (Spotify sırları) veriyordu (yalnız 127.0.0.1, ama
+  tarayıcıdaki herhangi bir sayfa isteyebilirdi). Kimlik biçimi ve ses uzantısı doğrulanıyor; oda yeniden başlatıldı,
+  canlıda 404.
+- **Gece koşusunun kırılganlığı:** keşifte tek bir ağ/yt-dlp hatası, GPU'nun 6 saat boşalmaması ya da tek bir
+  adayın kapı ölçümünün (Whisper/fpcalc) düşmesi tüm koşuyu, yani üretimi, paketlemeyi ve takibi durduruyordu. Adımlar
+  ve şarkılar yalıtıldı; Spotify ağ hataları `SpotifyHatasi`'na çevrildi; STILLMORE oturumu hata olunca Spotify'ı eski
+  hâline getiriyor (önce CDP'li Spotify açık kalıyor, kapatılan Spotify geri açılmıyordu).
+- **Boşa GPU:** kapıdan düşen şarkı her gece yeniden indirilip aynı tohumlarla yeniden üretiliyordu (sonuç aynı).
+  Artık analizden sonra düşen şarkı `hata`da Scryne'ı bekler; yalnız motor hatası (geçici) iki kez kendiliğinden
+  yeniden denenir.
+- **Aşama korumaları:** API yüklenmiş şarkıyı yeniden onaylatıp paketini ezebilir, reddedebilirdi; `hazirla
+  --yeniden` yüklenmiş şarkıyı `hazir`a düşürürdü. İkisi de kapatıldı. Yeni: dinleme odasında **Reddi geri al**.
+- **Yükleme kaydı:** ISRC/UPC/yayın tarihi `metadata.json`'a elle yazılıyordu; `yanki yuklendi --isrc --upc
+  --yayin-tarihi` doğrulayıp yazar (RouteNote bölge/mağaza hariçleri varsayılan).
+- **Kapak:** `kapak_ozel.jpg` doğrulanmadan kopyalanıyordu; kare 3000 JPEG değilse ortadan kırpılıp getirilir, küçük
+  özgün görsel YUKLE.md'de uyarılır (mevcut üç kapak zaten 3000×3000: bayt bayt korunur).
+- **Küçükler:** `yanki durum` winget ffmpeg'ini görmüyordu; günlükte "None BPM"; işçi sonucu ve keşif/STILLMORE
+  JSON'ları atomik değildi; `httpx2` doğrudan import edilip bağımlılıkta yoktu; `.env.example`'da TypeSafe anahtarı
+  yoktu; testler gerçek Whisper modeli yükleyip Deezer'a istek atıyordu (`tests/conftest.py`: ağ ve model kapalı).

@@ -142,7 +142,10 @@ def calistir(
             cikis = surec.returncode
         except subprocess.TimeoutExpired:
             cikis = None
-    okunan = json.loads(sonuc_yolu.read_text(encoding="utf-8")) if sonuc_yolu.exists() else []
+    try:
+        okunan = json.loads(sonuc_yolu.read_text(encoding="utf-8")) if sonuc_yolu.exists() else []
+    except (OSError, ValueError):  # işçi yazarken öldürüldü (zaman aşımı): yarım JSON
+        okunan = []
     sonuclar = {r["id"]: Sonuc(**r) for r in okunan if r.get("id") is not None}
     genel = next((r["hata"] for r in okunan if r.get("id") is None), None)
     if cikis is None:

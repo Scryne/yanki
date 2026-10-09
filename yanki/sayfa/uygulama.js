@@ -156,6 +156,12 @@ async function sarkiGoster(kimlik) {
       el("span", { class: "ipucu" }, d.asama === "onaylandi" ? `Onaylanan: aday ${d.secilen}. Paket sonraki koşuda hazırlanır.` : "Dalga üzerinde sürükle: aralık seç · Boşluk: çal/durdur"),
       el("span", { class: "bosluk" }),
       el("button", { class: "dugme tehlike", type: "button", onclick: () => reddet(d) }, "Şarkıyı reddet")));
+  } else if (d.asama === "reddedildi") {
+    parcalar.push(el("div", { class: "alt-cubuk" },
+      el("span", { class: "ipucu" }, "Bu şarkıyı reddettin. Geri alırsan reddetmeden önceki aşamasına döner; adaylar yerinde."),
+      el("span", { class: "bosluk" }),
+      el("button", { class: "dugme ikincil", type: "button",
+        onclick: () => eylem(d, "geri-al", {}, `"${d.ad}" yeniden listede, reddetmeden önceki aşamasında.`) }, "Reddi geri al")));
   }
   ana.replaceChildren(...parcalar);
 }

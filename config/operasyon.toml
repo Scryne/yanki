@@ -1,0 +1,15 @@
+# Gece koşusunun bakım adımları (yanki/yedek.py, yanki/temizlik.py). Roadmap Faz 13.
+
+[yedek]
+# Yeniden üretilemeyen durum (seçimler, yükleme bilgisi, keşif kaydı, liste, ayarlar, özel kapaklar) tek zip'te; ses ve
+# sır (.env, Spotify token'ı) yok, boyut birkaç MB. Varsayılan aynı diskte: yanlışlıkla silme ve bozuk yazıma karşı.
+# Disk arızasına karşı başka bir diskte ya da eşitlenen bir klasörde tam yol yazılabilir (ör. "D:/Yedek/Yanki").
+klasor = "calisma/yedek"
+# Gece koşusu son yedek bundan eskiyse (gün) yeni yedek alır; elle: `yanki yedekle`
+gun = 7
+# En yeni kaç yedek kalsın
+sakla = 8
+
+[temizlik]
+# Yüklenmiş şarkılarda seçilmeyen adayların ve ara seslerin silinmesi için yüklemenin üstünden geçmesi gereken gün
+gun = 14

@@ -132,6 +132,9 @@ class Spotify:
                 return r.status, dict(r.headers), r.read()
         except urllib.error.HTTPError as h:
             return h.code, dict(h.headers or {}), h.read() or b""
+        except (urllib.error.URLError, TimeoutError, ConnectionError) as e:
+            # ağ kesintisi keşfi/takibi düşürmesin: çağıranlar SpotifyHatasi'nı zaten yakalıyor
+            raise SpotifyHatasi(f"Spotify'a ulaşılamadı: {getattr(e, 'reason', e)}") from e
 
     def _form(self, url: str, alanlar: dict, yetki: str | None = None) -> dict:
         basliklar = {"Content-Type": "application/x-www-form-urlencoded"}
@@ -159,7 +162,7 @@ class Spotify:
             if kod == 200:
                 return json.loads(govde)
             if kod == 429:
-                sn = int({k.lower(): v for k, v in basliklar.items()}.get("retry-after", "60") or 60)
+                sn = _retry_after({k.lower(): v for k, v in basliklar.items()}.get("retry-after"))
                 if sn <= KISA_BEKLEME_SN and deneme == 0:
                     time.sleep(sn + 1)
                     continue
@@ -277,6 +280,14 @@ class Spotify:
                 if t and t.get("type") == "track" and not g.get("is_local"):
                     yield t
             url, parametre = d.get("next"), None
+
+
+def _retry_after(deger: str | None, varsayilan: int = 60) -> int:
+    """Retry-After saniye olarak gelir; gelmezse ya da sayı değilse (HTTP tarihi) varsayılan."""
+    try:
+        return max(1, int(float(deger))) if deger else varsayilan
+    except ValueError:
+        return varsayilan
 
 
 def kimlik_ayikla(metin: str, tur: str = "playlist") -> str:

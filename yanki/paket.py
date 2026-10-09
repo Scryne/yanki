@@ -18,6 +18,8 @@ import numpy as np
 from yanki import durum, ses, sozler
 
 FONT_KALIN = Path("C:/Windows/Fonts/bahnschrift.ttf")
+KAPAK_BOYUT = 3000
+KUCUK_KAPAK = 1000  # bundan küçük özgün görsel 3000'e büyütülünce bulanıklaşır; YUKLE.md uyarır
 
 # Dağıtımcıya özel ayrıntılar: docs/arastirma/02-dagitimci-karsilastirmasi.md (2026-10-07). RouteNote WAV almıyor
 # (FLAC/MP3 44,1); bilgi 2023 tarihli, yükleme ekranında doğrulanır.
@@ -211,7 +213,7 @@ def yukle_md(meta: dict, y: Yayin, dosyalar: dict[str, str]) -> str:
         f"9. **Ses dosyası:** `{dosyalar['ses']}` (44,1 kHz / 16 bit {Path(dosyalar['ses']).suffix[1:].upper()}, "
         f"{meta['master']['lufs']:.1f} LUFS, "
         f"{meta['master']['gercek_tepe_dbtp']:.1f} dBTP, {_mmss(meta['sure_sn'])})",
-        f"10. **Kapak:** `{dosyalar['kapak']}` (3000×3000 JPG)",
+        f"10. **Kapak:** `{dosyalar['kapak']}` (3000×3000 JPG){_kapak_notu(meta)}",
         "",
         "Kurallar (dağıtımcı yönergelerinden): başlığa `(Cover)` ya da orijinal sanatçı adı eklenmez; kapakta orijinal",
         "sanatçının adı, fotoğrafı ya da logosu yoktur.",
@@ -223,6 +225,14 @@ def yukle_md(meta: dict, y: Yayin, dosyalar: dict[str, str]) -> str:
         "Yükledikten sonra: `yanki yuklendi <kimlik>`",
     ]
     return "\n".join(satir) + "\n"
+
+
+def _kapak_notu(meta: dict) -> str:
+    k = meta.get("kapak") or {}
+    en, boy = k.get("ozgun_boyut") or (KAPAK_BOYUT, KAPAK_BOYUT)
+    if k.get("kaynak") == "ozel" and min(en, boy) < KUCUK_KAPAK:
+        return f". **Dikkat:** özgün görsel {en}×{boy} px, {KAPAK_BOYUT}'e büyütüldü; bulanıksa dağıtımcı reddedebilir"
+    return ""
 
 
 def _acik_satiri(meta: dict) -> str:
@@ -291,7 +301,8 @@ def _routenote_formu(meta: dict, dosyalar: dict[str, str]) -> list[str]:
         "22. **Explicit Content / Audio Language:** 15 ve 1 ile aynı",
         "",
         "## 3. Add Artwork",
-        f"23. **Kapak:** `{dosyalar['kapak']}` (3000×3000 JPG; orijinal sanatçının adı, fotoğrafı, logosu yok)",
+        f"23. **Kapak:** `{dosyalar['kapak']}` (3000×3000 JPG; orijinal sanatçının adı, fotoğrafı, logosu yok)"
+        f"{_kapak_notu(meta)}",
         "",
         "## 4. Manage Stores",
         "24. **İşareti kaldır:** Amazon (yapay zekâ içeriği almıyor); Melon, Bugs!, VIBE, FLO, Genie Music (Kore: AI "
@@ -320,39 +331,76 @@ def guvenli_ad(s: str) -> str:
     return re.sub(r"[^A-Za-z0-9._-]+", "_", s).strip("_")
 
 
-def paketle(calisma: Path, yayin_yolu: Path, kimlikler: list[str] | None = None,
-            yeniden: bool = False) -> list[durum.Durum]:
-    """`onaylandi` (yeniden=True ise `paketlendi` de) şarkıları paketler."""
-    from yanki import sunucu
+def ozel_kapak(kaynak: Path, hedef: Path, boyut: int = KAPAK_BOYUT) -> dict:
+    """Scryne'ın seçtiği kapak. Zaten kare, `boyut` px, RGB JPEG ise bayt bayt kopyalanır; değilse ortadan kare
+    kırpılır ve `boyut`'a getirilir (dağıtımcı en az 3000×3000 kare istiyor; 2026-10-08'de üç kapak elle böyle
+    hazırlanmıştı). Görsel açılamazsa hata: bozuk kapakla paket çıkmaz."""
+    from PIL import Image
 
+    with Image.open(kaynak) as img:
+        en, boy = img.size
+        hazir = img.format == "JPEG" and img.mode == "RGB" and en == boy == boyut
+        hedef.parent.mkdir(parents=True, exist_ok=True)
+        if hazir:
+            hedef.write_bytes(kaynak.read_bytes())
+            return {"kaynak": "ozel", "ozgun_boyut": [en, boy], "islem": None}
+        kenar = min(en, boy)
+        sol, ust = (en - kenar) // 2, (boy - kenar) // 2
+        kare = img.convert("RGB").crop((sol, ust, sol + kenar, ust + kenar))
+        kare.resize((boyut, boyut), Image.Resampling.LANCZOS).save(hedef, "JPEG", quality=95)
+    kirpma = f"ortadan kare kırpıldı ({en}×{boy} → {kenar}×{kenar}), " if en != boy else ""
+    islem = f"{kirpma}{boyut}×{boyut}'e getirildi"
+    return {"kaynak": "ozel", "ozgun_boyut": [en, boy], "islem": islem}
+
+
+def paketle(calisma: Path, yayin_yolu: Path, kimlikler: list[str] | None = None,
+            yeniden: bool = False, hatalar: list | None = None) -> list[durum.Durum]:
+    """`onaylandi` (yeniden=True ise `paketlendi` de) şarkıları paketler. Bir şarkının hatası (ffmpeg, bozuk kapak)
+    diğerlerini durdurmaz: şarkı aşamasında kalır, hata `hatalar`a eklenir, sonraki koşu yeniden dener."""
     y = yayin_ayarlari(yayin_yolu)
     asamalar = ("onaylandi", "paketlendi") if yeniden else ("onaylandi",)
     islenen = []
     for d in durum.hepsi(calisma):
         if d.asama not in asamalar or (kimlikler and d.kimlik not in kimlikler):
             continue
-        k = durum.klasor(calisma, d.kimlik)
-        aday = next(x for x in d.adaylar if x.no == d.secilen)
-        kaynak = k / aday.dosya
-        p = k / "paket"
-        ad = guvenli_ad(f"{y.sanatci_adi or 'SANATCI'} - {d.ad}")
-        ses_yolu, kapak_yolu = p / f"{ad}.{SES_BICIMI[y.dagitimci]}", p / f"{ad}.jpg"
-        olcum = master(kaynak, ses_yolu, y)
-        # Scryne'ın seçtiği kapak (3000×3000'e hazırlanmış) varsa o; yoksa dalga formundan üretilir
-        if (ozel := k / "kapak_ozel.jpg").exists():
-            kapak_yolu.parent.mkdir(parents=True, exist_ok=True)
-            kapak_yolu.write_bytes(ozel.read_bytes())
-        else:
-            kapak(d.ad, sunucu.dalga(kaynak)["tepe"], kapak_yolu, y.sanatci_adi)
-        zaman = k / "soz_zaman.json"
-        onizleme = nakarat_baslangici(json.loads(zaman.read_text(encoding="utf-8"))) if zaman.exists() else None
-        soz = k / "soz.txt"
-        acik = acik_sozler(soz.read_text(encoding="utf-8")) if soz.exists() else None
-        meta = metadata(d, y, olcum, ses.sure(ses_yolu), onizleme, acik)
-        (p / "metadata.json").write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
-        (p / "YUKLE.md").write_text(yukle_md(meta, y, {"ses": ses_yolu.name, "kapak": kapak_yolu.name}),
-                                    encoding="utf-8")
-        d.gec("paketlendi")
-        durum.yaz(calisma, d)
-        islenen.append(d)
+        try:
+            islenen.append(_paketle_bir(calisma, d, y))
+        except Exception as e:  # noqa: BLE001
+            if hatalar is None:
+                raise
+            hatalar.append((d, f"{type(e).__name__}: {e}"))
     return islenen
+
+
+def _paketle_bir(calisma: Path, d: durum.Durum, y: Yayin) -> durum.Durum:
+    from yanki import sunucu
+
+    k = durum.klasor(calisma, d.kimlik)
+    aday = next((x for x in d.adaylar if x.no == d.secilen), None)
+    if aday is None or not aday.dosya:
+        raise ValueError(f"seçilen aday ({d.secilen}) ya da dosyası yok")
+    kaynak = k / aday.dosya
+    p = k / "paket"
+    ad = guvenli_ad(f"{y.sanatci_adi or 'SANATCI'} - {d.ad}")
+    ses_yolu, kapak_yolu = p / f"{ad}.{SES_BICIMI[y.dagitimci]}", p / f"{ad}.jpg"
+    olcum = master(kaynak, ses_yolu, y)
+    # Scryne'ın seçtiği kapak varsa o (3000×3000 kareye getirilir); yoksa dalga formundan üretilir
+    if (ozel := k / "kapak_ozel.jpg").exists():
+        kapak_bilgi = ozel_kapak(ozel, kapak_yolu)
+    else:
+        kapak(d.ad, sunucu.dalga(kaynak)["tepe"], kapak_yolu, y.sanatci_adi)
+        kapak_bilgi = {"kaynak": "uretilen", "ozgun_boyut": [KAPAK_BOYUT, KAPAK_BOYUT], "islem": None}
+    zaman = k / "soz_zaman.json"
+    onizleme = nakarat_baslangici(json.loads(zaman.read_text(encoding="utf-8"))) if zaman.exists() else None
+    soz = k / "soz.txt"
+    acik = acik_sozler(soz.read_text(encoding="utf-8")) if soz.exists() else None
+    meta = metadata(d, y, olcum, ses.sure(ses_yolu), onizleme, acik)
+    meta["kapak"] = kapak_bilgi
+    (p / "metadata.json").write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
+    (p / "YUKLE.md").write_text(yukle_md(meta, y, {"ses": ses_yolu.name, "kapak": kapak_yolu.name}),
+                                encoding="utf-8")
+    with durum.guncelle(calisma, d.kimlik) as taze:
+        # paketleme sürerken seçim değiştiyse (yeniden üretim, ret) paket eskidir: aşamaya dokunma
+        if taze.asama == d.asama and taze.secilen == d.secilen:
+            taze.gec("paketlendi")
+    return taze

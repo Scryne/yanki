@@ -85,3 +85,21 @@ def yukle(yol: Path | None = None, kok: Path = KOK) -> Ayarlar:
         gpu=Gpu(int(g["bos_esik_mib"]), int(g["bekleme_sn"])),
         fpcalc=kok / d["araclar"]["fpcalc"],
     )
+
+
+@dataclass(frozen=True)
+class Operasyon:
+    """`config/operasyon.toml`: gece koşusunun bakım adımları (yedek, disk temizliği). Dosya yoksa varsayılanlar."""
+    yedek_klasor: Path
+    yedek_gun: int = 7
+    yedek_sakla: int = 8
+    temizlik_gun: int = 14
+
+
+def operasyon_oku(kok: Path = KOK) -> Operasyon:
+    yol = kok / "config" / "operasyon.toml"
+    d = tomllib.loads(yol.read_text(encoding="utf-8")) if yol.exists() else {}
+    y, t = d.get("yedek", {}), d.get("temizlik", {})
+    klasor = Path(y.get("klasor", "calisma/yedek"))
+    return Operasyon(klasor if klasor.is_absolute() else kok / klasor, max(1, int(y.get("gun", 7))),
+                     max(1, int(y.get("sakla", 8))), max(0, int(t.get("gun", 14))))

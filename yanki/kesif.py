@@ -215,8 +215,9 @@ def playlist_tara_onbellekli(sp, playlist_id: str, pazarlar, calisma: Path, saya
     sayac.update(yerel)
     kayit[playlist_id] = {"snapshot": snapshot, "tarih": simdi.isoformat(timespec="seconds"),
                           "sanatcilar": dict(yerel), "calinamayan": len(adaylar)}
-    yol.parent.mkdir(parents=True, exist_ok=True)
-    yol.write_text(json.dumps(kayit, ensure_ascii=False, indent=1), encoding="utf-8")
+    from yanki import dosya
+
+    dosya.json_yaz(yol, kayit, indent=1)
     return adaylar
 
 
@@ -344,16 +345,27 @@ def oku(calisma: Path) -> dict[str, Aday]:
     return {k: Aday(**v) for k, v in json.loads(yol.read_text(encoding="utf-8")).items()}
 
 
+def kayit_kilidi(calisma: Path):
+    """`adaylar.json` oku-değiştir-yaz kilidi: dinleme odasındaki "Ele" ile gece keşfi aynı anda yazmasın."""
+    from yanki import kilit
+
+    return kilit.bekleyerek(calisma / "kesif" / ".adaylar.kilit")
+
+
 def birlestir(calisma: Path, yeniler: list[Aday]) -> dict[str, Aday]:
-    """Aynı şarkı birden çok kaynaktan gelirse tek kayıt; ilk görülme korunur, ölçümler en yenisiyle güncellenir."""
-    kayit = oku(calisma)
-    simdi = datetime.now().isoformat(timespec="seconds")
-    for a in yeniler:
-        eski = kayit.get(a.kimlik)
-        a.ilk_gorulme = eski.ilk_gorulme if eski else simdi
-        tasi(a, eski)
-        kayit[a.kimlik] = a
-    kaydet(calisma, kayit)
+    """Aynı şarkı birden çok kaynaktan gelirse tek kayıt; ilk görülme korunur, ölçümler en yenisiyle güncellenir.
+    Eleme kararı kayıttakinden gelir: keşif sürerken dinleme odasında verilen "Ele"/"Geri al" geçerli."""
+    with kayit_kilidi(calisma):
+        kayit = oku(calisma)
+        simdi = datetime.now().isoformat(timespec="seconds")
+        for a in yeniler:
+            eski = kayit.get(a.kimlik)
+            a.ilk_gorulme = eski.ilk_gorulme if eski else simdi
+            tasi(a, eski)
+            if eski is not None:
+                a.elendi = eski.elendi
+            kayit[a.kimlik] = a
+        kaydet(calisma, kayit)
     return kayit
 
 
@@ -392,12 +404,9 @@ def taze(zaman: str | None, gun: int = 14, simdi: datetime | None = None) -> boo
 
 
 def kaydet(calisma: Path, kayit: dict[str, Aday]) -> None:
-    yol = kayit_yolu(calisma)
-    yol.parent.mkdir(parents=True, exist_ok=True)
-    gecici = yol.with_suffix(".tmp")
-    gecici.write_text(json.dumps({k: asdict(v) for k, v in sorted(kayit.items())}, ensure_ascii=False, indent=2),
-                      encoding="utf-8")
-    gecici.replace(yol)
+    from yanki import dosya
+
+    dosya.json_yaz(kayit_yolu(calisma), {k: asdict(v) for k, v in sorted(kayit.items())})
 
 
 def sirala(kayit: dict[str, Aday]) -> list[Aday]:

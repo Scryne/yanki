@@ -9,10 +9,14 @@ Aşamalar:
   her aşamadan → hata (neden yazılı) ya da reddedildi (Scryne)
 """
 
+import contextlib
 import json
+from collections.abc import Iterator
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
+
+from yanki import dosya, kilit
 
 ASAMALAR = (
     "yeni", "hazir", "analiz", "uretildi", "onarim", "onaylandi", "paketlendi", "yuklendi", "yayinda", "hata",
@@ -71,12 +75,25 @@ def oku(calisma: Path, kimlik: str) -> Durum | None:
 
 
 def yaz(calisma: Path, d: Durum) -> Path:
-    yol = klasor(calisma, d.kimlik) / "durum.json"
-    yol.parent.mkdir(parents=True, exist_ok=True)
-    gecici = yol.with_suffix(".tmp")
-    gecici.write_text(json.dumps(asdict(d), ensure_ascii=False, indent=2), encoding="utf-8")
-    gecici.replace(yol)  # yarım yazılmış dosya bırakma
-    return yol
+    return dosya.json_yaz(klasor(calisma, d.kimlik) / "durum.json", asdict(d))  # yarım yazılmış dosya bırakma
+
+
+class Yok(LookupError):
+    pass
+
+
+@contextlib.contextmanager
+def guncelle(calisma: Path, kimlik: str, yoksa: Durum | None = None) -> Iterator[Durum]:
+    """Süreçler arası güvenli oku-değiştir-yaz: şarkının kilidi alınır, durum diskten taze okunur, blok hatasız biterse
+    yazılır. Uzun süren işler (üretim saatler sürer) başta okudukları kopyayı sonda yazarsa dinleme odasında o arada
+    verilen kararı (onay, onarım isteği, ret) ezerdi; bu yüzden sonuçlar burada taze kopyaya işlenir.
+    Dosya yoksa `yoksa` kullanılır (o da yoksa `Yok`)."""
+    with kilit.bekleyerek(klasor(calisma, kimlik) / ".durum.kilit"):
+        d = oku(calisma, kimlik) or yoksa
+        if d is None:
+            raise Yok(kimlik)
+        yield d
+        yaz(calisma, d)
 
 
 def hepsi(calisma: Path) -> list[Durum]:

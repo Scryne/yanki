@@ -5,7 +5,9 @@ Sunucu motoru çalıştırmaz ve Spotify'a istek atmaz (kota dar; ölçümleri g
 istekleri durum.json'a, keşif kararları calisma/kesif/adaylar.json'a ve girdi/liste.toml'a yazılır.
 """
 
+import contextlib
 import json
+import re
 from dataclasses import asdict
 from pathlib import Path
 
@@ -15,11 +17,18 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from yanki import durum, kesif, sozler, uretim
+from yanki import durum, kesif, kilit, sozler, uretim
 from yanki.ayarlar import Ayarlar
 
 SAYFA = Path(__file__).with_name("sayfa")
 DALGA_NOKTA = 1600
+SES_UZANTILARI = (".wav", ".flac", ".mp3", ".m4a", ".ogg", ".opus")
+DUZENLENEBILIR = ("uretildi", "onarim")  # onay, onarım ve onarım kabulü yalnız dinlemedeki şarkıda
+
+
+def _kimlik_gecerli(kimlik: str) -> bool:
+    """Şarkı kimliği `liste.kimlik` biçiminde (a-z, 0-9, tire): yol ayıracı ya da `..` taşıyamaz."""
+    return bool(re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", kimlik))
 
 
 class OnarIstegi(BaseModel):
@@ -97,12 +106,26 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None) -> FastA
     liste_yolu = liste_yolu or a.kok / "girdi" / "liste.toml"
 
     def oku(kimlik: str) -> durum.Durum:
-        d = durum.oku(calisma, kimlik) if "/" not in kimlik and "\\" not in kimlik else None
+        d = durum.oku(calisma, kimlik) if _kimlik_gecerli(kimlik) else None
         if d is None:
             raise HTTPException(404, "şarkı bulunamadı")
         return d
 
+    @contextlib.contextmanager
+    def guncelle(kimlik: str):
+        """Kararlar kilit altında taze duruma yazılır: gece koşusu aynı şarkıya yazarken birbirini ezmesinler."""
+        oku(kimlik)
+        try:
+            with durum.guncelle(calisma, kimlik) as d:
+                yield d
+        except kilit.KilitMesgul as e:
+            raise HTTPException(409, "şarkı şu an gece koşusunca güncelleniyor; birkaç saniye sonra tekrar dene") from e
+
     def guvenli(kimlik: str, yol: str) -> Path:
+        """Yalnız bir şarkı klasörünün içindeki ses dosyaları. Kimlik doğrulanmazsa `%2E%2E` kimliği klasörü proje
+        köküne çıkarıp `.env`'yi (Spotify sırları) verirdi."""
+        if not _kimlik_gecerli(kimlik) or Path(yol).suffix.lower() not in SES_UZANTILARI:
+            raise HTTPException(404, "dosya yok")
         kok = durum.klasor(calisma, kimlik).resolve()
         hedef = (kok / yol).resolve()
         if not hedef.is_relative_to(kok) or not hedef.is_file():
@@ -132,61 +155,78 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None) -> FastA
 
     @app.get("/api/dalga/{kimlik}/{yol:path}")
     def dalga_ucu(kimlik: str, yol: str):
-        return dalga(guvenli(kimlik, yol))
+        hedef = guvenli(kimlik, yol)
+        try:
+            return dalga(hedef)
+        except (RuntimeError, ValueError) as e:  # bozuk/yarım ses dosyası (soundfile hatası RuntimeError türevi)
+            raise HTTPException(422, f"ses okunamadı: {e}") from e
 
     @app.post("/api/sarki/{kimlik}/onar")
     def onar(kimlik: str, istek: OnarIstegi):
-        d = oku(kimlik)
-        if d.asama not in ("uretildi", "onarim"):
-            raise HTTPException(409, f"bu aşamada onarım istenemez: {d.asama}")
-        if not any(x.no == istek.aday for x in d.adaylar):
-            raise HTTPException(404, "aday yok")
-        try:
-            uretim.onarim_iste(a, d, istek.aday, istek.bas, istek.son)
-        except ValueError as e:
-            raise HTTPException(422, str(e)) from e
-        durum.yaz(calisma, d)
+        with guncelle(kimlik) as d:
+            if d.asama not in DUZENLENEBILIR:
+                raise HTTPException(409, f"bu aşamada onarım istenemez: {d.asama}")
+            if not any(x.no == istek.aday for x in d.adaylar):
+                raise HTTPException(404, "aday yok")
+            try:
+                uretim.onarim_iste(a, d, istek.aday, istek.bas, istek.son)
+            except ValueError as e:
+                raise HTTPException(422, str(e)) from e
         return _ozet(d)
 
     @app.post("/api/sarki/{kimlik}/onarim-kabul")
     def onarim_kabul(kimlik: str, istek: KabulIstegi):
-        d = oku(kimlik)
-        try:
-            uretim.onarim_kabul(d, istek.aday, istek.onarim)
-        except (ValueError, StopIteration) as e:
-            raise HTTPException(409, f"kabul edilemedi: {e}") from e
-        durum.yaz(calisma, d)
+        with guncelle(kimlik) as d:
+            if d.asama not in DUZENLENEBILIR:
+                raise HTTPException(409, f"bu aşamada onarım kabul edilemez: {d.asama}")
+            try:
+                uretim.onarim_kabul(d, istek.aday, istek.onarim)
+            except (ValueError, StopIteration) as e:
+                raise HTTPException(409, f"kabul edilemedi: {e}") from e
         return _ozet(d)
 
     @app.post("/api/sarki/{kimlik}/onayla")
     def onayla(kimlik: str, istek: OnayIstegi):
-        d = oku(kimlik)
-        aday = next((x for x in d.adaylar if x.no == istek.aday), None)
-        if aday is None or not aday.gecti:
-            raise HTTPException(409, "yalnız kapılardan geçmiş bir aday onaylanabilir")
-        if any(o["durum"] == "bekliyor" for o in aday.onarimlar):
-            raise HTTPException(409, "bu adayın bekleyen onarımı var; önce üretilmesini bekle")
-        d.secilen = istek.aday
-        d.gec("onaylandi")
-        durum.yaz(calisma, d)
+        with guncelle(kimlik) as d:
+            # yüklenmiş/paketlenmiş şarkı yeniden onaylanırsa paketi sessizce yeniden üretilirdi
+            if d.asama not in DUZENLENEBILIR:
+                raise HTTPException(409, f"bu aşamada onaylanamaz: {d.asama}")
+            aday = next((x for x in d.adaylar if x.no == istek.aday), None)
+            if aday is None or not aday.gecti or not aday.dosya:
+                raise HTTPException(409, "yalnız kapılardan geçmiş bir aday onaylanabilir")
+            if any(o["durum"] == "bekliyor" for o in aday.onarimlar):
+                raise HTTPException(409, "bu adayın bekleyen onarımı var; önce üretilmesini bekle")
+            d.secilen = istek.aday
+            d.gec("onaylandi")
         return _ozet(d)
 
     @app.post("/api/sarki/{kimlik}/stil")
     def stil(kimlik: str, istek: StilIstegi):
-        d = oku(kimlik)
-        try:
-            uretim.stil_degistir(d, istek.stil, istek.bpm, istek.ton.strip())
-        except ValueError as e:
-            raise HTTPException(409, str(e)) from e
-        durum.yaz(calisma, d)
+        with guncelle(kimlik) as d:
+            try:
+                uretim.stil_degistir(d, istek.stil, istek.bpm, istek.ton.strip())
+            except ValueError as e:
+                raise HTTPException(409, str(e)) from e
         return _ozet(d)
 
     @app.post("/api/sarki/{kimlik}/reddet")
     def reddet(kimlik: str, istek: RetIstegi):
-        d = oku(kimlik)
-        d.notlar.append({"ret": istek.neden})
-        d.gec("reddedildi", istek.neden or None)
-        durum.yaz(calisma, d)
+        with guncelle(kimlik) as d:
+            if d.asama in ("yuklendi", "yayinda", "reddedildi"):
+                raise HTTPException(409, f"bu aşamada reddedilemez: {d.asama}")
+            d.notlar.append({"ret": istek.neden})
+            d.gec("reddedildi", istek.neden or None)
+        return _ozet(d)
+
+    @app.post("/api/sarki/{kimlik}/geri-al")
+    def geri_al(kimlik: str):
+        """Reddi geri alır: şarkı reddedilmeden önceki aşamasına döner (yanlış tık, fikir değişikliği)."""
+        with guncelle(kimlik) as d:
+            if d.asama != "reddedildi":
+                raise HTTPException(409, "yalnız reddedilmiş şarkı geri alınabilir")
+            onceki = next((g["asama"] for g in reversed(d.gecmis[:-1]) if g.get("asama") != "reddedildi"), "yeni")
+            d.notlar.append({"ret_geri_alindi": onceki})
+            d.gec(onceki)
         return _ozet(d)
 
     # ---- keşif ----
@@ -196,33 +236,37 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None) -> FastA
         listede = kesif.listedekiler(liste_yolu, calisma)
         return {"adaylar": [_kesif_ozet(x, listede) for x in kesif.sirala(kayit)], "kota": _kota(a.kok)}
 
-    def kesif_adayi(kimlik: str) -> tuple[dict, kesif.Aday]:
-        kayit = kesif.oku(calisma)
+    def kesif_adayi(kayit: dict, kimlik: str) -> kesif.Aday:
         if kimlik not in kayit:
             raise HTTPException(404, "keşif adayı bulunamadı")
-        return kayit, kayit[kimlik]
+        return kayit[kimlik]
 
     @app.post("/api/kesif/{kimlik}/ekle")
     def kesif_ekle(kimlik: str):
-        from yanki import kilit
-
-        kayit, x = kesif_adayi(kimlik)
         if kimlik in kesif.listedekiler(liste_yolu, calisma):
             raise HTTPException(409, "bu şarkı zaten listede")
         # liste.toml'a gece koşusu da yazıyor: aynı anda yazılmasın
         with kilit.tek_kosu(calisma / ".yanki.kilit") as alindi:
             if not alindi:
                 raise HTTPException(409, "gece koşusu sürüyor; bitince tekrar dene")
-            kesif.listeye_yaz([x], liste_yolu, "dinleme odasından eklendi")
-            x.elendi = False
-            kesif.kaydet(calisma, kayit)
+            with kesif.kayit_kilidi(calisma):
+                kayit = kesif.oku(calisma)
+                x = kesif_adayi(kayit, kimlik)
+                kesif.listeye_yaz([x], liste_yolu, "dinleme odasından eklendi")
+                x.elendi = False
+                kesif.kaydet(calisma, kayit)
         return _kesif_ozet(x, kesif.listedekiler(liste_yolu, calisma))
 
     @app.post("/api/kesif/{kimlik}/ele")
     def kesif_ele(kimlik: str, istek: EleIstegi):
-        kayit, x = kesif_adayi(kimlik)
-        x.elendi = istek.elendi
-        kesif.kaydet(calisma, kayit)
+        try:
+            with kesif.kayit_kilidi(calisma):
+                kayit = kesif.oku(calisma)
+                x = kesif_adayi(kayit, kimlik)
+                x.elendi = istek.elendi
+                kesif.kaydet(calisma, kayit)
+        except kilit.KilitMesgul as e:
+            raise HTTPException(409, "keşif kaydı şu an güncelleniyor; tekrar dene") from e
         return _kesif_ozet(x, kesif.listedekiler(liste_yolu, calisma))
 
     # ---- yayın ----

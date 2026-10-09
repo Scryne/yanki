@@ -163,14 +163,62 @@ def test_paketle_ozel_kapagi_korur(tmp_path):
     k = c / "adele-someone-like-you"
     (k / "adaylar" / "1").mkdir(parents=True)
     _muzik(k / "adaylar" / "1" / "tam.flac")
-    (k / "kapak_ozel.jpg").write_bytes(b"ozel")
-    d = _durum()
+    _jpeg(k / "kapak_ozel.jpg", (3000, 3000))  # zaten hazır: bayt bayt kopyalanır
+    _onayli(c)
+    paket.paketle(c, _yayin(tmp_path))
+    assert (k / "paket" / "SANATCI_-_Someone_Like_You.jpg").read_bytes() == (k / "kapak_ozel.jpg").read_bytes()
+    meta = json.loads((k / "paket" / "metadata.json").read_text(encoding="utf-8"))
+    assert meta["kapak"] == {"kaynak": "ozel", "ozgun_boyut": [3000, 3000], "islem": None}
+
+
+def _jpeg(yol, boyut, renk=(200, 40, 40)):
+    from PIL import Image
+
+    Image.new("RGB", boyut, renk).save(yol, "JPEG")
+
+
+def _onayli(c, kimlik="adele-someone-like-you"):
+    d = _durum() if kimlik == "adele-someone-like-you" else durum.Durum(kimlik, "A", kimlik)
     d.adaylar = [durum.Aday(1, "adaylar/1/tam.flac", 42, {}, True)]
     d.secilen = 1
     d.gec("onaylandi")
     durum.yaz(c, d)
-    paket.paketle(c, _yayin(tmp_path))
-    assert (k / "paket" / "SANATCI_-_Someone_Like_You.jpg").read_bytes() == b"ozel"
+
+
+def test_ozel_kapak_kareye_ve_3000e_getirilir(tmp_path):
+    from PIL import Image
+
+    _jpeg(tmp_path / "k.jpg", (982, 552))  # 2026-10-08'deki sahil fotoğrafı boyutu
+    bilgi = paket.ozel_kapak(tmp_path / "k.jpg", tmp_path / "c.jpg")
+    with Image.open(tmp_path / "c.jpg") as img:
+        assert img.size == (3000, 3000) and img.format == "JPEG" and img.mode == "RGB"
+    assert bilgi["ozgun_boyut"] == [982, 552] and "kare kırpıldı" in bilgi["islem"]
+    md = paket.yukle_md({**_meta_ornek(), "kapak": bilgi}, paket.Yayin("Orvane", "routenote", "", -14, -1, 44100),
+                        {"ses": "a.flac", "kapak": "a.jpg"})
+    assert "552 px" in md and "büyütüldü" in md
+
+
+def _meta_ornek():
+    return {"baslik": "B", "sanatci": "Orvane", "etiket": None, "orijinal_sanatci": "A", "orijinal_yazarlar": ["X Y"],
+            "orijinal_yazar_adlari": [["X", "Y"]], "orijinal_yil": "2011", "dil": "en", "sure_sn": 200.0,
+            "onizleme_sn": None, "acik_icerik": False, "acik_sozcukler": [],
+            "yapay_zeka": {"kapsam": "k", "arac": "a", "baglanti": "b"},
+            "master": {"lufs": -14.0, "gercek_tepe_dbtp": -1.2}}
+
+
+@ffmpeg_gerekli
+def test_bozuk_kapak_tek_sarkiyi_durdurur_digerleri_paketlenir(tmp_path):
+    c = tmp_path / "c"
+    for kimlik in ("adele-someone-like-you", "b-c"):
+        (c / kimlik / "adaylar" / "1").mkdir(parents=True)
+        _muzik(c / kimlik / "adaylar" / "1" / "tam.flac", sure=5)
+        _onayli(c, kimlik)
+    (c / "adele-someone-like-you" / "kapak_ozel.jpg").write_bytes(b"bozuk")
+    hatalar = []
+    islenen = paket.paketle(c, _yayin(tmp_path), hatalar=hatalar)
+    assert [d.kimlik for d in islenen] == ["b-c"] and durum.oku(c, "b-c").asama == "paketlendi"
+    assert hatalar[0][0].kimlik == "adele-someone-like-you"
+    assert durum.oku(c, "adele-someone-like-you").asama == "onaylandi"  # sonraki koşu yeniden dener
 
 
 def test_acik_icerik_sozlerden(tmp_path):

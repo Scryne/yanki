@@ -13,10 +13,11 @@ Sonuç şarkının `durum.json` → `yayin` alanında: `son` (en son kontrol) ve
 """
 
 import json
-from datetime import datetime
+import re
+from datetime import date, datetime
 from pathlib import Path
 
-from yanki import durum
+from yanki import dosya, durum
 from yanki.kesif import sade_ad
 
 GECMIS_SINIRI = 60
@@ -27,6 +28,56 @@ def yukleme_bilgisi(calisma: Path, kimlik: str) -> dict | None:
     if not yol.exists():
         return None
     return json.loads(yol.read_text(encoding="utf-8")).get("yukleme")
+
+
+ISRC = re.compile(r"[A-Z]{2}[A-Z0-9]{3}\d{7}")
+UPC = re.compile(r"\d{12,13}")
+# RouteNote kararı (Scryne, 2026-10-07): mekanik lisans yok → bu bölgeler hariç; AI/cover kabul etmeyen mağazalar
+# kaldırılır (YUKLE.md 24–26. adımlar). İlk üç yüklemenin kaydıyla aynı.
+ROUTENOTE_VARSAYILAN = {"mekanik_lisans": False, "haric_bolgeler": ["US", "CA", "MX", "IN", "PK"],
+                        "haric_magazalar": ["Amazon", "Melon", "Bugs!", "VIBE", "FLO", "Genie Music",
+                                            "YouTube Content ID"]}
+
+
+def yukleme_dogrula(isrc: str | None = None, upc: str | None = None, yayin_tarihi: str | None = None,
+                    onizleme: str | None = None) -> dict:
+    """Formdan kopyalanan değerleri temizler ve doğrular (ISRC'deki tireler atılır); hatalıysa ValueError."""
+    bilgi: dict = {}
+    if isrc:
+        bilgi["isrc"] = isrc.replace("-", "").replace(" ", "").upper()
+        if not ISRC.fullmatch(bilgi["isrc"]):
+            raise ValueError(f"ISRC biçimi CC-XXX-YY-NNNNN olmalı (12 karakter): {isrc}")
+    if upc:
+        bilgi["upc"] = upc.strip()
+        if not UPC.fullmatch(bilgi["upc"]):
+            raise ValueError(f"UPC 12–13 rakam olmalı: {upc}")
+    if yayin_tarihi:
+        try:
+            bilgi["yayin_tarihi"] = date.fromisoformat(yayin_tarihi.strip()).isoformat()
+        except ValueError:
+            raise ValueError(f"yayın tarihi YYYY-AA-GG olmalı: {yayin_tarihi}") from None
+    if onizleme:
+        if not re.fullmatch(r"\d{1,2}:[0-5]\d", onizleme.strip()):
+            raise ValueError(f"önizleme başlangıcı d:ss olmalı: {onizleme}")
+        bilgi["onizleme"] = onizleme.strip()
+    return bilgi
+
+
+def yukleme_kaydet(calisma: Path, kimlik: str, bilgi: dict, dagitimci: str = "") -> dict:
+    """Paketin `metadata.json` → `yukleme`'sine yazar (takip ISRC'yi buradan okur). İlk kayıtta tarih ve
+    dağıtımcının varsayılanları eklenir; sonraki çağrılar yalnız verilen alanları günceller."""
+    yol = durum.klasor(calisma, kimlik) / "paket" / "metadata.json"
+    if not yol.exists():
+        raise FileNotFoundError(f"paket yok: {yol}")
+    meta = json.loads(yol.read_text(encoding="utf-8"))
+    yukleme = meta.get("yukleme")
+    if yukleme is None:
+        yukleme = {"dagitimci": dagitimci or None, "tarih": date.today().isoformat(),
+                   **(ROUTENOTE_VARSAYILAN if dagitimci == "routenote" else {})}
+    yukleme.update(bilgi)
+    meta["yukleme"] = yukleme
+    dosya.json_yaz(yol, meta)
+    return yukleme
 
 
 def kontrol_et(sp, d: durum.Durum, isrc: str, sanatci_adi: str, pazarlar, arama_limiti: int = 20) -> dict:
@@ -89,13 +140,13 @@ def takip_et(sp, calisma: Path, sanatci_adi: str, pazarlar, kimlikler: list[str]
             continue
         y = yukleme_bilgisi(calisma, d.kimlik) or {}
         if not y.get("isrc"):
-            sonuc.append((d, ["paketin metadata.json'unda ISRC yok (yükleme bilgisi eksik)"]))
+            sonuc.append((d, [f"ISRC yok: dağıtımcının atadığı ISRC'yi `yanki yuklendi {d.kimlik} --isrc …` ile ekle"]))
             continue
         son = kontrol_et(sp, d, y["isrc"].upper(), sanatci_adi, pazarlar, arama_limiti)
         son["yayin_tarihi"] = y.get("yayin_tarihi")
-        uyarilar = kaydet(d, son)
-        durum.yaz(calisma, d)
-        sonuc.append((d, uyarilar))
+        with durum.guncelle(calisma, d.kimlik) as taze:
+            uyarilar = kaydet(taze, son)
+        sonuc.append((taze, uyarilar))
     return sonuc
 
 

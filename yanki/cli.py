@@ -25,16 +25,33 @@ def _durum(_: argparse.Namespace) -> int:
     return 0 if all(k.tamam for k in sonuc) else 1
 
 
+# `hazirla --yeniden` yalnız onaydan önceki şarkılara: onaylı/yüklenmiş şarkı baştan hazırlanırsa aşaması `hazir`a
+# düşer, yükleme kaydı ve takip kaybolurdu; bekleyen onarım da sahipsiz kalırdı
+YENIDEN_HAZIRLANIR = ("yeni", "hazir", "analiz", "uretildi", "hata")
+
+
+def _hazirlanacak_mi(d: durum.Durum | None, yeniden: bool) -> bool:
+    if d is None:
+        return True
+    if yeniden:
+        return d.asama in YENIDEN_HAZIRLANIR
+    # hazırlıkta düşen şarkı (söz/kaynak yok) her koşuda yeniden denenir: Scryne dosyayı girdi/'ye bırakmış olabilir.
+    # Analizden sonra düşen şarkıyı (kapı, motor) yeniden indirmek çözmez: stil değişikliği ya da `yanki yeniden`.
+    return d.asama == "yeni" or (d.asama == "hata" and not d.analiz)
+
+
 def _hazirla(args: argparse.Namespace) -> int:
     a = ayarlar.yukle()
     calisma, girdi = a.kok / "calisma", a.kok / "girdi"
     sarkilar = liste.yukle(Path(args.liste) if args.liste else girdi / "liste.toml")
     if not sarkilar:
         print("liste boş: girdi/liste.toml'a [[sarki]] ekle")
-        return 1
+        return 0
     for s in sarkilar:
         mevcut = durum.oku(calisma, s.kimlik)
-        if mevcut and mevcut.asama not in ("yeni", "hata") and not args.yeniden:
+        if not _hazirlanacak_mi(mevcut, args.yeniden):
+            if args.yeniden and mevcut:
+                print(f"atlandı ({mevcut.asama}): {s.sanatci} — {s.ad}; onaylı şarkıya yeni aday: `yanki yeniden`")
             continue
         d = hazirlik.girdi_hazirla(a, s, calisma, girdi)
         print(f"{d.asama:6} {s.sanatci} — {s.ad}" + (f": {d.hata}" if d.hata else f" [{d.kaynak.get('nereden')}]"))
@@ -42,8 +59,10 @@ def _hazirla(args: argparse.Namespace) -> int:
         hazirlik.analiz_et(a, sarkilar, calisma)
         for s in sarkilar:
             d = durum.oku(calisma, s.kimlik)
-            if d and d.asama == "analiz":
-                print(f"analiz {s.ad}: {d.analiz['stil']} | {d.analiz['bpm']} BPM | {d.analiz['ton']}")
+            if d and d.asama == "analiz" and d.analiz.get("stil"):
+                tempo = " · ".join(x for x in (f"{d.analiz['bpm']} BPM" if d.analiz.get("bpm") else "",
+                                               d.analiz.get("ton") or "") if x)
+                print(f"analiz {s.ad}: {d.analiz['stil']} | {tempo or 'tempo/ton modele bırakıldı'}")
     return 0
 
 
@@ -64,18 +83,17 @@ def _yeniden(args: argparse.Namespace) -> int:
     calisma = a.kok / "calisma"
     kod = 0
     for kimlik in args.kimlik:
-        d = durum.oku(calisma, kimlik)
-        if d is None:
+        try:
+            with durum.guncelle(calisma, kimlik) as d:
+                uretim.yeniden_uretime_al(d)
+        except durum.Yok:
             print(f"'{kimlik}' bulunamadı")
             kod = 1
             continue
-        try:
-            uretim.yeniden_uretime_al(d)
         except ValueError as e:
             print(f"{kimlik}: {e}")
             kod = 1
             continue
-        durum.yaz(calisma, d)
         # eski paket yeni seçim yapılana kadar yüklenmesin: kenara alınır (yeni onayda paket yeniden üretilir)
         k = durum.klasor(calisma, kimlik)
         if (k / "paket").exists():
@@ -98,12 +116,13 @@ def _kunye(args: argparse.Namespace) -> int:
         if args.kimlik and d.kimlik not in args.kimlik:
             continue
         try:
-            d.kunye = asdict(kunye.bul(d.sanatci, d.ad))
+            yeni = asdict(kunye.bul(d.sanatci, d.ad))
         except (ag.Bulunamadi, OSError) as e:
             print(f"✗ {d.sanatci} — {d.ad}: {e}")
             kod = 1
             continue
-        durum.yaz(calisma, d)
+        with durum.guncelle(calisma, d.kimlik) as d:
+            d.kunye = yeni
         adlar = ", ".join(f"{x} {y}".strip() if y else f"{x} (SOYAD?)" for x, y in d.kunye["yazar_adlari"])
         print(f"✓ {d.sanatci} — {d.ad}: {d.kunye['ilk_yayin']} | {adlar}")
     return kod
@@ -111,23 +130,53 @@ def _kunye(args: argparse.Namespace) -> int:
 
 def _paketle(args: argparse.Namespace) -> int:
     a = ayarlar.yukle()
-    islenen = paket.paketle(a.kok / "calisma", a.kok / "config" / "yayin.toml", yeniden=args.yeniden)
-    if not islenen:
+    hatalar: list = []
+    islenen = paket.paketle(a.kok / "calisma", a.kok / "config" / "yayin.toml", yeniden=args.yeniden,
+                            hatalar=hatalar)
+    if not islenen and not hatalar:
         print("paketlenecek onaylı şarkı yok")
     for d in islenen:
         print(f"paket hazır: {d.sanatci} — {d.ad} → calisma/{d.kimlik}/paket/YUKLE.md")
-    return 0
+    for d, hata in hatalar:
+        print(f"✗ paketlenemedi: {d.sanatci} — {d.ad}: {hata} (onaylı kaldı, sonraki koşu yeniden dener)")
+    return 1 if hatalar else 0
 
 
 def _yuklendi(args: argparse.Namespace) -> int:
+    """Paketi dağıtımcıya yükledikten sonra: aşama `yuklendi`, formdaki bilgiler (ISRC, UPC, yayın tarihi) paketin
+    metadata.json'una. Takip ISRC'yle çalışır; ISRC sonradan belli olursa aynı komutla eklenir."""
+    from yanki import takip
+
     a = ayarlar.yukle()
-    d = durum.oku(a.kok / "calisma", args.kimlik)
-    if d is None or d.asama != "paketlendi":
+    calisma = a.kok / "calisma"
+    try:
+        bilgi = takip.yukleme_dogrula(args.isrc, args.upc, args.yayin_tarihi, args.onizleme)
+    except ValueError as e:
+        print(f"✗ {e}")
+        return 1
+    d = durum.oku(calisma, args.kimlik)
+    if d is None or d.asama not in ("paketlendi", "yuklendi", "yayinda"):
         print(f"'{args.kimlik}' paketlenmiş bir şarkı değil" + (f" (aşama: {d.asama})" if d else ""))
         return 1
-    d.gec("yuklendi")
-    durum.yaz(a.kok / "calisma", d)
-    print(f"yüklendi olarak işaretlendi: {d.sanatci} — {d.ad}")
+    if d.asama != "paketlendi" and not bilgi:
+        print(f"zaten {d.asama}; yükleme bilgisini güncellemek için --isrc/--upc/--yayin-tarihi ver")
+        return 1
+    dagitimci = args.dagitimci or paket.yayin_ayarlari(a.kok / "config" / "yayin.toml").dagitimci
+    try:
+        kayit = takip.yukleme_kaydet(calisma, d.kimlik, bilgi, dagitimci)
+    except FileNotFoundError as e:
+        print(f"✗ {e}")
+        return 1
+    if d.asama == "paketlendi":
+        with durum.guncelle(calisma, d.kimlik) as d:
+            d.gec("yuklendi")
+        print(f"yüklendi olarak işaretlendi: {d.sanatci} — {d.ad}")
+    else:
+        print(f"yükleme bilgisi güncellendi: {d.sanatci} — {d.ad}")
+    eksik = [ad for ad in ("isrc", "yayin_tarihi") if not kayit.get(ad)]
+    if eksik:
+        print(f"  eksik: {', '.join(eksik)} (takip ISRC'siz çalışmaz; belli olunca: yanki yuklendi {d.kimlik} "
+              "--isrc … --yayin-tarihi …)")
     return 0
 
 
@@ -260,9 +309,13 @@ def _kesif(args: argparse.Namespace) -> int:
     from yanki import yargi
 
     olculecek = [x for x in tekil if not kesif.taze(x.olcum)]
-    yargic = yargi.ac(a.kok) if olculecek else None
+    try:
+        yargic = yargi.ac(a.kok) if olculecek else None
+    except Exception as e:  # noqa: BLE001 — SDK yüklenemedi ya da istemci kurulamadı: regex yedeği
+        print(f"TypeSafe istemcisi açılamadı: {e}")
+        yargic = None
     if olculecek and yargic is None:
-        print("TYPESAFE_API_KEY yok: özgünlük kararı regex yedeğiyle (daha zayıf)")
+        print("TypeSafe yok (TYPESAFE_API_KEY): özgünlük kararı regex yedeğiyle (daha zayıf)")
     for x in olculecek:
         try:
             kesif.talep_olc(x)
@@ -317,6 +370,7 @@ def _kesif(args: argparse.Namespace) -> int:
 
 def _stillmore_tara(args, kok: Path, calisma: Path, st: dict, sp, dogrula: bool, adaylar: list) -> None:
     """STILLMORE playlist taraması (Spotify istemcisinin içinden). Havuz: config + Web API playlist araması."""
+    import subprocess
     from datetime import datetime
 
     from yanki import spotify, stillmore
@@ -350,7 +404,7 @@ def _stillmore_tara(args, kok: Path, calisma: Path, st: dict, sp, dogrula: bool,
                 try:
                     bilgi = k.playlist_bilgi(pid) or {}
                     satirlar = k.kaldirilanlar(pid)
-                except stillmore.StillmoreYok as e:
+                except Exception as e:  # noqa: BLE001 — StillmoreYok, CDP bağlantısı koptu, zaman aşımı
                     print(f"✗ STILLMORE {pid}: {e}")
                     continue
                 bulunan = stillmore.adaylara(satirlar, pid)
@@ -359,7 +413,7 @@ def _stillmore_tara(args, kok: Path, calisma: Path, st: dict, sp, dogrula: bool,
                                    "calinamayan": len(satirlar), "aday": len(bulunan)})
                 print(f"STILLMORE '{havuz[pid]['ad']}': {len(satirlar)} çalınamayan, {len(bulunan)} aday")
                 adaylar += bulunan
-    except stillmore.StillmoreYok as e:
+    except (stillmore.StillmoreYok, OSError, subprocess.SubprocessError) as e:
         print(f"STILLMORE taraması atlandı: {e}")
     stillmore.havuz_yaz(calisma, havuz)
 
@@ -375,6 +429,9 @@ def _takip(args: argparse.Namespace) -> int:
     try:
         sonuc = takip.takip_et(sp, calisma, y.sanatci_adi, tuple(t["pazarlar"]), args.kimlik or None,
                                int(t["arama_derinligi"]))
+    except spotify.Sinirli as e:  # kota kilidi beklenen bir durum: özet bildirimi gösterir, koşu hatası değil
+        print(f"takip ertelendi: {e}")
+        return 0
     except spotify.SpotifyHatasi as e:
         print(f"✗ {e}")
         return 1
@@ -441,41 +498,83 @@ def _ozet(args: argparse.Namespace) -> int:
                                          (o["kesif_onerisi"], "keşif önerisi"), (o["hata"], "hatada"),
                                          (o["otomatik_onay_24sa"], "şarkı 24 saat içinde kendiliğinden onaylanacak"))
               if n]
+    if o["spotify_kilit_sn"]:
+        satir.append(f"Spotify kilitli (~{max(1, round(o['spotify_kilit_sn'] / 3600))} sa)")
     print(" · ".join(satir))
     return 0
 
 
 def _calistir(args: argparse.Namespace) -> int:
     """Arka plan koşusu: (açıksa) kaldırılmış şarkı keşfi → listeye ekle, yeni şarkıları hazırla, üret (bekleyen
-    onarımlar dahil), onaylıları paketle, yüklenenleri takip et. Liste boş olsa da onarım ve paketleme yapılır.
-    Spotify anahtarı yoksa keşif ve takip atlanır, koşu düşmez."""
+    onarımlar dahil), veto penceresi, onaylıları paketle, yüklenenleri takip et, disk temizliği, haftalık yedek.
+    Liste boş olsa da onarım ve paketleme yapılır; Spotify anahtarı yoksa keşif ve takip atlanır.
+
+    Adımlar birbirinden yalıtılmış: biri düşerse (YouTube, Deezer, GPU, ağ) hatası günlüğe yazılır, koşu sonraki
+    adımla sürer ve sonunda 1 döner (gece.ps1 hatayı bildirim olarak gösterir). Önce keşifteki tek bir ağ hatası
+    üretimi, paketlemeyi ve takibi de durduruyordu."""
+    import time
+    import traceback
+    from datetime import datetime
+
     from yanki import spotify
 
     kok = ayarlar.yukle().kok
+    op = ayarlar.operasyon_oku(kok)
     spotify_var = bool(spotify.Spotify(kok).client_id)
     gece_ekle = int(_kesif_ayarlari(kok)["kesif"].get("gece_ekle", 0))
-    if gece_ekle and spotify_var:
-        _kesif(argparse.Namespace(csv=[], playlist=[], pazar=None, ekle=gece_ekle, goster=10, katalogsuz=False,
-                                  yeniden_olc=False, stillmoresuz=False, spotify_yeniden_baslat=True))
-    _hazirla(args)
-    _uret(args)
-    _otomatik_onay(kok)
     args.yeniden = False
-    kod = _paketle(args)
+    adimlar: list = []
+    if gece_ekle and spotify_var:
+        adimlar.append(("keşif", lambda: _kesif(argparse.Namespace(
+            csv=[], playlist=[], pazar=None, ekle=gece_ekle, goster=10, katalogsuz=False, yeniden_olc=False,
+            stillmoresuz=False, spotify_yeniden_baslat=True))))
+    adimlar += [("hazırlık", lambda: _hazirla(args)), ("üretim", lambda: _uret(args)),
+                ("veto penceresi", lambda: _otomatik_onay(kok)), ("paketleme", lambda: _paketle(args))]
     if spotify_var:
-        _takip(argparse.Namespace(kimlik=[]))
+        adimlar.append(("takip", lambda: _takip(argparse.Namespace(kimlik=[]))))
     else:
         print("takip atlandı: Spotify anahtarı yok (.env → SPOTIFY_CLIENT_ID/SECRET)")
-    _temizle(argparse.Namespace(uygula=True, gun=14))
-    return kod
+    adimlar += [("temizlik", lambda: _temizle(argparse.Namespace(uygula=True, gun=op.temizlik_gun))),
+                ("yedek", lambda: _yedekle(argparse.Namespace(zorla=False)))]
+    sorunlu = []
+    for ad, fn in adimlar:
+        bas = time.monotonic()
+        print(f"── {ad} ({datetime.now():%H:%M:%S})", flush=True)
+        try:
+            kod = fn() or 0
+        except Exception:  # noqa: BLE001 — adım yalıtımı: iz günlüğe, koşu sürer
+            traceback.print_exc(file=sys.stdout)
+            kod = 1
+        if kod:
+            sorunlu.append(ad)
+            print(f"✗ {ad} adımı sorunlu bitti ({time.monotonic() - bas:.0f} sn)", flush=True)
+    print(f"── koşu bitti ({datetime.now():%H:%M:%S})" + (f"; sorunlu adım: {', '.join(sorunlu)}" if sorunlu else ""))
+    return 1 if sorunlu else 0
 
 
-def _otomatik_onay(kok: Path) -> None:
+def _otomatik_onay(kok: Path) -> int:
     from yanki import onay
 
     ayar = onay.ayar_oku(kok / "config" / "yayin.toml")
     for d, a in onay.uygula(kok / "calisma", ayar):
         print(f"otomatik onay ({ayar.sure_saat:g} sa veto penceresi doldu): {d.sanatci} — {d.ad}, aday {a.no}")
+    return 0
+
+
+def _yedekle(args: argparse.Namespace) -> int:
+    """Yeniden üretilemeyen durumun zip yedeği (config/operasyon.toml → [yedek]). Gece koşusu haftada bir alır."""
+    from yanki import yedek
+
+    a = ayarlar.yukle()
+    op = ayarlar.operasyon_oku(a.kok)
+    if not args.zorla and not yedek.gerekli_mi(op):
+        son = yedek.son_yedek_zamani(op.yedek_klasor)
+        print(f"yedek güncel (son: {son:%Y-%m-%d %H:%M}, her {op.yedek_gun} günde bir)")
+        return 0
+    yol, n = yedek.yedekle(a.kok, op)
+    print(f"yedek alındı: {yol} ({n} dosya, {yol.stat().st_size / 1e6:.1f} MB; en yeni {op.yedek_sakla} tanesi "
+          "saklanır)")
+    return 0
 
 
 def _temizle(args: argparse.Namespace) -> int:
@@ -528,7 +627,7 @@ def main(argv: list[str] | None = None) -> int:
     h.add_argument("--analizsiz", action="store_true", help="GPU analizini atla")
     h.set_defaults(fn=_hazirla)
     alt.add_parser("uret", help="cover adaylarını ve bekleyen onarımları üret (GPU)").set_defaults(fn=_uret)
-    c = alt.add_parser("calistir", help="hazırla + analiz + üret: arka plan koşusu")
+    c = alt.add_parser("calistir", help="gece koşusu: keşif, hazırlık, üretim, paket, takip, temizlik, yedek")
     c.add_argument("--liste", help="varsayılan girdi/liste.toml")
     c.set_defaults(fn=_calistir, yeniden=False, analizsiz=False)
     yn = alt.add_parser("yeniden", help="onaylı/paketli şarkıya güncel hatla yeni adaylar (eskiler kalır)")
@@ -540,8 +639,13 @@ def main(argv: list[str] | None = None) -> int:
     p = alt.add_parser("paketle", help="onaylı şarkılardan yükleme paketi (mastering, kapak, YUKLE.md)")
     p.add_argument("--yeniden", action="store_true", help="paketlenmişleri de yeniden paketle")
     p.set_defaults(fn=_paketle)
-    y = alt.add_parser("yuklendi", help="dağıtımcıya yüklenen şarkıyı işaretle")
+    y = alt.add_parser("yuklendi", help="dağıtımcıya yüklenen şarkıyı işaretle, yükleme bilgisini kaydet")
     y.add_argument("kimlik")
+    y.add_argument("--isrc", help="dağıtımcının atadığı ISRC (takip bununla çalışır)")
+    y.add_argument("--upc", help="sürümün UPC'si")
+    y.add_argument("--yayin-tarihi", help="yayın tarihi, YYYY-AA-GG")
+    y.add_argument("--onizleme", help="önizleme başlangıcı, d:ss")
+    y.add_argument("--dagitimci", help="varsayılan config/yayin.toml")
     y.set_defaults(fn=_yuklendi)
     sb = alt.add_parser("spotify-baglan", help="Spotify hesabını bir kez bağla (kendi playlist'lerini taramak için)")
     sb.set_defaults(fn=_spotify_baglan)
@@ -564,6 +668,9 @@ def main(argv: list[str] | None = None) -> int:
     tm.add_argument("--uygula", action="store_true", help="yalnız listelemek yerine sil")
     tm.add_argument("--gun", type=int, default=14, help="yüklemenin üstünden en az kaç gün geçmiş olsun")
     tm.set_defaults(fn=_temizle)
+    yd = alt.add_parser("yedekle", help="seçimlerin, yükleme bilgisinin ve keşif kaydının zip yedeği")
+    yd.add_argument("--zorla", action="store_true", help="son yedek yeni olsa da al")
+    yd.set_defaults(fn=_yedekle)
     oz = alt.add_parser("ozet", help="hattın tek satırlık durumu (oturum açılış bildirimi)")
     oz.add_argument("--json", action="store_true")
     oz.set_defaults(fn=_ozet)
@@ -585,7 +692,7 @@ def main(argv: list[str] | None = None) -> int:
 
 
 YAZAN_KOMUTLAR = {"hazirla", "uret", "calistir", "yeniden", "kunye", "paketle", "yuklendi", "kesif", "takip",
-                  "temizle"}
+                  "temizle", "yedekle"}
 
 
 if __name__ == "__main__":

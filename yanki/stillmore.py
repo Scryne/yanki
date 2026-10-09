@@ -93,23 +93,36 @@ class Oturum:
                 self.bayraksiz_geri_ac = True
             else:
                 self.biz_actik = True
-            ac(cdp=True, port=self.port)
-        k = Kopru(self.port)
-        k.hazir_bekle()
+        try:
+            if self.biz_actik or self.bayraksiz_geri_ac:
+                ac(cdp=True, port=self.port)
+            k = Kopru(self.port)
+            k.hazir_bekle()
+        except BaseException:
+            # `with` gövdesine girilmeden düşerse __exit__ çağrılmaz: Spotify'ı burada eski hâline getir
+            # (önce CDP'li Spotify açık kalıyor, kapattığımız Scryne'ın Spotify'ı geri açılmıyordu)
+            self.__exit__(None, None, None)
+            raise
         return k
 
     def __exit__(self, *_):
-        if self.biz_actik or self.bayraksiz_geri_ac:
-            kapat()
-        if self.bayraksiz_geri_ac:
-            ac(cdp=False)
+        try:
+            if self.biz_actik or self.bayraksiz_geri_ac:
+                kapat()
+            if self.bayraksiz_geri_ac:
+                ac(cdp=False)
+        except (OSError, subprocess.SubprocessError, StillmoreYok):
+            pass  # geri getirme en iyi çaba; asıl hatayı gölgelemesin
 
 
 # ── CDP ─────────────────────────────────────────────────────
 class Kopru:
     def __init__(self, port: int = PORT):
-        with urllib.request.urlopen(f"http://127.0.0.1:{port}/json", timeout=5) as r:
-            sayfalar = json.load(r)
+        try:
+            with urllib.request.urlopen(f"http://127.0.0.1:{port}/json", timeout=5) as r:
+                sayfalar = json.load(r)
+        except (OSError, ValueError) as e:
+            raise StillmoreYok(f"Spotify CDP'sine bağlanılamadı: {e}") from e
         ana = next((p for p in sayfalar if p.get("type") == "page" and "xpui" in p.get("url", "")), None)
         if ana is None:
             raise StillmoreYok("Spotify arayüz sayfası bulunamadı")
@@ -192,9 +205,9 @@ def havuz_oku(calisma: Path) -> dict[str, dict]:
 
 
 def havuz_yaz(calisma: Path, havuz: dict[str, dict]) -> None:
-    yol = havuz_yolu(calisma)
-    yol.parent.mkdir(parents=True, exist_ok=True)
-    yol.write_text(json.dumps(havuz, ensure_ascii=False, indent=1), encoding="utf-8")
+    from yanki import dosya
+
+    dosya.json_yaz(havuz_yolu(calisma), havuz, indent=1)
 
 
 def havuza_ekle(havuz: dict[str, dict], playlist_id: str, ad: str, kaynak: str, toplam: int | None = None) -> bool:
