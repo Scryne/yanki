@@ -91,7 +91,13 @@ class Aday:
             return 0.0
         # global çalışılıyor (Scryne, 2026-10-09): boşluk ne kadar çok pazarda açıksa o kadar değerli
         kapsam = len(self.kapali_pazarlar) / len(self.bakilan_pazarlar) if self.bakilan_pazarlar else 1.0
-        return self.youtube_izlenme * kapsam / (1 + (self.rakip_cover or 0))
+        return self.talep * kapsam / (1 + (self.rakip_cover or 0))
+
+    @property
+    def talep(self) -> int:
+        """YouTube izlenmesi ya da (varsa) kaldırılmadan önceki Spotify dinlenmesi, büyüğü: Spotify'da arayan
+        dinleyicinin doğrudan ölçüsü STILLMORE'dan geliyor (sızıntılarda 0, gerçek boşlukta milyonlar)."""
+        return max(self.youtube_izlenme or 0, self.spotify_dinlenme or 0)
 
 
 def spotifya_sorulur(a: Aday) -> bool:

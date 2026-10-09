@@ -1499,6 +1499,7 @@ dependencies = [
     { name = "soundfile" },
     { name = "typesafe-sdk" },
     { name = "uvicorn" },
+    { name = "websockets" },
     { name = "yt-dlp", extra = ["default"] },
 ]
 
@@ -1520,6 +1521,7 @@ requires-dist = [
     { name = "soundfile", specifier = ">=0.13" },
     { name = "typesafe-sdk", specifier = ">=0.7.3" },
     { name = "uvicorn", specifier = ">=0.37" },
+    { name = "websockets", specifier = ">=17.2" },
     { name = "yt-dlp", extras = ["default"], specifier = ">=2026.8" },
 ]
 

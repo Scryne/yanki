@@ -13,6 +13,7 @@ dependencies = [
     "soundfile>=0.13",
     "typesafe-sdk>=0.7.3",
     "uvicorn>=0.37",
+    "websockets>=17.2",
     "yt-dlp[default]>=2026.8",
 ]
 

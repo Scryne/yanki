@@ -550,3 +550,58 @@ def test_tasi_taze_olcumdeki_none_ezilmez():
     yeni = kesif.Aday("L. Del Rei", "Serial Killer", "k", sanatci_uyusuyor=None, youtube_izlenme=4,
                       ozgunluk={"karar": None}, olcum="2026-10-09T00:00:00")
     assert kesif.tasi(yeni, eski).sanatci_uyusuyor is None and kesif.hal(yeni) == "sanatçı belirsiz"
+
+
+def test_stillmore_satirlari_adaylara():
+    from yanki import stillmore
+
+    satirlar = [
+        {"trackId": "a" * 22, "name": "Ai Ai Ai Bebe", "artist": "Menor Teteu, DJ JR Oficial", "reason": "removed",
+         "plays": 35740049, "isrc": "brx1", "reuploads": []},
+        {"trackId": "b" * 22, "name": "Geri Gelen", "artist": "X", "reason": "removed", "plays": 10, "isrc": None,
+         "reuploads": ["c" * 22]},
+        {"trackId": "d" * 22, "name": "Ülke", "artist": "Y", "reason": "country", "plays": None, "isrc": None,
+         "reuploads": []},
+    ]
+    a = stillmore.adaylara(satirlar, "pl")
+    assert [(x.sanatci, x.neden, x.spotify_dinlenme, x.isrc, x.kaynak) for x in a] == [
+        ("Menor Teteu", "kaldirildi", 35740049, "BRX1", "stillmore:pl"), ("Y", "kismi", None, None, "stillmore:pl")]
+
+
+def test_talep_spotify_dinlenmesini_de_sayar():
+    a = kesif.Aday("Menor Teteu", "Ai Ai Ai Bebe", "k", youtube_izlenme=2_000_000, spotify_dinlenme=35_740_049,
+                   geri_geldi=False, sanatci_uyusuyor=True, soz_var=True, rakip_cover=1)
+    assert a.talep == 35_740_049 and a.puan == 35_740_049 / 2
+
+
+def test_stillmore_havuz_secimi():
+    from datetime import datetime
+
+    from yanki import stillmore
+
+    h = {}
+    assert stillmore.havuza_ekle(h, "p1", "A", "config") and not stillmore.havuza_ekle(h, "p1", "A", "config")
+    stillmore.havuza_ekle(h, "p2", "B", "arama:x", 300)
+    stillmore.havuza_ekle(h, "p3", "C", "arama:y", 200)
+    h["p1"]["son_tarama"] = "2026-10-01T03:00:00"
+    h["p2"]["son_tarama"] = "2026-10-08T03:00:00"
+    # p3 hiç taranmadı → önce; p1 8 gün önce → sonra; p2 1 gün önce → atlanır
+    assert stillmore.sec(h, 3, 7, datetime(2026, 10, 9, 3)) == ["p3", "p1"]
+    assert stillmore.sec(h, 1, 7, datetime(2026, 10, 9, 3)) == ["p3"]
+
+
+def test_stillmore_oturum_caliyorsa_dokunmaz(monkeypatch):
+    from yanki import stillmore
+
+    monkeypatch.setattr(stillmore, "cdp_acik", lambda port=9222: False)
+    monkeypatch.setattr(stillmore, "calisiyor_mu", lambda: True)
+    monkeypatch.setattr(stillmore, "caliyor_mu", lambda: True)
+    kapatildi = []
+    monkeypatch.setattr(stillmore, "kapat", lambda: kapatildi.append(1))
+    with pytest.raises(stillmore.StillmoreYok, match="çalıyor"):
+        with stillmore.Oturum(yeniden_baslat=True):
+            pass
+    with pytest.raises(stillmore.StillmoreYok, match="gece koşusu"):
+        with stillmore.Oturum(yeniden_baslat=False):
+            pass
+    assert kapatildi == []

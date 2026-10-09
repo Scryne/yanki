@@ -244,6 +244,11 @@ class Spotify:
                 break
         return sonuc
 
+    def playlist_ara(self, sorgu: str, adet: int = 10) -> list[dict]:
+        """Herkese açık playlist araması (uygulama token'ı): STILLMORE taraması için havuz büyütme."""
+        d = self._get("/search", {"q": sorgu, "type": "playlist", "limit": min(adet, 10)}, self.uygulama_token())
+        return [x for x in (d.get("playlists") or {}).get("items") or [] if x and x.get("id")]
+
     def isrc_ara(self, isrc: str, market: str) -> list[dict]:
         return self.ara(f"isrc:{isrc}", market)
 

@@ -220,6 +220,7 @@ def _kesif(args: argparse.Namespace) -> int:
         adaylar += bulunan
     if degismeyen:
         print(f"{degismeyen} playlist değişmemiş (son {kesif.PLAYLIST_TAZELEME_GUN} günde tarandı), atlandı")
+    _stillmore_tara(args, a.kok, calisma, ayar.get("stillmore", {}), sp, dogrula, adaylar)
     kat = ayar.get("katalog", {})
     if dogrula and kat.get("acik") and not args.katalogsuz:
         ek = [ad for ad, _ in sayac.most_common(int(kat.get("playlist_sanatcilari", 0)))]
@@ -314,6 +315,55 @@ def _kesif(args: argparse.Namespace) -> int:
     return 0
 
 
+def _stillmore_tara(args, kok: Path, calisma: Path, st: dict, sp, dogrula: bool, adaylar: list) -> None:
+    """STILLMORE playlist taraması (Spotify istemcisinin içinden). Havuz: config + Web API playlist araması."""
+    from datetime import datetime
+
+    from yanki import spotify, stillmore
+
+    if not st.get("acik") or getattr(args, "stillmoresuz", False):
+        return
+    havuz = stillmore.havuz_oku(calisma)
+    for pid in st.get("playlistler", []):
+        stillmore.havuza_ekle(havuz, spotify.kimlik_ayikla(pid), "", "config")
+    sorgular = st.get("arama", [])
+    if dogrula and sorgular:  # her gece sıradaki birkaç sorgu (döner)
+        sira = int(datetime.now().strftime("%j"))
+        n = int(st.get("arama_gece", 2))
+        for q in [sorgular[(sira * n + i) % len(sorgular)] for i in range(n)]:
+            try:
+                bulunan = sp.playlist_ara(q)
+            except spotify.SpotifyHatasi as e:
+                print(f"✗ playlist araması ({q}): {e}")
+                break
+            yeni = sum(stillmore.havuza_ekle(havuz, x["id"], x.get("name") or "", f"arama:{q}", t)
+                       for x in bulunan if (t := ((x.get("items") or x.get("tracks") or {}).get("total") or 0))
+                       >= int(st.get("min_parca", 100)))
+            print(f"playlist araması '{q}': {len(bulunan)} sonuç, {yeni} yeni havuza")
+    secilen = stillmore.sec(havuz, int(st.get("gece_playlist", 3)), int(st.get("tazeleme_gun", 7)))
+    stillmore.havuz_yaz(calisma, havuz)
+    if not secilen:
+        return
+    try:
+        with stillmore.Oturum(yeniden_baslat=getattr(args, "spotify_yeniden_baslat", False)) as k:
+            for pid in secilen:
+                try:
+                    bilgi = k.playlist_bilgi(pid) or {}
+                    satirlar = k.kaldirilanlar(pid)
+                except stillmore.StillmoreYok as e:
+                    print(f"✗ STILLMORE {pid}: {e}")
+                    continue
+                bulunan = stillmore.adaylara(satirlar, pid)
+                havuz[pid].update({"ad": bilgi.get("name") or havuz[pid]["ad"], "toplam": bilgi.get("total"),
+                                   "son_tarama": datetime.now().isoformat(timespec="seconds"),
+                                   "calinamayan": len(satirlar), "aday": len(bulunan)})
+                print(f"STILLMORE '{havuz[pid]['ad']}': {len(satirlar)} çalınamayan, {len(bulunan)} aday")
+                adaylar += bulunan
+    except stillmore.StillmoreYok as e:
+        print(f"STILLMORE taraması atlandı: {e}")
+    stillmore.havuz_yaz(calisma, havuz)
+
+
 def _takip(args: argparse.Namespace) -> int:
     from yanki import spotify, takip
 
@@ -406,7 +456,7 @@ def _calistir(args: argparse.Namespace) -> int:
     gece_ekle = int(_kesif_ayarlari(kok)["kesif"].get("gece_ekle", 0))
     if gece_ekle and spotify_var:
         _kesif(argparse.Namespace(csv=[], playlist=[], pazar=None, ekle=gece_ekle, goster=10, katalogsuz=False,
-                                  yeniden_olc=False))
+                                  yeniden_olc=False, stillmoresuz=False, spotify_yeniden_baslat=True))
     _hazirla(args)
     _uret(args)
     _otomatik_onay(kok)
@@ -500,6 +550,9 @@ def main(argv: list[str] | None = None) -> int:
     ks.add_argument("--playlist", nargs="*", default=[], help="kendi playlist'in (varsayılan config/kesif.toml)")
     ks.add_argument("--pazar", nargs="*", help="pazarlar, ilki ana (varsayılan config/kesif.toml)")
     ks.add_argument("--katalogsuz", action="store_true", help="Deezer katalog farkını atla")
+    ks.add_argument("--stillmoresuz", action="store_true", help="STILLMORE playlist taramasını atla")
+    ks.add_argument("--spotify-yeniden-baslat", action="store_true",
+                    help="Spotify CDP'siz açıksa (çalmıyorsa) STILLMORE için yeniden başlat (gece koşusu bunu yapar)")
     ks.add_argument("--yeniden-olc", action="store_true", help="kayıtta ölçülmüş adayları da yeniden ölç")
     ks.add_argument("--ekle", type=int, default=0, help="en iyi N doğrulanmış adayı girdi/liste.toml'a ekle")
     ks.add_argument("--goster", type=int, default=25)

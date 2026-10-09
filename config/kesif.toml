@@ -17,6 +17,26 @@ playlistler = [
 # Şarkı başı ~30 dk GPU; dinleme yükü de Scryne'da.
 gece_ekle = 2
 
+[stillmore]
+# Spotify istemcisinin içindeki STILLMORE ile playlist taraması (yanki/stillmore.py): başkasının ve editoryal
+# playlist'leri de okur, kaldırılmadan önceki Spotify dinlenmesini verir. Gece koşusu Spotify'ı CDP bayrağıyla açar
+# (çalıyorsa dokunmaz). Her gece en uzun süredir taranmamış `gece_playlist` tanesi.
+acik = true
+# Elle eklenen playlist'ler (Scryne'ın takip ettikleri: Web API bunları okuyamıyordu)
+playlistler = [
+  "5qdc2RpU1touPQlNSK5tee", "7cSXOMRAjzI4F8KNLDj377", "3vAnSIcOBOBbzAQElt7cSq", "1pXViTb7efviU11zRaVM2y",
+  "5tD40BIv9CShuFmAad8Tcw",
+]
+# Havuz büyütme: Web API playlist araması (sorgu başı 1 istek); en az `min_parca` parçalı sonuçlar havuza girer
+arama = [
+  "throwback hits", "2000s hits", "2010s hits", "old songs", "tiktok viral 2020", "brazilian funk", "rap hits 2017",
+  "emo 2000s", "sad songs 2019", "türkçe pop 2000ler", "latino hits 2015", "phonk",
+]
+arama_gece = 2
+min_parca = 100
+gece_playlist = 3
+tazeleme_gun = 7
+
 [katalog]
 # Kendi keşfimiz (STILLMORE'suz): Deezer'da çok dinlenen ama Spotify'da kapalı/olmayan şarkılar (yanki/katalog.py).
 acik = true

@@ -251,6 +251,14 @@ Durum sütunu session-start hook'u tarafından otomatik okunur — format bozulm
   (oturum açılışı + her gün 12:00) yama silinmişse kurulumu Spotify'ı yeniden başlatmadan tekrarlar; silme taklit
   edilip onarım doğrulandı. Keşif için CSV artık Scryne'ın kendi Spotify'ından: playlist → "Kaldırılmış şarkıları
   bul" → "CSV indir" → `girdi/kesif/`.
+- **STILLMORE köprüsü (2026-10-09, `yanki/stillmore.py`):** Yanki, Spotify istemcisindeki STILLMORE'a CDP ile
+  `Stillmore.playlist.scan` yaptırıyor: başkasının ve editoryal playlist'ler, kaldırılmadan önceki Spotify dinlenmesi,
+  ISRC, yeniden yükleme. CSV indirmeye gerek kalmadı, Web API kotası harcanmıyor. Gece koşusu Spotify'ı bayrakla açar
+  (çalıyorsa dokunmaz, açıktıysa sonra bayraksız geri açar). Havuz: config + Web API playlist araması (gece 2 sorgu,
+  ≥ 100 parça), her gece en uzun süredir taranmamış 3 playlist (`calisma/kesif/stillmore.json`). Canlı: "suwi" 40
+  çalınamayan (Web API ile aynı), takip edilen "Musica brazilian fivem"de Menor Teteu "Ai Ai Ai Bebe" kaldırılmadan
+  önce 35,7 milyon dinlenme (Web API bu playlist'i okuyamıyordu); sızıntılarda dinlenme 0. Talep artık
+  max(YouTube izlenmesi, Spotify dinlenmesi).
 - **Oturum açılınca Yanki (Scryne, 2026-10-09):** `\Yanki\Oda` görevi dinleme odasını arka planda açar
   (127.0.0.1:8765) ve özeti Windows bildirimiyle gösterir (`yanki ozet`); elle tetiklenip doğrulandı. Oda `python -m`
   ile çalışır: `yanki.exe` açıkken kilitleniyor, bağımlılık değişince `uv` senkronu düşüyordu (bulundu, düzeltildi).
