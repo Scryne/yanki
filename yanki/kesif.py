@@ -69,7 +69,8 @@ class Aday:
     geri_geldi: bool | None = None  # None: doğrulanmadı
     geri_gelen: list = field(default_factory=list)  # [{"id", "sanatci", "ad", "neden": "isrc"|"ad"}]
     rakip_cover: int | None = None
-    kontrol: str | None = None
+    kontrol: str | None = None  # Spotify doğrulamasının zamanı
+    olcum: str | None = None  # ücretsiz ölçümlerin (YouTube, LRCLIB) zamanı
     ilk_gorulme: str | None = None
     elendi: bool = False  # Scryne dinleme odasında eledi: listeye kendiliğinden girmez
 
@@ -335,20 +336,34 @@ def birlestir(calisma: Path, yeniler: list[Aday]) -> dict[str, Aday]:
     for a in yeniler:
         eski = kayit.get(a.kimlik)
         a.ilk_gorulme = eski.ilk_gorulme if eski else simdi
-        if eski:
-            if not a.bakilan_pazarlar and eski.bakilan_pazarlar:
-                a.bakilan_pazarlar, a.kapali_pazarlar = eski.bakilan_pazarlar, eski.kapali_pazarlar
-            a.elendi = a.elendi or eski.elendi
-            for alan in ("spotify_dinlenme", "isrc", "spotify_id", "album", "cikis", "youtube_izlenme",
-                         "youtube_baslik", "youtube_id", "sanatci_uyusuyor", "soz_var", "sure_sn", "geri_geldi",
-                         "rakip_cover", "kontrol"):
-                if getattr(a, alan) is None and getattr(eski, alan) is not None:
-                    setattr(a, alan, getattr(eski, alan))
-            if not a.geri_gelen and eski.geri_gelen:
-                a.geri_gelen = eski.geri_gelen
+        tasi(a, eski)
         kayit[a.kimlik] = a
     kaydet(calisma, kayit)
     return kayit
+
+
+OLCUM_ALANLARI = ("spotify_dinlenme", "isrc", "spotify_id", "album", "cikis", "youtube_izlenme", "youtube_baslik",
+                  "youtube_id", "sanatci_uyusuyor", "soz_var", "sure_sn", "geri_geldi", "rakip_cover", "kontrol",
+                  "olcum")
+
+
+def tasi(a: Aday, eski: Aday | None) -> Aday:
+    """Kayıttaki ölçümleri yeni gelen adaya taşır (yenide boş olanlar); pazar dağılımı ve eleme kararı da."""
+    if eski is None:
+        return a
+    if not a.bakilan_pazarlar and eski.bakilan_pazarlar:
+        a.bakilan_pazarlar, a.kapali_pazarlar = eski.bakilan_pazarlar, eski.kapali_pazarlar
+    a.elendi = a.elendi or eski.elendi
+    for alan in OLCUM_ALANLARI:
+        if getattr(a, alan) is None and getattr(eski, alan) is not None:
+            setattr(a, alan, getattr(eski, alan))
+    if not a.geri_gelen and eski.geri_gelen:
+        a.geri_gelen = eski.geri_gelen
+    return a
+
+
+def taze(zaman: str | None, gun: int = 14, simdi: datetime | None = None) -> bool:
+    return bool(zaman) and datetime.fromisoformat(zaman) > (simdi or datetime.now()) - timedelta(days=gun)
 
 
 def kaydet(calisma: Path, kayit: dict[str, Aday]) -> None:

@@ -487,3 +487,16 @@ def test_playlist_onbellek_snapshot_ve_haftalik(tmp_path):
     sp.snapshot = "s2"  # değişmedi ama hafta doldu → yine tam tarama (parça sonradan kaldırılmış olabilir)
     assert kesif.playlist_tara_onbellekli(sp, "p", ("TR",), tmp_path, Counter(), datetime(2026, 10, 20)) is not None
     assert sp.tam_tarama == 3
+
+
+def test_tasi_ve_taze(tmp_path):
+    from datetime import datetime
+
+    eski = kesif.Aday("A", "B", "playlist:p", youtube_izlenme=5, sanatci_uyusuyor=True, soz_var=True,
+                      olcum="2026-10-09T10:00:00", elendi=True, bakilan_pazarlar=["US"], kapali_pazarlar=["US"])
+    yeni = kesif.tasi(kesif.Aday("A", "B", "deezer:1"), eski)
+    assert (yeni.youtube_izlenme, yeni.olcum, yeni.elendi, yeni.kapali_pazarlar, yeni.kaynak) == (
+        5, "2026-10-09T10:00:00", True, ["US"], "deezer:1")
+    assert kesif.taze("2026-10-09T10:00:00", 14, datetime(2026, 10, 20))
+    assert not kesif.taze("2026-10-09T10:00:00", 14, datetime(2026, 10, 24))
+    assert not kesif.taze(None)

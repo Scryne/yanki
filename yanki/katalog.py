@@ -139,7 +139,7 @@ def spotify_durumu(sp, p: Parca, pazarlar, json_al=ag.json_al) -> tuple[str, str
     # aramada özgün ad (kesme işareti/aksan Spotify eşleşmesi için gerekli: "C'est" ≠ "c est"), karşılaştırmada sade
     sonuc = sp.ara(f'track:"{sade_ad_gorunur(p.ad)}" artist:"{p.sanatci}"', market, adet=5)
     eslesen = [t for t in sonuc if _eslesir(t, sade, p.sanatci)]
-    if not any(t.get("is_playable") is not False for t in eslesen) and not eslesen:
+    if not eslesen:  # ad yazımı farklı olabilir: Deezer ISRC'siyle ikinci bakış
         kod = isrc(p.deezer_id, json_al)
         eslesen = sp.isrc_ara(kod, market) if kod else []
     if any(t.get("is_playable") is not False for t in eslesen):
@@ -240,7 +240,8 @@ def tara(sp, calisma: Path, pazarlar, ayar: Ayar, ek_adlar: list[str] | None = N
     baslangic = sp.istek_sayisi
     try:
         for p in sorulacak:
-            if sp.istek_sayisi - baslangic + 2 > ayar.butce:
+            # parça başı en kötü: ad + ISRC araması + kapalıysa her pazar
+            if sp.istek_sayisi - baslangic + 2 + len(pazarlar) > ayar.butce:
                 break
             durum, sid, kapali = spotify_durumu(sp, p, pazarlar, json_al)
             kayit[str(p.deezer_id)] = Kontrol(durum, simdi.isoformat(timespec="seconds"), p.sanatci, p.ad, p.rank, sid,

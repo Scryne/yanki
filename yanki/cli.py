@@ -236,10 +236,15 @@ def _kesif(args: argparse.Namespace) -> int:
     if duzenleme:
         print(f"{len(duzenleme)} düzenleme atlandı (sped up, slowed, remix…): "
               + ", ".join(f"{x.sanatci} — {x.ad}" for x in duzenleme[:5]) + (" …" if len(duzenleme) > 5 else ""))
-    # son 14 günde ölçülmüş adaylar yeniden sorulmaz (gece bütçesi korunur); `--yeniden-olc` hepsini ölçer
+    # Son 14 günde ölçülen adım yeniden yapılmaz: ücretsiz ölçüm (`olcum`) ve Spotify doğrulaması (`kontrol`) ayrı
+    # zamanlı; Spotify kilitliyken bekleyen aday ertesi gece yalnız Spotify adımına girer. `--yeniden-olc`: hepsi.
     if not args.yeniden_olc:
         onceki = kesif.oku(calisma)
-        tekil = [x for x in tekil if not _olculmus(onceki.get(x.kimlik))]
+        for x in tekil:
+            kesif.tasi(x, onceki.get(x.kimlik))
+    else:
+        for x in tekil:
+            x.olcum = x.kontrol = None
     yayin = paket.yayin_ayarlari(a.kok / "config" / "yayin.toml")
     if tekil and not dogrula:
         print("Spotify anahtarı yok (.env): boşluk doğrulanmıyor, yalnız talep ölçülüyor; doğrulanmamış aday listeye"
@@ -247,17 +252,25 @@ def _kesif(args: argparse.Namespace) -> int:
     # Önce ücretsiz elemeler (YouTube talebi + sanatçı eşleşmesi, LRCLIB sözü), Spotify en son ve yalnız bunları
     # geçenlere: Spotify kotası dar (2026-10-09: ~1.000 istekte 23 saatlik kilit), playlist adaylarının çoğu
     # sızıntı/düzenleme olarak ücretsiz adımlarda eleniyor.
-    for x in tekil:
+    from datetime import datetime
+
+    olculecek = [x for x in tekil if not kesif.taze(x.olcum)]
+    for x in olculecek:
         try:
             kesif.talep_olc(x)
         except Exception as e:  # noqa: BLE001 — YouTube araması düşerse aday kalır, talep boş
             print(f"  YouTube ölçülemedi ({x.sanatci} — {x.ad}): {e}")
+            continue
         if x.sanatci_uyusuyor is True:
             try:
                 kesif.soz_kontrol(x)
             except OSError as e:
                 print(f"  LRCLIB'e ulaşılamadı ({x.sanatci} — {x.ad}): {e}")
-    sorulacak = [x for x in tekil if kesif.spotifya_sorulur(x)]
+                continue
+        x.olcum = datetime.now().isoformat(timespec="seconds")
+    if olculecek:
+        print(f"ücretsiz ölçüm: {len(olculecek)} aday (YouTube, LRCLIB)")
+    sorulacak = [x for x in tekil if kesif.spotifya_sorulur(x) and not kesif.taze(x.kontrol)]
     if dogrula and sorulacak:
         print(f"Spotify doğrulaması: {len(sorulacak)}/{len(tekil)} aday ücretsiz elemeleri geçti")
     for i, x in enumerate(sorulacak if dogrula else [], 1):
@@ -284,12 +297,6 @@ def _kesif(args: argparse.Namespace) -> int:
         if not eklenen:
             print("listeye eklenecek doğrulanmış yeni aday yok")
     return 0
-
-
-def _olculmus(x, gun: int = 14) -> bool:
-    from datetime import datetime, timedelta
-
-    return bool(x and x.kontrol and datetime.fromisoformat(x.kontrol) > datetime.now() - timedelta(days=gun))
 
 
 def _takip(args: argparse.Namespace) -> int:
