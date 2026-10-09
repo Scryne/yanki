@@ -308,12 +308,22 @@ veto eder.
   aynı kayıtla düzeltilip yeniden gönderilir (hesabın parça kotası yanmaz). `yanki yukle <kimlik> [--taslak]`,
   `yanki dagitim-durum`; gece koşusu takipten önce durumu yoklar (kabulde UPC/ISRC, redde `paketlendi` + bildirim) ve
   takvimde sırası geleni kendisi yükler. `ilk_kabul` artık dağıtımcıya göre: Tunearo ilk parçayı kabul edene kadar
-  incelemede en çok bir yükleme, red gelirse neden anlaşılana kadar yok. 16 yeni test (sahte API), toplam 245 yeşil.
+  incelemede en çok bir yükleme, red gelirse neden anlaşılana kadar yok. 23 yeni test (sahte API), toplam 252 yeşil.
   **Canlı (2026-10-10):** Adele "When We Were Young" taslak olarak yüklendi ve API'den geri okundu: tür, söz (1.827
-  karakter), kapak, WAV (16 bit / 44,1 kHz, 290,9 sn), bölge/mağaza doğru; tek yayın, tek parça. Gönderim Scryne'ın
-  onayında. Canlı bulgular (dokümanda yok): söz POST'ta düşüyor (PATCH'le yazılıyor); depo sesi hep `.wav` adıyla
+  karakter), kapak, WAV (16 bit / 44,1 kHz, 290,9 sn), bölge/mağaza doğru; tek yayın, tek parça. **İlk gönderim
+  (2026-10-10 01:35, Scryne kararı bana bıraktı):** `pending`, yayın tarihi 2026-10-31; takvim kabul gelene kadar
+  bekliyor. Canlı bulgular (dokümanda yok): söz POST'ta düşüyor (PATCH'le yazılıyor); depo sesi hep `.wav` adıyla
   saklıyor; tür serbest metin; API'den açılan yayında mağaza listesi boş; önizleme başlangıcı API'de yok; yazar
   alanları tek metin (birden çok yazar ayrı kişi olarak gitmiyor). Webhook herkese açık HTTPS ister → yoklama.
+- **Doğrulama (2026-10-10):** bağımsız gözden geçirme üç açık buldu, kapatıldı: gönderim sunucuda olup yerelde
+  kaydedilemezse kapı görmüyordu (artık `gonderiliyor` işareti, yarım yükleme kuyruğun başında, reddedilmiş yayın red
+  kaydedilmeden yeniden gönderilmez); tek yayının 404/5xx'i bütün yoklamayı durduruyordu; yarım yüklemede yeni tarih
+  yazılıyordu. Kendi denetimimden: yeniden paketleme `metadata.json`'daki dağıtım geçmişini siliyordu (aynı yayın
+  yeniden gönderilemez, red kapısı kaybolurdu) ve FLAC → WAV geçişinde eski ses kalıyordu; yazarsız cover gönderilmez.
+  Her düzeltmenin testi düzeltmesiz kodda kırılıyor. Kuyruktaki 12 paketin YUKLE.md'si Tunearo akışına çevrildi, 12'si
+  yükleme ön koşullarından geçti.
+- **Bitti kriterinden kalan:** ilk Tunearo kararı (kabul → UPC/ISRC kaydı, takip; red → neden), takvimin 2 hafta
+  kesintisiz işlemesi, veto penceresinin uçtan uca bir şarkıda çalışması (kapalı, Faz 12 ölçümü bekliyor).
 - **Risk (Tunearo kalite kontrolü):** hesaptaki iki yayın "derivative work (remix, sample, or cover)" diye
   reddedilmiş (biri orijinal kaydın "Lo-Fi Remix"i, ses eşleşmesi 30, `qc_proof_required`). AI tespiti tek
   başına red değil (canlı bir yayında `ai_detected: true`). Bizim parçalar kopya kapısından geçmiş yeni kayıt; ilk
