@@ -34,10 +34,11 @@ function Bildir([string]$baslik, [string]$metin) {
 
 $acik = $false
 try { $acik = (Invoke-WebRequest "$adres`api/sarkilar" -UseBasicParsing -TimeoutSec 3).StatusCode -eq 200 } catch {}
-$ozet = (& $uv run yanki ozet 2>$null) -join " "
+$ozet = (& $uv run --no-sync python -m yanki ozet 2>$null) -join " "
 Yaz "özet: $ozet"
 Bildir "Yanki" $ozet
 if ($acik) { Yaz "oda zaten açık: $adres"; exit 0 }
 Yaz "oda başlıyor: $adres"
-& $uv run yanki dinle --tarayicisiz --port $Port *>&1 | ForEach-Object { [IO.File]::AppendAllText($log, "$_`r`n", $utf8) }
+# yanki.exe değil python -m: açık oda yanki.exe'yi kilitler, bağımlılık değişince gece koşusunun `uv run` senkronu düşer
+& $uv run --no-sync python -m yanki dinle --tarayicisiz --port $Port *>&1 | ForEach-Object { [IO.File]::AppendAllText($log, "$_`r`n", $utf8) }
 Yaz "oda kapandı (kod $LASTEXITCODE)"

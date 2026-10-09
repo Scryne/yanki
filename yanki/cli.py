@@ -229,6 +229,8 @@ def _kesif(args: argparse.Namespace) -> int:
             print(f"✗ katalog farkı: {e}")
         except (OSError, katalog.DeezerHatasi) as e:
             print(f"✗ katalog farkı: {e}")
+    if args.yeniden_olc:  # kayıttaki adaylar da (kaynak o gece taranamasa bile) yeniden ölçülür
+        adaylar += [x for x in kesif.oku(calisma).values() if not any(y.kimlik == x.kimlik for y in adaylar)]
     # aynı şarkı birden çok kaynaktan gelebilir: doğrulama tek kez; düzenlemeler (sped up, remix…) hiç sorulmaz
     tekil = list({x.kimlik: x for x in adaylar}.values())
     duzenleme = [x for x in tekil if x.duzenleme]
@@ -254,13 +256,24 @@ def _kesif(args: argparse.Namespace) -> int:
     # sızıntı/düzenleme olarak ücretsiz adımlarda eleniyor.
     from datetime import datetime
 
+    from yanki import yargi
+
     olculecek = [x for x in tekil if not kesif.taze(x.olcum)]
+    yargic = yargi.ac(a.kok) if olculecek else None
+    if olculecek and yargic is None:
+        print("TYPESAFE_API_KEY yok: özgünlük kararı regex yedeğiyle (daha zayıf)")
     for x in olculecek:
         try:
             kesif.talep_olc(x)
         except Exception as e:  # noqa: BLE001 — YouTube araması düşerse aday kalır, talep boş
             print(f"  YouTube ölçülemedi ({x.sanatci} — {x.ad}): {e}")
             continue
+        if yargic and x.youtube_kanit:
+            try:  # Jev birincil karar; düşerse regex sonucu (talep_olc'de) kalır
+                x.ozgunluk = yargic.ozgunluk(x.sanatci, x.ad, x.youtube_kanit)
+                x.sanatci_uyusuyor = x.ozgunluk["karar"]
+            except Exception as e:  # noqa: BLE001
+                print(f"  TypeSafe kararı alınamadı ({x.sanatci} — {x.ad}), regex yedeği: {e}")
         if x.sanatci_uyusuyor is True:
             try:
                 kesif.soz_kontrol(x)
@@ -268,8 +281,10 @@ def _kesif(args: argparse.Namespace) -> int:
                 print(f"  LRCLIB'e ulaşılamadı ({x.sanatci} — {x.ad}): {e}")
                 continue
         x.olcum = datetime.now().isoformat(timespec="seconds")
+    if yargic:
+        yargic.kapat()
     if olculecek:
-        print(f"ücretsiz ölçüm: {len(olculecek)} aday (YouTube, LRCLIB)")
+        print(f"ücretsiz ölçüm: {len(olculecek)} aday (YouTube, Jev, LRCLIB)")
     sorulacak = [x for x in tekil if kesif.spotifya_sorulur(x) and not kesif.taze(x.kontrol)]
     if dogrula and sorulacak:
         print(f"Spotify doğrulaması: {len(sorulacak)}/{len(tekil)} aday ücretsiz elemeleri geçti")

@@ -61,6 +61,8 @@ class Aday:
     youtube_izlenme: int | None = None
     youtube_baslik: str | None = None
     youtube_id: str | None = None  # dinleme odasında "Dinle" bağlantısı
+    youtube_kanit: list = field(default_factory=list)  # ilk 5 sonuç {title, channel, views}: özgünlük kararının kanıtı
+    ozgunluk: dict | None = None  # Jev kararı (yanki/yargi.py), model sürümüyle dondurulmuş
     # YouTube'daki en çok izlenen yüklemede listedeki sanatçı geçiyor mu. Geçmiyorsa takma adla yüklenmiş bir sızıntı
     # ya da taklit olabilir (2026-10-09: "Lizzy Rey", "Del" adıyla Lana Del Rey sızıntıları) → listeye eklenmez
     sanatci_uyusuyor: bool | None = None
@@ -106,6 +108,10 @@ def hal(a: Aday) -> str:
         return "geri geldi"
     if a.youtube_izlenme is None and a.sanatci_uyusuyor is None:
         return "talep yok"
+    if a.ozgunluk and a.ozgunluk.get("hayran", 0) >= 0.5:
+        return "hayran yapımı"
+    if a.sanatci_uyusuyor is None and a.ozgunluk:
+        return "sanatçı belirsiz"
     if a.sanatci_uyusuyor is not True:
         return "sanatçı uymuyor"
     if a.soz_var is False:
@@ -256,12 +262,14 @@ def talep_olc(a: Aday, arama=None) -> Aday:
         arama = _youtube_ara
     sade = sade_ad(a.ad)
     en_iyi: tuple[int, str, str | None] | None = None
-    for baslik, izlenme, *kimlik in arama(f"{a.sanatci} {a.ad}"):
+    sonuclar = arama(f"{a.sanatci} {a.ad}")
+    a.youtube_kanit = [{"title": r[0], "channel": r[3] if len(r) > 3 else None, "views": r[1]} for r in sonuclar[:5]]
+    for baslik, izlenme, *kimlik in sonuclar:
         # YouTube başlığı "Sanatçı - Şarkı (Official Video)": sonek silinmeden, kelime sınırıyla aranır
         if izlenme is None or kaynak.ISTENMEYEN.search(baslik) or f" {sade} " not in f" {_duz(baslik)} ":
             continue
         if en_iyi is None or izlenme > en_iyi[0]:
-            en_iyi = (izlenme, baslik, kimlik[0] if kimlik else None)
+            en_iyi = (izlenme, baslik, kimlik[0] if kimlik else None)  # kimlik: [video id, kanal]
     if en_iyi:
         a.youtube_izlenme, a.youtube_baslik, a.youtube_id = en_iyi
         a.sanatci_uyusuyor = sanatci_eslesir(a.sanatci, en_iyi[1])
@@ -308,13 +316,14 @@ def soz_kontrol(a: Aday, json_al=None) -> Aday:
     return a
 
 
-def _youtube_ara(sorgu: str, adet: int = 5) -> list[tuple[str, int | None, str | None]]:
+def _youtube_ara(sorgu: str, adet: int = 5) -> list[tuple[str, int | None, str | None, str | None]]:
     import yt_dlp
 
     ayar = {"quiet": True, "no_warnings": True, "extract_flat": True, "skip_download": True}
     with yt_dlp.YoutubeDL(ayar) as ydl:
         bilgi = ydl.extract_info(f"ytsearch{adet}:{sorgu}", download=False)
-    return [(g.get("title") or "", g.get("view_count"), g.get("id")) for g in bilgi.get("entries") or [] if g]
+    return [(g.get("title") or "", g.get("view_count"), g.get("id"), g.get("channel") or g.get("uploader"))
+            for g in bilgi.get("entries") or [] if g]
 
 
 # ── Kayıt ve liste ──────────────────────────────────────────
@@ -342,23 +351,33 @@ def birlestir(calisma: Path, yeniler: list[Aday]) -> dict[str, Aday]:
     return kayit
 
 
-OLCUM_ALANLARI = ("spotify_dinlenme", "isrc", "spotify_id", "album", "cikis", "youtube_izlenme", "youtube_baslik",
-                  "youtube_id", "sanatci_uyusuyor", "soz_var", "sure_sn", "geri_geldi", "rakip_cover", "kontrol",
-                  "olcum")
+KIMLIK_ALANLARI = ("spotify_dinlenme", "isrc", "spotify_id", "album", "cikis")
+# Aynı adımda birlikte ölçülen alanlar grup olarak taşınır: taze ölçümde None da geçerli bir sonuçtur ("belirsiz"),
+# eski kaydın değeriyle doldurulmaz (2026-10-09: Jev "belirsiz" dediği aday eski regex "uymuyor"uyla eziliyordu).
+UCRETSIZ_ALANLAR = ("youtube_izlenme", "youtube_baslik", "youtube_id", "youtube_kanit", "sanatci_uyusuyor", "soz_var",
+                    "sure_sn", "ozgunluk", "olcum")
+SPOTIFY_ALANLARI = ("geri_geldi", "geri_gelen", "rakip_cover", "kontrol", "bakilan_pazarlar", "kapali_pazarlar")
 
 
 def tasi(a: Aday, eski: Aday | None) -> Aday:
-    """Kayıttaki ölçümleri yeni gelen adaya taşır (yenide boş olanlar); pazar dağılımı ve eleme kararı da."""
+    """Kayıttaki ölçümleri yeni gelen adaya taşır: kimlik alanları tek tek (boşsa), ücretsiz ölçüm ve Spotify
+    doğrulaması grup olarak (yeni aday o adımda ölçülmediyse). Eleme kararı korunur."""
     if eski is None:
         return a
-    if not a.bakilan_pazarlar and eski.bakilan_pazarlar:
-        a.bakilan_pazarlar, a.kapali_pazarlar = eski.bakilan_pazarlar, eski.kapali_pazarlar
-    a.elendi = a.elendi or eski.elendi
-    for alan in OLCUM_ALANLARI:
+    for alan in KIMLIK_ALANLARI:
         if getattr(a, alan) is None and getattr(eski, alan) is not None:
             setattr(a, alan, getattr(eski, alan))
-    if not a.geri_gelen and eski.geri_gelen:
-        a.geri_gelen = eski.geri_gelen
+    if a.olcum is None:
+        for alan in UCRETSIZ_ALANLAR:
+            setattr(a, alan, getattr(eski, alan))
+    if a.kontrol is None and not a.bakilan_pazarlar:
+        for alan in SPOTIFY_ALANLARI:
+            setattr(a, alan, getattr(eski, alan))
+    elif a.kontrol is None:  # pazar dağılımı kaynaktan geldi (katalog), boşluk doğrulaması eskiden
+        for alan in ("geri_geldi", "geri_gelen", "rakip_cover"):
+            if getattr(a, alan) in (None, []):
+                setattr(a, alan, getattr(eski, alan))
+    a.elendi = a.elendi or eski.elendi
     return a
 
 

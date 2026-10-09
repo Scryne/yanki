@@ -500,3 +500,53 @@ def test_tasi_ve_taze(tmp_path):
     assert kesif.taze("2026-10-09T10:00:00", 14, datetime(2026, 10, 20))
     assert not kesif.taze("2026-10-09T10:00:00", 14, datetime(2026, 10, 24))
     assert not kesif.taze(None)
+
+
+class SahteJev:
+    """typesafe_sdk.TypeSafeClient.system_one taklidi: listede adı geçen sanatçıya göre cevap."""
+
+    def __init__(self, dagilim, hayran=0.05):
+        self.dagilim, self.hayran, self.istekler = dagilim, hayran, []
+
+    def system_one(self, state, questions):
+        from types import SimpleNamespace as N
+
+        self.istekler.append((state, set(questions)))
+        d = self.dagilim[state["listed_artist"]]
+        return N(model="jev-1.13.0", answers={
+            "kimin": N(choice=max(d, key=d.get), probabilities=d, confidence=max(d.values())),
+            "hayran": N(noul=self.hayran)})
+
+
+@pytest.mark.parametrize(("dagilim", "hayran", "karar"), [
+    ({"listed_artist": 0.98, "other_artist": 0.01, "unclear": 0.01}, 0.05, True),
+    ({"listed_artist": 0.77, "other_artist": 0.20, "unclear": 0.03}, 0.05, None),   # L. Del Rei: eşik altı
+    ({"listed_artist": 0.02, "other_artist": 0.94, "unclear": 0.04}, 0.05, False),
+    ({"listed_artist": 0.95, "other_artist": 0.03, "unclear": 0.02}, 0.70, False),  # hayran yapımı
+])
+def test_yargi_esikleri(dagilim, hayran, karar):
+    from yanki import yargi
+
+    jev = SahteJev({"X": dagilim}, hayran)
+    o = yargi.Yargic("k", istemci=jev).ozgunluk("X", "Şarkı", [{"title": "X - Şarkı", "channel": "X", "views": 5}])
+    assert o["karar"] is karar and o["model"] == "jev-1.13.0"
+    assert jev.istekler[0][0]["youtube_results"][0]["channel"] == "X" and jev.istekler[0][1] == {"kimin", "hayran"}
+
+
+def test_talep_kaniti_ve_hal():
+    a = kesif.Aday("Del", "Mermaid Motel", "k", geri_geldi=False)
+    kesif.talep_olc(a, arama=lambda q: [("Lana Del Rey-Mermaid Motel(lyrics)", 18910, "vid1", "lyrics kanalı")])
+    assert a.youtube_kanit == [{"title": "Lana Del Rey-Mermaid Motel(lyrics)", "channel": "lyrics kanalı",
+                                "views": 18910}]
+    a.ozgunluk, a.sanatci_uyusuyor = {"hayran": 0.05, "karar": None}, None
+    assert kesif.hal(a) == "sanatçı belirsiz" and a.puan == 0
+    a.ozgunluk = {"hayran": 0.8, "karar": False}
+    assert kesif.hal(a) == "hayran yapımı"
+
+
+def test_tasi_taze_olcumdeki_none_ezilmez():
+    eski = kesif.Aday("L. Del Rei", "Serial Killer", "k", sanatci_uyusuyor=False, youtube_izlenme=4,
+                      olcum="2026-10-01T00:00:00")
+    yeni = kesif.Aday("L. Del Rei", "Serial Killer", "k", sanatci_uyusuyor=None, youtube_izlenme=4,
+                      ozgunluk={"karar": None}, olcum="2026-10-09T00:00:00")
+    assert kesif.tasi(yeni, eski).sanatci_uyusuyor is None and kesif.hal(yeni) == "sanatçı belirsiz"
