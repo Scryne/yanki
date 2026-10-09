@@ -204,7 +204,15 @@ Durum sütunu session-start hook'u tarafından otomatik okunur — format bozulm
 - **Canlı (2026-10-09, Scryne'ın Spotify uygulaması):** token, ISRC ve ad araması, `is_playable: false` doğrulandı;
   `restrictions.reason` kaldırılmışı ayırmıyor ("market") → US/GB/DE kontrolü eklendi. Boşluk doğrulama Adele SLY'yi
   doğru eledi (rakip 4). `yanki takip`: üç yükleme yayın tarihinden önce, canlı değil.
-- **Bekleyen:** ilk STILLMORE CSV'si (`girdi/kesif/`); kendi playlist taraması için `yanki spotify-baglan`. İlk Türkçe adayda Türkçe cover dinleme
+- **İlk gerçek keşif (2026-10-09, Scryne'ın 13 kendi playlist'i, 2.166 parça):** `/items` + PKCE canlıda çalıştı.
+  70 çalınamayan → 55 benzersiz; çoğu cover adayı değil: takma adla yüklenmiş Lana Del Rey sızıntıları ("Lizzy Rey",
+  "Del", "EVE !"…), sped up/slowed/remix düzenlemeleri, oyun müziği hayran yüklemeleri, 18 dk sözsüz parça (GY!BE).
+  Eklenen filtreler (canlı veriyle bulundu): düzenleme adı; sanatçı YouTube başlığında bütün hâlde ("Del" ≠ "Lana Del
+  Rey"; ayraçlar " - ", "- ", "||", boşluksuz tire); LRCLIB'de sözlü kayıt ve ≤ 420 sn. Kalan 3 aday listeye eklendi
+  ve hazırlandı (HAARPER "Cadavers in My Cadillac" YouTube 77 bin / rakip 0, 1nonly "Cotton Candy Swirls" 23 bin / 1,
+  Day$okee "MAMACITA" 55 bin / 5): üçü de rap, hattın rap'te ilk denemesi.
+- **Sonuç:** Scryne'ın playlist'leri zayıf kaynak (55'te 3, talep düşük). Büyük, eski playlist'lerin STILLMORE
+  CSV'si gerekiyor (arkadaştan) → `girdi/kesif/`. İlk Türkçe adayda Türkçe cover dinleme
   testi (ACE-Step'te denenmedi). Sıra formülü ilk yayınların arama sırasıyla düzeltilir.
 
 ### Faz 10: Otomatik yükleme (dağıtım API'si) ⏳

@@ -205,8 +205,13 @@ def _kesif(args: argparse.Namespace) -> int:
             continue
         print(f"playlist {pid}: {len(bulunan)} çalınamayan şarkı")
         adaylar += bulunan
-    # aynı şarkı birden çok kaynaktan gelebilir: doğrulama tek kez
+    # aynı şarkı birden çok kaynaktan gelebilir: doğrulama tek kez; düzenlemeler (sped up, remix…) hiç sorulmaz
     tekil = list({x.kimlik: x for x in adaylar}.values())
+    duzenleme = [x for x in tekil if x.duzenleme]
+    tekil = [x for x in tekil if not x.duzenleme]
+    if duzenleme:
+        print(f"{len(duzenleme)} düzenleme atlandı (sped up, slowed, remix…): "
+              + ", ".join(f"{x.sanatci} — {x.ad}" for x in duzenleme[:5]) + (" …" if len(duzenleme) > 5 else ""))
     yayin = paket.yayin_ayarlari(a.kok / "config" / "yayin.toml")
     dogrula = bool(sp.client_id and sp.client_secret)
     if tekil and not dogrula:
@@ -228,11 +233,18 @@ def _kesif(args: argparse.Namespace) -> int:
                 kesif.talep_olc(x)
             except Exception as e:  # noqa: BLE001 — YouTube araması düşerse aday kalır, talep boş
                 print(f"  YouTube ölçülemedi ({x.sanatci} — {x.ad}): {e}")
+            if x.sanatci_uyusuyor is not False:
+                try:
+                    kesif.soz_kontrol(x)
+                except OSError as e:
+                    print(f"  LRCLIB'e ulaşılamadı ({x.sanatci} — {x.ad}): {e}")
     kayit = kesif.birlestir(calisma, tekil)
     sirali = kesif.sirala(kayit)
     print(f"\n{'puan':>12}  {'YouTube':>13}  rakip  durum        şarkı")
     for x in sirali[: args.goster]:
-        hal = "geri geldi" if x.geri_geldi else ("doğrulanmadı" if x.geri_geldi is None else x.neden)
+        hal = ("geri geldi" if x.geri_geldi else "doğrulanmadı" if x.geri_geldi is None
+               else "sanatçı uymuyor" if x.sanatci_uyusuyor is False else "söz yok" if x.soz_var is False
+               else "çok uzun" if (x.sure_sn or 0) > kesif.SURE_SINIRI_SN else x.neden)
         izl = f"{x.youtube_izlenme:,}" if x.youtube_izlenme else "—"
         print(f"{x.puan:12,.0f}  {izl:>13}  {x.rakip_cover if x.rakip_cover is not None else '—':>5}  "
               f"{hal:12} {x.sanatci} — {x.ad}")

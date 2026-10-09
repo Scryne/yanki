@@ -103,8 +103,8 @@ def test_talep_istenmeyen_surumleri_atar():
 
 
 def test_puan_ve_siralama():
-    x = kesif.Aday("A", "1", "k", youtube_izlenme=1000, rakip_cover=1, geri_geldi=False)
-    y = kesif.Aday("B", "2", "k", youtube_izlenme=900, rakip_cover=0, geri_geldi=False)
+    x = kesif.Aday("A", "1", "k", youtube_izlenme=1000, rakip_cover=1, geri_geldi=False, sanatci_uyusuyor=True)
+    y = kesif.Aday("B", "2", "k", youtube_izlenme=900, rakip_cover=0, geri_geldi=False, sanatci_uyusuyor=True)
     z = kesif.Aday("C", "3", "k", youtube_izlenme=10**9, geri_geldi=True)
     assert [a.sanatci for a in kesif.sirala({a.kimlik: a for a in (x, y, z)})] == ["B", "A", "C"]
 
@@ -131,6 +131,8 @@ def test_listeye_ekle_dogrulanmisi_ekler_mevcudu_atlar(tmp_path):
         kesif.Aday("Yeni \"Tırnak\"", "Şarkı (2011 Remaster)", "k", youtube_izlenme=5000, geri_geldi=False),
         kesif.Aday("İkinci", "Y", "k", youtube_izlenme=4000, geri_geldi=False),
     ]
+    for x in adaylar:
+        x.sanatci_uyusuyor = True
     eklenen = kesif.listeye_ekle(adaylar, lyol, calisma, adet=1)
     assert [x.sanatci for x in eklenen] == ['Yeni "Tırnak"']
     metin = lyol.read_text(encoding="utf-8")
@@ -143,7 +145,7 @@ def test_listeye_ekle_dogrulanmisi_ekler_mevcudu_atlar(tmp_path):
 class KayitliSpotify(spotify.Spotify):
     def __init__(self, tmp_path, yanitlar):
         super().__init__(tmp_path, "cid", "sec")
-        self.yanitlar, self.istekler = list(yanitlar), []
+        self.yanitlar, self.istekler, self.aralik_sn = list(yanitlar), [], 0
 
     def _http(self, yontem, url, basliklar, veri=None):
         self.istekler.append((yontem, url))
@@ -261,3 +263,64 @@ def test_takip_isrc_yoksa_uyarir(tmp_path):
     durum.yaz(tmp_path, d)
     (_, uyari), = takip.takip_et(SahteSpotify(), tmp_path, "Orvane", "TR")
     assert "ISRC yok" in uyari[0]
+
+
+def test_duzenleme_ve_takma_ad_eklenmez(tmp_path):
+    assert kesif.Aday("X", "Satisfya Slowed + Bass Boosted", "k").duzenleme
+    assert kesif.Aday("X", "Shorty Party (Sped Up Tik Tok) - Remix", "k").duzenleme
+    assert not kesif.Aday("X", "Serial Killer", "k").duzenleme
+    a = kesif.Aday("Lizzy Rey", "Serial Killer", "k", geri_geldi=False)
+    kesif.talep_olc(a, arama=lambda q: [("Lana Del Rey - Serial Killer (Unreleased)", 3_000_000)])
+    assert a.youtube_izlenme == 3_000_000 and a.sanatci_uyusuyor is False and a.puan == 0
+    b = kesif.Aday("Sezen Aksu", "Gülümse", "k", geri_geldi=False)
+    kesif.talep_olc(b, arama=lambda q: [("Sezen Aksu - Gülümse (Official Video)", 7_000_000)])
+    assert b.sanatci_uyusuyor is True and b.puan == 7_000_000
+    lyol = tmp_path / "liste.toml"
+    lyol.write_text("", encoding="utf-8")
+    (tmp_path / "c").mkdir()
+    assert [x.sanatci for x in kesif.listeye_ekle([a, b], lyol, tmp_path / "c", 5)] == ["Sezen Aksu"]
+
+
+@pytest.mark.parametrize(("sanatci", "baslik", "beklenen"), [
+    ("Del", "Lana Del Rey - Put Me in a Movie", False),
+    ("Lana Del Rey", "Lana Del Rey - Put Me in a Movie (Unreleased)", True),
+    ("Sezen Aksu", "Sezen Aksu & Tarkan - Şarkı", True),
+    ("Tarkan", "Sezen Aksu & Tarkan - Şarkı", True),
+    ("1nonly", "1nonly x Ciscaux - Cotton Candy Swirls", True),
+    ("Adele", "Someone Like You (Official Video) Adele", True),
+    ("¥$", "¥$ - FIELD TRIP", None),
+    ("Del", "put me in a movie- Lana del rey", False),
+    ("Del", "Brite Lites || Lana Del Rey full song", False),
+    ("Day$okee", "Day$okee- MAMACITA feat REDEMBRECE (prod SPLXTSTXCS)", True),
+    ("JAY-Z", "JAY-Z - Empire State Of Mind", True),
+    ("HAARPER", "HAARPER - Cadavers in My Cadillac (Lyrics)", True),
+    ("Del", "Lana Del Rey-Mermaid Motel(lyrics)", False),
+    ("JAY-Z", "JAY-Z Empire State Of Mind", True),
+])
+def test_sanatci_eslesir(sanatci, baslik, beklenen):
+    assert kesif.sanatci_eslesir(sanatci, baslik) is beklenen
+
+
+def test_soz_kontrol_sozsuz_ve_uzun():
+    from yanki import ag
+
+    def sozsuz(url, p):
+        if url.endswith("/get"):
+            return {"instrumental": True, "plainLyrics": None, "duration": 1080}
+        raise AssertionError
+
+    a = kesif.soz_kontrol(kesif.Aday("GY!BE", "East Hastings", "k", youtube_izlenme=10**6, geri_geldi=False), sozsuz)
+    assert a.soz_var is False and a.puan == 0
+
+    def uzun(url, p):
+        return {"plainLyrics": "la la\nla", "duration": 600}
+
+    b = kesif.soz_kontrol(kesif.Aday("A", "B", "k", youtube_izlenme=10**6, geri_geldi=False), uzun)
+    assert b.soz_var is True and b.sure_sn == 600 and b.puan == 0
+
+    def yok(url, p):
+        if url.endswith("/get"):
+            raise ag.Bulunamadi(url)
+        return []
+
+    assert kesif.soz_kontrol(kesif.Aday("A", "B", "k"), yok).soz_var is False

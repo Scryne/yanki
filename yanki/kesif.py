@@ -28,6 +28,9 @@ from pathlib import Path
 from yanki import liste
 
 PARANTEZ = re.compile(r"\s*[\(\[][^)\]]*[\)\]]")
+# Şarkı değil düzenleme: cover'ı yapılmaz (2026-10-09, Scryne'ın playlist'lerindeki 70 çalınamayanın ~10'u böyleydi)
+DUZENLEME = re.compile(r"\b(sped ?up|speed ?up|slowed|reverb|bass ?boost(ed)?|nightcore|8d audio|remix|tik ?tok|"
+                       r"mashup|edit audio|phonk edit|final set)\b", re.I)
 EK = re.compile(r"\s+-\s+.*$")  # "Song - Remastered 2011", "Song - From the film ..."
 
 
@@ -54,6 +57,11 @@ class Aday:
     spotify_dinlenme: int | None = None  # STILLMORE CSV'sinden (kaldırılmadan önceki toplam)
     youtube_izlenme: int | None = None
     youtube_baslik: str | None = None
+    # YouTube'daki en çok izlenen yüklemede listedeki sanatçı geçiyor mu. Geçmiyorsa takma adla yüklenmiş bir sızıntı
+    # ya da taklit olabilir (2026-10-09: "Lizzy Rey", "Del" adıyla Lana Del Rey sızıntıları) → listeye eklenmez
+    sanatci_uyusuyor: bool | None = None
+    soz_var: bool | None = None  # LRCLIB'de sözlü kayıt
+    sure_sn: float | None = None
     geri_geldi: bool | None = None  # None: doğrulanmadı
     geri_gelen: list = field(default_factory=list)  # [{"id", "sanatci", "ad", "neden": "isrc"|"ad"}]
     rakip_cover: int | None = None
@@ -65,8 +73,13 @@ class Aday:
         return liste.kimlik(self.sanatci, sade_ad_gorunur(self.ad))  # listeye yazılan adla aynı kimlik
 
     @property
+    def duzenleme(self) -> bool:
+        return bool(DUZENLEME.search(self.ad))
+
+    @property
     def puan(self) -> float:
-        if self.geri_geldi or not self.youtube_izlenme:
+        if (self.geri_geldi or not self.youtube_izlenme or self.sanatci_uyusuyor is not True or self.duzenleme
+                or self.soz_var is False or (self.sure_sn or 0) > SURE_SINIRI_SN):
             return 0.0
         return self.youtube_izlenme / (1 + (self.rakip_cover or 0))
 
@@ -171,6 +184,47 @@ def talep_olc(a: Aday, arama=None) -> Aday:
             en_iyi = (izlenme, baslik)
     if en_iyi:
         a.youtube_izlenme, a.youtube_baslik = en_iyi
+        a.sanatci_uyusuyor = sanatci_eslesir(a.sanatci, en_iyi[1])
+    return a
+
+
+SANATCI_AYRAC = re.compile(r"\s*(?:,|&|\+|\bx\b|\bfeat\.?|\bft\.?|\band\b|\bve\b)\s*", re.I)
+
+
+def sanatci_eslesir(sanatci: str, baslik: str) -> bool | None:
+    """YouTube başlığında sanatçı bütün olarak geçiyor mu. "Sanatçı - Şarkı" biçiminde sol taraftaki adlardan biri
+    birebir aynı olmalı: "Del", "Lana Del Rey - Put Me in a Movie" ile eşleşmez (2026-10-09 canlı koşuda kaçmıştı).
+    Ad harfsizse (ör. "¥$") karar verilmez."""
+    sd = _duz(sanatci)
+    if not sd:
+        return None
+    # "A - B", "A- B", "A || B" (canlı başlıklarda görüldü); "Jay-Z" gibi boşluksuz tire ayraç değil
+    parcalar = BASLIK_AYRAC.split(PARANTEZ.sub("", baslik))
+    if len(parcalar) > 1:
+        return any(_duz(x) == sd for p in parcalar for x in SANATCI_AYRAC.split(p) if x)
+    # ayraçsız başlık: sanatçı başta, sonda ya da boşluksuz tireyle ayrılmış bir parça olarak bütün hâlde
+    # ("Lana Del Rey-Mermaid Motel" → "Del" eşleşmez; "JAY-Z Empire State" eşleşir)
+    tam = _duz(PARANTEZ.sub("", baslik))
+    return (tam.startswith(sd + " ") or tam.endswith(" " + sd) or tam == sd
+            or any(_duz(p) == sd for p in baslik.split("-")))
+
+
+BASLIK_AYRAC = re.compile(r"\s+[-–—]+\s*|\s*[-–—]+\s+|\s*\|+\s*")
+
+
+SURE_SINIRI_SN = 420  # hattın parçalı üretimi ölçüldüğü aralığın üstü (285–290 sn şarkılar); uzun parça atlanır
+
+
+def soz_kontrol(a: Aday, json_al=None) -> Aday:
+    """Hattın söz kaynağı LRCLIB'de sözlü kayıt var mı ve süresi ne. Sözsüz (enstrümantal) ya da kaydı olmayan şarkı
+    kendiliğinden listeye girmez: cover tarifi gerçek sözlere dayanıyor ve söz kapısı sözsüz adayı düşürür."""
+    from yanki import ag, sozler
+
+    try:
+        s = sozler.lrclib(a.sanatci, sade_ad_gorunur(a.ad), **({"json_al": json_al} if json_al else {}))
+        a.soz_var, a.sure_sn = True, s.sure_sn
+    except ag.Bulunamadi:
+        a.soz_var = False
     return a
 
 
@@ -204,7 +258,8 @@ def birlestir(calisma: Path, yeniler: list[Aday]) -> dict[str, Aday]:
         a.ilk_gorulme = eski.ilk_gorulme if eski else simdi
         if eski:
             for alan in ("spotify_dinlenme", "isrc", "spotify_id", "album", "cikis", "youtube_izlenme",
-                         "youtube_baslik", "geri_geldi", "rakip_cover", "kontrol"):
+                         "youtube_baslik", "sanatci_uyusuyor", "soz_var", "sure_sn", "geri_geldi", "rakip_cover",
+                         "kontrol"):
                 if getattr(a, alan) is None and getattr(eski, alan) is not None:
                     setattr(a, alan, getattr(eski, alan))
             if not a.geri_gelen and eski.geri_gelen:

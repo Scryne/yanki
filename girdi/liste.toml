@@ -108,3 +108,16 @@ sanatci = "Lana Del Rey"
 ad = "Young and Beautiful"
 vokal = "kadin"
 stil = "cinematic orchestral pop ballad, female lead vocal, dreamy and haunting, piano and lush strings, slow, clean modern studio recording"
+
+# kesif 2026-10-09: Spotify'da kaldırılmış şarkılar (yanki kesif)
+[[sarki]]  # YouTube 76,938 izlenme; playlist:3PMsSWdcfg8X6JdEMlcBpB
+sanatci = "HAARPER"
+ad = "Cadavers in My Cadillac"
+
+[[sarki]]  # YouTube 23,127 izlenme, rakip cover 1; playlist:4BONsw2IXNq17K1CQhqWem
+sanatci = "1nonly"
+ad = "Cotton Candy Swirls"
+
+[[sarki]]  # YouTube 54,683 izlenme, rakip cover 5; playlist:4BONsw2IXNq17K1CQhqWem
+sanatci = "Day$okee"
+ad = "MAMACITA"

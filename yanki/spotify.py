@@ -32,6 +32,7 @@ HESAP = "https://accounts.spotify.com"
 YONLENDIRME = "http://127.0.0.1:8766/callback"  # Spotify `localhost`u reddediyor, 127.0.0.1 döngü adresini kabul ediyor
 KAPSAM = "playlist-read-private playlist-read-collaborative"
 KISA_BEKLEME_SN = 10  # Retry-After bundan kısaysa bekleyip bir kez daha dene
+ARALIK_SN = 0.3  # ardışık istekler arası en az bekleme (30 sn'lik kayan pencereyi toplu taramada doldurmamak için)
 
 
 class SpotifyHatasi(RuntimeError):
@@ -72,6 +73,8 @@ class Spotify:
         self.yonlendirme = yonlendirme or e.get("SPOTIFY_REDIRECT_URI", "") or YONLENDIRME
         self.token_yolu = kok / "calisma" / ".spotify.json"
         self._uygulama: tuple[str, float] | None = None
+        self._son_istek = 0.0
+        self.aralik_sn = ARALIK_SN
 
     # ── HTTP ────────────────────────────────────────────────
     def _http(self, yontem: str, url: str, basliklar: dict, veri: bytes | None = None) -> tuple[int, dict, bytes]:
@@ -96,6 +99,10 @@ class Spotify:
         if parametre:
             url += ("&" if "?" in url else "?") + urllib.parse.urlencode(parametre)
         for deneme in range(2):
+            bekle = self._son_istek + self.aralik_sn - time.monotonic()
+            if bekle > 0:
+                time.sleep(bekle)
+            self._son_istek = time.monotonic()
             kod, basliklar, govde = self._http("GET", url, {"Authorization": f"Bearer {token}"})
             if kod == 200:
                 return json.loads(govde)
