@@ -298,8 +298,15 @@ class Tunearo:
             except ag.Bulunamadi:  # taslak panelden silinmiş: baştan
                 rid, kayit = None, {}
             else:
-                if st.get("status") not in DUZENLENEBILIR:  # önceki koşu göndermiş, kaydedememiş
-                    return self._sonuc(kayit, rid, yayin_tarihi, st)
+                # önceki koşu göndermiş, sonucu kaydedememiş (`gonderiliyor`) ya da gönderim panelden yapılmış:
+                # dokunma, olduğu gibi kaydet. Reddedilmişse de yeniden gönderme: kayda geçsin, yoklama reddi
+                # bildirsin (red kaydedildikten sonra durum `gonderiliyor` değildir, düzeltilen yayın gönderilir)
+                kaydedilmedi = kayit.get("durum") == "gonderiliyor"
+                if st.get("status") not in DUZENLENEBILIR or (st.get("status") == "rejected" and kaydedilmedi):
+                    kayit["durum"] = st.get("status")  # artık kayıtlı: red sonrası düzeltilen yayın gönderilebilir
+                    _meta_yaz(meta_yolu, "tunearo", kayit)
+                    return self._sonuc(kayit, rid, date.fromisoformat(kayit.get("yayin_tarihi")
+                                                                      or yayin_tarihi.isoformat()), st)
         alanlar = yayin_alanlari(meta, d, yayin_tarihi, self.ayar, self.sanatci_id(meta["sanatci"]))
         if rid:
             self.api.patch(f"/releases/{rid}", alanlar)
@@ -341,6 +348,9 @@ class Tunearo:
             kayit["durum"] = "draft"
             _meta_yaz(meta_yolu, "tunearo", kayit)
             return {}
+        # gönderimden önce işaret: istek sunucuda başarılı olup burada düşerse takvim bunu incelemede sayar
+        kayit.update(durum="gonderiliyor", yayin_tarihi=yayin_tarihi.isoformat())
+        _meta_yaz(meta_yolu, "tunearo", kayit)
         st = self.api.post(f"/releases/{rid}/submit").get("release") or {"status": "pending"}
         kayit.update(durum=st.get("status", "pending"), gonderildi=datetime.now().isoformat(timespec="seconds"))
         _meta_yaz(meta_yolu, "tunearo", kayit)
@@ -368,7 +378,18 @@ class Tunearo:
             if d.asama not in ("yuklendi", "yayinda") or y.get("dagitimci") != self.ad or not y.get("release_id"):
                 continue
             rid = y["release_id"]
-            st = self.api.get(f"/releases/{rid}/status")
+            try:  # bir yayının hatası diğerlerinin yoklamasını durdurmaz
+                st = self.api.get(f"/releases/{rid}/status")
+            except ag.Bulunamadi:
+                if bildir:
+                    bildir("kayip", f"Tunearo'da yok: {d.ad}", f"yayın {rid} bulunamadı (panelden silinmiş olabilir)",
+                           f"tunearo:yok:{d.kimlik}:{rid}")
+                sonuc.append((d, "bulunamadi", y.get("dagitim_durumu")))
+                continue
+            except TunearoHatasi as e:
+                print(f"  {d.ad}: durum alınamadı: {e}")
+                sonuc.append((d, "hata", y.get("dagitim_durumu")))
+                continue
             yeni, eski = st.get("status"), y.get("dagitim_durumu")
             guncel = {"dagitim_durumu": yeni, "dagitim_kontrol": datetime.now().isoformat(timespec="seconds")}
             if st.get("upc"):

@@ -129,15 +129,21 @@ class Plan:
         return self.sira[0] if self.sira and not self.beklemede and self.sira[0].yukleme <= date.today() else None
 
 
-def _yuklemeler(calisma: Path, d: durum.Durum) -> tuple[dict | None, list[dict]]:
+def _meta(calisma: Path, d: durum.Durum) -> dict:
     import json
 
     yol = durum.klasor(calisma, d.kimlik) / "paket" / "metadata.json"
     try:
-        meta = json.loads(yol.read_text(encoding="utf-8"))
+        return json.loads(yol.read_text(encoding="utf-8"))
     except (OSError, ValueError):
-        return None, []
-    return meta.get("yukleme"), list(meta.get("yukleme_gecmisi") or [])
+        return {}
+
+
+def _yarim(calisma: Path, d: durum.Durum) -> dict | None:
+    """API'li dağıtımcıda açılmış ama kaydı tamamlanmamış yükleme (`metadata.json` → `tunearo`): taslak ya da
+    gönderilip sonucu kaydedilemeyen (`gonderiliyor`)."""
+    kayit = _meta(calisma, d).get("tunearo") or {}
+    return kayit if d.asama == "paketlendi" and kayit.get("release_id") else None
 
 
 def _ilk_kabul_bekleme(calisma: Path, hepsi: list[durum.Durum], dagitimci: str | None) -> str | None:
@@ -149,11 +155,14 @@ def _ilk_kabul_bekleme(calisma: Path, hepsi: list[durum.Durum], dagitimci: str |
     bizim = lambda y: bool(y) and y.get("dagitimci") in (dagitimci, None)  # noqa: E731 — eski kayıtta ad yok
     incelemede, red = [], []
     for d in hepsi:
-        y, gecmis = _yuklemeler(calisma, d)
+        meta = _meta(calisma, d)
+        y, gecmis = meta.get("yukleme"), list(meta.get("yukleme_gecmisi") or [])
         if bizim(y) and (d.asama == "yayinda" or y.get("dagitim_durumu") in ("approved", "live")):
             return None  # bu dağıtımcı en az bir parçayı kabul etti
         if bizim(y) and d.asama == "yuklendi":
             incelemede.append(d.ad)
+        elif d.asama == "paketlendi" and (meta.get("tunearo") or {}).get("durum") == "gonderiliyor":
+            incelemede.append(d.ad)  # gönderildi ama sonuç kaydedilemedi: sunucuda incelemede olabilir
         red += [d.ad for g in gecmis if g.get("red") and g.get("dagitimci") in (dagitimci, None)]
     if incelemede:
         return f"{dagitimci}: ilk kabul bekleniyor ({', '.join(incelemede)} incelemede), o gelene kadar yükleme yok"
@@ -176,8 +185,10 @@ def plan(calisma: Path, t: Takvim, bugun: date | None = None, puanlar: dict[str,
     yuklemeler = [z.date() for d in hepsi if d.asama in ("yuklendi", "yayinda") and (z := _gecis(d, "yuklendi"))]
     son = max(yuklemeler, default=None)
     reddedilen = [d.kimlik for d in hepsi if d.asama == "paketlendi" and (d.hata or "").startswith(RED_ONEKI)]
+    # yarım kalan API yüklemesi önce: aynı yayın tamamlanır, açılmış taslak ve parça sahipsiz kalmaz
     kuyruk = sorted((d for d in hepsi if d.asama == "paketlendi" and d.kimlik not in reddedilen),
-                    key=lambda d: (-puanlar.get(d.kimlik, 0.0), _gecis(d, "onaylandi") or datetime.max, d.kimlik))
+                    key=lambda d: (_yarim(calisma, d) is None, -puanlar.get(d.kimlik, 0.0),
+                                   _gecis(d, "onaylandi") or datetime.max, d.kimlik))
     ilk = max(bugun, son + t.aralik) if son else bugun
     sira = [Sira(d.kimlik, d.sanatci, d.ad, gun := ilk + i * t.aralik, gun + timedelta(days=t.yayin_on_gun),
                  puanlar.get(d.kimlik, 0.0)) for i, d in enumerate(kuyruk)]

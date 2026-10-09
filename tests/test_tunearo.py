@@ -381,3 +381,77 @@ def test_takip_tunearo_isrc_beklerken_elle_komut_onermez(tmp_path):
     c, _api, _t, _rid = _yuklenmis(tmp_path)
     ((_d, uyarilar),) = takip.takip_et(None, c, "Orvane", ["GB"])
     assert "incelemesi sürüyor (pending)" in uyarilar[0] and "yanki yuklendi" not in uyarilar[0]
+
+
+# ── gözden geçirme bulguları (2026-10-10): kaydedilemeyen gönderim, tek yayının yoklama hatası, yarım yükleme sırası
+class GonderimDuser(SahteApi):
+    """Gönderim sunucuda gerçekleşir ama cevap gelmez (zaman aşımı, süreç düştü)."""
+
+    def post(self, yol, govde=None):
+        sonuc = super().post(yol, govde)
+        if yol.endswith("/submit") and not getattr(self, "bir_kez", False):
+            self.bir_kez = True
+            raise tunearo.TunearoHatasi(None, "zaman aşımı")
+        return sonuc
+
+
+def test_kaydedilemeyen_gonderim_kapiyi_tutar_yeniden_gonderilmez(tmp_path):
+    c = tmp_path / "calisma"
+    _paket(c, kimlik="a")
+    _paket(c, kimlik="b")
+    api = GonderimDuser()
+    t = _dagitimci(tmp_path, api)
+    with pytest.raises(tunearo.TunearoHatasi):
+        dagitim.otomatik_yukle(c, t, "a", date(2026, 11, 5))
+    assert durum.oku(c, "a").asama == "paketlendi" and _meta(c, "a")["tunearo"]["durum"] == "gonderiliyor"
+    # b daha yüksek puanlı olsa da: a incelemede sayılır (ikinci gönderim yok) ve kuyruğun başında
+    p = dagitim.plan(c, dagitim.Takvim(), date(2026, 10, 20), {"b": 9e9}, dagitimci="tunearo")
+    assert "incelemede" in p.beklemede and p.sira[0].kimlik == "a"
+    # sonraki koşu: yayın pending → yeniden gönderilmez, ilk tarihle kaydedilir
+    bilgi = dagitim.otomatik_yukle(c, t, "a", date(2026, 11, 20))
+    assert bilgi["yayin_tarihi"] == "2026-11-05" and durum.oku(c, "a").asama == "yuklendi"
+    assert sum(x[1].endswith("/submit") for x in api.cagrilar if x[0] == "POST") == 1
+
+
+def test_kaydedilemeyen_gonderim_reddedildiyse_once_red_kaydedilir(tmp_path):
+    c = tmp_path / "calisma"
+    _paket(c, kimlik="a")
+    api = GonderimDuser()
+    t = _dagitimci(tmp_path, api)
+    with pytest.raises(tunearo.TunearoHatasi):
+        dagitim.otomatik_yukle(c, t, "a", date(2026, 11, 5))
+    (rid,) = api.yayinlar
+    api.yayinlar[rid].update(status="rejected", rejection_reason="Artwork", updated_at="x")
+    bilgi = dagitim.otomatik_yukle(c, t, "a", date(2026, 11, 5))  # sessizce yeniden göndermez
+    assert bilgi["dagitim_durumu"] == "rejected" and api.yayinlar[rid]["status"] == "rejected"
+    t.yokla(c, lambda *a: olay.bildir(c, *a))
+    assert durum.oku(c, "a").hata.startswith(dagitim.RED_ONEKI) and olay.oku(c)[0]["tur"] == "red"
+    with durum.guncelle(c, "a") as x:  # düzeltildi, yeniden paketlendi
+        x.gec("paketlendi")
+    dagitim.otomatik_yukle(c, t, "a", date(2026, 11, 12))
+    assert api.yayinlar[rid]["status"] == "pending" and len(api.yayinlar) == 1
+
+
+def test_bir_yayinin_yoklama_hatasi_digerlerini_durdurmaz(tmp_path):
+    c = tmp_path / "calisma"
+    _paket(c, kimlik="a")
+    _paket(c, kimlik="b")
+    api = SahteApi()
+    t = _dagitimci(tmp_path, api)
+    dagitim.otomatik_yukle(c, t, "a", date(2026, 11, 5))
+    dagitim.otomatik_yukle(c, t, "b", date(2026, 11, 12))
+    ra, rb = api.yayinlar
+    del api.yayinlar[ra]  # panelden silinmiş
+    api.yayinlar[rb]["status"] = "approved"
+    sonuc = {d.kimlik: yeni for d, yeni, _ in t.yokla(c, lambda *a: olay.bildir(c, *a))}
+    assert sonuc == {"a": "bulunamadi", "b": "approved"}
+    assert takip.yukleme_bilgisi(c, "b")["dagitim_durumu"] == "approved"
+    assert any(o["tur"] == "kayip" and "bulunamadı" in o["metin"] for o in olay.oku(c))
+
+
+def test_yarim_kalan_taslak_kuyrugun_basina_gecer(tmp_path):
+    c = tmp_path / "calisma"
+    _paket(c, kimlik="taslak", tunearo={"release_id": "rel-1", "durum": "draft"})
+    _paket(c, kimlik="populer")
+    p = dagitim.plan(c, dagitim.Takvim(), date(2026, 10, 20), {"populer": 9e9}, dagitimci="tunearo")
+    assert [x.kimlik for x in p.sira] == ["taslak", "populer"]

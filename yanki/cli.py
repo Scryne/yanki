@@ -671,7 +671,7 @@ def _dagitim_durum(args: argparse.Namespace) -> int:
         print(f"{d.ad}: izlenen yükleme yok")
     for s, yeni, eski in sonuc:
         print(f"  {s.sanatci} — {s.ad}: {yeni}" + (f" (önce {eski})" if eski and eski != yeni else ""))
-    return 0
+    return 1 if any(yeni in ("hata", "bulunamadi") for _, yeni, _ in sonuc) else 0
 
 
 def _dagitim_red(args: argparse.Namespace) -> int:
