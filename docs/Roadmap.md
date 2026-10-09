@@ -245,6 +245,12 @@ Durum sütunu session-start hook'u tarafından otomatik okunur — format bozulm
   model sürümüyle adaya dondurulur, anahtar yoksa regex yedeği. Kayıttaki 55 aday yeniden ölçüldü: 4 kabul, 8 belirsiz
   (kendiliğinden eklenmez), 4 hayran yapımı, 23 başka sanatçının. Yeni lider: Vinnie Vincent Invasion "Love Kills"
   (678 bin, rakip 4; önceki Spotify doğrulamasıyla 2026-10-10 gecesi kendiliğinden listeye girer).
+- **STILLMORE bu makinede kuruldu (2026-10-09):** Scryne Spotify'ı klasik sürüme geçirdi (1.3.4); Spicetify 2.45.3
+  (winget + upgrade), `C:\df-archive`'den kurulum betiği; eklenti Spotify içinde yüklü (CDP: "[ODF] STILLMORE FINDER
+  loaded … 139 records"), STILLMORE sayfası menüde. Spotify güncellemesi yamayı siler → `\STILLMORE\Onarim` görevi
+  (oturum açılışı + her gün 12:00) yama silinmişse kurulumu Spotify'ı yeniden başlatmadan tekrarlar; silme taklit
+  edilip onarım doğrulandı. Keşif için CSV artık Scryne'ın kendi Spotify'ından: playlist → "Kaldırılmış şarkıları
+  bul" → "CSV indir" → `girdi/kesif/`.
 - **Oturum açılınca Yanki (Scryne, 2026-10-09):** `\Yanki\Oda` görevi dinleme odasını arka planda açar
   (127.0.0.1:8765) ve özeti Windows bildirimiyle gösterir (`yanki ozet`); elle tetiklenip doğrulandı. Oda `python -m`
   ile çalışır: `yanki.exe` açıkken kilitleniyor, bağımlılık değişince `uv` senkronu düşüyordu (bulundu, düzeltildi).
