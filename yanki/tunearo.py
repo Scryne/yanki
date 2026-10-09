@@ -287,6 +287,8 @@ class Tunearo:
         meta = json.loads(meta_yolu.read_text(encoding="utf-8"))
         if not meta.get("sanatci"):
             raise ValueError("pakette sanatçı adı yok (config/yayin.toml → sanatci_adi)")
+        if not yazarlar(meta):  # cover'da orijinal yazarlar zorunlu (© ve composer bunlar)
+            raise ValueError("pakette orijinal yazarlar yok: `yanki kunye <kimlik>` sonra `yanki paketle --yeniden`")
         ses, kapak = _paket_dosyalari(p)
         kayit = dict(meta.get("tunearo") or {})
         rid = kayit.get("release_id")

@@ -172,7 +172,11 @@ def takip_et(sp, calisma: Path, sanatci_adi: str, pazarlar, kimlikler: list[str]
             continue
         y = yukleme_bilgisi(calisma, d.kimlik) or {}
         if not y.get("isrc"):
-            sonuc.append((d, [f"ISRC yok: dağıtımcının atadığı ISRC'yi `yanki yuklendi {d.kimlik} --isrc …` ile ekle"]))
+            if y.get("release_id"):  # API'li dağıtımcı: ISRC kabulde gelir, `yanki dagitim-durum` yazar
+                sonuc.append((d, [f"ISRC henüz yok: dağıtımcı incelemesi sürüyor ({y.get('dagitim_durumu')})"]))
+            else:
+                sonuc.append((d, [f"ISRC yok: dağıtımcının atadığı ISRC'yi `yanki yuklendi {d.kimlik} --isrc …` ile "
+                                  "ekle"]))
             continue
         son = kontrol_et(sp, d, y["isrc"].upper(), sanatci_adi, pazarlar, arama_limiti)
         son["yayin_tarihi"] = y.get("yayin_tarihi")

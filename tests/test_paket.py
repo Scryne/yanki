@@ -230,3 +230,28 @@ def test_acik_icerik_sozlerden(tmp_path):
     assert m["acik_icerik"] is True and "**Explicit** (sözlerde: fucking)" in paket.yukle_md(m, y, dosya)
     temiz = paket.metadata(_durum(), y, {"lufs": -14.0, "gercek_tepe_dbtp": -1.2}, 200.0, acik=[])
     assert temiz["acik_icerik"] is False and "Not Explicit (sözlerde küfür yok)" in paket.yukle_md(temiz, y, dosya)
+
+
+@ffmpeg_gerekli
+def test_yeniden_paketleme_dagitim_gecmisini_korur_eski_sesi_siler(tmp_path):
+    """Red → düzelt → `paketle --yeniden`: Tunearo yayın kimliği ve red geçmişi kalır (aynı yayın yeniden gönderilir,
+    takvim kapısı tutar); dağıtımcı FLAC'tan WAV'a geçtiyse eski FLAC silinir (yükleyici tek ses dosyası bekler)."""
+    c = tmp_path / "c"
+    k = c / "adele-someone-like-you"
+    (k / "adaylar" / "1").mkdir(parents=True)
+    _muzik(k / "adaylar" / "1" / "tam.flac")
+    _onayli(c)
+    paket.paketle(c, _yayin(tmp_path, "Orvane", "routenote"))
+    p = k / "paket"
+    assert [x.name for x in p.glob("*.flac")] == ["Orvane_-_Someone_Like_You.flac"]
+    meta = json.loads((p / "metadata.json").read_text(encoding="utf-8"))
+    meta["tunearo"] = {"release_id": "rel-1", "track_id": "trk-1"}
+    meta["yukleme_gecmisi"] = [{"dagitimci": "tunearo", "red": "Tunearo: derivative work"}]
+    (p / "metadata.json").write_text(json.dumps(meta), encoding="utf-8")
+
+    paket.paketle(c, _yayin(tmp_path, "Orvane", "tunearo"), yeniden=True)
+    assert sorted(x.name for x in p.iterdir()) == ["Orvane_-_Someone_Like_You.jpg", "Orvane_-_Someone_Like_You.wav",
+                                                   "YUKLE.md", "metadata.json"]
+    meta = json.loads((p / "metadata.json").read_text(encoding="utf-8"))
+    assert meta["tunearo"]["release_id"] == "rel-1" and meta["yukleme_gecmisi"][0]["red"].startswith("Tunearo")
+    assert "Tunearo'ya hat API ile kendisi yükler" in (p / "YUKLE.md").read_text(encoding="utf-8")

@@ -329,7 +329,6 @@ def _tunearo_notu(meta: dict, dosyalar: dict[str, str]) -> list[str]:
     from yanki import tunearo
 
     yazarlar = tunearo.yazarlar(meta) or "EKSİK"
-    on = meta.get("onizleme_sn")
     return [
         "Tunearo'ya hat API ile kendisi yükler: yayın takviminde sırası gelince gece koşusu, ya da elle "
         "`yanki yukle <kimlik>`. Form doldurma yok.", "",
@@ -338,8 +337,7 @@ def _tunearo_notu(meta: dict, dosyalar: dict[str, str]) -> list[str]:
         f"`{meta['etiket'] or meta['sanatci']}` · dil {DIL_ADI.get(meta['dil'], meta['dil'])} · "
         f"{'Explicit' if meta.get('acik_icerik') else 'Not Explicit'}",
         f"- **©** {meta.get('orijinal_yil') or '—'} {yazarlar} · **℗** {date.today().year} {meta['sanatci']}",
-        f"- **Parça:** composer/songwriter/lyricist `{yazarlar}`, producer `{meta['sanatci']}`, düz söz"
-        + (f", önizleme {_mmss(on)}" if on else ""),
+        f"- **Parça:** composer/songwriter/lyricist `{yazarlar}`, producer `{meta['sanatci']}`, düz söz",
         f"- **Dosyalar:** `{dosyalar['ses']}` ({meta['master']['lufs']:.1f} LUFS, {_mmss(meta['sure_sn'])}) · "
         f"`{dosyalar['kapak']}` (3000×3000 JPG){_kapak_notu(meta)}",
         "- **Bölge ve mağaza:** `config/yayin.toml` → `[tunearo]`",
@@ -402,6 +400,9 @@ def paketle(calisma: Path, yayin_yolu: Path, kimlikler: list[str] | None = None,
     return islenen
 
 
+KALICI_ALANLAR = ("yukleme", "yukleme_gecmisi", "tunearo")
+
+
 def _paketle_bir(calisma: Path, d: durum.Durum, y: Yayin) -> durum.Durum:
     from yanki import sunucu
 
@@ -426,6 +427,15 @@ def _paketle_bir(calisma: Path, d: durum.Durum, y: Yayin) -> durum.Durum:
     acik = acik_sozler(soz.read_text(encoding="utf-8")) if soz.exists() else None
     meta = metadata(d, y, olcum, ses.sure(ses_yolu), onizleme, acik)
     meta["kapak"] = kapak_bilgi
+    # yeniden paketlemede dağıtım geçmişi kalır: reddedilen yayın aynı kayıtla yeniden gönderilir (Tunearo), red
+    # geçmişi takvimin ilk_kabul kapısını tutar
+    if (eski_yol := p / "metadata.json").exists():
+        eski = json.loads(eski_yol.read_text(encoding="utf-8"))
+        meta.update({a: eski[a] for a in KALICI_ALANLAR if a in eski})
+    # başka biçimde ya da adla kalmış eski ses/kapak (FLAC → WAV, sanatçı adı değişti): yükleyici tek dosya bekler
+    for eski_dosya in [*p.glob("*.flac"), *p.glob("*.wav"), *p.glob("*.jpg")]:
+        if eski_dosya not in (ses_yolu, kapak_yolu):
+            eski_dosya.unlink()
     (p / "metadata.json").write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
     (p / "YUKLE.md").write_text(yukle_md(meta, y, {"ses": ses_yolu.name, "kapak": kapak_yolu.name}),
                                 encoding="utf-8")

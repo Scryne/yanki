@@ -366,3 +366,18 @@ def test_istemci_postu_yeniden_denemez_get_i_dener_dogrulama_hatasini_okur(monke
         api.patch("/releases/x", {})
     with pytest.raises(tunearo.AyarYok):
         tunearo.Istemci("")
+
+
+def test_yazarsiz_cover_gonderilmez(tmp_path):
+    c = tmp_path / "calisma"
+    _paket(c, orijinal_yazarlar=[], orijinal_yazar_adlari=[])
+    api = SahteApi()
+    with pytest.raises(ValueError, match="orijinal yazarlar"):
+        dagitim.otomatik_yukle(c, _dagitimci(tmp_path, api), "keane-sowk", date(2026, 11, 5))
+    assert api.cagrilar == [] and durum.oku(c, "keane-sowk").asama == "paketlendi"
+
+
+def test_takip_tunearo_isrc_beklerken_elle_komut_onermez(tmp_path):
+    c, _api, _t, _rid = _yuklenmis(tmp_path)
+    ((_d, uyarilar),) = takip.takip_et(None, c, "Orvane", ["GB"])
+    assert "incelemesi sürüyor (pending)" in uyarilar[0] and "yanki yuklendi" not in uyarilar[0]
