@@ -7,7 +7,7 @@ olduğu `config/yayin.toml` → `dagitimci`; takvim, kuyruk ve bildirim ikisinde
 
 Takvim (`config/yayin.toml` → `[takvim]`): `paketlendi` şarkılar kuyruk; sıra keşif puanı (kaldırılmış ve aranan şarkı
 önce), sonra onay sırası. Haftada `haftada` yükleme; ilk boş gün son yüklemeden bir aralık sonra. Önerilen yayın
-tarihi yüklemeden `yayin_on_gun` gün sonra (inceleme günler sürüyor, Spotify pitch için ≥ 7 gün; YUKLE.md).
+tarihi yüklemeden `yayin_on_gun` gün sonra (Tunearo'da 1: en erken; RouteNote'ta 21 kullanılıyordu).
 `baslangic = "ilk_kabul"`: etkin dağıtımcıda ilk kabul gelene kadar incelemede en çok bir yükleme; o reddedilirse
 neden anlaşılana kadar yeni yükleme yok (Roadmap Faz 7: red gelirse nedeni kapak mı AI mı önce o anlaşılmalı; aynı
 nedenle kuyruğun tamamı ve hesabın parça kotası yanmasın).

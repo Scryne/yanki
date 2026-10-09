@@ -322,6 +322,11 @@ veto eder.
   yeniden gönderilemez, red kapısı kaybolurdu) ve FLAC → WAV geçişinde eski ses kalıyordu; yazarsız cover gönderilmez.
   Her düzeltmenin testi düzeltmesiz kodda kırılıyor. Kuyruktaki 12 paketin YUKLE.md'si Tunearo akışına çevrildi, 12'si
   yükleme ön koşullarından geçti.
+- **Yayın tarihi en erkene (Scryne, 2026-10-10):** `yayin_on_gun` 21 → 1. 21 RouteNote'tan kalmıştı (ücretsiz
+  inceleme, pitch ≥ 7 gün); hesaptaki canlı Tunearo yayınları açılıştan 1–5 gün sonrasına tarihli, 2–5 gün sonra canlı.
+  When We Were Young 21 günlük payla (2026-10-31) gönderilmişti; `pending` yayında tarih değişmiyor (409, `PATCH
+  /releases` ve `/metadata`). Red gelirse yeniden gönderimde yeni tarih yazılır; kabul gelirse 31 Ekim kalır (panelden
+  arkadaş değiştirebilir).
 - **Bitti kriterinden kalan:** ilk Tunearo kararı (kabul → UPC/ISRC kaydı, takip; red → neden), takvimin 2 hafta
   kesintisiz işlemesi, veto penceresinin uçtan uca bir şarkıda çalışması (kapalı, Faz 12 ölçümü bekliyor).
 - **Risk (Tunearo kalite kontrolü):** hesaptaki iki yayın "derivative work (remix, sample, or cover)" diye

@@ -28,7 +28,11 @@ sure_saat = 72
 # Tunearo'ya gece koşusu kendisi yükler; elle dağıtımcıda (RouteNote) bildirilir.
 acik = true
 haftada = 1  # Roadmap Faz 8: kabul gelince düzenli yayın, haftada bir
-yayin_on_gun = 21  # yüklemeden kaç gün sonrası yayın tarihi önerilsin (ücretsiz inceleme günler sürüyor; pitch ≥ 7 gün)
+# Yüklemeden kaç gün sonrası yayın tarihi. 21 RouteNote içindi (ücretsiz inceleme, pitch ≥ 7 gün). Tunearo'da en erken
+# (Scryne, 2026-10-10): hesaptaki canlı yayınlar açılıştan 1–5 gün sonrasına tarihli ve 2–5 gün sonra canlıya çıkmış;
+# tarih incelemede geçerse parça onaylanınca çıkar. Orvane'de Spotify for Artists yok, pitch payının karşılığı yok.
+# Gönderilen yayının tarihi incelemedeyken değiştirilemiyor (409), bu yüzden en baştan kısa.
+yayin_on_gun = 1
 # "ilk_kabul": etkin dağıtımcı ilk parçayı kabul edene kadar incelemede en çok bir yükleme; reddederse neden
 # anlaşılana kadar yeni yükleme yok (Faz 7 kararı; kuyruk ve Tunearo parça kotası aynı nedenle yanmasın)
 baslangic = "ilk_kabul"
