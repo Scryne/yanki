@@ -90,7 +90,7 @@ def test_bosluk_dogrula_isrc_ile_geri_gelmis():
 
 def test_bosluk_dogrula_ayni_sanatci_ayni_ad_ve_rakip_sayimi():
     a = kesif.Aday("Sanatçı", "Şarkı - Remastered", "x", spotify_id="old")
-    arama = {'track:"sarki"': [
+    arama = {'track:"Şarkı"': [
         _parca("c1", "Şarkı", "Başka Biri"),             # rakip cover
         _parca("c2", "Şarkı (Cover)", "Üçüncü"),         # sade ad aynı → rakip
         _parca("c3", "Şarkı", "Orvane"),                 # bizim: sayılmaz
@@ -99,7 +99,7 @@ def test_bosluk_dogrula_ayni_sanatci_ayni_ad_ve_rakip_sayimi():
     ]}
     kesif.bosluk_dogrula(SahteSpotify(arama=arama), a, "TR", kendi_sanatci="Orvane")
     assert a.geri_geldi is False and a.rakip_cover == 2
-    arama['track:"sarki"'].append(_parca("c6", "Şarkı", "Sanatçı"))
+    arama['track:"Şarkı"'].append(_parca("c6", "Şarkı", "Sanatçı"))
     kesif.bosluk_dogrula(SahteSpotify(arama=arama), a, "TR")
     assert a.geri_geldi is True and a.geri_gelen == [{"id": "c6", "sanatci": "Sanatçı", "ad": "Şarkı", "neden": "ad"}]
 
@@ -406,8 +406,8 @@ def test_katalog_tara_kapali_yok_var_ve_onbellek(tmp_path):
     from yanki import katalog
 
     sp = SahteSpotify(arama={
-        'track:"teardrop" artist:"Massive Attack"': [_parca("t1", "Teardrop", "Massive Attack", oynar=False)],
-        'track:"glory box" artist:"Portishead"': [_parca("g1", "Glory Box", "Portishead")],
+        'track:"Teardrop" artist:"Massive Attack"': [_parca("t1", "Teardrop", "Massive Attack", oynar=False)],
+        'track:"Glory Box" artist:"Portishead"': [_parca("g1", "Glory Box", "Portishead")],
     })
     sp.istek_sayisi = 0
     sp.baska_yerde_acik = set()
@@ -426,7 +426,7 @@ def test_katalog_tara_kapali_yok_var_ve_onbellek(tmp_path):
     assert "/track/31" in ja.istekler  # adla bulunamayan ISRC'yle de soruldu
     sp.sorgular.clear()
     katalog.tara(sp, tmp_path, ("US", "GB"), ayar, json_al=ja, bildir=lambda *_: None, simdi=datetime(2026, 10, 10))
-    assert 'track:"glory box" artist:"Portishead"' not in sp.sorgular  # "var" önbellekte taze: yeniden sorulmaz
+    assert 'track:"Glory Box" artist:"Portishead"' not in sp.sorgular  # "var" önbellekte taze: yeniden sorulmaz
 
 
 def test_katalog_butce_sinirlar(tmp_path):

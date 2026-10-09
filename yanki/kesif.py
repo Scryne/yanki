@@ -229,7 +229,7 @@ def bosluk_dogrula(sp, a: Aday, pazarlar, kendi_sanatci: str = "") -> Aday:
         for t in sp.isrc_ara(a.isrc, market):
             if t.get("id") != a.spotify_id and t.get("is_playable") is not False:
                 geri.append({"id": t["id"], "sanatci": t["artists"][0]["name"], "ad": t["name"], "neden": "isrc"})
-    sonuclar = sp.ara(f'track:"{sade}"', market, adet=10)
+    sonuclar = sp.ara(f'track:"{sade_ad_gorunur(a.ad)}"', market, adet=10)  # aramada özgün ad, karşılaştırmada sade
     rakip = 0
     for t in sonuclar:
         if t.get("is_playable") is False or sade_ad(t.get("name") or "") != sade or t.get("id") == a.spotify_id:

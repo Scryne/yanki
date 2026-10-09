@@ -13,7 +13,7 @@ veriyor. Akış:
    listeleri IP'ye göre geliyor; bu ağda Fransa listesi döndü.
 3. **Spotify'da var mı:** `track:"ad" artist:"sanatçı"` araması (1 istek). Çalınabilir eşleşme → var. Eşleşme var ama
    çalınamıyor → kaldırılmış/kapalı. Eşleşme yoksa Deezer ISRC'siyle ikinci bakış (ad yazımı farklı olabilir).
-4. Sonuç `calisma/kesif/katalog.json`'da önbellek: "var" çıkan parça `tazeleme_gun` boyunca yeniden sorulmaz.
+4. Sonuç `calisma/kesif/katalog.json`'da önbellek: sorulan parça `tazeleme_gun` boyunca yeniden sorulmaz.
    Spotify istekleri koşu başına `butce` ile sınırlı (sınırlar sert, bkz. `spotify.py`).
 
 Bulunan adaylar `kesif.Aday` olarak keşfin geri kalanına (rakip sayımı, YouTube talebi, söz kontrolü) girer.
@@ -26,7 +26,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from yanki import ag
-from yanki.kesif import DUZENLEME, Aday, _duz, sade_ad
+from yanki.kesif import DUZENLEME, Aday, _duz, sade_ad, sade_ad_gorunur
 
 DEEZER = "https://api.deezer.com"
 
@@ -136,7 +136,8 @@ def spotify_durumu(sp, p: Parca, pazarlar, json_al=ag.json_al) -> tuple[str, str
         pazarlar = (pazarlar,)
     market = pazarlar[0]
     sade = sade_ad(p.ad)
-    sonuc = sp.ara(f'track:"{sade}" artist:"{p.sanatci}"', market, adet=5)
+    # aramada özgün ad (kesme işareti/aksan Spotify eşleşmesi için gerekli: "C'est" ≠ "c est"), karşılaştırmada sade
+    sonuc = sp.ara(f'track:"{sade_ad_gorunur(p.ad)}" artist:"{p.sanatci}"', market, adet=5)
     eslesen = [t for t in sonuc if _eslesir(t, sade, p.sanatci)]
     if not any(t.get("is_playable") is not False for t in eslesen) and not eslesen:
         kod = isrc(p.deezer_id, json_al)
@@ -172,7 +173,8 @@ def onbellek_yaz(calisma: Path, kayit: dict[str, Kontrol]) -> None:
 
 
 def taze_mi(k: Kontrol, gun: int, simdi: datetime) -> bool:
-    return k.durum == "var" and datetime.fromisoformat(k.zaman) > simdi - timedelta(days=gun)
+    """Her durum `gun` sonra yeniden sorulur: "var" kalkmış olabilir, "kapalı/yok" geri gelmiş olabilir."""
+    return datetime.fromisoformat(k.zaman) > simdi - timedelta(days=gun)
 
 
 # ── Tarama ──────────────────────────────────────────────────
