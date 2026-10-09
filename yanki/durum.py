@@ -5,6 +5,7 @@ Tek dosya, insan okunur; hattın her adımı buraya yazar, dinleme sayfası bura
 Aşamalar:
   yeni → hazir (kaynak + söz + künye) → analiz (stil/BPM/ton) → uretildi (adaylar kapıdan geçti)
   → onarim (Scryne aralık işaretledi, motor bekliyor) → uretildi … → onaylandi → paketlendi → yuklendi
+  → yayinda (`yanki takip` parçayı Spotify'da buldu)
   her aşamadan → hata (neden yazılı) ya da reddedildi (Scryne)
 """
 
@@ -14,7 +15,8 @@ from datetime import datetime
 from pathlib import Path
 
 ASAMALAR = (
-    "yeni", "hazir", "analiz", "uretildi", "onarim", "onaylandi", "paketlendi", "yuklendi", "hata", "reddedildi",
+    "yeni", "hazir", "analiz", "uretildi", "onarim", "onaylandi", "paketlendi", "yuklendi", "yayinda", "hata",
+    "reddedildi",
 )
 
 
@@ -46,6 +48,7 @@ class Durum:
     secilen: int | None = None
     notlar: list = field(default_factory=list)
     gecmis: list = field(default_factory=list)
+    yayin: dict = field(default_factory=dict)  # `yanki takip`: {"son": {...}, "gecmis": [...]}
 
     def gec(self, asama: str, hata: str | None = None) -> None:
         if asama not in ASAMALAR:

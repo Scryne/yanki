@@ -33,3 +33,5 @@ araclar/
 # Scryne'ın bıraktığı kaynak sesler ve yerel durum veritabanı
 girdi/kaynak/
 durum/
+# STILLMORE "Kaldırılmış şarkılar" CSV çıktıları (yanki kesif girdisi)
+girdi/kesif/*.csv

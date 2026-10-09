@@ -54,7 +54,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 
 .asama { font: 500 11px/1 var(--f-zaman); padding: 3px 6px; border-radius: 999px; border: 1px solid var(--cizgi); color: var(--metin-2); }
 .asama[data-a="uretildi"], .asama[data-a="onarim"] { color: var(--primary); border-color: color-mix(in srgb, var(--primary) 45%, transparent); }
-.asama[data-a="onaylandi"], .asama[data-a="paketlendi"], .asama[data-a="yuklendi"] { color: var(--gecti); border-color: color-mix(in srgb, var(--gecti) 45%, transparent); }
+.asama[data-a="onaylandi"], .asama[data-a="paketlendi"], .asama[data-a="yuklendi"], .asama[data-a="yayinda"] { color: var(--gecti); border-color: color-mix(in srgb, var(--gecti) 45%, transparent); }
 .asama[data-a="hata"], .asama[data-a="reddedildi"] { color: var(--dustu); border-color: color-mix(in srgb, var(--dustu) 45%, transparent); }
 
 .ana { padding: var(--s8) var(--s8) 120px; max-width: 1180px; outline: none; }

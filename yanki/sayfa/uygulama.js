@@ -16,7 +16,7 @@ const css = (ad) => getComputedStyle(document.documentElement).getPropertyValue(
 
 const ASAMA = {
   yeni: "yeni", hazir: "hazır", analiz: "analizde", uretildi: "dinlemede", onarim: "onarım bekliyor",
-  onaylandi: "onaylandı", paketlendi: "paketlendi", yuklendi: "yüklendi", hata: "hata", reddedildi: "reddedildi",
+  onaylandi: "onaylandı", paketlendi: "paketlendi", yuklendi: "yüklendi", yayinda: "yayında", hata: "hata", reddedildi: "reddedildi",
 };
 const KAPI = { parmak_izi: "parmak izi", dalga: "dalga", soz_wer: "söz", sure_fark: "süre", motor: "motor" };
 
@@ -148,7 +148,7 @@ async function sarkiGoster(kimlik) {
   const stilFarkli = new Set(d.adaylar.map((a) => a.stil || "")).size > 1;
   for (const a of d.adaylar) parcalar.push(adayKutu(d, a, duzenlenebilir, stilFarkli));
   if (!d.adaylar.length && !d.hata) parcalar.push(el("p", { class: "ipucu" }, "Adaylar henüz üretilmedi. Üretim GPU boşken arka planda çalışır."));
-  if (!["reddedildi", "yuklendi"].includes(d.asama)) {
+  if (!["reddedildi", "yuklendi", "yayinda"].includes(d.asama)) {
     parcalar.push(el("div", { class: "alt-cubuk" },
       el("span", { class: "ipucu" }, d.asama === "onaylandi" ? `Onaylanan: aday ${d.secilen}. Paket sonraki koşuda hazırlanır.` : "Dalga üzerinde sürükle: aralık seç · Boşluk: çal/durdur"),
       el("span", { class: "bosluk" }),

@@ -1,6 +1,7 @@
 """Scryne'ın şarkı listesi: `girdi/liste.toml`.
 
-Hat şarkı seçmez; yalnız bu listedekileri işler (Scryne, 2026-10-06).
+Hat yalnız bu listedekileri işler (Scryne, 2026-10-06). `yanki kesif --ekle N` doğrulanmış kaldırılmış şarkıları
+bu dosyanın sonuna ekler (2026-10-09).
 
     [[sarki]]
     sanatci = "Adele"

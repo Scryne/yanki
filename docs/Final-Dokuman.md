@@ -1,7 +1,7 @@
 ---
 proje: Yanki
 created: 2026-10-06
-modified: 2026-10-07
+modified: 2026-10-09
 type: final-dokuman
 status: onaylandi
 ---
@@ -19,6 +19,13 @@ doğru) geçirir ve yerel bir dinleme sayfasına koyar. Scryne dinler: onaylar, 
 aralığı yeniden üretir) ya da reddeder. Onaylanan cover mastering, kapak ve dağıtımcı metadata'sıyla bir **yükleme
 paketine** dönüşür; Scryne paketi dağıtımcı arayüzünden yükler (şarkı başı ~3–5 dk). Dağıtımcılarda yükleme API'si
 olmadığı için yükleme adımı bilerek insanda kalır.
+
+**Şarkı seçimi (Scryne, 2026-10-09):** hattın ana şarkı kaynağı Spotify'dan **kaldırılmış** şarkılar. Kaldırılmış
+şarkıyı arayan dinleyici Spotify'da onu bulamıyor; cover'ı aramada üste çıkar. Adaylar STILLMORE FINDER'ın
+(arkadaşın aracı, `docs/arastirma/03`) playlist taramasından ya da Scryne'ın playlist'lerinden gelir; Yanki boşluğun
+gerçekten açık olduğunu (şarkı geri gelmemiş) doğrular, talebe göre sıralar, listeye ekler (`yanki kesif`). Başarı
+ölçüsü yüklenen parçanın ad aramasındaki sırası (`yanki takip`). **Yükleme:** arkadaşın dağıtım sitesinin API'si
+gelince otomatik yüklemeye geçilir (Scryne, 2026-10-09); o zamana kadar insanda.
 
 ## Teknoloji Stack
 
@@ -40,6 +47,8 @@ olmadığı için yükleme adımı bilerek insanda kalır.
 | Kapak | Pillow ile kodla üretilen tipografik kapak, 3000×3000 JPG | Orijinal sanatçı adı/logosu yok (dağıtımcı kuralı); model gerektirmez |
 | Durum | Şarkı başına `calisma/<kimlik>/durum.json` (atomik yazım) | İnsan okunur, tek dosya; dinleme sayfası ve hat aynı kaydı okur. SQLite gereksiz çıktı |
 | Kalite | ruff, pytest; CI'da GPU'suz testler | Motor çağrısı arayüzün arkasında; testler sahte motorla |
+| Şarkı keşfi | STILLMORE CSV'si (`girdi/kesif/`) + Web API ile kendi playlist'ler → boşluk doğrulama (ISRC ve sanatçı + ad araması) → talep (YouTube izlenmesi, yt-dlp) → `calisma/kesif/adaylar.json`; `--ekle N` ya da `gece_ekle` | Başkasının playlist'ini Şubat 2026'dan beri yalnız Spotify istemcisi okuyor (STILLMORE); Yanki'yi Spicetify yamasına ve lisansa bağlamamak için sözleşme CSV. Spotify dinlenme sayısı herkese açık API'de yok, YouTube anahtarsız |
+| Yayın takibi | Spotify Web API (client credentials): ISRC araması → canlı, ad araması → sıra, sanatçı kimliği → profil tek mi; `durum.json` → `yayin` | Faz 7 bitti kriterini (Spotify'da dinlenebilir) ve stratejinin başarısını elle bakmadan ölçer. Anahtar `.env`'de |
 | Zamanlama | Görev Zamanlayıcı `\Yanki\Gece` 03:00 → `scripts/gece.ps1` → `yanki calistir`; yazan komutlar tek işletim sistemi kilidi | "Her şey arkada" (Scryne); bilgisayar yerelde GPU'lu olduğu için bulut cron değil. Kilit süreç ölünce kalkar |
 
 Model kimlikleri (`acestep-v15-xl-sft`, niceleme, adım, güç) kod içine gömülmez: `config/motor.toml`.
@@ -85,12 +94,16 @@ girdi/liste.toml  (Scryne: sanatçı + şarkı, isteğe bağlı stil/söz düzel
 | Kaynak ses edinme | ✅ S8: HTTP/3 ile YouTube'dan tam şarkı iniyor; yedek kaynak klasörü |
 | Tam şarkı 8 GB'ta | ✅ parçalı üretimle aday başı ~8 dk (S10) |
 | Otomatik stil tanımı | ⚠️ LM ve CLAP güvenilmez çıktı; MusicBrainz türleri + cinsiyet genel kalıyor ("piano ballad" gibi ayrıntı yok). Faz 6: dinleme sayfasında stili düzenleyip yeniden üretme |
+| Kaldırılmış şarkı stratejisi aramada üste çıkar mı | ⏳ ilk yayınlar canlı olunca `yanki takip` ölçer |
+| Spotify API kısıtları (Şubat 2026) keşfi engeller mi | ⚠️ başkasının playlist'i API'de 403 → STILLMORE CSV'si; arama ve ISRC çalışıyor (dokümana göre, canlı doğrulanmadı) |
 | Dağıtımcı AI cover'ı kabul eder mi | ⏳ Faz 7'de ilk gerçek yükleme. Seçilen: RouteNote (`docs/arastirma/02`); tam AI cover için açık kabul cümlesi yok |
 
 ## Kapsam Dışı
 
-- Tam otomatik yükleme (dağıtımcıda API yok; B2B API $139/ay; tarayıcı botu ToS dışı).
-- Hattın kendi şarkı seçmesi, Türkçe şarkılar, sanatçı ses klonu, orijinal kaydı girdi olarak taşıyan yollar.
+- Tarayıcı botuyla otomatik yükleme (ToS dışı). Arkadaşın dağıtım sitesinin API'si gelince yükleme otomatikleşir.
+- Sanatçı ses klonu, orijinal kaydı girdi olarak taşıyan yollar, orijinal sanatçı adının başlıkta/kapakta kullanılması.
+- ~~Hattın kendi şarkı seçmesi, Türkçe şarkılar~~ (2026-10-09: kaldırılmış şarkılar keşiften gelir ve Türkçe
+  olabilir. Türkçe cover kalitesi denenmedi → ilk Türkçe adayda dinleme testi.)
 - Promosyon, dinlenme artırma.
 
 ## Scryne'dan beklenenler (açık)

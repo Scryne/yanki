@@ -1,7 +1,7 @@
 ---
 proje: Yanki
 created: 2026-10-06
-modified: 2026-10-08
+modified: 2026-10-09
 type: roadmap
 status: aktif
 ---
@@ -20,7 +20,9 @@ Durum sütunu session-start hook'u tarafından otomatik okunur — format bozulm
 | 5 | Yükleme paketi | ✅ Tamamlandı | Onaylı şarkıdan mastering (−14 LUFS, −1 dBTP) + 3000×3000 kapak + metadata + `YUKLE.md`; Scryne'ın seçtiği dağıtımcının formuna birebir uyuyor |
 | 6 | Kalite turu | ✅ Tamamlandı | Mırıldanma, nefes, titreme için denemeler; Scryne bir şarkıda "yayınlanabilir" dedi |
 | 7 | Gerçek kullanım | 🔄 Devam Ediyor | Scryne listeden bir şarkıyı yükledi, dağıtımcı kabul etti, parça Spotify'da dinlenebilir; bulgular roadmap'e işlendi |
-| 8 | Kalite ve düzenli yayın | ⏳ Bekliyor | En az 3 parça Spotify'da; yükleme takvimi işliyor; vokal son işlemi ve LoRA dinleme testiyle karara bağlandı; ≥ 10 onarım etiketiyle otomatik kusur işaretleme denendi (sonuç kayıtlı) |
+| 8 | Kalite ve düzenli yayın | 🔄 Devam Ediyor | En az 3 parça Spotify'da; yükleme takvimi işliyor; vokal son işlemi ve LoRA dinleme testiyle karara bağlandı; ≥ 10 onarım etiketiyle otomatik kusur işaretleme denendi (sonuç kayıtlı) |
+| 9 | Kaldırılmış şarkı keşfi ve yayın takibi | 🔄 Devam Ediyor | Spotify anahtarı bağlı; `yanki kesif` gerçek bir STILLMORE CSV'si ya da kendi playlist'le ≥ 5 doğrulanmış (geri gelmemiş) aday buldu; en az biri üretilip yüklendi; `yanki takip` yüklenen parçaların canlılığını ve ad aramasındaki sırasını kaydetti |
+| 10 | Otomatik yükleme (dağıtım API'si) | ⏳ Bekliyor | Arkadaşın dağıtım sitesinin API'siyle onaylı bir paket elle dokunmadan yüklendi; durum kendiliğinden `yuklendi`, red/hata `durum.json`'a düşüyor |
 
 ## Faz Detayları
 
@@ -183,3 +185,28 @@ Durum sütunu session-start hook'u tarafından otomatik okunur — format bozulm
   otomatik kusur işaretleme (S14: Whisper güveni tutmadı; onarım etiketleri birikince yeniden).
 - Kabul gelince düzenli yayın: onaylı paketlerden takvim (haftada bir), her yüklemenin bulgusu `YUKLE.md`'ye.
 - Zayıf şarkılar (Fix You: üç aday da söz WER 0,28–0,39) stil düzenleme ya da yeni tohumlarla yeniden.
+
+### Faz 9: Kaldırılmış şarkı keşfi ve yayın takibi 🔄
+- **Karar (Scryne, 2026-10-09):** şarkı kaynağı Spotify'dan kaldırılmış şarkılar; aranan ama bulunamayan şarkının
+  cover'ı aramada üste çıksın. Fikir arkadaşın aracı STILLMORE FINDER'dan (playlist'te kaldırılmış şarkı bulucu);
+  Scryne: "her şeyi sana bırakıyorum", aracı daha iyi hâle getirme yetkisi.
+- **Analiz (`docs/arastirma/03`):** STILLMORE Spotify istemcisinin içinden (Spicetify) çalışıyor; Store sürümü
+  Spotify, Spicetify yaması ve Virus Records lisansı ister. Yanki bunlara bağlanmadı: sözleşme CSV dışa aktarımı.
+  Spotify Web API Şubat 2026'dan beri başkasının playlist'ini vermiyor (403), arama sayfası 10, sahibin Premium'u şart.
+- **Yapıldı (2026-10-09):** `yanki/spotify.py` (client credentials + PKCE, 429'da `Sinirli`, `/items`),
+  `yanki/kesif.py` (STILLMORE CSV, kendi playlist, boşluk doğrulama: aynı ISRC ya da aynı sanatçı + ad çalınabilir
+  mi, rakip cover sayısı; talep: YouTube izlenmesi; sıra izlenme / (1 + rakip); `--ekle N`), `yanki/takip.py`
+  (ISRC → canlı, ad araması → sıra, Orvane profili tek mi; `yuklendi → yayinda`, kayıp işareti), `config/kesif.toml`,
+  gece koşusu takip eder (anahtar yoksa atlar) ve `gece_ekle > 0` ise keşfeder. 23 yeni test (sahte Spotify,
+  STILLMORE başlığı birebir); testler gerçek bir hata buldu (YouTube başlığındaki "Sanatçı - Şarkı" sonek sanılıp
+  siliniyordu). Canlı: YouTube talep ölçümü doğru (Adele 2,58 milyar, "Gülümse" 6,95 milyon); CSV → kayıt → liste
+  akışı anahtarsız uçtan uca çalıştı, doğrulanmamış aday listeye girmedi.
+- **Bekleyen:** Scryne'dan Spotify geliştirici uygulaması (`.env.example`; Premium hesapla) → ilk canlı doğrulama
+  (`is_playable`, `/items` alan adı); ilk STILLMORE CSV'si (`girdi/kesif/`). İlk Türkçe adayda Türkçe cover dinleme
+  testi (ACE-Step'te denenmedi). Sıra formülü ilk yayınların arama sırasıyla düzeltilir.
+
+### Faz 10: Otomatik yükleme (dağıtım API'si) ⏳
+- Arkadaşın dağıtım sitesi API'sini gönderecek (Scryne, 2026-10-09). Gelince: paket → API yükleme,
+  durum `yuklendi`, ISRC/UPC `metadata.json` → `yukleme`'ye; RouteNote'un elle akışı yedek kalır.
+- Önce: API dokümanı, kimlik doğrulama, AI cover kuralları (operasyonel), bölge/mağaza seçimi, kapak ve ses biçimi.
+

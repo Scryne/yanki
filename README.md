@@ -2,11 +2,16 @@
 
 Listeye yazılan yabancı şarkıların cover'ını yerel GPU'da [ACE-Step 1.5](https://github.com/ace-step/ACE-Step-1.5)
 ile üretir, yayınlanamayacak adayları otomatik eler, dinleme sayfasında onaya sunar ve onaylananı Spotify dağıtımcısına
-yüklenmeye hazır bir pakete çevirir. Yükleme adımı insanda kalır: dağıtımcıların yükleme API'si yok.
+yüklenmeye hazır bir pakete çevirir. Şarkı kaynağı Spotify'dan kaldırılmış, hâlâ aranan şarkılar (`yanki kesif`);
+yüklenen parçanın Spotify'da çıkıp çıkmadığını ve adı arandığında kaçıncı sırada olduğunu `yanki takip` izler. Yükleme
+şimdilik insanda; arkadaşın dağıtım API'si gelince otomatikleşecek.
 
 ## Günlük akış
 
-1. `girdi/liste.toml`'a şarkı ekle (sanatçı + şarkı adı yeter).
+0. **Keşif:** STILLMORE → playlist → "Kaldırılmış şarkıları bul" → "CSV indir" → dosyayı `girdi/kesif/`'e bırak (ya da
+   `config/kesif.toml` → `playlistler` ile kendi playlist'lerin). `uv run yanki kesif` adayları doğrular (şarkı geri
+   gelmiş mi, kaç rakip cover var) ve YouTube talebine göre sıralar; `--ekle 3` en iyi üçünü listeye yazar.
+1. `girdi/liste.toml`'a şarkı ekle (sanatçı + şarkı adı yeter) ya da 0. adımdaki gibi keşiften.
 2. Her gece 03:00'te zamanlanmış görev (`\Yanki\Gece`, `scripts/gece.ps1`; pilde başlamaz, kaçırırsa açılınca yetişir)
    `yanki calistir` koşar: kaynak ses (YouTube), sözler (LRCLIB), künye ve stil (MusicBrainz), üç cover adayı, kapılar,
    bekleyen onarımlar, onaylılar için paket. GPU başka bir işle doluysa boşalmasını bekler; şarkı başı ~30 dk.
@@ -17,6 +22,7 @@ yüklenmeye hazır bir pakete çevirir. Yükleme adımı insanda kalır: dağıt
    **Bunu kabul et**.
 5. Onaylanan şarkı paketlenir: `calisma/<kimlik>/paket/` → `YUKLE.md`'yi açıp formu doldur, ses dosyasını (RouteNote: FLAC) ve JPG'yi yükle.
 6. `yanki yuklendi <kimlik>`.
+7. Gece koşusu ya da `uv run yanki takip`: parça Spotify'da çıkınca aşama `yayinda`, `yanki durum` arama sırasını gösterir.
 
 Diğer komutlar: `yanki durum` (motor, model, araçlar, GPU, şarkıların aşaması), `yanki hazirla`, `yanki uret`,
 `yanki yeniden <kimlik>` (onaylı şarkıya güncel hatla yeni adaylar), `yanki kunye [kimlik]` (yazarlar ve orijinal
@@ -33,6 +39,9 @@ uv run acestep-download
 winget install Gyan.FFmpeg.Shared                          # ffmpeg/ffprobe
 # fpcalc (Chromaprint 1.5.1, Windows x64) → araclar/fpcalc.exe
 uv run yanki durum                                         # hepsi ✓ olmalı
+# Keşif ve takip için: developer.spotify.com → Create app (Premium hesap), Redirect URI http://127.0.0.1:8766/callback
+copy .env.example .env                                     # SPOTIFY_CLIENT_ID / SECRET
+uv run yanki spotify-baglan                                # yalnız kendi playlist'lerini taramak için
 ```
 
 ## Ayarlar
@@ -40,6 +49,7 @@ uv run yanki durum                                         # hepsi ✓ olmalı
 - `config/motor.toml` — model, niceleme, cover gücü, adım, aday/onarım tohumları, GPU eşiği. Tarifin kaynağı dinleme
   testleri (`docs/arastirma/01-spike-bulgulari.md`).
 - `config/yayin.toml` — sanatçı adı, dağıtımcı, mastering hedefi (−14 LUFS, −1 dBTP).
+- `config/kesif.toml` — keşif/takip ülkesi (TR), taranacak playlist'ler, gece listeye kaç aday eklensin, arama derinliği.
 - Liste alanları ve kaynak/söz dosyasını elle verme: `girdi/liste.toml` başındaki açıklama.
 
 ## Nasıl çalışır
@@ -51,6 +61,8 @@ uv run yanki durum                                         # hepsi ✓ olmalı
 - **Pencereli onarım:** işaretli aralığın ±25 sn'lik penceresi yeniden üretilip geri dikilir; aralık dışı birebir korunur.
 - **Kapılar:** orijinal kaydı taşıyan (parmak izi ≥ 0,72 ya da dalga korelasyonu ≥ 0,25), sözsüz (WER ≥ 0,5) ya da yanlış
   süreli aday dinlemeye çıkmaz. "İyi"yi kulak seçer: otomatik kalite ölçüleri dinlemeyle uyuşmadı.
+- **Keşif:** kaldırılmış = Spotify'da çalınamayan (`is_playable: false`). Aynı ISRC ya da aynı sanatçı + ad çalınabilir
+  durumda geri geldiyse aday düşer; sıra YouTube izlenmesi / (1 + rakip cover). Ayrıntı: `docs/arastirma/03`.
 - **Motor ayrı süreç:** hat torch yüklemez; ACE-Step işçisi (`yanki/motor_isci.py`) motorun kendi ortamında çalışır.
 
 Kararlar ve gerekçeler: `docs/Final-Dokuman.md`, yol haritası: `docs/Roadmap.md`.

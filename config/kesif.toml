@@ -1,0 +1,16 @@
+# Kaldırılmış şarkı keşfi ve yayın takibi (`yanki kesif`, `yanki takip`). Gerekçe: yanki/kesif.py, yanki/takip.py.
+# Spotify anahtarları burada değil: proje kökündeki .env (SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET; gitignore'da).
+
+[kesif]
+# Çalınabilirlik ve arama bu ülkenin kataloğunda ölçülür. Yüklemeler ABD/CA/MX/IN/PK'yı hariç tutuyor → TR.
+market = "TR"
+# Web API ile taranacak playlist'ler (yalnız Scryne'ın kendi ya da ortak olduğu playlist'ler; başkasınınki 403).
+# Başka playlist'ler için STILLMORE → "Kaldırılmış şarkıları bul" → "CSV indir" → girdi/kesif/ klasörüne bırak.
+playlistler = []
+# Gece koşusu her gece en iyi kaç doğrulanmış adayı listeye eklesin (0 = eklemesin, `yanki kesif --ekle N` elle)
+gece_ekle = 0
+
+[takip]
+market = "TR"
+# Şarkının adı arandığında ilk kaç sonuçta bizim parçaya bakılsın (sayfa başı 10, her 10 için bir istek)
+arama_derinligi = 20
