@@ -474,8 +474,9 @@ def ozet(kok: Path) -> dict:
     from yanki import dagitim, onay
 
     try:
-        sira = dagitim.plan(calisma, dagitim.takvim_oku(kok / "config" / "yayin.toml")).bugun_yuklenecek
-    except (OSError, ValueError):
+        sira = dagitim.plan(calisma, dagitim.takvim_oku(kok / "config" / "yayin.toml"),
+                            dagitimci=paket.yayin_ayarlari(kok / "config" / "yayin.toml").dagitimci).bugun_yuklenecek
+    except (OSError, ValueError, KeyError):
         sira = None
 
     try:
@@ -536,7 +537,9 @@ def _calistir(args: argparse.Namespace) -> int:
             csv=[], playlist=[], pazar=None, ekle=gece_ekle, goster=10, katalogsuz=False, yeniden_olc=False,
             stillmoresuz=False, spotify_yeniden_baslat=True))))
     adimlar += [("hazırlık", lambda: _hazirla(args)), ("üretim", lambda: _uret(args)),
-                ("veto penceresi", lambda: _otomatik_onay(kok)), ("paketleme", lambda: _paketle(args))]
+                ("veto penceresi", lambda: _otomatik_onay(kok)), ("paketleme", lambda: _paketle(args)),
+                # takipten önce: kabul gelince Tunearo'nun atadığı ISRC takibe girsin
+                ("dağıtım durumu", lambda: _dagitim_durum(argparse.Namespace()))]
     if spotify_var:
         adimlar.append(("takip", lambda: _takip(argparse.Namespace(kimlik=[]))))
     else:
@@ -582,7 +585,8 @@ def _takvim_hatirlat(kok: Path) -> int:
     from yanki import dagitim, paket
 
     calisma = kok / "calisma"
-    p = dagitim.plan(calisma, dagitim.takvim_oku(kok / "config" / "yayin.toml"))
+    ad = paket.yayin_ayarlari(kok / "config" / "yayin.toml").dagitimci
+    p = dagitim.plan(calisma, dagitim.takvim_oku(kok / "config" / "yayin.toml"), dagitimci=ad)
     if p.beklemede:
         print(f"takvim: {p.beklemede}; kuyrukta {len(p.sira)} paket")
         return 0
@@ -591,9 +595,15 @@ def _takvim_hatirlat(kok: Path) -> int:
         ilk = p.sira[0] if p.sira else None
         print(f"takvim: sıradaki yükleme {ilk.yukleme:%d.%m} ({ilk.ad})" if ilk else "takvim: kuyruk boş")
         return 0
-    d = dagitim.sec(paket.yayin_ayarlari(kok / "config" / "yayin.toml").dagitimci)
-    if d.otomatik:  # arkadaşın API'si gelince: yükle, kaydet, `yuklendi`
-        raise NotImplementedError("otomatik dağıtımcı henüz yok")
+    d = dagitim.sec(ad, kok)
+    if d.otomatik:
+        bilgi = dagitim.otomatik_yukle(calisma, d, s.kimlik, s.yayin_tarihi)
+        print(f"takvim: {s.sanatci} — {s.ad} {d.ad}'ya yüklendi, incelemede (yayın {s.yayin_tarihi:%Y-%m-%d}, "
+              f"yayın kimliği {bilgi.get('release_id')})")
+        _bildirici(calisma)("dagitim", f"yüklendi: {s.ad}",
+                            f"{s.sanatci} — {s.ad} {paket.DAGITIMCI_ADI.get(d.ad, d.ad)} incelemesine gönderildi; "
+                            f"yayın tarihi {s.yayin_tarihi:%Y-%m-%d}", f"yukleme:{s.kimlik}:{bilgi.get('release_id')}")
+        return 0
     _bildirici(calisma)("takvim", f"yükleme sırası: {s.ad}",
                         f"{s.sanatci} — {s.ad}: calisma/{s.kimlik}/paket/YUKLE.md hazır; önerilen yayın tarihi "
                         f"{s.yayin_tarihi:%Y-%m-%d}. Yükleyince: yanki yuklendi {s.kimlik} --isrc …",
@@ -606,7 +616,8 @@ def _takvim(args: argparse.Namespace) -> int:
 
     a = ayarlar.yukle()
     calisma = a.kok / "calisma"
-    p = dagitim.plan(calisma, dagitim.takvim_oku(a.kok / "config" / "yayin.toml"))
+    p = dagitim.plan(calisma, dagitim.takvim_oku(a.kok / "config" / "yayin.toml"),
+                     dagitimci=paket.yayin_ayarlari(a.kok / "config" / "yayin.toml").dagitimci)
     print(f"son yükleme: {p.son_yukleme or '—'}" + (f" · {p.beklemede}" if p.beklemede else ""))
     if not p.sira:
         print("kuyruk boş: paketlenmiş şarkı yok")
@@ -615,6 +626,51 @@ def _takvim(args: argparse.Namespace) -> int:
         print(f"{i:2}. {x.yukleme:%Y-%m-%d} yükle → {x.yayin_tarihi:%Y-%m-%d} yayın  {x.sanatci} — {x.ad}  ({puan})")
     for kimlik in p.duzeltme:
         print(f"  ✗ {kimlik}: dağıtımcı reddetti; düzeltip `yanki paketle --yeniden` deyince kuyruğa döner")
+    return 0
+
+
+def _yukle(args: argparse.Namespace) -> int:
+    """Paketi API'li dağıtımcıya şimdi yükler (takvimi beklemeden). --taslak: her şey yüklenir, gönderilmez."""
+    from datetime import date, timedelta
+
+    from yanki import dagitim
+
+    a = ayarlar.yukle()
+    yayin_yolu = a.kok / "config" / "yayin.toml"
+    d = dagitim.sec(paket.yayin_ayarlari(yayin_yolu).dagitimci, a.kok)
+    if not d.otomatik:
+        print(f"✗ {d.ad or 'dağıtımcı'} için API yok: YUKLE.md ile elle yükle, sonra `yanki yuklendi`")
+        return 1
+    try:
+        tarih = (date.fromisoformat(args.yayin_tarihi) if args.yayin_tarihi
+                 else date.today() + timedelta(days=dagitim.takvim_oku(yayin_yolu).yayin_on_gun))
+        bilgi = dagitim.otomatik_yukle(a.kok / "calisma", d, args.kimlik, tarih, gonder=not args.taslak)
+    except (ValueError, LookupError, RuntimeError) as e:  # bozuk paket, şarkı yok, Tunearo hatası
+        print(f"✗ {args.kimlik}: {e}")
+        return 1
+    if args.taslak:
+        print(f"taslak hazır ({d.ad}): kapak, parça ve ses yüklendi, gönderilmedi. "
+              f"Göndermek: yanki yukle {args.kimlik}")
+    else:
+        print(f"gönderildi ({d.ad}): yayın {bilgi.get('release_id')}, durum {bilgi.get('dagitim_durumu')}, "
+              f"yayın tarihi {bilgi.get('yayin_tarihi')}")
+    return 0
+
+
+def _dagitim_durum(args: argparse.Namespace) -> int:
+    """API'li dağıtımcıya yüklenenlerin durumunu yoklar (gece koşusu da yapar)."""
+    from yanki import dagitim
+
+    a = ayarlar.yukle()
+    d = dagitim.sec(paket.yayin_ayarlari(a.kok / "config" / "yayin.toml").dagitimci, a.kok)
+    if not d.otomatik:
+        print(f"{d.ad or 'dağıtımcı'}: API yok, durum dağıtımcı panelinde")
+        return 0
+    sonuc = d.yokla(a.kok / "calisma", _bildirici(a.kok / "calisma"))
+    if not sonuc:
+        print(f"{d.ad}: izlenen yükleme yok")
+    for s, yeni, eski in sonuc:
+        print(f"  {s.sanatci} — {s.ad}: {yeni}" + (f" (önce {eski})" if eski and eski != yeni else ""))
     return 0
 
 
@@ -789,6 +845,13 @@ def main(argv: list[str] | None = None) -> int:
     tm.set_defaults(fn=_temizle)
     tv = alt.add_parser("takvim", help="paketlenmiş şarkıların yükleme sırası ve önerilen yayın tarihleri")
     tv.set_defaults(fn=_takvim)
+    yk = alt.add_parser("yukle", help="paketi API'li dağıtımcıya (Tunearo) şimdi yükle ve incelemeye gönder")
+    yk.add_argument("kimlik")
+    yk.add_argument("--taslak", action="store_true", help="her şeyi yükle ama gönderme (yayın taslakta kalır)")
+    yk.add_argument("--yayin-tarihi", help="YYYY-AA-GG (varsayılan bugün + takvim.yayin_on_gun)")
+    yk.set_defaults(fn=_yukle)
+    alt.add_parser("dagitim-durum", help="API'li dağıtımcıya yüklenenlerin inceleme/yayın durumu").set_defaults(
+        fn=_dagitim_durum)
     dr = alt.add_parser("dagitim-red", help="dağıtımcının reddettiği şarkıyı kaydet (paketlendi'ye döner)")
     dr.add_argument("kimlik")
     dr.add_argument("--neden", required=True, help="dağıtımcının red gerekçesi (ör. kapak, AI içerik)")
@@ -821,7 +884,7 @@ def main(argv: list[str] | None = None) -> int:
 
 
 YAZAN_KOMUTLAR = {"hazirla", "uret", "calistir", "yeniden", "kunye", "paketle", "yuklendi", "kesif", "takip",
-                  "temizle", "yedekle", "dagitim-red", "gunduz"}
+                  "temizle", "yedekle", "dagitim-red", "gunduz", "yukle", "dagitim-durum"}
 
 
 if __name__ == "__main__":

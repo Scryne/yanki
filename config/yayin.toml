@@ -3,8 +3,10 @@
 [yayin]
 # Spotify'da görünecek sanatçı adı. Boşsa kapakta sanatçı yazmaz, YUKLE.md eksik diye işaretler.
 sanatci_adi = "Orvane"  # Scryne, 2026-10-07
-# "routenote" | "distrokid" | "" — form alanlarının sırası ve cover lisans adımı buna göre yazılır
-dagitimci = "routenote"  # Scryne, 2026-10-07: RouteNote, mekanik lisans alınmadan
+# "tunearo" (API: hat kendisi yükler) | "routenote" | "distrokid" (form insanda) | ""
+# Scryne, 2026-10-07: RouteNote, mekanik lisans alınmadan. 2026-10-10: arkadaşın dağıtım API'si (Tunearo) geldi →
+# yeni yüklemeler Tunearo'ya; RouteNote'taki üç parça orada kalır, takip ISRC'leriyle sürer.
+dagitimci = "tunearo"
 # Kapakta ve metadata'da: plak şirketi yoksa sanatçı adı kullanılır
 etiket = ""
 
@@ -22,10 +24,19 @@ acik = false
 sure_saat = 72
 
 [takvim]
-# Yayın takvimi (yanki/dagitim.py): paketlenmiş şarkılar kuyruk, sıra keşif puanı sonra onay sırası. Sırası gelen paket
-# bildirilir (RouteNote'ta API yok, yükleme elle); dağıtım API'si gelince gece koşusu kendisi yükler (Roadmap Faz 10).
+# Yayın takvimi (yanki/dagitim.py): paketlenmiş şarkılar kuyruk, sıra keşif puanı sonra onay sırası. Sırası gelen paketi
+# Tunearo'ya gece koşusu kendisi yükler; elle dağıtımcıda (RouteNote) bildirilir.
 acik = true
 haftada = 1  # Roadmap Faz 8: kabul gelince düzenli yayın, haftada bir
 yayin_on_gun = 21  # yüklemeden kaç gün sonrası yayın tarihi önerilsin (ücretsiz inceleme günler sürüyor; pitch ≥ 7 gün)
-# "ilk_kabul": ilk parça Spotify'a çıkana kadar bekle (Faz 7: kabul gelmeden RouteNote'a daha fazla yükleme yok)
+# "ilk_kabul": etkin dağıtımcı ilk parçayı kabul edene kadar incelemede en çok bir yükleme; reddederse neden
+# anlaşılana kadar yeni yükleme yok (Faz 7 kararı; kuyruk ve Tunearo parça kotası aynı nedenle yanmasın)
 baslangic = "ilk_kabul"
+
+[tunearo]
+# Tunearo API (yanki/tunearo.py; anahtar .env → TUNEARO_API_KEY). Doküman: https://api.tunearo.com/
+# Bölge: mekanik lisans yok → RouteNote'taki kararla aynı bölgeler hariç (Scryne, 2026-10-07). ISO 3166-1 alpha-2.
+haric_bolgeler = ["US", "CA", "MX", "IN", "PK"]
+# Mağaza (Tunearo kodları, tam liste yanki/tunearo.py → MAGAZALAR): Amazon yapay zekâ içeriği almıyor; YouTube Content
+# ID cover'ı orijinal kayıtla eşleştirir (RouteNote'ta da kaldırılmıştı). Kore mağazaları Tunearo listesinde yok.
+haric_magazalar = ["amazon", "youtube_cid"]

@@ -22,7 +22,7 @@ Durum sütunu session-start hook'u tarafından otomatik okunur — format bozulm
 | 7 | Gerçek kullanım | 🔄 Devam Ediyor | Scryne listeden bir şarkıyı yükledi, dağıtımcı kabul etti, parça Spotify'da dinlenebilir; bulgular roadmap'e işlendi |
 | 8 | Kalite ve düzenli yayın | 🔄 Devam Ediyor | En az 3 parça Spotify'da; yükleme takvimi işliyor; vokal son işlemi ve LoRA dinleme testiyle karara bağlandı; ≥ 10 onarım etiketiyle otomatik kusur işaretleme denendi (sonuç kayıtlı) |
 | 9 | Kaldırılmış şarkı keşfi ve yayın takibi | 🔄 Devam Ediyor | Spotify anahtarı bağlı; `yanki kesif` (STILLMORE CSV'si, kendi playlist ya da Deezer katalog farkı) ≥ 5 doğrulanmış (geri gelmemiş) aday buldu; en az biri üretilip yüklendi; `yanki takip` yüklenen parçaların canlılığını ve ad aramasındaki sırasını pazar pazar kaydetti |
-| 10 | Tam otomatik yayın (dağıtım API'si) | ⏳ Bekliyor | Arkadaşın API'siyle onaylı bir paket elle dokunmadan yüklendi; inceleme → kabul/red → canlı durumu kendiliğinden izlendi ve kayda düştü; yayın takvimi en az 2 hafta kesintisiz işledi; veto penceresi (otomatik onay) bir şarkıda uçtan uca çalıştı |
+| 10 | Tam otomatik yayın (dağıtım API'si) | 🔄 Devam Ediyor | Arkadaşın API'siyle onaylı bir paket elle dokunmadan yüklendi; inceleme → kabul/red → canlı durumu kendiliğinden izlendi ve kayda düştü; yayın takvimi en az 2 hafta kesintisiz işledi; veto penceresi (otomatik onay) bir şarkıda uçtan uca çalıştı |
 | 11 | Öğrenen şarkı seçimi | ⏳ Bekliyor | Puan formülü en az 10 yayının ölçülen arama sırası/dinlenmesiyle karşılaştırılıp güncellendi; tür/dil başına üretilebilirlik çarpanı Scryne'ın onay/ret verisinden; en az bir yeni keşif kaynağı (YouTube'da olup Spotify'da olmayan) canlı aday üretti |
 | 12 | Kalite otomasyonu | ⏳ Bekliyor | Otomatik aday seçimi Scryne'ın geçmiş seçimleriyle ölçüldü (isabet kayıtlı) ve ≥ %70 ise veto penceresinde varsayılan; rap ve İngilizce dışı en az bir dil için tarif dinleme testiyle karara bağlandı |
 | 13 | Operasyon ve dayanıklılık | 🔄 Devam Ediyor | Disk temizliği ve yedek işliyor; gece koşusu/Spotify kilidi/dağıtımcı reddi bildirim olarak geliyor; GPU boştayken gündüz üretimi kuyruğu eritiyor; bir haftalık kesintisiz otomatik koşu günlükte hatasız |
@@ -263,7 +263,7 @@ Durum sütunu session-start hook'u tarafından otomatik okunur — format bozulm
   (127.0.0.1:8765) ve özeti Windows bildirimiyle gösterir (`yanki ozet`); elle tetiklenip doğrulandı. Oda `python -m`
   ile çalışır: `yanki.exe` açıkken kilitleniyor, bağımlılık değişince `uv` senkronu düşüyordu (bulundu, düzeltildi).
 
-### Faz 10: Tam otomatik yayın (dağıtım API'si) ⏳
+### Faz 10: Tam otomatik yayın (dağıtım API'si) 🔄
 Hedef (Scryne, 2026-10-09): "arkadaşımın API'si gelince her şeyin otomatik olması". Uçtan uca: keşif → üretim →
 onay (insan ya da veto penceresi) → paket → API ile yükleme → durum izleme → takip. İnsan yalnız dinler ve isterse
 veto eder.
@@ -299,6 +299,25 @@ veto eder.
   önce; `config/yayin.toml` → `[otomatik_onay]` **kapalı**, 72 sa), dinleme odasında "karar vermezsen … aday N
   kendiliğinden onaylanır" satırı, oturum özetinde "24 saat içinde kendiliğinden onaylanacak" sayısı. Öneri kuralı en
   düşük söz WER (aşağıda Faz 12 ölçümü: kulağı tahmin etmiyor, yalnız "sözü en anlaşılır"ı seçer).
+
+- **API geldi: Tunearo (2026-10-10, `yanki/tunearo.py`, `docs/arastirma/04`):** arkadaşın dağıtım sitesi
+  (dashboard.tunearo.com, REST, Bearer anahtar; anahtar `.env`). `config/yayin.toml` → `dagitimci = "tunearo"`;
+  RouteNote'taki üç parça orada kalır. Akış: Orvane sanatçısı (hesapta bir kez) → yayın taslağı (Single, tür stilden,
+  ©/℗, US/CA/MX/IN/PK hariç, Amazon ve YouTube Content ID hariç 32 mağaza) → kapak → parça (yazarlar, düz söz) → ses
+  (FLAC paket WAV'a açılır) → incelemeye gönder. Kaldığı yerden sürer (`metadata.json` → `tunearo`), reddedilen yayın
+  aynı kayıtla düzeltilip yeniden gönderilir (hesabın parça kotası yanmaz). `yanki yukle <kimlik> [--taslak]`,
+  `yanki dagitim-durum`; gece koşusu takipten önce durumu yoklar (kabulde UPC/ISRC, redde `paketlendi` + bildirim) ve
+  takvimde sırası geleni kendisi yükler. `ilk_kabul` artık dağıtımcıya göre: Tunearo ilk parçayı kabul edene kadar
+  incelemede en çok bir yükleme, red gelirse neden anlaşılana kadar yok. 16 yeni test (sahte API), toplam 245 yeşil.
+  **Canlı (2026-10-10):** Adele "When We Were Young" taslak olarak yüklendi ve API'den geri okundu: tür, söz (1.827
+  karakter), kapak, WAV (16 bit / 44,1 kHz, 290,9 sn), bölge/mağaza doğru; tek yayın, tek parça. Gönderim Scryne'ın
+  onayında. Canlı bulgular (dokümanda yok): söz POST'ta düşüyor (PATCH'le yazılıyor); depo sesi hep `.wav` adıyla
+  saklıyor; tür serbest metin; API'den açılan yayında mağaza listesi boş; önizleme başlangıcı API'de yok; yazar
+  alanları tek metin (birden çok yazar ayrı kişi olarak gitmiyor). Webhook herkese açık HTTPS ister → yoklama.
+- **Risk (Tunearo kalite kontrolü):** hesaptaki iki yayın "derivative work (remix, sample, or cover)" diye
+  reddedilmiş (biri orijinal kaydın "Lo-Fi Remix"i, ses eşleşmesi 30, `qc_proof_required`). AI tespiti tek
+  başına red değil (canlı bir yayında `ai_detected: true`). Bizim parçalar kopya kapısından geçmiş yeni kayıt; ilk
+  gönderimin sonucu bu riski ölçer, takvim o gelene kadar ikinciyi göndermez.
 
 ### Faz 11: Öğrenen şarkı seçimi ⏳
 Bugünkü puan (YouTube izlenmesi × kapalı pazar oranı / (1 + rakip)) sezgisel; ölçüm geldikçe öğrenen bir seçime

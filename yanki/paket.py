@@ -1,8 +1,8 @@
 """Yükleme paketi: onaylanan aday → mastering + kapak + metadata + YUKLE.md (`calisma/<kimlik>/paket/`).
 
-Yükleme insanda kalır (dağıtımcılarda API yok; DistroKid ToS'u botu yasaklıyor). Paket, formu kopyala-yapıştırla
-doldurmaya yetecek her şeyi taşır. Eksik karar (sanatçı adı, dağıtımcı) varsa paket yine hazırlanır, YUKLE.md en
-üstte eksikleri yazar.
+RouteNote ve DistroKid'de yükleme insanda (API yok; DistroKid ToS'u botu yasaklıyor): paket, formu kopyala-yapıştırla
+doldurmaya yetecek her şeyi taşır. Tunearo'da hat paketi API ile kendisi yükler (`yanki/tunearo.py`). Eksik karar
+(sanatçı adı, dağıtımcı) varsa paket yine hazırlanır, YUKLE.md en üstte eksikleri yazar.
 """
 
 import json
@@ -23,8 +23,8 @@ KUCUK_KAPAK = 1000  # bundan küçük özgün görsel 3000'e büyütülünce bul
 
 # Dağıtımcıya özel ayrıntılar: docs/arastirma/02-dagitimci-karsilastirmasi.md (2026-10-07). RouteNote WAV almıyor
 # (FLAC/MP3 44,1); bilgi 2023 tarihli, yükleme ekranında doğrulanır.
-SES_BICIMI = {"routenote": "flac", "distrokid": "wav", "": "wav"}
-DAGITIMCI_ADI = {"distrokid": "DistroKid", "routenote": "RouteNote"}
+SES_BICIMI = {"routenote": "flac", "distrokid": "wav", "tunearo": "wav", "": "wav"}  # Tunearo depoda WAV
+DAGITIMCI_ADI = {"distrokid": "DistroKid", "routenote": "RouteNote", "tunearo": "Tunearo"}
 DAGITIMCI_NOTU = {
     "distrokid": [
         "Yapay zekâ sorusu (\"Is any part of this track AI-generated?\"): **all of the audio**. Ardından sanatçının"
@@ -57,8 +57,8 @@ def yayin_ayarlari(yol: Path) -> Yayin:
     with open(yol, "rb") as f:
         d = tomllib.load(f)
     y, m = d["yayin"], d["master"]
-    if y["dagitimci"] not in ("", "routenote", "distrokid"):
-        raise ValueError(f"dagitimci routenote, distrokid ya da boş olmalı: {y['dagitimci']}")
+    if y["dagitimci"] not in ("", "routenote", "distrokid", "tunearo"):
+        raise ValueError(f"dagitimci tunearo, routenote, distrokid ya da boş olmalı: {y['dagitimci']}")
     return Yayin(y["sanatci_adi"].strip(), y["dagitimci"], y.get("etiket", "").strip(), float(m["lufs"]),
                  float(m["gercek_tepe_dbtp"]), int(m["ornekleme"]))
 
@@ -190,7 +190,7 @@ def yukle_md(meta: dict, y: Yayin, dosyalar: dict[str, str]) -> str:
         eksik.append("Sanatçı adı: `config/yayin.toml` → `sanatci_adi` "
                      "(kapak da yeniden üretilmeli: `yanki paketle --yeniden`)")
     if not y.dagitimci:
-        eksik.append("Dağıtımcı: `config/yayin.toml` → `dagitimci` (routenote | distrokid)")
+        eksik.append("Dağıtımcı: `config/yayin.toml` → `dagitimci` (tunearo | routenote | distrokid)")
     if not meta["orijinal_yazarlar"]:
         eksik.append("Orijinal yazarlar bulunamadı: dağıtımcının cover formunda zorunlu")
     satir = [f"# Yükleme: {meta['baslik']}", ""]
@@ -198,6 +198,8 @@ def yukle_md(meta: dict, y: Yayin, dosyalar: dict[str, str]) -> str:
         satir += ["> **Eksik karar — yüklemeden önce:**", *[f"> - {e}" for e in eksik], ""]
     if y.dagitimci == "routenote":
         return "\n".join(satir + _routenote_formu(meta, dosyalar)) + "\n"
+    if y.dagitimci == "tunearo":
+        return "\n".join(satir + _tunearo_notu(meta, dosyalar)) + "\n"
     satir += [
         "Form alanları yukarıdan aşağı, kopyala-yapıştır:", "",
         f"1. **Başlık (Title):** `{meta['baslik']}`",
@@ -319,6 +321,34 @@ def _routenote_formu(meta: dict, dosyalar: dict[str, str]) -> list[str]:
         "Kurallar: başlığa `(Cover)` ya da orijinal sanatçı adı eklenmez.",
         "",
         "Yükledikten sonra: `yanki yuklendi <kimlik>`",
+    ]
+
+
+def _tunearo_notu(meta: dict, dosyalar: dict[str, str]) -> list[str]:
+    """Tunearo'da form yok, hat API ile yükler: YUKLE.md ne gönderileceğini söyler (`yanki/tunearo.py` ile aynı)."""
+    from yanki import tunearo
+
+    yazarlar = tunearo.yazarlar(meta) or "EKSİK"
+    on = meta.get("onizleme_sn")
+    return [
+        "Tunearo'ya hat API ile kendisi yükler: yayın takviminde sırası gelince gece koşusu, ya da elle "
+        "`yanki yukle <kimlik>`. Form doldurma yok.", "",
+        "Gönderilenler:",
+        f"- **Yayın:** Single · `{meta['baslik']}` · sanatçı `{meta['sanatci'] or 'EKSİK'}` · etiket "
+        f"`{meta['etiket'] or meta['sanatci']}` · dil {DIL_ADI.get(meta['dil'], meta['dil'])} · "
+        f"{'Explicit' if meta.get('acik_icerik') else 'Not Explicit'}",
+        f"- **©** {meta.get('orijinal_yil') or '—'} {yazarlar} · **℗** {date.today().year} {meta['sanatci']}",
+        f"- **Parça:** composer/songwriter/lyricist `{yazarlar}`, producer `{meta['sanatci']}`, düz söz"
+        + (f", önizleme {_mmss(on)}" if on else ""),
+        f"- **Dosyalar:** `{dosyalar['ses']}` ({meta['master']['lufs']:.1f} LUFS, {_mmss(meta['sure_sn'])}) · "
+        f"`{dosyalar['kapak']}` (3000×3000 JPG){_kapak_notu(meta)}",
+        "- **Bölge ve mağaza:** `config/yayin.toml` → `[tunearo]`",
+        "",
+        "Durum gece koşusunda yoklanır (`yanki dagitim-durum`): kabulde UPC/ISRC `metadata.json` → `yukleme`'ye "
+        "yazılır; red gelirse şarkı `paketlendi`ye döner, neden bildirilir.",
+        "",
+        "Kurallar: başlığa `(Cover)` ya da orijinal sanatçı adı eklenmez; kapakta orijinal sanatçının adı, fotoğrafı "
+        "ya da logosu yoktur.",
     ]
 
 

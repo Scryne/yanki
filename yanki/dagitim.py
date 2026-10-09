@@ -1,15 +1,16 @@
-"""Dağıtım arayüzü ve yayın takvimi (Roadmap Faz 10'un API'den bağımsız kısmı).
+"""Dağıtım arayüzü ve yayın takvimi (Roadmap Faz 10).
 
-`Dagitimci` hattın dağıtımcıyla konuştuğu tek yer. Bugün tek uygulama elle RouteNote: hat yüklemez (API yok, form
-insanda), takvimde sırası gelen paketi bildirir; Scryne yükleyip `yanki yuklendi` der. Arkadaşın dağıtım API'si
-gelince `otomatik = True` bir uygulama eklenir, gece koşusu sırası gelen paketi kendisi yükler; takvim, kuyruk ve
-bildirim aynı kalır.
+`Dagitimci` hattın dağıtımcıyla konuştuğu tek yer. İki tür: elle (RouteNote, DistroKid: API yok, form insanda; hat
+takvimde sırası gelen paketi bildirir, Scryne yükleyip `yanki yuklendi` der) ve otomatik (Tunearo, `yanki/tunearo.py`:
+gece koşusu sırası gelen paketi kendisi yükler ve incelemeye gönderir, sonraki gecelerde durumunu yoklar). Hangisi
+olduğu `config/yayin.toml` → `dagitimci`; takvim, kuyruk ve bildirim ikisinde aynı.
 
 Takvim (`config/yayin.toml` → `[takvim]`): `paketlendi` şarkılar kuyruk; sıra keşif puanı (kaldırılmış ve aranan şarkı
 önce), sonra onay sırası. Haftada `haftada` yükleme; ilk boş gün son yüklemeden bir aralık sonra. Önerilen yayın
-tarihi yüklemeden `yayin_on_gun` gün sonra (ücretsiz inceleme günler sürüyor, Spotify pitch için ≥ 7 gün; YUKLE.md).
-`baslangic = "ilk_kabul"`: ilk parça Spotify'a çıkana kadar takvim bekler (Roadmap Faz 7: ilk kabul gelmeden
-RouteNote'a daha fazla yükleme yok; red gelirse nedeni kapak mı AI mı önce o anlaşılmalı).
+tarihi yüklemeden `yayin_on_gun` gün sonra (inceleme günler sürüyor, Spotify pitch için ≥ 7 gün; YUKLE.md).
+`baslangic = "ilk_kabul"`: etkin dağıtımcıda ilk kabul gelene kadar incelemede en çok bir yükleme; o reddedilirse
+neden anlaşılana kadar yeni yükleme yok (Roadmap Faz 7: red gelirse nedeni kapak mı AI mı önce o anlaşılmalı; aynı
+nedenle kuyruğun tamamı ve hesabın parça kotası yanmasın).
 """
 
 import tomllib
@@ -25,7 +26,7 @@ class Dagitimci(Protocol):
     ad: str
     otomatik: bool  # True: hat yükler (API); False: insan yükler, hat sırası geleni bildirir
 
-    def yukle(self, calisma: Path, d: durum.Durum) -> dict:
+    def yukle(self, calisma: Path, d: durum.Durum, yayin_tarihi: date, gonder: bool = True) -> dict:
         """Paketi yükler, yükleme bilgisini (`takip.yukleme_kaydet` alanları) döner."""
         ...
 
@@ -33,7 +34,7 @@ class Dagitimci(Protocol):
 class ElleRouteNote:
     ad, otomatik = "routenote", False
 
-    def yukle(self, calisma: Path, d: durum.Durum) -> dict:
+    def yukle(self, calisma: Path, d: durum.Durum, yayin_tarihi: date, gonder: bool = True) -> dict:
         raise NotImplementedError("RouteNote'ta API yok: YUKLE.md ile elle yükle, sonra `yanki yuklendi`")
 
 
@@ -44,12 +45,36 @@ class Elle:
     def __init__(self, ad: str):
         self.ad = ad
 
-    def yukle(self, calisma: Path, d: durum.Durum) -> dict:
+    def yukle(self, calisma: Path, d: durum.Durum, yayin_tarihi: date, gonder: bool = True) -> dict:
         raise NotImplementedError(f"{self.ad or 'dağıtımcı'} için API yok: YUKLE.md ile elle yükle")
 
 
-def sec(ad: str) -> Dagitimci:
+def sec(ad: str, kok: Path | None = None) -> Dagitimci:
+    if ad == "tunearo":
+        from yanki import ayarlar, tunearo
+
+        return tunearo.Tunearo(kok or ayarlar.KOK)
     return ElleRouteNote() if ad == "routenote" else Elle(ad)
+
+
+def otomatik_yukle(calisma: Path, dagitimci: Dagitimci, kimlik: str, yayin_tarihi: date,
+                   gonder: bool = True) -> dict:
+    """API'li dağıtımcıya yükler; gönderildiyse yükleme bilgisi kaydedilir ve şarkı `yuklendi`ye geçer."""
+    from yanki import takip
+
+    d = durum.oku(calisma, kimlik)
+    if d is None or d.asama != "paketlendi":
+        raise ValueError(f"paketlenmiş bir şarkı değil (aşama: {d.asama if d else 'yok'})")
+    if (d.hata or "").startswith(RED_ONEKI):
+        raise ValueError(f"dağıtımcı reddetti, önce düzeltip yeniden paketle: {d.hata}")
+    bilgi = dagitimci.yukle(calisma, d, yayin_tarihi, gonder)
+    if not gonder:
+        return bilgi
+    takip.yukleme_kaydet(calisma, kimlik, {**bilgi, "dagitimci": dagitimci.ad}, dagitimci.ad)
+    with durum.guncelle(calisma, kimlik) as taze:
+        if taze.asama == "paketlendi":
+            taze.gec("yuklendi")
+    return bilgi
 
 
 # ── takvim ──────────────────────────────────────────────────
@@ -104,8 +129,44 @@ class Plan:
         return self.sira[0] if self.sira and not self.beklemede and self.sira[0].yukleme <= date.today() else None
 
 
-def plan(calisma: Path, t: Takvim, bugun: date | None = None, puanlar: dict[str, float] | None = None) -> Plan:
-    """Kuyruk ve tarihleri hesaplar (kayıt tutmaz: her çağrıda durumdan yeniden çıkar, elle yükleme hemen yansır)."""
+def _yuklemeler(calisma: Path, d: durum.Durum) -> tuple[dict | None, list[dict]]:
+    import json
+
+    yol = durum.klasor(calisma, d.kimlik) / "paket" / "metadata.json"
+    try:
+        meta = json.loads(yol.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None, []
+    return meta.get("yukleme"), list(meta.get("yukleme_gecmisi") or [])
+
+
+def _ilk_kabul_bekleme(calisma: Path, hepsi: list[durum.Durum], dagitimci: str | None) -> str | None:
+    """`ilk_kabul` kapısı. Dağıtımcı verilmezse eski kural: hiçbir parça Spotify'da değilse bekle."""
+    if dagitimci is None:
+        if any(d.asama == "yayinda" for d in hepsi):
+            return None
+        return "ilk parça Spotify'a çıkana kadar bekliyor (dağıtımcı incelemesi)"
+    bizim = lambda y: bool(y) and y.get("dagitimci") in (dagitimci, None)  # noqa: E731 — eski kayıtta ad yok
+    incelemede, red = [], []
+    for d in hepsi:
+        y, gecmis = _yuklemeler(calisma, d)
+        if bizim(y) and (d.asama == "yayinda" or y.get("dagitim_durumu") in ("approved", "live")):
+            return None  # bu dağıtımcı en az bir parçayı kabul etti
+        if bizim(y) and d.asama == "yuklendi":
+            incelemede.append(d.ad)
+        red += [d.ad for g in gecmis if g.get("red") and g.get("dagitimci") in (dagitimci, None)]
+    if incelemede:
+        return f"{dagitimci}: ilk kabul bekleniyor ({', '.join(incelemede)} incelemede), o gelene kadar yükleme yok"
+    if red:
+        return (f"{dagitimci} ilk yüklemeyi reddetti ({', '.join(dict.fromkeys(red))}); neden anlaşılıp düzeltilmeden "
+                "yeni yükleme yok (düzeltilen şarkı: yanki yukle <kimlik>)")
+    return None
+
+
+def plan(calisma: Path, t: Takvim, bugun: date | None = None, puanlar: dict[str, float] | None = None,
+         dagitimci: str | None = None) -> Plan:
+    """Kuyruk ve tarihleri hesaplar (kayıt tutmaz: her çağrıda durumdan yeniden çıkar, elle yükleme hemen yansır).
+    `dagitimci`: etkin dağıtımcı; `ilk_kabul` kapısı onun kabul/red geçmişine bakar."""
     bugun = bugun or date.today()
     if puanlar is None:
         from yanki import kesif
@@ -123,8 +184,8 @@ def plan(calisma: Path, t: Takvim, bugun: date | None = None, puanlar: dict[str,
     beklemede = None
     if not t.acik:
         beklemede = "takvim kapalı (config/yayin.toml → [takvim])"
-    elif t.baslangic == "ilk_kabul" and not any(d.asama == "yayinda" for d in hepsi):
-        beklemede = "ilk parça Spotify'a çıkana kadar bekliyor (dağıtımcı incelemesi)"
+    elif t.baslangic == "ilk_kabul":
+        beklemede = _ilk_kabul_bekleme(calisma, hepsi, dagitimci)
     return Plan(sira, beklemede, son, reddedilen)
 
 

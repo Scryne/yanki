@@ -80,11 +80,12 @@ def _kota(kok: Path) -> dict:
 
 def _takvim(kok: Path, calisma: Path) -> dict:
     """Yükleme sırası (yalnız durumdan hesaplanır, ağa çıkmaz)."""
-    from yanki import dagitim
+    from yanki import dagitim, paket
 
     try:
-        p = dagitim.plan(calisma, dagitim.takvim_oku(kok / "config" / "yayin.toml"))
-    except (OSError, ValueError) as e:
+        p = dagitim.plan(calisma, dagitim.takvim_oku(kok / "config" / "yayin.toml"),
+                         dagitimci=paket.yayin_ayarlari(kok / "config" / "yayin.toml").dagitimci)
+    except (OSError, ValueError, KeyError) as e:
         return {"hata": str(e), "sira": [], "beklemede": None, "duzeltme": []}
     return {"beklemede": p.beklemede, "duzeltme": p.duzeltme,
             "sira": [{"kimlik": x.kimlik, "sanatci": x.sanatci, "ad": x.ad, "yukleme": x.yukleme.isoformat(),
