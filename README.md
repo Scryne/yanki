@@ -18,7 +18,8 @@ yüklenen parçanın Spotify'da çıkıp çıkmadığını ve adı arandığınd
    `yanki calistir` koşar: kaynak ses (YouTube), sözler (LRCLIB), künye ve stil (MusicBrainz), üç cover adayı, kapılar,
    bekleyen onarımlar, onaylılar için paket. GPU başka bir işle doluysa boşalmasını bekler; şarkı başı ~30 dk.
    Günlük: `calisma/gunluk/<tarih>.log`. Hemen istersen elle `uv run yanki calistir` (aynı anda tek koşu, kilitli).
-3. `yanki dinle` (ya da Kokpit → Yanki → Çalıştır) → tarayıcıda dinleme odası. Orijinalle karşılaştır; bozuk yer varsa dalga üzerinde sürükleyip
+3. Dinleme odası oturum açılınca kendiliğinden başlar (`\Yanki\Oda`, `scripts/oda.ps1`): http://127.0.0.1:8765/,
+   özet Windows bildirimiyle gelir, bildirime tıklayınca oda açılır. Elle: `yanki dinle` ya da Kokpit → Yanki → Çalıştır. Orijinalle karşılaştır; bozuk yer varsa dalga üzerinde sürükleyip
    **Bu aralığı onar**; iyi olanı **Bu adayı onayla**.
 4. Onarım istendiyse bir sonraki `yanki calistir` (ya da `yanki uret`) iki onarım sürümü üretir; dinleme odasında iyisini
    **Bunu kabul et**.
@@ -45,6 +46,7 @@ uv run acestep-download
 winget install Gyan.FFmpeg.Shared                          # ffmpeg/ffprobe
 # fpcalc (Chromaprint 1.5.1, Windows x64) → araclar/fpcalc.exe
 uv run yanki durum                                         # hepsi ✓ olmalı
+powershell -File scripts/gorev_kur.ps1                     # \Yanki\Gece (03:00) ve \Yanki\Oda (oturum açılışı)
 # Keşif ve takip için: developer.spotify.com → Create app (Premium hesap), Redirect URI http://127.0.0.1:8766/callback
 copy .env.example .env                                     # SPOTIFY_CLIENT_ID / SECRET
 uv run yanki spotify-baglan                                # yalnız kendi playlist'lerini taramak için

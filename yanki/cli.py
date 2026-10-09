@@ -334,6 +334,43 @@ def _takip(args: argparse.Namespace) -> int:
     return 0
 
 
+def ozet(kok: Path) -> dict:
+    """Hattın tek bakışta durumu: oturum açılış bildirimi ve günlük için. Ağa çıkmaz."""
+    import time
+
+    from yanki import kesif, spotify
+
+    calisma = kok / "calisma"
+    sarkilar = durum.hepsi(calisma)
+    say = lambda *a: sum(d.asama in a for d in sarkilar)  # noqa: E731
+    try:
+        listede = kesif.listedekiler(kok / "girdi" / "liste.toml", calisma)
+        oneri = sum(x.puan > 0 and not x.elendi and x.kimlik not in listede for x in kesif.oku(calisma).values())
+    except (OSError, ValueError):
+        oneri = 0
+    k = spotify.Spotify(kok).kota()
+    return {"dinlemede": say("uretildi"), "onarim": say("onarim"), "uretimde": say("yeni", "hazir", "analiz"),
+            "paket_bekliyor": say("paketlendi"), "yuklendi": say("yuklendi"), "yayinda": say("yayinda"),
+            "hata": say("hata"), "kesif_onerisi": oneri,
+            "spotify_kilit_sn": max(0, int(k.get("kilit", 0) - time.time()))}
+
+
+def _ozet(args: argparse.Namespace) -> int:
+    import json
+
+    o = ozet(ayarlar.yukle().kok)
+    if args.json:
+        print(json.dumps(o))
+        return 0
+    satir = [f"{o['dinlemede']} şarkı dinlemede" if o["dinlemede"] else "dinlemede şarkı yok"]
+    satir += [f"{n} {ad}" for n, ad in ((o["onarim"], "onarım bekliyor"), (o["uretimde"], "üretim sırasında"),
+                                         (o["paket_bekliyor"], "paket yüklenmeyi bekliyor"),
+                                         (o["yayinda"], "yayında"), (o["yuklendi"], "yayın bekliyor"),
+                                         (o["kesif_onerisi"], "keşif önerisi"), (o["hata"], "hatada")) if n]
+    print(" · ".join(satir))
+    return 0
+
+
 def _calistir(args: argparse.Namespace) -> int:
     """Arka plan koşusu: (açıksa) kaldırılmış şarkı keşfi → listeye ekle, yeni şarkıları hazırla, üret (bekleyen
     onarımlar dahil), onaylıları paketle, yüklenenleri takip et. Liste boş olsa da onarım ve paketleme yapılır.
@@ -415,6 +452,9 @@ def main(argv: list[str] | None = None) -> int:
     tk = alt.add_parser("takip", help="yüklenenler Spotify'da mı, adı arandığında kaçıncı sırada")
     tk.add_argument("kimlik", nargs="*", help="boşsa hepsi")
     tk.set_defaults(fn=_takip)
+    oz = alt.add_parser("ozet", help="hattın tek satırlık durumu (oturum açılış bildirimi)")
+    oz.add_argument("--json", action="store_true")
+    oz.set_defaults(fn=_ozet)
     dn = alt.add_parser("dinle", help="dinleme sayfasını aç")
     dn.add_argument("--port", type=int, default=8765)
     dn.add_argument("--tarayicisiz", action="store_true")

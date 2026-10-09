@@ -13,3 +13,15 @@ $kim = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -
 Register-ScheduledTask -TaskPath "\Yanki\" -TaskName "Gece" -Action $eylem -Trigger $zaman -Settings $ayar `
     -Principal $kim -Force | Out-Null
 "Yanki\Gece kuruldu: her gece 03:00 → $kok\scripts\gece.ps1"
+
+# Yanki\Oda: oturum açılınca dinleme odası arka planda (127.0.0.1:8765) + özet bildirimi (Scryne, 2026-10-09:
+# "bilgisayar açıldığında yanki otomatik başlasın"). Süre sınırı yok; düşerse 1 dk arayla 3 kez yeniden başlar.
+$arg = "--headless `"$ps`" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File `"$kok\scripts\oda.ps1`""
+$eylem = New-ScheduledTaskAction -Execute (Join-Path $env:WINDIR "System32\conhost.exe") -Argument $arg -WorkingDirectory $kok
+$zaman = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
+$zaman.Delay = "PT45S"  # oturum açılışındaki yükü beklesin (ağ, Defender taraması)
+$ayar = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Seconds 0) -MultipleInstances IgnoreNew `
+    -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1) -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
+Register-ScheduledTask -TaskPath "\Yanki\" -TaskName "Oda" -Action $eylem -Trigger $zaman -Settings $ayar `
+    -Principal $kim -Force | Out-Null
+"Yanki\Oda kuruldu: oturum açılınca → $kok\scripts\oda.ps1 (http://127.0.0.1:8765/)"
