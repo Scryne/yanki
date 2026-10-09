@@ -31,7 +31,9 @@ yüklenen parçanın Spotify'da çıkıp çıkmadığını ve adı arandığınd
    **Bunu kabul et**.
 5. Onaylanan şarkı paketlenir: `calisma/<kimlik>/paket/`. **Tunearo (varsayılan, 2026-10-10):** yüklemeyi hat yapar,
    takvimde sırası gelince gece koşusu paketi API ile yükleyip incelemeye gönderir; elle hemen yüklemek için
-   `yanki yukle <kimlik>` (`--taslak`: her şeyi yükler, göndermez). Durum gece yoklanır (`yanki dagitim-durum`): kabulde
+   `yanki yukle <kimlik>` (`--taslak`: her şeyi yükler, göndermez). Kapak şarkının moduna göre Pinterest'ten
+   (insansız, yazısız; her yeni kapak bildirilir); beğenmezsen `yanki kapak <kimlik> --yeni`, kendi görselin için
+   şarkı klasörüne `kapak_ozel.jpg`. Durum gece yoklanır (`yanki dagitim-durum`): kabulde
    UPC/ISRC kaydedilir, red gelirse şarkı `paketlendi`ye döner ve neden bildirilir. **Elle dağıtımcıda (RouteNote):**
    `YUKLE.md`'yi açıp formu doldur, ses dosyasını (FLAC) ve JPG'yi yükle, sonra 6. adım.
 6. Yalnız elle dağıtımcıda: `yanki yuklendi <kimlik> --isrc <ISRC> --upc <UPC> --yayin-tarihi YYYY-AA-GG`: aşama `yuklendi`, formdaki

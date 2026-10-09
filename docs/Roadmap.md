@@ -327,6 +327,16 @@ veto eder.
   When We Were Young 21 günlük payla (2026-10-31) gönderilmişti; `pending` yayında tarih değişmiyor (409, `PATCH
   /releases` ve `/metadata`). Red gelirse yeniden gönderimde yeni tarih yazılır; kabul gelirse 31 Ekim kalır (panelden
   arkadaş değiştirebilir).
+- **Kapak Pinterest'ten (Scryne, 2026-10-10: "üretilen kapağı istemiyorum, şarkıya göre o modda Pinterest'ten
+  görsel"):** `yanki/pinterest.py`, `config/yayin.toml` → `[kapak] kaynak = "pinterest"`. Sorgu stilin mod sözcükleri
+  + sözlerde en sık geçen imge (okyanus, yol, yıldızlar…; yoksa türün sahnesi), şarkı/sanatçı adı yok. Resmi API iş
+  hesabı istiyor; sitenin arama ucu girişsiz cevap veriyor (başlıksız 403). Görsel açıklamasında insan, yazı, logo ya
+  da yazı taşıyan nesne (kitap, dergi, plak, ekran) geçen pin elenir; bir pin iki şarkıda kullanılmaz; en büyük ve
+  kareye en yakını. Elle konan `kapak_ozel.jpg` önce gelir. Kuyruktaki 11 paket yeni kapakla yeniden paketlendi (WAV).
+  Gözle bakıldı: açıklama süzgeci 11'de 2'yi kaçırdı (dergi kapağı + tarih damgası, okunur kitap sayfası; sonra bir
+  dizüstü ekranında çizgi film) → süzgeç sıkılaştırıldı, üçü değiştirildi. Süzgeç kusursuz değil: her yeni kapak
+  bildirilir, beğenilmeyen `yanki kapak <kimlik> --yeni`. When We Were Young üretilen kapakla gönderilmişti
+  (incelemede değişmiyor). 13 yeni test, toplam 265.
 - **Bitti kriterinden kalan:** ilk Tunearo kararı (kabul → UPC/ISRC kaydı, takip; red → neden), takvimin 2 hafta
   kesintisiz işlemesi, veto penceresinin uçtan uca bir şarkıda çalışması (kapalı, Faz 12 ölçümü bekliyor).
 - **Risk (Tunearo kalite kontrolü):** hesaptaki iki yayın "derivative work (remix, sample, or cover)" diye

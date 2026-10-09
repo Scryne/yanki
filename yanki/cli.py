@@ -657,6 +657,43 @@ def _yukle(args: argparse.Namespace) -> int:
     return 0
 
 
+def _kapak(args: argparse.Namespace) -> int:
+    """Pinterest kapağı getir (`--yeni`: beğenilmeyeni değiştir); şarkı paketliyse paket yeni kapakla yenilenir.
+    Yüklenmiş şarkıya dokunmaz (dağıtımcıda kapak değişmez)."""
+    import json
+
+    from yanki import pinterest
+
+    a = ayarlar.yukle()
+    calisma = a.kok / "calisma"
+    kimlikler = args.kimlik or [d.kimlik for d in durum.hepsi(calisma) if d.asama == "paketlendi"]
+    kod = 0
+    for kimlik in kimlikler:
+        d = durum.oku(calisma, kimlik)
+        if d is None or d.asama not in ("onaylandi", "paketlendi"):
+            print(f"✗ {kimlik}: onaylı ya da paketli değil" + (f" (aşama: {d.asama})" if d else ""))
+            kod = 1
+            continue
+        if (durum.klasor(calisma, kimlik) / "kapak_ozel.jpg").exists():
+            print(f"  {d.ad}: elle seçilmiş kapak_ozel.jpg var, o kullanılıyor (Pinterest'e bakılmadı)")
+            continue
+        try:
+            pinterest.getir(calisma, d, yeni=args.yeni)
+        except (OSError, LookupError, ValueError) as e:  # ağ, uygun görsel yok, bozuk görsel
+            print(f"✗ {d.ad}: {e}")
+            kod = 1
+            continue
+        k = json.loads((durum.klasor(calisma, kimlik) / "kapak_kaynak.json").read_text(encoding="utf-8"))
+        print(f"  {d.ad}: {k['boyut'][0]}×{k['boyut'][1]} — {k['aciklama']} ({k['pin']})")
+        if d.asama == "paketlendi":
+            hatalar: list = []
+            paket.paketle(calisma, a.kok / "config" / "yayin.toml", [kimlik], yeniden=True, hatalar=hatalar)
+            for _, hata in hatalar:
+                print(f"✗ {d.ad}: yeniden paketlenemedi: {hata}")
+                kod = 1
+    return kod
+
+
 def _dagitim_durum(args: argparse.Namespace) -> int:
     """API'li dağıtımcıya yüklenenlerin durumunu yoklar (gece koşusu da yapar)."""
     from yanki import dagitim
@@ -850,6 +887,10 @@ def main(argv: list[str] | None = None) -> int:
     yk.add_argument("--taslak", action="store_true", help="her şeyi yükle ama gönderme (yayın taslakta kalır)")
     yk.add_argument("--yayin-tarihi", help="YYYY-AA-GG (varsayılan bugün + takvim.yayin_on_gun)")
     yk.set_defaults(fn=_yukle)
+    kp = alt.add_parser("kapak", help="şarkının moduna göre Pinterest kapağı (paketliyse paketi yeniler)")
+    kp.add_argument("kimlik", nargs="*", help="boşsa paketlenmiş hepsi")
+    kp.add_argument("--yeni", action="store_true", help="mevcut kapağı bırak, başka görsel seç")
+    kp.set_defaults(fn=_kapak)
     alt.add_parser("dagitim-durum", help="API'li dağıtımcıya yüklenenlerin inceleme/yayın durumu").set_defaults(
         fn=_dagitim_durum)
     dr = alt.add_parser("dagitim-red", help="dağıtımcının reddettiği şarkıyı kaydet (paketlendi'ye döner)")
@@ -884,7 +925,7 @@ def main(argv: list[str] | None = None) -> int:
 
 
 YAZAN_KOMUTLAR = {"hazirla", "uret", "calistir", "yeniden", "kunye", "paketle", "yuklendi", "kesif", "takip",
-                  "temizle", "yedekle", "dagitim-red", "gunduz", "yukle", "dagitim-durum"}
+                  "temizle", "yedekle", "dagitim-red", "gunduz", "yukle", "dagitim-durum", "kapak"}
 
 
 if __name__ == "__main__":

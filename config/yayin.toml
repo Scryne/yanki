@@ -10,6 +10,12 @@ dagitimci = "tunearo"
 # Kapakta ve metadata'da: plak şirketi yoksa sanatçı adı kullanılır
 etiket = ""
 
+[kapak]
+# "pinterest": şarkının moduna göre Pinterest görseli, insansız ve yazısız (yanki/pinterest.py; Scryne, 2026-10-10:
+# "üretilen kapağı istemiyorum"). "uretilen": dalga formundan tipografik kapak. Şarkı klasöründeki kapak_ozel.jpg
+# (elle seçilen) her zaman önce gelir. Beğenilmeyen kapak: yanki kapak <kimlik> --yeni
+kaynak = "pinterest"
+
 [master]
 lufs = -14.0
 # Spotify sınırı −1 dBTP; doğrusal loudnorm bazı şarkılarda 0,06 dB aşıyordu (2026-10-07) → pay

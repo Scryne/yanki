@@ -51,6 +51,7 @@ class Yayin:
     lufs: float
     gercek_tepe: float
     ornekleme: int
+    kapak: str = "uretilen"  # "pinterest" (şarkının moduna göre görsel) | "uretilen" (dalga formundan tipografik)
 
 
 def yayin_ayarlari(yol: Path) -> Yayin:
@@ -59,8 +60,11 @@ def yayin_ayarlari(yol: Path) -> Yayin:
     y, m = d["yayin"], d["master"]
     if y["dagitimci"] not in ("", "routenote", "distrokid", "tunearo"):
         raise ValueError(f"dagitimci tunearo, routenote, distrokid ya da boş olmalı: {y['dagitimci']}")
+    kapak_kaynagi = d.get("kapak", {}).get("kaynak", "uretilen")
+    if kapak_kaynagi not in ("pinterest", "uretilen"):
+        raise ValueError(f"kapak.kaynak pinterest ya da uretilen olmalı: {kapak_kaynagi}")
     return Yayin(y["sanatci_adi"].strip(), y["dagitimci"], y.get("etiket", "").strip(), float(m["lufs"]),
-                 float(m["gercek_tepe_dbtp"]), int(m["ornekleme"]))
+                 float(m["gercek_tepe_dbtp"]), int(m["ornekleme"]), kapak_kaynagi)
 
 
 def _loudnorm_olc(girdi: Path, y: Yayin) -> dict:
@@ -232,7 +236,7 @@ def yukle_md(meta: dict, y: Yayin, dosyalar: dict[str, str]) -> str:
 def _kapak_notu(meta: dict) -> str:
     k = meta.get("kapak") or {}
     en, boy = k.get("ozgun_boyut") or (KAPAK_BOYUT, KAPAK_BOYUT)
-    if k.get("kaynak") == "ozel" and min(en, boy) < KUCUK_KAPAK:
+    if k.get("kaynak") in ("ozel", "pinterest") and min(en, boy) < KUCUK_KAPAK:
         return f". **Dikkat:** özgün görsel {en}×{boy} px, {KAPAK_BOYUT}'e büyütüldü; bulanıksa dağıtımcı reddedebilir"
     return ""
 
@@ -415,9 +419,21 @@ def _paketle_bir(calisma: Path, d: durum.Durum, y: Yayin) -> durum.Durum:
     ad = guvenli_ad(f"{y.sanatci_adi or 'SANATCI'} - {d.ad}")
     ses_yolu, kapak_yolu = p / f"{ad}.{SES_BICIMI[y.dagitimci]}", p / f"{ad}.jpg"
     olcum = master(kaynak, ses_yolu, y)
-    # Scryne'ın seçtiği kapak varsa o (3000×3000 kareye getirilir); yoksa dalga formundan üretilir
+    # Scryne'ın elle koyduğu kapak her zaman önce; yoksa ayara göre Pinterest (şarkının modu) ya da dalga formundan
+    # üretilen. Görsel 3000×3000 kareye getirilir. Pinterest bulamazsa hata: şarkı onaylı kalır, sonraki koşu dener.
     if (ozel := k / "kapak_ozel.jpg").exists():
         kapak_bilgi = ozel_kapak(ozel, kapak_yolu)
+    elif y.kapak == "pinterest":
+        from yanki import olay, pinterest
+
+        yeni_secim = not (k / "kapak_pinterest.jpg").exists()
+        kapak_bilgi = {**ozel_kapak(pinterest.getir(calisma, d), kapak_yolu), "kaynak": "pinterest"}
+        kaynak = json.loads((k / "kapak_kaynak.json").read_text(encoding="utf-8"))
+        kapak_bilgi["pin"] = kaynak.get("pin")
+        if yeni_secim:  # açıklama süzgeci her yazıyı/insanı yakalamıyor (11'de 2 kaçtı): göz atılsın
+            olay.bildir(calisma, "kapak", f"kapak seçildi: {d.ad}",
+                        f"{kaynak.get('aciklama')} — calisma/{d.kimlik}/kapak_pinterest.jpg. Beğenmezsen: "
+                        f"yanki kapak {d.kimlik} --yeni", f"kapak:{d.kimlik}:{kaynak.get('pin_id')}")
     else:
         kapak(d.ad, sunucu.dalga(kaynak)["tepe"], kapak_yolu, y.sanatci_adi)
         kapak_bilgi = {"kaynak": "uretilen", "ozgun_boyut": [KAPAK_BOYUT, KAPAK_BOYUT], "islem": None}
