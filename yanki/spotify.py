@@ -12,8 +12,13 @@
   Yanki CSV'sini okur.
 - Arama `limit` en fazla 10 (önce 50); derinlik `offset` ile.
 
-Anahtarlar ortam değişkeninden ya da proje kökündeki `.env`'den okunur (gitignore'da). Sınırlar sert ve IP başına:
-tek uygulamada 13 saatlik 429 ölçülmüş (STILLMORE) → istekler tek tek, 429'da uzun bekleme yerine `Sinirli` fırlatılır.
+Anahtarlar ortam değişkeninden ya da proje kökündeki `.env`'den okunur (gitignore'da).
+
+Kota (2026-10-09, kendi ölçümümüz): bir günde ~1.000 istekten sonra uygulama 429 + `Retry-After: 83595` (23 saat)
+aldı; STILLMORE'da 13 saat ölçülmüştü. Bu yüzden `calisma/.spotify_kota.json`:
+- **kilit:** uzun 429'un bitiş zamanı kalıcı yazılır; kilit sürerken hiç istek atılmaz (gece koşusu, elle komut, hepsi).
+- **günlük tavan:** `GUNLUK_BUTCE` istekten sonra gün bitene kadar `KotaDoldu`.
+Kısa 429'da (≤ 10 sn) bir kez beklenip tekrar denenir.
 """
 
 import base64
@@ -32,7 +37,8 @@ HESAP = "https://accounts.spotify.com"
 YONLENDIRME = "http://127.0.0.1:8766/callback"  # Spotify `localhost`u reddediyor, 127.0.0.1 döngü adresini kabul ediyor
 KAPSAM = "playlist-read-private playlist-read-collaborative"
 KISA_BEKLEME_SN = 10  # Retry-After bundan kısaysa bekleyip bir kez daha dene
-ARALIK_SN = 0.3  # ardışık istekler arası en az bekleme (30 sn'lik kayan pencereyi toplu taramada doldurmamak için)
+ARALIK_SN = 0.5  # ardışık istekler arası en az bekleme (30 sn'lik kayan pencereyi toplu taramada doldurmamak için)
+GUNLUK_BUTCE = 400  # günde en fazla istek (token hariç); 2026-10-09'da ~1.000'de 23 saatlik kilit
 
 
 class SpotifyHatasi(RuntimeError):
@@ -40,9 +46,14 @@ class SpotifyHatasi(RuntimeError):
 
 
 class Sinirli(SpotifyHatasi):
-    def __init__(self, sn: int):
-        super().__init__(f"Spotify istek sınırı: {sn} sn sonra tekrar dene")
+    def __init__(self, sn: int, neden: str = ""):
+        saat = f" (~{sn / 3600:.1f} saat)" if sn >= 3600 else ""
+        super().__init__(f"Spotify istek sınırı: {sn} sn{saat} sonra tekrar dene" + (f" [{neden}]" if neden else ""))
         self.sn = sn
+
+
+class KotaDoldu(Sinirli):
+    pass
 
 
 class AyarYok(SpotifyHatasi):
@@ -66,7 +77,8 @@ def env_oku(kok: Path) -> dict[str, str]:
 
 
 class Spotify:
-    def __init__(self, kok: Path, client_id: str = "", client_secret: str = "", yonlendirme: str = ""):
+    def __init__(self, kok: Path, client_id: str = "", client_secret: str = "", yonlendirme: str = "",
+                 gunluk_butce: int = GUNLUK_BUTCE):
         e = env_oku(kok) if not client_id else {}
         self.client_id = client_id or e.get("SPOTIFY_CLIENT_ID", "")
         self.client_secret = client_secret or e.get("SPOTIFY_CLIENT_SECRET", "")
@@ -75,6 +87,42 @@ class Spotify:
         self._uygulama: tuple[str, float] | None = None
         self._son_istek = 0.0
         self.aralik_sn = ARALIK_SN
+        self.istek_sayisi = 0  # bu nesnenin API istekleri (token hariç): keşif bütçesi buna bakar
+        self.kota_yolu = kok / "calisma" / ".spotify_kota.json"
+        self.gunluk_butce = gunluk_butce
+
+    # ── Kota ────────────────────────────────────────────────
+    def kota(self) -> dict:
+        try:
+            k = json.loads(self.kota_yolu.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            k = {}
+        bugun = time.strftime("%Y-%m-%d")
+        if k.get("gun") != bugun:
+            k = {"gun": bugun, "sayi": 0, "kilit": k.get("kilit", 0), "neden": k.get("neden", "")}
+        return k
+
+    def _kota_yaz(self, k: dict) -> None:
+        self.kota_yolu.parent.mkdir(parents=True, exist_ok=True)
+        gecici = self.kota_yolu.with_suffix(".tmp")
+        gecici.write_text(json.dumps(k), encoding="utf-8")
+        gecici.replace(self.kota_yolu)
+
+    def kilitle(self, sn: int, neden: str = "") -> None:
+        k = self.kota()
+        k["kilit"], k["neden"] = time.time() + sn, neden
+        self._kota_yaz(k)
+
+    def kota_kontrol(self) -> dict:
+        """İstek atmadan önce: kilit ya da günlük tavan varsa istek atılmadan fırlatır."""
+        k = self.kota()
+        kalan = int(k.get("kilit", 0) - time.time())
+        if kalan > 0:
+            raise Sinirli(kalan, k.get("neden") or "kayıtlı kilit")
+        if k["sayi"] >= self.gunluk_butce:
+            gece = time.mktime(time.strptime(k["gun"], "%Y-%m-%d")) + 86400
+            raise KotaDoldu(int(gece - time.time()), f"günlük tavan {self.gunluk_butce} istek")
+        return k
 
     # ── HTTP ────────────────────────────────────────────────
     def _http(self, yontem: str, url: str, basliklar: dict, veri: bytes | None = None) -> tuple[int, dict, bytes]:
@@ -99,10 +147,14 @@ class Spotify:
         if parametre:
             url += ("&" if "?" in url else "?") + urllib.parse.urlencode(parametre)
         for deneme in range(2):
+            k = self.kota_kontrol()
             bekle = self._son_istek + self.aralik_sn - time.monotonic()
             if bekle > 0:
                 time.sleep(bekle)
             self._son_istek = time.monotonic()
+            self.istek_sayisi += 1
+            k["sayi"] += 1
+            self._kota_yaz(k)
             kod, basliklar, govde = self._http("GET", url, {"Authorization": f"Bearer {token}"})
             if kod == 200:
                 return json.loads(govde)
@@ -111,7 +163,12 @@ class Spotify:
                 if sn <= KISA_BEKLEME_SN and deneme == 0:
                     time.sleep(sn + 1)
                     continue
-                raise Sinirli(sn)
+                try:
+                    neden = (json.loads(govde or b"{}").get("error") or {}).get("reason") or ""
+                except ValueError:
+                    neden = ""
+                self.kilitle(sn, neden or "429")
+                raise Sinirli(sn, neden)
             if kod in (500, 502, 503) and deneme == 0:
                 time.sleep(3)
                 continue
@@ -124,6 +181,7 @@ class Spotify:
             return self._uygulama[0]
         if not (self.client_id and self.client_secret):
             raise AyarYok("SPOTIFY_CLIENT_ID ve SPOTIFY_CLIENT_SECRET yok (.env ya da ortam değişkeni)")
+        self.kota_kontrol()  # kilitliyken token isteği de atılmaz
         yetki = base64.b64encode(f"{self.client_id}:{self.client_secret}".encode()).decode()
         t = self._form(f"{HESAP}/api/token", {"grant_type": "client_credentials"}, f"Basic {yetki}")
         self._uygulama = (t["access_token"], time.time() + int(t.get("expires_in", 3600)))
@@ -166,6 +224,7 @@ class Spotify:
         k = json.loads(self.token_yolu.read_text(encoding="utf-8"))
         if k["bitis"] > time.time() + 60:
             return k["access_token"]
+        self.kota_kontrol()
         t = self._form(f"{HESAP}/api/token", {"grant_type": "refresh_token", "refresh_token": k["refresh_token"],
                                               "client_id": self.client_id})
         self._token_yaz(t, k["refresh_token"])
@@ -192,8 +251,7 @@ class Spotify:
         return self._get(f"/tracks/{parca_id}", {"market": market}, self.uygulama_token())
 
     def playlist(self, playlist_id: str) -> dict:
-        return self._get(f"/playlists/{playlist_id}", {"fields": "name,owner(display_name),tracks(total)"},
-                         self.kullanici_token())
+        return self._get(f"/playlists/{playlist_id}", {"fields": "name,snapshot_id"}, self.kullanici_token())
 
     def playlist_parcalari(self, playlist_id: str, market: str):
         """Kullanıcı token'ıyla tüm sayfalar → parça nesneleri. `market` verilince çalınamayan parça

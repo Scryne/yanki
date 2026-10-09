@@ -1,16 +1,48 @@
-# Kaldırılmış şarkı keşfi ve yayın takibi (`yanki kesif`, `yanki takip`). Gerekçe: yanki/kesif.py, yanki/takip.py.
+# Kaldırılmış şarkı keşfi ve yayın takibi (`yanki kesif`, `yanki takip`). Gerekçe: yanki/kesif.py, katalog.py, takip.py.
 # Spotify anahtarları burada değil: proje kökündeki .env (SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET; gitignore'da).
+# Global çalışılıyor (Scryne, 2026-10-09): kapalılık ve arama sırası tek ülkede değil, aşağıdaki pazarlarda ölçülür.
 
 [kesif]
-# Çalınabilirlik ve arama bu ülkenin kataloğunda ölçülür. Yüklemeler ABD/CA/MX/IN/PK'yı hariç tutuyor → TR.
-market = "TR"
-# Web API ile taranacak playlist'ler (yalnız Scryne'ın kendi ya da ortak olduğu playlist'ler; başkasınınki 403).
-# Başka playlist'ler için STILLMORE → "Kaldırılmış şarkıları bul" → "CSV indir" → girdi/kesif/ klasörüne bırak.
-playlistler = []
-# Gece koşusu her gece en iyi kaç doğrulanmış adayı listeye eklesin (0 = eklemesin, `yanki kesif --ekle N` elle)
-gece_ekle = 0
+# İlki ana pazar (aramalar orada; en geniş katalog). Bir şarkı hepsinde kapalıysa "kaldirildi", bazılarında "kismi";
+# puan kapalı pazar oranıyla çarpılır. Her ek pazar, aday başına bir Spotify isteği.
+pazarlar = ["US", "GB", "DE", "FR", "BR", "MX", "JP", "TR"]
+# Web API ile taranacak playlist'ler: yalnız Scryne'ın kendi ya da ortak olduğu playlist'ler (başkasınınki 403).
+# Hem çalınamayan parçaları verir hem de sanatçıları katalog farkına tohum olur. STILLMORE CSV'leri: girdi/kesif/.
+playlistler = [
+  "1qzTZyjCtqgHCcqaWnqgfU", "3PMsSWdcfg8X6JdEMlcBpB", "7edy7Tl0r0lOd5aNvVOEGG", "4BONsw2IXNq17K1CQhqWem",
+  "6Rp2bOX82WJkjktyU9pj73", "7ffIJHtd8eCIkWq3ZPTlWd", "391psXFUqyFfH0oxfBXuOa", "6h9eeEai5OtAz7E2dIsyCj",
+  "6mvt34Rhj8gA1oH1Il8tVZ", "2iNydjURFzLC0TBIy3kkBW", "0Loby2EIKtoTBUFTYaTPed", "1iOlJtQ1C2hK8M3zVKBkeT",
+]
+# Gece koşusu her gece en iyi kaç doğrulanmış adayı listeye eklesin (0 = eklemesin; elle: `yanki kesif --ekle N`).
+# Şarkı başı ~30 dk GPU; dinleme yükü de Scryne'da.
+gece_ekle = 2
+
+[katalog]
+# Kendi keşfimiz (STILLMORE'suz): Deezer'da çok dinlenen ama Spotify'da kapalı/olmayan şarkılar (yanki/katalog.py).
+acik = true
+# Elle tohumlar. Kataloğunu Spotify'dan çektiği haberlerde geçen sanatçılar (2025); doğru olup olmadığını hat ölçer,
+# yanlışsa yalnız birkaç istek boşa gider.
+tohumlar = [
+  "Massive Attack", "King Gizzard & The Lizard Wizard", "Godspeed You! Black Emperor", "Deerhoof", "Xiu Xiu",
+  "Hotline TNT",
+]
+# Playlist'lerde en sık geçen kaç sanatçı tohum olsun (Scryne'ın zevki)
+playlist_sanatcilari = 30
+# Deezer tür listeleri (0 hepsi, 132 pop, 116 rap, 152 rock, 165 R&B, 85 alternatif). Deezer listeyi IP'nin
+# ülkesine göre veriyor (bu ağda Türkiye); global genişleme benzer sanatçılardan gelir.
+liste_turleri = [0, 132, 116, 152, 165, 85]
+liste_adet = 25
+benzer_adet = 5
+parca_adet = 15
+# Deezer rank (0–1.000.000, parçanın Deezer'daki genel popülerliği) eşiği
+min_rank = 300000
+# Koşu başına en fazla Spotify isteği; kalan parçalar sonraki gecelere kalır (önbellek: calisma/kesif/katalog.json)
+butce = 150
+# Spotify'da "var" çıkan parça bu kadar gün yeniden sorulmaz
+tazeleme_gun = 30
 
 [takip]
-market = "TR"
-# Şarkının adı arandığında ilk kaç sonuçta bizim parçaya bakılsın (sayfa başı 10, her 10 için bir istek)
+# Yayınladığımız pazarlar (RouteNote'ta mekanik lisans yok → US/CA/MX/IN/PK hariç). İlki ISRC araması için.
+pazarlar = ["GB", "DE", "FR", "BR", "TR", "AU"]
+# Şarkının adı arandığında ilk kaç sonuçta bizim parçaya bakılsın (sayfa başı 10, her 10 için bir istek, pazar başına)
 arama_derinligi = 20

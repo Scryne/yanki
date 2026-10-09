@@ -31,7 +31,11 @@ class SahteSpotify:
         return self.arama.get(sorgu, [])[:adet]
 
     def playlist_parcalari(self, pid, market):
+        self.tam_tarama = getattr(self, "tam_tarama", 0) + 1
         yield from self.pl
+
+    def playlist(self, pid):
+        return {"snapshot_id": getattr(self, "snapshot", "s1")}
 
     def parca(self, pid, market):
         return {"id": pid, "is_playable": pid in getattr(self, "baska_yerde_acik", set())}
@@ -57,7 +61,7 @@ def test_stillmore_csv_yalniz_calinamayan_ve_geri_gelmemis(tmp_path):
     yol.write_text("﻿" + "\n".join(satirlar), encoding="utf-8")
     a = kesif.stillmore_csv(yol)
     assert [(x.sanatci, x.ad, x.neden) for x in a] == [("Sanatçı A", "Kayıp, Şarkı", "kaldirildi"),
-                                                       ("Sanatçı C", "Ülke Şarkısı", "ulkede_kapali")]
+                                                       ("Sanatçı C", "Ülke Şarkısı", "kismi")]
     assert a[0].isrc == "TRX001" and a[0].spotify_dinlenme == 1234567 and a[0].kaynak == "stillmore:" + yol.name
 
 
@@ -66,8 +70,15 @@ def test_playlist_tara_calinamayanlari_alir():
     sp = SahteSpotify(playlist=[_parca("1" * 22, "Var", "X"), _parca("2" * 22, "Yok", "Y", False, "ISRC1", "market"),
                                 _parca("3" * 22, "Kapalı", "Z", False, neden="market")])
     sp.baska_yerde_acik = {"3" * 22}
-    a = kesif.playlist_tara(sp, "p" * 22, "TR")
-    assert [(x.ad, x.neden, x.isrc) for x in a] == [("Yok", "kaldirildi", "ISRC1"), ("Kapalı", "ulkede_kapali", None)]
+    from collections import Counter
+
+    sayac = Counter()
+    a = kesif.playlist_tara(sp, "p" * 22, ("TR", "US"), sayac)
+    assert [(x.ad, x.isrc, x.kapali_pazarlar) for x in a] == [("Yok", "ISRC1", ["TR"]), ("Kapalı", None, ["TR"])]
+    # pazarlar doğrulamada sorulur: biri her yerde kapalı, öteki yalnız ana pazarda
+    a = [kesif.bosluk_dogrula(sp, x, ("TR", "US")) for x in a]
+    assert [(x.neden, x.kapali_pazarlar) for x in a] == [("kaldirildi", ["TR", "US"]), ("kismi", ["TR"])]
+    assert sayac == Counter({"X": 1, "Y": 1, "Z": 1})
 
 
 def test_bosluk_dogrula_isrc_ile_geri_gelmis():
@@ -163,11 +174,26 @@ def test_ara_sayfa_basi_10_ve_offset(tmp_path):
     assert "limit=10" in sp.istekler[1][1] and "offset=0" in sp.istekler[1][1] and "offset=10" in sp.istekler[2][1]
 
 
-def test_429_uzun_bekleme_sinirli_firlatir(tmp_path):
-    sp = KayitliSpotify(tmp_path, [TOKEN, (429, {}, {"Retry-After": "46728"})])
+def test_429_uzun_bekleme_kalici_kilit(tmp_path):
+    sp = KayitliSpotify(tmp_path, [TOKEN, (429, {"error": {"reason": "QUOTA_EXCEEDED"}}, {"Retry-After": "83595"})])
     with pytest.raises(spotify.Sinirli) as e:
         sp.ara("q", "TR")
-    assert e.value.sn == 46728
+    assert e.value.sn == 83595 and "QUOTA_EXCEEDED" in str(e.value)
+    # yeni süreç (gece koşusu) kilidi dosyadan okur ve hiç istek atmaz
+    sp2 = KayitliSpotify(tmp_path, [])
+    with pytest.raises(spotify.Sinirli):
+        sp2.ara("q", "TR")
+    assert sp2.istekler == []
+
+
+def test_gunluk_tavan(tmp_path):
+    sp = KayitliSpotify(tmp_path, [TOKEN] + [(200, {"tracks": {"items": []}})] * 3)
+    sp.gunluk_butce = 2
+    sp.ara("a", "TR")
+    sp.ara("b", "TR")
+    with pytest.raises(spotify.KotaDoldu):
+        sp.ara("c", "TR")
+    assert len([i for i in sp.istekler if "/search" in i[1]]) == 2
 
 
 def test_playlist_403_aciklayici(tmp_path):
@@ -324,3 +350,140 @@ def test_soz_kontrol_sozsuz_ve_uzun():
         return []
 
     assert kesif.soz_kontrol(kesif.Aday("A", "B", "k"), yok).soz_var is False
+
+
+def test_puan_kapali_pazar_orani():
+    tam = kesif.Aday("A", "1", "k", youtube_izlenme=1000, geri_geldi=False, sanatci_uyusuyor=True,
+                     bakilan_pazarlar=["US", "GB", "DE", "TR"], kapali_pazarlar=["US", "GB", "DE", "TR"])
+    yarim = kesif.Aday("B", "2", "k", youtube_izlenme=1000, geri_geldi=False, sanatci_uyusuyor=True,
+                       bakilan_pazarlar=["US", "GB", "DE", "TR"], kapali_pazarlar=["DE", "TR"])
+    assert (tam.puan, yarim.puan) == (1000, 500)
+    assert (kesif.hal(tam), kesif.hal(yarim)) == ("kaldırılmış", "kaldırılmış")
+    yarim.neden = "kismi"
+    assert kesif.hal(yarim) == "kısmen kapalı"
+
+
+def test_bosluk_dogrula_csv_adayini_pazar_pazar_sorar():
+    sp = SahteSpotify()
+    sp.baska_yerde_acik = {"id1"}  # her pazarda açık: aynı parça geri gelmiş
+    a = kesif.bosluk_dogrula(sp, kesif.Aday("S", "Ş", "k", spotify_id="id1"), ("US", "GB"))
+    assert a.geri_geldi is True and a.geri_gelen[0]["neden"] == "ayni_parca"
+    b = kesif.bosluk_dogrula(SahteSpotify(), kesif.Aday("S", "Ş", "k", spotify_id="id2"), ("US", "GB"))
+    assert (b.geri_geldi, b.neden, b.kapali_pazarlar) == (False, "kaldirildi", ["US", "GB"])
+
+
+# ── Katalog farkı (Deezer) ──────────────────────────────────
+def _deezer(cevaplar):
+    istekler = []
+
+    def json_al(url, p=None):
+        yol = url.replace("https://api.deezer.com", "")
+        istekler.append(yol)
+        return cevaplar[yol]
+
+    json_al.istekler = istekler
+    return json_al
+
+
+DEEZER = {
+    "/search/artist": {"data": [{"id": 1, "name": "Massive Attack"}]},
+    "/artist/1/related": {"data": [{"id": 2, "name": "Portishead"}]},
+    "/chart/0/artists": {"data": [{"id": 3, "name": "Tarkan"}]},
+    "/artist/1/top": {"data": [
+        {"id": 11, "title": "Teardrop", "rank": 800000, "artist": {"name": "Massive Attack"}},
+        {"id": 12, "title": "Angel (Sped Up)", "rank": 900000, "artist": {"name": "Massive Attack"}},
+        {"id": 13, "title": "Az Bilinen", "rank": 1000, "artist": {"name": "Massive Attack"}}]},
+    "/artist/2/top": {"data": [{"id": 21, "title": "Glory Box", "rank": 700000, "artist": {"name": "Portishead"}}]},
+    "/artist/3/top": {"data": [{"id": 31, "title": "Şımarık", "rank": 600000, "artist": {"name": "Tarkan"}}]},
+    "/track/31": {"isrc": "TRA019700001"},
+    "/track/11": {}, "/track/21": {}, "/track/13": {},
+}
+
+
+def test_katalog_tara_kapali_yok_var_ve_onbellek(tmp_path):
+    from datetime import datetime
+
+    from yanki import katalog
+
+    sp = SahteSpotify(arama={
+        'track:"teardrop" artist:"Massive Attack"': [_parca("t1", "Teardrop", "Massive Attack", oynar=False)],
+        'track:"glory box" artist:"Portishead"': [_parca("g1", "Glory Box", "Portishead")],
+    })
+    sp.istek_sayisi = 0
+    sp.baska_yerde_acik = set()
+    ayar = katalog.Ayar(tohumlar=("Massive Attack",), liste_turleri=(0,), benzer_adet=1, butce=100, min_rank=500000)
+    ja = _deezer(DEEZER)
+    adaylar = katalog.tara(sp, tmp_path, ("US", "GB"), ayar, json_al=ja, bildir=lambda *_: None,
+                           simdi=datetime(2026, 10, 9))
+    # sped up atlandı (düşük rank'lı "Az Bilinen" elle tohum olduğu için eşiğe takılmaz); Teardrop her pazarda
+    # kapalı, Şımarık Spotify'da hiç yok (ad + ISRC)
+    assert [(a.ad, a.neden, a.kapali_pazarlar) for a in sorted(adaylar, key=lambda a: a.ad)] == [
+        ("Az Bilinen", "spotify_yok", ["US", "GB"]), ("Teardrop", "kaldirildi", ["US", "GB"]),
+        ("Şımarık", "spotify_yok", ["US", "GB"])]
+    on = katalog.onbellek_oku(tmp_path)
+    assert {k: v.durum for k, v in on.items()} == {"11": "kapali", "13": "yok", "21": "var", "31": "yok"}
+    assert list(on) == ["11", "13", "21", "31"]  # sorma sırası: tohum (rank sırasıyla) → benzer → liste
+    assert "/track/31" in ja.istekler  # adla bulunamayan ISRC'yle de soruldu
+    sp.sorgular.clear()
+    katalog.tara(sp, tmp_path, ("US", "GB"), ayar, json_al=ja, bildir=lambda *_: None, simdi=datetime(2026, 10, 10))
+    assert 'track:"glory box" artist:"Portishead"' not in sp.sorgular  # "var" önbellekte taze: yeniden sorulmaz
+
+
+def test_katalog_butce_sinirlar(tmp_path):
+    from yanki import katalog
+
+    class Sayan(SahteSpotify):
+        def ara(self, sorgu, market, adet=10):
+            self.istek_sayisi += 1
+            return super().ara(sorgu, market, adet)
+
+        def isrc_ara(self, isrc, market):
+            self.istek_sayisi += 1
+            return []
+
+    sp = Sayan()
+    sp.istek_sayisi = 0
+    ayar = katalog.Ayar(tohumlar=("Massive Attack",), liste_turleri=(0,), benzer_adet=1, butce=3, min_rank=500000)
+    katalog.tara(sp, tmp_path, ("US",), ayar, json_al=_deezer(DEEZER), bildir=lambda *_: None)
+    # her parça en fazla 2 istek: bütçe 3 iken 3 parçanın hepsi sorulamaz
+    assert sp.istek_sayisi <= 3 and len(katalog.onbellek_oku(tmp_path)) < 3
+
+
+def test_deezer_kota_ve_bulunamadi(monkeypatch):
+    from yanki import ag, katalog
+
+    monkeypatch.setattr(katalog.time, "sleep", lambda s: None)
+    cevaplar = iter([{"error": {"code": 4}}, {"data": []}])
+    assert katalog.deezer("/x", None, lambda u, p: next(cevaplar)) == {"data": []}
+    with pytest.raises(ag.Bulunamadi):
+        katalog.deezer("/track/0", None, lambda u, p: {"error": {"code": 800}})
+
+
+def test_takip_pazar_pazar_sira(tmp_path):
+    _yuklenmis(tmp_path)
+    bizim = _parca("ours", "Someone Like You", "Orvane", isrc="GXM2X2626596")
+
+    class Pazarli(SahteSpotify):
+        def ara(self, sorgu, market, adet=10):
+            return {"GB": [bizim], "DE": [_parca("x", "Someone Like You", "Adele"), bizim]}.get(market, [])
+
+    (d, _), = takip.takip_et(Pazarli(isrc={"GXM2X2626596": [bizim]}), tmp_path, "Orvane", ("GB", "DE", "TR"))
+    assert d.yayin["son"]["siralar"] == {"GB": 1, "DE": 2, "TR": None} and d.yayin["son"]["arama_sirasi"] == 1
+
+
+def test_playlist_onbellek_snapshot_ve_haftalik(tmp_path):
+    from collections import Counter
+    from datetime import datetime
+
+    sp = SahteSpotify(playlist=[_parca("1" * 22, "Var", "X"), _parca("2" * 22, "Yok", "Y", False)])
+    gun = datetime(2026, 10, 9)
+    s1 = Counter()
+    assert len(kesif.playlist_tara_onbellekli(sp, "p", ("TR",), tmp_path, s1, gun)) == 1
+    s2 = Counter()
+    assert kesif.playlist_tara_onbellekli(sp, "p", ("TR",), tmp_path, s2, datetime(2026, 10, 12)) is None
+    assert s1 == s2 == Counter({"X": 1, "Y": 1}) and sp.tam_tarama == 1
+    sp.snapshot = "s2"  # playlist değişti → tam tarama
+    assert kesif.playlist_tara_onbellekli(sp, "p", ("TR",), tmp_path, Counter(), datetime(2026, 10, 12)) is not None
+    sp.snapshot = "s2"  # değişmedi ama hafta doldu → yine tam tarama (parça sonradan kaldırılmış olabilir)
+    assert kesif.playlist_tara_onbellekli(sp, "p", ("TR",), tmp_path, Counter(), datetime(2026, 10, 20)) is not None
+    assert sp.tam_tarama == 3

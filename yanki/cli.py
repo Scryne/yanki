@@ -183,28 +183,52 @@ def _spotify_baglan(_: argparse.Namespace) -> int:
 
 
 def _kesif(args: argparse.Namespace) -> int:
-    from yanki import kesif, spotify
+    from collections import Counter
+
+    from yanki import katalog, kesif, spotify
 
     a = ayarlar.yukle()
     calisma = a.kok / "calisma"
-    k = _kesif_ayarlari(a.kok)["kesif"]
-    market = args.market or k["market"]
+    ayar = _kesif_ayarlari(a.kok)
+    k = ayar["kesif"]
+    pazarlar = tuple(args.pazar or k["pazarlar"])
     sp = spotify.Spotify(a.kok)
+    dogrula = bool(sp.client_id and sp.client_secret)
     adaylar: list = []
     csvler = [Path(x) for x in args.csv] or sorted((a.kok / "girdi" / "kesif").glob("*.csv"))
     for yol in csvler:
         bulunan = kesif.stillmore_csv(yol)
         print(f"STILLMORE {yol.name}: {len(bulunan)} çalınamayan şarkı")
         adaylar += bulunan
-    for p in args.playlist or k["playlistler"]:
+    sayac: Counter = Counter()
+    playlistler = args.playlist or (k["playlistler"] if dogrula and sp.bagli_mi() else [])
+    degismeyen = 0
+    for p in playlistler:
         try:
             pid = spotify.kimlik_ayikla(p)
-            bulunan = kesif.playlist_tara(sp, pid, market)
+            bulunan = kesif.playlist_tara_onbellekli(sp, pid, pazarlar, calisma, sayac)
+        except spotify.Sinirli as e:
+            print(f"✗ playlist taraması durdu: {e}")
+            break
         except (ValueError, spotify.SpotifyHatasi) as e:
             print(f"✗ playlist {p}: {e}")
             continue
+        if bulunan is None:
+            degismeyen += 1
+            continue
         print(f"playlist {pid}: {len(bulunan)} çalınamayan şarkı")
         adaylar += bulunan
+    if degismeyen:
+        print(f"{degismeyen} playlist değişmemiş (son {kesif.PLAYLIST_TAZELEME_GUN} günde tarandı), atlandı")
+    kat = ayar.get("katalog", {})
+    if dogrula and kat.get("acik") and not args.katalogsuz:
+        ek = [ad for ad, _ in sayac.most_common(int(kat.get("playlist_sanatcilari", 0)))]
+        try:
+            adaylar += katalog.tara(sp, calisma, pazarlar, katalog.Ayar.oku(kat), ek)
+        except spotify.Sinirli as e:
+            print(f"✗ katalog farkı: {e}")
+        except (OSError, katalog.DeezerHatasi) as e:
+            print(f"✗ katalog farkı: {e}")
     # aynı şarkı birden çok kaynaktan gelebilir: doğrulama tek kez; düzenlemeler (sped up, remix…) hiç sorulmaz
     tekil = list({x.kimlik: x for x in adaylar}.values())
     duzenleme = [x for x in tekil if x.duzenleme]
@@ -212,42 +236,47 @@ def _kesif(args: argparse.Namespace) -> int:
     if duzenleme:
         print(f"{len(duzenleme)} düzenleme atlandı (sped up, slowed, remix…): "
               + ", ".join(f"{x.sanatci} — {x.ad}" for x in duzenleme[:5]) + (" …" if len(duzenleme) > 5 else ""))
+    # son 14 günde ölçülmüş adaylar yeniden sorulmaz (gece bütçesi korunur); `--yeniden-olc` hepsini ölçer
+    if not args.yeniden_olc:
+        onceki = kesif.oku(calisma)
+        tekil = [x for x in tekil if not _olculmus(onceki.get(x.kimlik))]
     yayin = paket.yayin_ayarlari(a.kok / "config" / "yayin.toml")
-    dogrula = bool(sp.client_id and sp.client_secret)
     if tekil and not dogrula:
         print("Spotify anahtarı yok (.env): boşluk doğrulanmıyor, yalnız talep ölçülüyor; doğrulanmamış aday listeye"
               " eklenmez")
-    for i, x in enumerate(tekil, 1):
+    # Önce ücretsiz elemeler (YouTube talebi + sanatçı eşleşmesi, LRCLIB sözü), Spotify en son ve yalnız bunları
+    # geçenlere: Spotify kotası dar (2026-10-09: ~1.000 istekte 23 saatlik kilit), playlist adaylarının çoğu
+    # sızıntı/düzenleme olarak ücretsiz adımlarda eleniyor.
+    for x in tekil:
         try:
-            if dogrula:
-                kesif.bosluk_dogrula(sp, x, market, yayin.sanatci_adi)
+            kesif.talep_olc(x)
+        except Exception as e:  # noqa: BLE001 — YouTube araması düşerse aday kalır, talep boş
+            print(f"  YouTube ölçülemedi ({x.sanatci} — {x.ad}): {e}")
+        if x.sanatci_uyusuyor is True:
+            try:
+                kesif.soz_kontrol(x)
+            except OSError as e:
+                print(f"  LRCLIB'e ulaşılamadı ({x.sanatci} — {x.ad}): {e}")
+    sorulacak = [x for x in tekil if kesif.spotifya_sorulur(x)]
+    if dogrula and sorulacak:
+        print(f"Spotify doğrulaması: {len(sorulacak)}/{len(tekil)} aday ücretsiz elemeleri geçti")
+    for i, x in enumerate(sorulacak if dogrula else [], 1):
+        try:
+            kesif.bosluk_dogrula(sp, x, pazarlar, yayin.sanatci_adi)
         except spotify.Sinirli as e:
-            print(f"✗ {e}; doğrulanan {i - 1}/{len(tekil)} kaydedildi, kalanı sonraki koşuda")
-            tekil = tekil[: i - 1]
+            print(f"✗ {e}; doğrulanan {i - 1}/{len(sorulacak)}, kalanı sonraki koşuda")
             break
         except spotify.SpotifyHatasi as e:
             print(f"✗ Spotify: {e}")
-            return 1
-        if not x.geri_geldi:
-            try:
-                kesif.talep_olc(x)
-            except Exception as e:  # noqa: BLE001 — YouTube araması düşerse aday kalır, talep boş
-                print(f"  YouTube ölçülemedi ({x.sanatci} — {x.ad}): {e}")
-            if x.sanatci_uyusuyor is not False:
-                try:
-                    kesif.soz_kontrol(x)
-                except OSError as e:
-                    print(f"  LRCLIB'e ulaşılamadı ({x.sanatci} — {x.ad}): {e}")
+            break
     kayit = kesif.birlestir(calisma, tekil)
     sirali = kesif.sirala(kayit)
-    print(f"\n{'puan':>12}  {'YouTube':>13}  rakip  durum        şarkı")
+    print(f"\n{'puan':>12}  {'YouTube':>13}  rakip  pazar  durum            şarkı")
     for x in sirali[: args.goster]:
-        hal = ("geri geldi" if x.geri_geldi else "doğrulanmadı" if x.geri_geldi is None
-               else "sanatçı uymuyor" if x.sanatci_uyusuyor is False else "söz yok" if x.soz_var is False
-               else "çok uzun" if (x.sure_sn or 0) > kesif.SURE_SINIRI_SN else x.neden)
-        izl = f"{x.youtube_izlenme:,}" if x.youtube_izlenme else "—"
-        print(f"{x.puan:12,.0f}  {izl:>13}  {x.rakip_cover if x.rakip_cover is not None else '—':>5}  "
-              f"{hal:12} {x.sanatci} — {x.ad}")
+        pazar = f"{len(x.kapali_pazarlar)}/{len(x.bakilan_pazarlar)}" if x.bakilan_pazarlar else "—"
+        print(f"{x.puan:12,.0f}  {(f'{x.youtube_izlenme:,}' if x.youtube_izlenme else '—'):>13}  "
+              f"{x.rakip_cover if x.rakip_cover is not None else '—':>5}  {pazar:>5}  {kesif.hal(x):16} "
+              f"{x.sanatci} — {x.ad}")
     if args.ekle:
         eklenen = kesif.listeye_ekle(sirali, a.kok / "girdi" / "liste.toml", calisma, args.ekle)
         for x in eklenen:
@@ -255,6 +284,12 @@ def _kesif(args: argparse.Namespace) -> int:
         if not eklenen:
             print("listeye eklenecek doğrulanmış yeni aday yok")
     return 0
+
+
+def _olculmus(x, gun: int = 14) -> bool:
+    from datetime import datetime, timedelta
+
+    return bool(x and x.kontrol and datetime.fromisoformat(x.kontrol) > datetime.now() - timedelta(days=gun))
 
 
 def _takip(args: argparse.Namespace) -> int:
@@ -266,7 +301,7 @@ def _takip(args: argparse.Namespace) -> int:
     y = paket.yayin_ayarlari(a.kok / "config" / "yayin.toml")
     sp = spotify.Spotify(a.kok)
     try:
-        sonuc = takip.takip_et(sp, calisma, y.sanatci_adi, t["market"], args.kimlik or None,
+        sonuc = takip.takip_et(sp, calisma, y.sanatci_adi, tuple(t["pazarlar"]), args.kimlik or None,
                                int(t["arama_derinligi"]))
     except spotify.SpotifyHatasi as e:
         print(f"✗ {e}")
@@ -278,8 +313,8 @@ def _takip(args: argparse.Namespace) -> int:
         if not son:
             hal = "—"
         elif son["canli"]:
-            hal = f"canlı, '{d.ad}' aramasında " + (
-                f"{son['arama_sirasi']}." if son["arama_sirasi"] else f"ilk {son['arama_limiti']}'de yok")
+            siralar = ", ".join(f"{m} {s or '—'}" for m, s in (son.get("siralar") or {}).items())
+            hal = f"canlı; '{d.ad}' aramasında sıra: {siralar} (ilk {son['arama_limiti']})"
         else:
             hal = f"henüz Spotify'da değil (yayın tarihi {son.get('yayin_tarihi') or '?'})"
         print(f"{'✓' if son.get('canli') else '·'} {d.sanatci} — {d.ad}: {hal}")
@@ -302,7 +337,8 @@ def _calistir(args: argparse.Namespace) -> int:
     spotify_var = bool(spotify.Spotify(kok).client_id)
     gece_ekle = int(_kesif_ayarlari(kok)["kesif"].get("gece_ekle", 0))
     if gece_ekle and spotify_var:
-        _kesif(argparse.Namespace(csv=[], playlist=[], market=None, ekle=gece_ekle, goster=gece_ekle))
+        _kesif(argparse.Namespace(csv=[], playlist=[], pazar=None, ekle=gece_ekle, goster=10, katalogsuz=False,
+                                  yeniden_olc=False))
     _hazirla(args)
     _uret(args)
     args.yeniden = False
@@ -363,7 +399,9 @@ def main(argv: list[str] | None = None) -> int:
     ks = alt.add_parser("kesif", help="Spotify'dan kaldırılmış, hâlâ aranan şarkıları bul, doğrula, sırala")
     ks.add_argument("--csv", nargs="*", default=[], help="STILLMORE CSV'si (varsayılan girdi/kesif/*.csv)")
     ks.add_argument("--playlist", nargs="*", default=[], help="kendi playlist'in (varsayılan config/kesif.toml)")
-    ks.add_argument("--market", help="varsayılan config/kesif.toml")
+    ks.add_argument("--pazar", nargs="*", help="pazarlar, ilki ana (varsayılan config/kesif.toml)")
+    ks.add_argument("--katalogsuz", action="store_true", help="Deezer katalog farkını atla")
+    ks.add_argument("--yeniden-olc", action="store_true", help="kayıtta ölçülmüş adayları da yeniden ölç")
     ks.add_argument("--ekle", type=int, default=0, help="en iyi N doğrulanmış adayı girdi/liste.toml'a ekle")
     ks.add_argument("--goster", type=int, default=25)
     ks.set_defaults(fn=_kesif)

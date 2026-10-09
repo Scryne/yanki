@@ -22,7 +22,7 @@ import json
 import re
 import unicodedata
 from dataclasses import asdict, dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from yanki import liste
@@ -48,12 +48,15 @@ def sade_ad(ad: str) -> str:
 class Aday:
     sanatci: str
     ad: str
-    kaynak: str  # "playlist:<id>" | "stillmore:<dosya>"
+    kaynak: str  # "playlist:<id>" | "stillmore:<dosya>" | "deezer:<id>"
     spotify_id: str | None = None
     isrc: str | None = None
     album: str | None = None
     cikis: str | None = None
-    neden: str = "kaldirildi"  # "kaldirildi" | "ulkede_kapali"
+    # "kaldirildi": bakılan her pazarda kapalı | "kismi": bazılarında | "spotify_yok": katalogda hiç yok
+    neden: str = "kaldirildi"
+    bakilan_pazarlar: list = field(default_factory=list)
+    kapali_pazarlar: list = field(default_factory=list)
     spotify_dinlenme: int | None = None  # STILLMORE CSV'sinden (kaldırılmadan önceki toplam)
     youtube_izlenme: int | None = None
     youtube_baslik: str | None = None
@@ -81,7 +84,35 @@ class Aday:
         if (self.geri_geldi or not self.youtube_izlenme or self.sanatci_uyusuyor is not True or self.duzenleme
                 or self.soz_var is False or (self.sure_sn or 0) > SURE_SINIRI_SN):
             return 0.0
-        return self.youtube_izlenme / (1 + (self.rakip_cover or 0))
+        # global çalışılıyor (Scryne, 2026-10-09): boşluk ne kadar çok pazarda açıksa o kadar değerli
+        kapsam = len(self.kapali_pazarlar) / len(self.bakilan_pazarlar) if self.bakilan_pazarlar else 1.0
+        return self.youtube_izlenme * kapsam / (1 + (self.rakip_cover or 0))
+
+
+def spotifya_sorulur(a: Aday) -> bool:
+    """Ücretsiz elemeleri geçti mi: talep ölçüldü, sanatçı eşleşti, sözlü ve süresi uygun."""
+    return (not a.duzenleme and bool(a.youtube_izlenme) and a.sanatci_uyusuyor is True and a.soz_var is True
+            and (a.sure_sn or 0) <= SURE_SINIRI_SN)
+
+
+def hal(a: Aday) -> str:
+    """Tek kelimelik durum: tabloda ve dinleme odasında. Elemeler uygulandıkları sırayla."""
+    if a.duzenleme:
+        return "düzenleme"
+    if a.geri_geldi:
+        return "geri geldi"
+    if a.youtube_izlenme is None and a.sanatci_uyusuyor is None:
+        return "talep yok"
+    if a.sanatci_uyusuyor is not True:
+        return "sanatçı uymuyor"
+    if a.soz_var is False:
+        return "söz yok"
+    if (a.sure_sn or 0) > SURE_SINIRI_SN:
+        return "çok uzun"
+    if a.geri_geldi is None:
+        return "doğrulanmadı"
+    return {"kaldirildi": "kaldırılmış", "kismi": "kısmen kapalı", "spotify_yok": "Spotify'da yok"}.get(a.neden,
+                                                                                                         a.neden)
 
 
 # ── Bulma ───────────────────────────────────────────────────
@@ -105,45 +136,91 @@ def stillmore_csv(yol: Path) -> list[Aday]:
             sanatci=(r.get("Sanatçı") or "").split(",")[0].strip(), ad=r["Parça"].strip(),
             kaynak=f"stillmore:{yol.name}", spotify_id=(r.get("Spotify ID") or "").strip() or None,
             isrc=(r.get("ISRC") or "").strip().upper() or None, cikis=(r.get("Çıkış") or "").strip() or None,
-            neden="ulkede_kapali" if durum.startswith("Ülkende kapalı") else "kaldirildi",
+            neden="kismi" if durum.startswith("Ülkende kapalı") else "kaldirildi",
             spotify_dinlenme=_sayi(r.get("Dinlenme")),
         ))
     return adaylar
 
 
-# Kaldırılmış ile "yalnız bu ülkede kapalı"yı ayırmak için bakılan pazarlar. `restrictions.reason` ikisinde de
-# "market" dönüyor (2026-10-09 ölçümü: Spotify'ın olmadığı CN'de her parça is_playable false, reason market).
-DIS_PAZARLAR = ("US", "GB", "DE")
+def kapali_pazarlar(sp, parca_id: str | None, pazarlar, bilinen_kapali=()) -> list[str]:
+    """Parçanın çalınamadığı pazarlar (pazar başına bir istek). Kaldırılmış ile "bazı ülkelerde kapalı"yı ayırmanın tek
+    yolu: `restrictions.reason` ikisinde de "market" (2026-10-09 ölçümü, CN'de her parça false/market)."""
+    if not parca_id:
+        return list(pazarlar)
+    return [m for m in pazarlar if m in bilinen_kapali or sp.parca(parca_id, m).get("is_playable") is False]
 
 
-def baska_pazarda_acik(sp, parca_id: str, pazarlar: tuple[str, ...] = DIS_PAZARLAR) -> bool:
-    for m in pazarlar:
-        if sp.parca(parca_id, m).get("is_playable") is not False:
-            return True
-    return False
+def neden_sec(kapali: list, pazarlar) -> str:
+    return "kaldirildi" if len(kapali) == len(pazarlar) else "kismi"
 
 
-def playlist_tara(sp, playlist_id: str, market: str) -> list[Aday]:
-    """Playlist'te `market`te çalınamayan parçalar. Spotify bir parçayı kaldırınca listede gri bırakır; Web API'de
-    `is_playable: false` görünür. Başka büyük pazarlarda açıksa `ulkede_kapali`, hiçbirinde değilse `kaldirildi`."""
+def playlist_tara(sp, playlist_id: str, pazarlar, sayac=None) -> list[Aday]:
+    """Playlist'te ana pazarda (ilk) çalınamayan parçalar. Spotify kaldırılan parçayı listede gri bırakır; Web API'de
+    `is_playable: false`. Diğer pazarlar burada sorulmaz: elemelerden (düzenleme, ölçülmüş) sonra `bosluk_dogrula`
+    sorar; playlist'lerdeki çalınamayanların çoğu zaten eleniyor (2026-10-09: 70'te 3 aday)."""
+    if isinstance(pazarlar, str):
+        pazarlar = (pazarlar,)
     adaylar = []
-    for t in sp.playlist_parcalari(playlist_id, market):
+    for t in sp.playlist_parcalari(playlist_id, pazarlar[0]):
+        if sayac is not None:  # katalog farkı için tohum: playlist'teki sanatçıların sıklığı
+            sayac.update(a["name"] for a in t.get("artists") or [] if a.get("name"))
         if t.get("is_playable") is not False:
             continue
-        acik = bool(t.get("id")) and baska_pazarda_acik(sp, t["id"], tuple(m for m in DIS_PAZARLAR if m != market))
         adaylar.append(Aday(
             sanatci=(t.get("artists") or [{}])[0].get("name") or "", ad=t.get("name") or "",
             kaynak=f"playlist:{playlist_id}", spotify_id=t.get("id"),
             isrc=((t.get("external_ids") or {}).get("isrc") or "").upper() or None,
             album=(t.get("album") or {}).get("name"), cikis=(t.get("album") or {}).get("release_date"),
-            neden="ulkede_kapali" if acik else "kaldirildi",
+            kapali_pazarlar=[pazarlar[0]],  # ana pazarda kapalı olduğu biliniyor; diğerleri doğrulamada
         ))
     return [a for a in adaylar if a.sanatci and a.ad]
 
 
+PLAYLIST_TAZELEME_GUN = 7
+
+
+def playlist_tara_onbellekli(sp, playlist_id: str, pazarlar, calisma: Path, sayac, simdi: datetime | None = None
+                             ) -> list[Aday] | None:
+    """İçerik değişmediyse (`snapshot_id`) ve son tam tarama `PLAYLIST_TAZELEME_GUN`'den yeniyse taramaz: sanatçı
+    sayımı kayıttan gelir, `None` döner (adaylar zaten `adaylar.json`'da). Değişmeyen playlist'te de parça sonradan
+    kaldırılabilir; bu yüzden haftada bir yine tam tarama. Maliyet: değişmeyen playlist 1 istek, tam tarama ~4."""
+    from collections import Counter
+
+    simdi = simdi or datetime.now()
+    yol = calisma / "kesif" / "playlistler.json"
+    kayit = json.loads(yol.read_text(encoding="utf-8")) if yol.exists() else {}
+    eski = kayit.get(playlist_id) or {}
+    snapshot = sp.playlist(playlist_id).get("snapshot_id")
+    if (eski.get("snapshot") == snapshot and snapshot
+            and datetime.fromisoformat(eski["tarih"]) > simdi - timedelta(days=PLAYLIST_TAZELEME_GUN)):
+        sayac.update(eski.get("sanatcilar") or {})
+        return None
+    yerel: Counter = Counter()
+    adaylar = playlist_tara(sp, playlist_id, pazarlar, yerel)
+    sayac.update(yerel)
+    kayit[playlist_id] = {"snapshot": snapshot, "tarih": simdi.isoformat(timespec="seconds"),
+                          "sanatcilar": dict(yerel), "calinamayan": len(adaylar)}
+    yol.parent.mkdir(parents=True, exist_ok=True)
+    yol.write_text(json.dumps(kayit, ensure_ascii=False, indent=1), encoding="utf-8")
+    return adaylar
+
+
 # ── Boşluk doğrulama ────────────────────────────────────────
-def bosluk_dogrula(sp, a: Aday, market: str, kendi_sanatci: str = "") -> Aday:
-    """Aynı şarkının çalınabilir bir sürümü var mı (geri gelmiş) ve kaç rakip cover var."""
+def bosluk_dogrula(sp, a: Aday, pazarlar, kendi_sanatci: str = "") -> Aday:
+    """Aynı şarkının çalınabilir bir sürümü var mı (geri gelmiş) ve kaç rakip cover var; aramalar ana pazarda
+    (`pazarlar[0]`). Pazar dağılımı bilinmiyorsa (CSV) Spotify kimliğiyle her pazar sorulur."""
+    if isinstance(pazarlar, str):
+        pazarlar = (pazarlar,)
+    market = pazarlar[0]
+    if a.spotify_id and not a.bakilan_pazarlar:
+        a.kapali_pazarlar = kapali_pazarlar(sp, a.spotify_id, pazarlar, bilinen_kapali=tuple(a.kapali_pazarlar))
+        a.bakilan_pazarlar = list(pazarlar)
+        if not a.kapali_pazarlar:  # aynı parça her pazarda yeniden çalınabilir: boşluk kapandı
+            a.geri_geldi, a.rakip_cover = True, a.rakip_cover
+            a.geri_gelen = [{"id": a.spotify_id, "sanatci": a.sanatci, "ad": a.ad, "neden": "ayni_parca"}]
+            a.kontrol = datetime.now().isoformat(timespec="seconds")
+            return a
+        a.neden = neden_sec(a.kapali_pazarlar, pazarlar)
     sade, sanatci = sade_ad(a.ad), a.sanatci.casefold()
     geri: list[dict] = []
     if a.isrc:
@@ -257,6 +334,8 @@ def birlestir(calisma: Path, yeniler: list[Aday]) -> dict[str, Aday]:
         eski = kayit.get(a.kimlik)
         a.ilk_gorulme = eski.ilk_gorulme if eski else simdi
         if eski:
+            if not a.bakilan_pazarlar and eski.bakilan_pazarlar:
+                a.bakilan_pazarlar, a.kapali_pazarlar = eski.bakilan_pazarlar, eski.kapali_pazarlar
             for alan in ("spotify_dinlenme", "isrc", "spotify_id", "album", "cikis", "youtube_izlenme",
                          "youtube_baslik", "sanatci_uyusuyor", "soz_var", "sure_sn", "geri_geldi", "rakip_cover",
                          "kontrol"):

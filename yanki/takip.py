@@ -3,8 +3,9 @@
 Her yüklenen şarkı için (ISRC paketin `metadata.json` → `yukleme`'sinde):
 - **Canlı mı:** ISRC araması `market`te çalınabilir bir parça döndürüyor mu. İlk görüldüğünde aşama
   `yuklendi → yayinda`. Önceden canlıyken artık bulunmuyorsa `kayip` işaretlenir (kaldırılmış olabilir).
-- **Arama sırası:** şarkının adı (dinleyicinin yazacağı gibi, sanatçısız) arandığında bizim parça kaçıncı. Kaldırılmış
-  şarkı stratejisinin (bkz. `kesif.py`) başarı ölçüsü bu.
+- **Arama sırası:** şarkının adı (dinleyicinin yazacağı gibi, sanatçısız) arandığında bizim parça kaçıncı; her pazarda
+  ayrı (arama sonuçları ülkeye göre değişir; global çalışılıyor, Scryne 2026-10-09). Kaldırılmış şarkı stratejisinin
+  (bkz. `kesif.py`) başarı ölçüsü bu.
 - **Profil:** sanatçı adımızın Spotify kimliği. Her yüklemede "yeni profil" açıldı (RouteNote, 2026-10-08); birden
   fazla kimlik görülürse profil bölünmüş demektir.
 
@@ -28,10 +29,14 @@ def yukleme_bilgisi(calisma: Path, kimlik: str) -> dict | None:
     return json.loads(yol.read_text(encoding="utf-8")).get("yukleme")
 
 
-def kontrol_et(sp, d: durum.Durum, isrc: str, sanatci_adi: str, market: str, arama_limiti: int = 20) -> dict:
-    """Tek şarkı: Spotify'a iki istek (ISRC araması + ad araması)."""
+def kontrol_et(sp, d: durum.Durum, isrc: str, sanatci_adi: str, pazarlar, arama_limiti: int = 20) -> dict:
+    """Tek şarkı: ISRC araması (ana pazar, yayınladığımız bir pazar olmalı) + her pazarda ad araması."""
+    if isinstance(pazarlar, str):
+        pazarlar = (pazarlar,)
+    market = pazarlar[0]
     son: dict = {"zaman": datetime.now().isoformat(timespec="seconds"), "market": market, "canli": False,
-                 "spotify_id": None, "sanatci_id": None, "arama_sirasi": None, "arama_limiti": arama_limiti}
+                 "spotify_id": None, "sanatci_id": None, "arama_sirasi": None, "siralar": {},
+                 "arama_limiti": arama_limiti}
     bizim = None
     for t in sp.isrc_ara(isrc, market):
         if t.get("is_playable") is not False and (t.get("external_ids") or {}).get("isrc", isrc).upper() == isrc:
@@ -41,14 +46,20 @@ def kontrol_et(sp, d: durum.Durum, isrc: str, sanatci_adi: str, market: str, ara
         son["canli"], son["spotify_id"] = True, bizim["id"]
         son["sanatci_id"] = next((a.get("id") for a in bizim.get("artists") or []
                                   if a.get("name", "").casefold() == sanatci_adi.casefold()), None)
+    if not bizim:
+        return son  # yayında değilken ad araması boşuna istek
     sade = sade_ad(d.ad)
-    for i, t in enumerate(sp.ara(d.ad, market, adet=arama_limiti), 1):
-        ayni_parca = bizim and t.get("id") == bizim["id"]
-        bizim_adla = sade_ad(t.get("name") or "") == sade and any(
-            a.get("name", "").casefold() == sanatci_adi.casefold() for a in t.get("artists") or [])
-        if ayni_parca or bizim_adla:
-            son["arama_sirasi"] = i
-            break
+    for m in pazarlar:
+        son["siralar"][m] = None
+        for i, t in enumerate(sp.ara(d.ad, m, adet=arama_limiti), 1):
+            ayni_parca = t.get("id") == bizim["id"]
+            bizim_adla = sade_ad(t.get("name") or "") == sade and any(
+                a.get("name", "").casefold() == sanatci_adi.casefold() for a in t.get("artists") or [])
+            if ayni_parca or bizim_adla:
+                son["siralar"][m] = i
+                break
+    bulunan = [x for x in son["siralar"].values() if x]
+    son["arama_sirasi"] = min(bulunan) if bulunan else None
     return son
 
 
@@ -64,13 +75,13 @@ def kaydet(d: durum.Durum, son: dict) -> list[str]:
         uyarilar.append("önceden canlıydı, ISRC artık bulunmuyor (kaldırılmış olabilir)")
     if son["canli"] and not son["sanatci_id"]:
         uyarilar.append("parça canlı ama sanatçı adı eşleşmedi")
-    if (son["canli"], son["arama_sirasi"]) != (onceki.get("canli"), onceki.get("arama_sirasi")):
-        gecmis.append({k: son[k] for k in ("zaman", "canli", "arama_sirasi")})
+    if (son["canli"], son.get("siralar")) != (onceki.get("canli"), onceki.get("siralar")):
+        gecmis.append({k: son.get(k) for k in ("zaman", "canli", "arama_sirasi", "siralar")})
     d.yayin = {"son": son, "gecmis": gecmis[-GECMIS_SINIRI:]}
     return uyarilar
 
 
-def takip_et(sp, calisma: Path, sanatci_adi: str, market: str, kimlikler: list[str] | None = None,
+def takip_et(sp, calisma: Path, sanatci_adi: str, pazarlar, kimlikler: list[str] | None = None,
              arama_limiti: int = 20) -> list[tuple[durum.Durum, list[str]]]:
     sonuc = []
     for d in durum.hepsi(calisma):
@@ -80,7 +91,7 @@ def takip_et(sp, calisma: Path, sanatci_adi: str, market: str, kimlikler: list[s
         if not y.get("isrc"):
             sonuc.append((d, ["paketin metadata.json'unda ISRC yok (yükleme bilgisi eksik)"]))
             continue
-        son = kontrol_et(sp, d, y["isrc"].upper(), sanatci_adi, market, arama_limiti)
+        son = kontrol_et(sp, d, y["isrc"].upper(), sanatci_adi, pazarlar, arama_limiti)
         son["yayin_tarihi"] = y.get("yayin_tarihi")
         uyarilar = kaydet(d, son)
         durum.yaz(calisma, d)
