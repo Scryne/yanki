@@ -95,6 +95,25 @@ def en_cok_dinlenenler(sanatci: dict, adet: int, json_al=ag.json_al) -> list[Par
                   int(t.get("rank") or 0), t.get("duration")) for t in veri if t.get("id") and t.get("title")]
 
 
+def sanatci_turleri(ad: str, json_al=ag.json_al, album_adet: int = 3) -> list[str]:
+    """Sanatçının Deezer'daki son albümlerinin türleri, sıklık sırasıyla ("Rap/Hip Hop" → "rap, hip hop").
+    MusicBrainz'de türü olmayan sanatçılar için stil yedeği (2026-10-09: keşiften gelen üç rap şarkısında MusicBrainz
+    boş, stil yalnız "clean modern studio recording" kalıyordu)."""
+    from collections import Counter
+
+    a = sanatci_bul(ad, json_al)
+    if a is None:
+        return []
+    sayac: Counter = Counter()
+    for alb in (deezer(f"/artist/{a['id']}/albums", {"limit": album_adet}, json_al).get("data") or [])[:album_adet]:
+        try:
+            turler = (deezer(f"/album/{alb['id']}", None, json_al).get("genres") or {}).get("data") or []
+        except ag.Bulunamadi:
+            continue
+        sayac.update(t["name"] for t in turler if t.get("name"))
+    return [", ".join(p.strip().lower() for p in ad_.split("/")) for ad_, _ in sayac.most_common(2)]
+
+
 def isrc(deezer_id: int, json_al=ag.json_al) -> str | None:
     try:
         return (deezer(f"/track/{deezer_id}", None, json_al).get("isrc") or "").upper() or None

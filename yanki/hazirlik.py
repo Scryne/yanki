@@ -48,16 +48,17 @@ def girdi_hazirla(a: Ayarlar, s: Sarki, calisma: Path, girdi: Path) -> durum.Dur
     return d
 
 
-def stil_kur(s: Sarki, lm_caption: str | None = None, kunye: dict | None = None) -> str:
-    """Scryne'ın stili esastır. Yoksa: (LM tanımı ya da sanatçının ilk iki MusicBrainz türü) + vokal cinsiyeti
-    (liste; yoksa solo sanatçının cinsiyeti, grupta söylenmez) + temiz kayıt soneki."""
+def stil_kur(s: Sarki, lm_caption: str | None = None, kunye: dict | None = None,
+             yedek_turler: list[str] | None = None) -> str:
+    """Scryne'ın stili esastır. Yoksa: (LM tanımı ya da sanatçının ilk iki MusicBrainz türü; MusicBrainz boşsa Deezer
+    türleri) + vokal cinsiyeti (liste; yoksa solo sanatçının cinsiyeti, grupta söylenmez) + temiz kayıt soneki."""
     if s.stil:
         return s.stil
     kunye = kunye or {}
     parcalar = []
     if lm_caption:
         parcalar.append(lm_caption.strip().rstrip("."))
-    elif turler := list(kunye.get("sanatci_turleri") or [])[:2]:
+    elif turler := list(kunye.get("sanatci_turleri") or [])[:2] or list(yedek_turler or [])[:2]:
         parcalar.append(", ".join(turler) + " song")
     vokal = VOKAL.get(s.vokal or "") or (
         {"Female": "female", "Male": "male"}.get(kunye.get("sanatci_cinsiyeti") or "")
@@ -76,7 +77,8 @@ def analiz_et(a: Ayarlar, sarkilar: list[Sarki], calisma: Path, zaman_asimi_sn: 
     if a.motor.analiz_yontemi == "musicbrainz":
         for s, d in hedef:
             # BPM/ton yalnız listeden: yanlış değer modeli detone eder, tahmin göndermek göndermemekten kötü
-            d.analiz = {"stil": stil_kur(s, kunye=d.kunye), "bpm": s.bpm, "ton": s.ton or "",
+            d.analiz = {"stil": stil_kur(s, kunye=d.kunye, yedek_turler=_yedek_turler(s, d)), "bpm": s.bpm,
+                        "ton": s.ton or "",
                         **dil_bul(d, durum.klasor(calisma, s.kimlik)), "kaynak": "musicbrainz"}
             d.gec("analiz")
             durum.yaz(calisma, d)
@@ -104,6 +106,17 @@ def analiz_et(a: Ayarlar, sarkilar: list[Sarki], calisma: Path, zaman_asimi_sn: 
 
 
 DIL_ESIGI = 0.5
+
+
+def _yedek_turler(s: Sarki, d: durum.Durum) -> list[str]:
+    if s.stil or (d.kunye or {}).get("sanatci_turleri"):
+        return []
+    from yanki import katalog
+
+    try:
+        return katalog.sanatci_turleri(s.sanatci)
+    except (OSError, ag.Bulunamadi, katalog.DeezerHatasi):
+        return []
 
 
 def dil_bul(d: durum.Durum, k: Path, tespit=None) -> dict:

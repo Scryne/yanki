@@ -167,3 +167,23 @@ def test_dil_bul_esik_ve_hata(tmp_path):
         raise RuntimeError("ses okunamadı")
 
     assert hazirlik.dil_bul(d, tmp_path, bozuk) == {"dil": "en", "dil_tespit": "başarısız: ses okunamadı"}
+
+
+def test_stil_deezer_yedegi_yalniz_musicbrainz_bossa():
+    from yanki import hazirlik, liste
+
+    s = liste.Sarki("HAARPER", "Cadavers")
+    assert hazirlik.stil_kur(s, kunye={}, yedek_turler=["rap, hip hop"]).startswith("rap, hip hop song, ")
+    mb = {"sanatci_turleri": ["pop"], "sanatci_tipi": "Person", "sanatci_cinsiyeti": "Female"}
+    assert hazirlik.stil_kur(s, kunye=mb, yedek_turler=["rap, hip hop"]).startswith("pop song, female lead vocal")
+
+
+def test_deezer_sanatci_turleri():
+    from yanki import katalog
+
+    cevap = {"/search/artist": {"data": [{"id": 9, "name": "Haarper"}]},
+             "/artist/9/albums": {"data": [{"id": 1}, {"id": 2}]},
+             "/album/1": {"genres": {"data": [{"name": "Rap/Hip Hop"}]}},
+             "/album/2": {"genres": {"data": [{"name": "Rap/Hip Hop"}, {"name": "Alternative"}]}}}
+    ja = lambda url, p=None: cevap[url.replace(katalog.DEEZER, "")]  # noqa: E731
+    assert katalog.sanatci_turleri("HAARPER", ja) == ["rap, hip hop", "alternative"]
