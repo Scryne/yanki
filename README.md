@@ -31,7 +31,8 @@ yüklenen parçanın Spotify'da çıkıp çıkmadığını ve adı arandığınd
 Spotify kotası dar: uzun 429 alınırsa kilit `calisma/.spotify_kota.json`'a yazılır ve süresi dolana kadar hiçbir
 komut Spotify'a istek atmaz; günlük tavan 400 istek. Dinleme odası Spotify'a hiç istek atmaz.
 
-Diğer komutlar: `yanki durum` (motor, model, araçlar, GPU, şarkıların aşaması), `yanki hazirla`, `yanki uret`,
+Diğer komutlar: `yanki durum` (motor, model, araçlar, GPU, şarkıların aşaması), `yanki ozet` (tek satır),
+`yanki temizle [--uygula]` (yüklenmiş şarkıların ara sesleri; gece koşusu 14 günden eskileri kendisi siler), `yanki hazirla`, `yanki uret`,
 `yanki yeniden <kimlik>` (onaylı şarkıya güncel hatla yeni adaylar), `yanki kunye [kimlik]` (yazarlar ve orijinal
 yılı yeniden çek), `yanki paketle [--yeniden]`.
 

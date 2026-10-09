@@ -138,6 +138,9 @@ async function sarkiGoster(kimlik) {
       el("span", {}, "Kaynak: ", el("b", {}, d.kaynak?.baslik || "—"))),
   ];
   if (d.hata) parcalar.push(el("p", { class: "uyari", role: "alert" }, d.hata));
+  if (d.otomatik_onay) parcalar.push(el("p", { class: "ipucu bekleyen" },
+    `Karar vermezsen ${new Date(d.otomatik_onay.zaman).toLocaleString("tr-TR", { weekday: "long", hour: "2-digit", minute: "2-digit" })}`
+    + ` aday ${d.otomatik_onay.aday} kendiliğinden onaylanır (sözü en anlaşılır olan). Onaylamak, onarım istemek ya da reddetmek bunu iptal eder.`));
   const duzenlenebilir = ["uretildi", "onarim"].includes(d.asama);
   panelTus = null;
   parcalar.push(karsilastirma(d, duzenlenebilir));

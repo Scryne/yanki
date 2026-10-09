@@ -17,20 +17,7 @@ $utf8 = New-Object System.Text.UTF8Encoding $false
 function Yaz($m) { [IO.File]::AppendAllText($log, "$(Get-Date -Format s) $m`r`n", $utf8) }
 $adres = "http://127.0.0.1:$Port/"
 
-function Bildir([string]$baslik, [string]$metin) {
-    # Windows PowerShell 5.1 WinRT bildirimi; modül gerektirmez. Uygulama kimliği PowerShell'in (Başlat'ta kayıtlı).
-    try {
-        [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null
-        [Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom.XmlDocument, ContentType = WindowsRuntime] | Out-Null
-        $esc = [Security.SecurityElement]
-        $xml = New-Object Windows.Data.Xml.Dom.XmlDocument
-        $xml.LoadXml("<toast activationType=`"protocol`" launch=`"$adres`"><visual><binding template=`"ToastGeneric`">" +
-            "<text>$($esc::Escape($baslik))</text><text>$($esc::Escape($metin))</text></binding></visual></toast>")
-        $kimlik = "{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\WindowsPowerShell\v1.0\powershell.exe"
-        [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier($kimlik).Show(
-            [Windows.UI.Notifications.ToastNotification]::new($xml))
-    } catch { Yaz "bildirim gösterilemedi: $_" }
-}
+. (Join-Path $PSScriptRoot "bildirim.ps1")  # Bildir: ortak Windows bildirimi
 
 $acik = $false
 try { $acik = (Invoke-WebRequest "$adres`api/sarkilar" -UseBasicParsing -TimeoutSec 3).StatusCode -eq 200 } catch {}

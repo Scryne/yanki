@@ -118,7 +118,13 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None) -> FastA
         d = oku(kimlik)
         zaman = durum.klasor(calisma, kimlik) / "soz_zaman.json"
         satirlar = json.loads(zaman.read_text(encoding="utf-8")) if zaman.exists() else []
-        return {**asdict(d), **_ozet(d), "kesitler": sozler.kesitler(satirlar, d.kaynak.get("sure_sn"))}
+        from yanki import onay
+
+        oto = onay.onay_zamani(d, onay.ayar_oku(a.kok / "config" / "yayin.toml"))
+        oneri = onay.oneri(d) if oto else None
+        return {**asdict(d), **_ozet(d), "kesitler": sozler.kesitler(satirlar, d.kaynak.get("sure_sn")),
+                "otomatik_onay": {"zaman": oto.isoformat(timespec="minutes"), "aday": oneri.no}
+                if oto and oneri else None}
 
     @app.get("/ses/{kimlik}/{yol:path}")
     def ses(kimlik: str, yol: str):

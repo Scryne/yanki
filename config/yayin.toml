@@ -13,3 +13,10 @@ lufs = -14.0
 # Spotify sınırı −1 dBTP; doğrusal loudnorm bazı şarkılarda 0,06 dB aşıyordu (2026-10-07) → pay
 gercek_tepe_dbtp = -1.2
 ornekleme = 44100
+
+[otomatik_onay]
+# Veto penceresi (yanki/onay.py): dinlemeye çıkan şarkıya `sure_saat` içinde onay/onarım/ret gelmezse kapılardan geçmiş,
+# sözü en anlaşılır (en düşük söz WER) aday onaylanır. Ölçüm: bu kural Scryne'ın seçimini 15'te 4 tuttu (rastgele
+# kadar) → kapalı; dağıtım API'siyle tam otomasyonda açılır (Roadmap Faz 10).
+acik = false
+sure_saat = 72

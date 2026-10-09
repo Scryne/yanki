@@ -364,8 +364,15 @@ def ozet(kok: Path) -> dict:
     except (OSError, ValueError):
         oneri = 0
     k = spotify.Spotify(kok).kota()
-    return {"dinlemede": say("uretildi"), "onarim": say("onarim"), "uretimde": say("yeni", "hazir", "analiz"),
-            "paket_bekliyor": say("paketlendi"), "yuklendi": say("yuklendi"), "yayinda": say("yayinda"),
+    from yanki import onay
+
+    try:
+        yakin = len(onay.yaklasan(calisma, onay.ayar_oku(kok / "config" / "yayin.toml")))
+    except (OSError, ValueError):
+        yakin = 0
+    return {"otomatik_onay_24sa": yakin, "dinlemede": say("uretildi"), "onarim": say("onarim"),
+            "uretimde": say("yeni", "hazir", "analiz"), "paket_bekliyor": say("paketlendi"),
+            "yuklendi": say("yuklendi"), "yayinda": say("yayinda"),
             "hata": say("hata"), "kesif_onerisi": oneri,
             "spotify_kilit_sn": max(0, int(k.get("kilit", 0) - time.time()))}
 
@@ -381,7 +388,9 @@ def _ozet(args: argparse.Namespace) -> int:
     satir += [f"{n} {ad}" for n, ad in ((o["onarim"], "onarım bekliyor"), (o["uretimde"], "üretim sırasında"),
                                          (o["paket_bekliyor"], "paket yüklenmeyi bekliyor"),
                                          (o["yayinda"], "yayında"), (o["yuklendi"], "yayın bekliyor"),
-                                         (o["kesif_onerisi"], "keşif önerisi"), (o["hata"], "hatada")) if n]
+                                         (o["kesif_onerisi"], "keşif önerisi"), (o["hata"], "hatada"),
+                                         (o["otomatik_onay_24sa"], "şarkı 24 saat içinde kendiliğinden onaylanacak"))
+              if n]
     print(" · ".join(satir))
     return 0
 
@@ -400,13 +409,44 @@ def _calistir(args: argparse.Namespace) -> int:
                                   yeniden_olc=False))
     _hazirla(args)
     _uret(args)
+    _otomatik_onay(kok)
     args.yeniden = False
     kod = _paketle(args)
     if spotify_var:
         _takip(argparse.Namespace(kimlik=[]))
     else:
         print("takip atlandı: Spotify anahtarı yok (.env → SPOTIFY_CLIENT_ID/SECRET)")
+    _temizle(argparse.Namespace(uygula=True, gun=14))
     return kod
+
+
+def _otomatik_onay(kok: Path) -> None:
+    from yanki import onay
+
+    ayar = onay.ayar_oku(kok / "config" / "yayin.toml")
+    for d, a in onay.uygula(kok / "calisma", ayar):
+        print(f"otomatik onay ({ayar.sure_saat:g} sa veto penceresi doldu): {d.sanatci} — {d.ad}, aday {a.no}")
+
+
+def _temizle(args: argparse.Namespace) -> int:
+    from yanki import temizlik
+
+    a = ayarlar.yukle()
+    calisma = a.kok / "calisma"
+    toplam = 0
+    for d in durum.hepsi(calisma):
+        p = temizlik.plan(calisma, d, args.gun)
+        if p is None:
+            continue
+        mb = p.bayt / 1e6
+        if args.uygula:
+            temizlik.uygula(calisma, d, p)
+        toplam += mb
+        eylem = "silindi" if args.uygula else "silinecek"
+        print(f"{eylem}: {d.sanatci} — {d.ad}: {len(p.dosyalar)} dosya, {mb:,.0f} MB")
+    if toplam or not args.uygula:
+        print(f"toplam {toplam:,.0f} MB" + ("" if args.uygula else " (silmek için --uygula)"))
+    return 0
 
 
 def _dinle(args: argparse.Namespace) -> int:
@@ -467,6 +507,10 @@ def main(argv: list[str] | None = None) -> int:
     tk = alt.add_parser("takip", help="yüklenenler Spotify'da mı, adı arandığında kaçıncı sırada")
     tk.add_argument("kimlik", nargs="*", help="boşsa hepsi")
     tk.set_defaults(fn=_takip)
+    tm = alt.add_parser("temizle", help="yüklenmiş şarkılarda seçilmeyen adayların ve ara seslerin dosyaları")
+    tm.add_argument("--uygula", action="store_true", help="yalnız listelemek yerine sil")
+    tm.add_argument("--gun", type=int, default=14, help="yüklemenin üstünden en az kaç gün geçmiş olsun")
+    tm.set_defaults(fn=_temizle)
     oz = alt.add_parser("ozet", help="hattın tek satırlık durumu (oturum açılış bildirimi)")
     oz.add_argument("--json", action="store_true")
     oz.set_defaults(fn=_ozet)
@@ -487,7 +531,8 @@ def main(argv: list[str] | None = None) -> int:
     return args.fn(args)
 
 
-YAZAN_KOMUTLAR = {"hazirla", "uret", "calistir", "yeniden", "kunye", "paketle", "yuklendi", "kesif", "takip"}
+YAZAN_KOMUTLAR = {"hazirla", "uret", "calistir", "yeniden", "kunye", "paketle", "yuklendi", "kesif", "takip",
+                  "temizle"}
 
 
 if __name__ == "__main__":

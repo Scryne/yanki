@@ -280,6 +280,11 @@ veto eder.
   kapak varsayılan; görsel kapak üretimi (yerel model ya da şablon havuzu) ayrı deneme.
 - **Önce:** arkadaşın API dokümanı. RouteNote incelemesinin sonucu (kabul/red) bu fazın dağıtımcı seçimini etkiler.
 
+- **Hazırlık (2026-10-09, API'den bağımsız kısımlar):** veto penceresi `yanki/onay.py` (gece koşusu paketlemeden
+  önce; `config/yayin.toml` → `[otomatik_onay]` **kapalı**, 72 sa), dinleme odasında "karar vermezsen … aday N
+  kendiliğinden onaylanır" satırı, oturum özetinde "24 saat içinde kendiliğinden onaylanacak" sayısı. Öneri kuralı en
+  düşük söz WER (aşağıda Faz 12 ölçümü: kulağı tahmin etmiyor, yalnız "sözü en anlaşılır"ı seçer).
+
 ### Faz 11: Öğrenen şarkı seçimi ⏳
 Bugünkü puan (YouTube izlenmesi × kapalı pazar oranı / (1 + rakip)) sezgisel; ölçüm geldikçe öğrenen bir seçime
 dönüşür. Jev **metnin ne dediğini** yargılar (özgünlük, düzenleme, eşleşme), **ne kadar dinleneceğini** tahmin etmez
@@ -303,6 +308,10 @@ dönüşür. Jev **metnin ne dediğini** yargılar (özgünlük, düzenleme, eş
 - **Seçim modeli:** Scryne'ın 17 şarkıdaki seçimleri (hangi aday) ile kapı ölçüleri (söz WER, parmak izi, dalga,
   tohum) arasındaki ilişki; otomatik seçimin isabeti kayıtlı. ≥ %70 ise veto penceresinde öneri bu model; değilse söz
   WER'i ve insan.
+  **İlk ölçüm (2026-10-09, 15 şarkı):** en düşük söz WER 4/15 (%27; şarkı başı ~3,4 aday, rastgele ~%29), en düşük
+  dalga korelasyonu 7/15, en düşük parmak izi 7/15 (%47), tohum her biri 5/15. Kapı ölçüleri kulağı açıklamıyor →
+  model için yeni özellikler gerekir (vokal netliği, nefes/mırıldanma bölgesi sayısı, Jev ile değil sesle ölçülen) ya
+  da daha çok seçim verisi; o zamana kadar veto penceresi kapalı kalır.
 - **Tür/dil tarifi:** rap (HAARPER, 1nonly, Day$okee, 2026-10-10 gecesi ilk üretim) ve ilk Türkçe/Fransızca aday için
   stil/güç/adım dinleme testi; gerekirse tür başına `config/motor.toml` profili.
 - Faz 8'den devralınanlar: vokal son işlemi, LoRA ihtiyacı, onarım etiketleriyle otomatik kusur işaretleme.
@@ -310,6 +319,12 @@ dönüşür. Jev **metnin ne dediğini** yargılar (özgünlük, düzenleme, eş
 ### Faz 13: Operasyon ve dayanıklılık ⏳
 - **Disk:** reddedilen/eski adayların sesleri (aday başı onlarca MB) N gün sonra silinir, onaylı + paket kalır; yedek
   (`durum.json`'lar, paketler, `calisma/kesif/`) haftalık.
+  **Yapıldı (2026-10-09):** `yanki temizle [--uygula] [--gun 14]` (`yanki/temizlik.py`): yalnız yüklenmiş ve
+  yüklemesinin üstünden 14 gün geçmiş şarkılarda seçilmeyen adaylar, kabul edilmeyen onarımlar ve parçalar; seçilen
+  aday, paket, kaynak kalır. Gece koşusu sonunda uygular. Ön izleme: yüklü üç şarkıdan 693 MB (ilk silme ~2026-10-22).
+  Yedek henüz yok.
+- **Bildirim (yapıldı, 2026-10-09):** `scripts/bildirim.ps1` ortak; gece koşusu bitince özet, hata verirse kod +
+  günlük yolu; oturum açılışında özet (`\Yanki\Oda`).
 - **Bildirim:** oturum açılış özeti var (`\Yanki\Oda`); eklenecek: gece koşusu hatası, Spotify kilidi, dağıtımcı
   reddi, "şarkı yayında / arama sırası değişti".
 - **Gündüz boşta üretim:** GPU boş ve kullanıcı uzun süre etkin değilken kuyruğu eritmek (gece tek koşu sınırı yerine).

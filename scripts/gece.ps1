@@ -14,4 +14,9 @@ $log = Join-Path $gunluk ((Get-Date -Format "yyyy-MM-dd") + ".log")
 $utf8 = New-Object System.Text.UTF8Encoding $false
 [Console]::OutputEncoding = $utf8  # Python UTF-8 yazar (PYTHONUTF8); 5.1 varsayılan OEM 857 ile okuyup bozuyordu
 & $uv run yanki calistir *>&1 | ForEach-Object { [IO.File]::AppendAllText($log, "$_`r`n", $utf8) }
-"=== $(Get-Date -Format s) bitti (kod $LASTEXITCODE)" | Add-Content $log -Encoding utf8
+$kod = $LASTEXITCODE
+"=== $(Get-Date -Format s) bitti (kod $kod)" | Add-Content $log -Encoding utf8
+# Sonuç bildirimi (bilgisayar gece açıksa sabah bildirim merkezinde durur)
+. (Join-Path $PSScriptRoot "bildirim.ps1")
+if ($kod -ne 0) { Bildir "Yanki: gece koşusu hata verdi (kod $kod)" "Günlük: calisma\gunluk\$(Split-Path -Leaf $log)" }
+else { Bildir "Yanki: gece koşusu bitti" ((& $uv run --no-sync python -m yanki ozet 2>$null) -join " ") }

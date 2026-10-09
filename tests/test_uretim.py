@@ -233,3 +233,73 @@ def test_yeniden_komutu_eski_paketi_kenara_alir(tmp_path, monkeypatch):
     assert cli.main(["yeniden", "s"]) == 0
     assert not (c / "s" / "paket").exists() and (c / "s" / "paket_onceki" / "YUKLE.md").exists()
     assert durum.oku(c, "s").asama == "analiz"
+
+
+# ── veto penceresi ve temizlik ──────────────────────────────
+def _uretilmis(c, gecmis_zaman="2026-10-01T03:00:00"):
+    from yanki import durum
+
+    d = durum.Durum("a-b", "A", "B", asama="uretildi")
+    d.gecmis = [{"zaman": gecmis_zaman, "asama": "uretildi", "hata": None}]
+    d.adaylar = [durum.Aday(1, "adaylar/1/tam.flac", 42, {"soz_wer": {"deger": 0.2, "gecti": True}}, True),
+                 durum.Aday(2, "adaylar/2/tam.flac", 7, {"soz_wer": {"deger": 0.05, "gecti": True}}, True),
+                 durum.Aday(3, "", 123, {"motor": {"gecti": False}}, False)]
+    durum.yaz(c, d)
+    return d
+
+
+def test_otomatik_onay_kapali_iken_dokunmaz(tmp_path):
+    from datetime import datetime
+
+    from yanki import durum, onay
+
+    _uretilmis(tmp_path)
+    assert onay.uygula(tmp_path, onay.Ayar(acik=False), datetime(2026, 10, 9)) == []
+    assert durum.oku(tmp_path, "a-b").asama == "uretildi"
+
+
+def test_otomatik_onay_sure_dolunca_en_dusuk_wer(tmp_path):
+    from datetime import datetime
+
+    from yanki import durum, onay
+
+    _uretilmis(tmp_path)
+    ayar = onay.Ayar(acik=True, sure_saat=72)
+    assert onay.uygula(tmp_path, ayar, datetime(2026, 10, 3, 12)) == []  # 57 saat: pencere açık
+    assert [d.kimlik for d in onay.yaklasan(tmp_path, ayar, 24, datetime(2026, 10, 3, 12))] == ["a-b"]
+    (d, a), = onay.uygula(tmp_path, ayar, datetime(2026, 10, 4, 4))
+    d = durum.oku(tmp_path, "a-b")
+    assert (d.asama, d.secilen, a.no) == ("onaylandi", 2, 2) and d.notlar[-1]["otomatik_onay"]["aday"] == 2
+
+
+def test_otomatik_onay_bekleyen_onarimli_adayi_onermez(tmp_path):
+    from yanki import onay
+
+    d = _uretilmis(tmp_path)
+    d.adaylar[1].onarimlar = [{"id": "x", "durum": "bekliyor"}]
+    assert onay.oneri(d).no == 1
+
+
+def test_temizlik_yalniz_yuklenmis_ve_eski(tmp_path):
+    from datetime import datetime
+
+    from yanki import durum, temizlik
+
+    d = durum.Durum("a-b", "A", "B", asama="yuklendi", secilen=2)
+    d.gecmis = [{"zaman": "2026-10-01T10:00:00", "asama": "yuklendi", "hata": None}]
+    d.adaylar = [durum.Aday(1, "adaylar/1/tam.flac", 42, {}, True), durum.Aday(2, "adaylar/2/tam.flac", 7, {}, True)]
+    durum.yaz(tmp_path, d)
+    k = tmp_path / "a-b"
+    for yol in ("adaylar/1/tam.flac", "adaylar/2/tam.flac", "adaylar/2/tam.flac.dalga.json", "parcalar/p1.flac",
+                "paket/x.flac", "kaynak.wav"):
+        (k / yol).parent.mkdir(parents=True, exist_ok=True)
+        (k / yol).write_bytes(b"x" * 10)
+    assert temizlik.plan(tmp_path, d, 14, datetime(2026, 10, 9)) is None  # 8 gün: erken
+    p = temizlik.plan(tmp_path, d, 14, datetime(2026, 10, 20))
+    assert sorted(f.relative_to(k).as_posix() for f in p.dosyalar) == ["adaylar/1/tam.flac", "parcalar/p1.flac"]
+    temizlik.uygula(tmp_path, d, p)
+    d = durum.oku(tmp_path, "a-b")
+    assert (k / "adaylar/2/tam.flac").exists() and (k / "paket/x.flac").exists() and (k / "kaynak.wav").exists()
+    assert not (k / "parcalar").exists() and d.adaylar[0].dosya == "" and d.adaylar[1].dosya == "adaylar/2/tam.flac"
+    d.asama = "paketlendi"
+    assert temizlik.plan(tmp_path, d, 0, datetime(2026, 10, 20)) is None  # yüklenmemiş şarkıya dokunmaz
