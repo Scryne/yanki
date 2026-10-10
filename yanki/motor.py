@@ -98,6 +98,8 @@ def calistir(
     isci: Path = ISCI,
     bekle: Callable[..., int] = gpu_bekle,
     model: str | None = None,
+    hareketsiz_sn: float = 20 * 60,
+    bekci_aralik_sn: float = 5,
 ) -> list[Sonuc]:
     """İşleri tek işçi sürecinde (tek model yüklemesi) çalıştırır. `model` verilirse ayardaki model yerine o
     (nicelemesiz) yüklenir — analiz gibi hafif işler için."""
@@ -132,23 +134,41 @@ def calistir(
         return [Sonuc(i.id, False, hata) for i in isler]
     bekle(a, gpu_bekleme_sn)
     gunluk = klasor / "motor.log"
+    takildi = False
     with open(gunluk, "wb") as log:
-        try:
-            surec = subprocess.run(
-                [str(python or a.motor.python), str(isci), str(is_yolu), str(sonuc_yolu)],
-                stdout=log, stderr=subprocess.STDOUT, timeout=zaman_asimi_sn,
-                env=_ortam(a), cwd=str(a.motor.klasor if a.motor.klasor.is_dir() else klasor),
-            )
-            cikis = surec.returncode
-        except subprocess.TimeoutExpired:
-            cikis = None
+        surec = subprocess.Popen(
+            [str(python or a.motor.python), str(isci), str(is_yolu), str(sonuc_yolu)],
+            stdout=log, stderr=subprocess.STDOUT, env=_ortam(a),
+            cwd=str(a.motor.klasor if a.motor.klasor.is_dir() else klasor),
+        )
+        bitis, son_hareket = time.monotonic() + zaman_asimi_sn, time.monotonic()
+        boyut = -1
+        while surec.poll() is None:
+            try:  # işçi bitince hemen döner; bitmediyse bekçi aralığında bir bakar
+                surec.wait(timeout=bekci_aralik_sn)
+                break
+            except subprocess.TimeoutExpired:
+                pass
+            yeni = gunluk.stat().st_size if gunluk.exists() else 0
+            if yeni != boyut:
+                boyut, son_hareket = yeni, time.monotonic()
+            # bekçi: işçi günlüğe hiç yazmadan HAREKETSIZ_SN geçerse takılmıştır (2026-10-10: VAE çözme boş VRAM
+            # 0,76 GB'ta paylaşımlı belleğe taştı, bir saat ilerlemedi; toplam zaman aşımı 3 saat 45 dk sonraydı)
+            takildi = time.monotonic() - son_hareket > hareketsiz_sn
+            if takildi or time.monotonic() > bitis:
+                surec.kill()
+                surec.wait()
+                break
+        cikis = None if surec.returncode is None or takildi or time.monotonic() > bitis else surec.returncode
     try:
         okunan = json.loads(sonuc_yolu.read_text(encoding="utf-8")) if sonuc_yolu.exists() else []
     except (OSError, ValueError):  # işçi yazarken öldürüldü (zaman aşımı): yarım JSON
         okunan = []
     sonuclar = {r["id"]: Sonuc(**r) for r in okunan if r.get("id") is not None}
     genel = next((r["hata"] for r in okunan if r.get("id") is None), None)
-    if cikis is None:
+    if takildi:
+        genel = f"işçi {hareketsiz_sn / 60:.0f} dk ilerlemedi, durduruldu (ayrıntı: {gunluk})"
+    elif cikis is None:
         genel = f"zaman aşımı ({zaman_asimi_sn:.0f} sn)"
     elif genel is None and cikis not in (0, 1):
         genel = f"işçi {cikis} koduyla çıktı, ayrıntı: {gunluk}"

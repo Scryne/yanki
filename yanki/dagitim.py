@@ -240,7 +240,7 @@ def red_kaydet(calisma: Path, kimlik: str, neden: str) -> durum.Durum:
 
 # ── geri çekme ──────────────────────────────────────────────
 def geri_cekildi_kaydet(calisma: Path, kimlik: str, neden: str | None = None, yeni_yayin: bool = True,
-                        son_durum: str | None = None) -> durum.Durum:
+                        son_durum: str | None = None, bastan: bool | None = None) -> durum.Durum:
     """Yayın dağıtımcıdan kalktı: yükleme bilgisi geçmişe (`geri_cekildi`), şarkı `onaylandi`ya döner (eski paket
     başka dağıtımcının biçiminde ya da eski kapakla olabilir: sonraki paketleme güncel ayarlarla yeniler).
     `yeni_yayin`: Tunearo kaydı da geçmişe taşınır, sonraki yükleme yeni yayın açar (silinen taslak, takedown);
@@ -257,8 +257,9 @@ def geri_cekildi_kaydet(calisma: Path, kimlik: str, neden: str | None = None, ye
         if meta_yolu.exists():
             meta = json.loads(meta_yolu.read_text(encoding="utf-8"))
             y = meta.pop("yukleme", None) or {}
-            neden = neden or (y.pop("geri_cek", None) or {}).get("neden") or "geri çekildi"
-            y.pop("geri_cek", None)
+            isaret = y.pop("geri_cek", None) or {}
+            neden = neden or isaret.get("neden") or "geri çekildi"
+            bastan = isaret.get("bastan", False) if bastan is None else bastan
             meta.setdefault("yukleme_gecmisi", []).append(
                 {**y, "geri_cekildi": neden, "geri_cekme_tarihi": bugun, **({"son_durum": son_durum} if son_durum
                                                                             else {})})
@@ -272,10 +273,15 @@ def geri_cekildi_kaydet(calisma: Path, kimlik: str, neden: str | None = None, ye
         d.notlar.append({"geri_cekildi": {"neden": neden, "tarih": bugun}})
         d.yayin = {}
         d.gec("onaylandi")
+    if bastan:  # eski paketle sıraya dönmesin: adaylar arşive, şarkı yeniden üretime (uretim.bastan)
+        from yanki import uretim
+
+        d = uretim.bastan(calisma, kimlik, f"geri çekildi: {neden}")
     return d
 
 
-def geri_cek(calisma: Path, kimlik: str, neden: str, kok: Path | None = None, kaldirildi: bool = False) -> str:
+def geri_cek(calisma: Path, kimlik: str, neden: str, kok: Path | None = None, kaldirildi: bool = False,
+             bastan: bool = False) -> str:
     """Yüklenmiş şarkıyı dağıtımcıdan geri çeker. Dönen: "tamam" (kuyruğa döndü) | "bekliyor" (Tunearo incelemesinde:
     işaretlendi, gece yoklaması sonuç gelince bitirir). Elle dağıtımcıda yayını insan panelden kaldırır, sonra
     `kaldirildi=True` ile kaydedilir."""
@@ -289,8 +295,8 @@ def geri_cek(calisma: Path, kimlik: str, neden: str, kok: Path | None = None, ka
     ad = (takip.yukleme_bilgisi(calisma, kimlik) or {}).get("dagitimci") or "routenote"
     dagitimci = sec(ad, kok)
     if dagitimci.otomatik:
-        return dagitimci.geri_cek(calisma, d, neden)
+        return dagitimci.geri_cek(calisma, d, neden, bastan=bastan)
     if not kaldirildi:
         raise ValueError(f"{ad} için API yok: yayını panelden kaldır, sonra aynı komutu --kaldirildi ile ver")
-    geri_cekildi_kaydet(calisma, kimlik, neden)
+    geri_cekildi_kaydet(calisma, kimlik, neden, bastan=bastan)
     return "tamam"

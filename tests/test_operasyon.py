@@ -133,7 +133,7 @@ def test_operasyon_gunduz_saat_penceresi():
 def gunduz(tmp_path, monkeypatch):
     from yanki import cli, saglik, sistem, uretim
 
-    a = replace(ayarlar.yukle(), kok=tmp_path)
+    a = replace(ayarlar.yukle(), kok=tmp_path, uzak=ayarlar.Uzak())  # evdeki motor yolu
     monkeypatch.setattr(cli.ayarlar, "yukle", lambda: a)
     monkeypatch.setattr(cli.ayarlar, "operasyon_oku", lambda _k: ayarlar.Operasyon(tmp_path, gunduz_saatler=(0, 0)))
     monkeypatch.setattr(sistem, "bosta_sn", lambda: 3600)

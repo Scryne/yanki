@@ -132,3 +132,13 @@ def test_motor_klasoru_yoksa_is_klasorunde_baslar(tmp_path, isci):
     s = motor.calistir(a, [_is("a", cikti=str(tmp_path / "c"))], tmp_path / "is", zaman_asimi_sn=20,
                        python=Path(sys.executable), isci=isci, bekle=lambda *_: 0)
     assert s[0].basari, s[0].hata
+
+
+def test_ilerlemeyen_isci_bekci_ile_durdurulur(tmp_path, isci):
+    """2026-10-10: VAE çözme paylaşımlı belleğe taşıp bir saat ilerlemedi, koşu toplam zaman aşımına (3 sa 45 dk)
+    kadar bekleyecekti. Günlüğe yazmayan işçi `hareketsiz_sn` sonra durdurulur."""
+    import time
+
+    t = time.monotonic()
+    (s,) = _calistir(tmp_path, isci, [_is(stil="uyu")], zaman=60, hareketsiz_sn=1, bekci_aralik_sn=0.2)
+    assert not s.basari and "ilerlemedi" in s.hata and time.monotonic() - t < 15

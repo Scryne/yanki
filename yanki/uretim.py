@@ -356,3 +356,37 @@ def uret(a: Ayarlar, calisma: Path, kimlikler: list[str] | None = None,
                                                             dil)
         sonuc.append(_sonuclari_isle(calisma, d.asama, yeni_adaylar, onarimlar, d.kimlik, notlar.get(d.kimlik)))
     return sonuc
+
+
+ARSIV_KLASORLER = ("adaylar", "onarimlar", "parcalar", "paket", "paket_onceki")
+BASTAN_ASAMALAR = ("analiz", "uretildi", "onarim", "onaylandi", "paketlendi", "hata")
+
+
+def bastan(calisma: Path, kimlik: str, neden: str, arsiv: Path | None = None) -> durum.Durum:
+    """Şarkıyı baştan üretime alır (Scryne, 2026-10-10: "makinede tam sürümüyle üreticez, 0'dan başlayalım"): adaylar,
+    onarımlar, parçalar ve paket `calisma/_arsiv/<tarih>/<kimlik>/`'e taşınır, seçim silinir, aşama `analiz`. Kaynak
+    ses, sözler, künye, stil ve kapak kalır (donanımdan bağımsız). Paketteki dağıtım geçmişi arşivde kalır. Analizi
+    olmayan (hazırlıkta düşmüş) ya da yüklenmiş şarkı alınmaz: önce hazırlık / geri çekme."""
+    import shutil
+    from datetime import date
+
+    k = durum.klasor(calisma, kimlik)
+    arsiv = arsiv or calisma / "_arsiv" / date.today().isoformat() / kimlik
+    with durum.guncelle(calisma, kimlik) as d:
+        if d.asama not in BASTAN_ASAMALAR or not d.analiz.get("stil"):
+            raise ValueError(f"baştan alınamaz (aşama {d.asama}" + ("" if d.analiz.get("stil") else ", analiz yok")
+                             + ")")
+        tasinan = []
+        for ad in ARSIV_KLASORLER:
+            if (k / ad).exists():
+                hedef = arsiv / ad
+                if hedef.exists():  # aynı gün ikinci kez: öncekinin yanına
+                    hedef = arsiv / f"{ad}_{len(list(arsiv.glob(ad + '*')))}"
+                hedef.parent.mkdir(parents=True, exist_ok=True)
+                shutil.move(str(k / ad), str(hedef))
+                tasinan.append(ad)
+        d.notlar.append({"bastan": {"neden": neden, "onceki_asama": d.asama, "onceki_secilen": d.secilen,
+                                    "aday": len(d.adaylar), "arsiv": str(arsiv), "tasinan": tasinan}})
+        d.adaylar, d.secilen, d.yayin = [], None, {}
+        d.gec("analiz")
+    return d

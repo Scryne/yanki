@@ -446,8 +446,14 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None) -> FastA
         try:
             y = paket.yayin_ayarlari(yayin_yolu)
             t = dagitim.takvim_oku(yayin_yolu)
+            from yanki import uzak
+
             ayarlar = {"dagitimci": y.dagitimci, "kapak": y.kapak, "takvim_acik": t.acik, "haftada": t.haftada,
-                       "oto_onay": ayar.acik, "oto_onay_saat": ayar.sure_saat}
+                       "oto_onay": ayar.acik, "oto_onay_saat": ayar.sure_saat,
+                       "uretim": (f"kiralık GPU ({a.uzak.gpu.replace('NVIDIA ', '')})" if a.uzak.acik
+                                  else "evdeki GPU"),
+                       "uzak_ay_usd": uzak.bu_ay_harcama(a.kok) if a.uzak.acik else None,
+                       "uzak_butce": a.uzak.aylik_butce if a.uzak.acik else None}
         except (OSError, ValueError, KeyError):
             ayarlar = {}
         return {

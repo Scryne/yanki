@@ -86,6 +86,9 @@ def _uret(_: argparse.Namespace) -> int:
 
     a = ayarlar.yukle()
     calistir, tek_parca_sn, uzak_mi = uzak.motor_sec(a)
+    if calistir is None:
+        print("üretim yok: kiralık GPU kullanılamıyor, evde üretim kapalı (config/motor.toml → [uzak] yerel_yedek)")
+        return 0
     print(f"üretim: {'kiralık GPU' if uzak_mi else 'evdeki GPU'}")
     islenen = uretim.uret(a, a.kok / "calisma", calistir=calistir, tek_parca_sn=tek_parca_sn)
     if not islenen:
@@ -715,6 +718,9 @@ def _uret_surekli(kok: Path, op) -> int:
         print("üretilecek bir şey yok (analiz ya da onarım bekleyen şarkı yok)")
         return 0
     calistir, tek_parca_sn, uzak_mi = uzak.motor_sec(a)
+    if calistir is None:
+        print(f"üretim bekliyor: kiralık GPU kullanılamıyor, evde üretim kapalı ({len(hedef)} şarkı sırada)")
+        return 0
     if uzak_mi:  # kiralık GPU: evdeki kart, priz ve kullanıcı etkinliği önemsiz
         return _uret_ve_bildir(a, hedef[: a.uzak.sarki], len(hedef), calistir, tek_parca_sn, "kiralık GPU")
     if not sistem.prizde_mi():
@@ -946,6 +952,44 @@ def _geri_cek(args: argparse.Namespace) -> int:
     return kod
 
 
+def _bastan(args: argparse.Namespace) -> int:
+    """Bütün şarkıları baştan üretime alır (Scryne, 2026-10-10: "makinede daha iyi tam sürümüyle üreticez, 0'dan
+    başlayalım"): yüklenmişler dağıtımcıdan geri çekilir (Tunearo incelemede: işaret, sonuç gelince; elle dağıtımcı:
+    `--kaldirildi` ile hemen), diğerlerinin adayları ve paketi arşive (`uretim.bastan`). Reddedilen ve hazırlıkta
+    düşen şarkılara dokunulmaz. `--uygula` olmadan yalnız plan."""
+    from yanki import dagitim, takip
+
+    a = ayarlar.yukle()
+    calisma = a.kok / "calisma"
+    neden = args.neden
+    kod = 0
+    for d in durum.hepsi(calisma):
+        if args.kimlik and d.kimlik not in args.kimlik:
+            continue
+        if d.asama in ("yuklendi", "yayinda"):
+            ad = (takip.yukleme_bilgisi(calisma, d.kimlik) or {}).get("dagitimci") or "routenote"
+            elle = ad != "tunearo"
+            ne = (f"{ad}: geri çekilir (panelden kaldırıldı sayılır), baştan üretime" if elle else
+                  f"{ad}: geri çekilmek üzere işaretlenir, inceleme bitince baştan üretime")
+            if args.uygula:
+                try:
+                    sonuc = dagitim.geri_cek(calisma, d.kimlik, neden, a.kok, kaldirildi=elle and args.kaldirildi,
+                                             bastan=True)
+                    ne += f" → {sonuc}"
+                except (ValueError, LookupError, RuntimeError) as e:
+                    ne, kod = f"✗ {e}", 1
+        elif d.asama in uretim.BASTAN_ASAMALAR and d.analiz.get("stil"):
+            ne = f"{d.asama}, {len(d.adaylar)} aday → arşiv, baştan üretime"
+            if args.uygula:
+                uretim.bastan(calisma, d.kimlik, neden)
+        else:
+            continue
+        print(f"  {d.sanatci} — {d.ad}: {ne}")
+    if not args.uygula:
+        print("plan; uygulamak için: yanki bastan --uygula" + ("" if args.kaldirildi else " --kaldirildi"))
+    return kod
+
+
 def _oac(args: argparse.Namespace) -> int:
     """YouTube resmi sanatçı kanalı (OAC) talebi Tunearo'ya (en az 2 canlı yayından sonra)."""
     from yanki import tunearo
@@ -1022,6 +1066,8 @@ def _gunduz(args: argparse.Namespace) -> int:
     _seyrek_yokla(a.kok, simdi)
     if not op.gunduz_acik:
         return print("gündüz üretimi kapalı (config/operasyon.toml)") or 0
+    if a.uzak.acik and not a.uzak.yerel_yedek:  # evde üretim kapalı; sürekli koşu sunucuda üretir
+        return print("evde üretim kapalı (config/motor.toml → [uzak] yerel_yedek); üretim kiralık GPU'da") or 0
     if not op.gunduz_saatinde(simdi.hour) and not args.zorla:
         return print(f"saat dışında ({op.gunduz_saatler[0]:02d}:00–{op.gunduz_saatler[1]:02d}:00)") or 0
     if not args.zorla and (bosta := sistem.bosta_sn()) < op.gunduz_bosta_dk * 60:
@@ -1198,6 +1244,13 @@ def main(argv: list[str] | None = None) -> int:
     gc.add_argument("--kaldirildi", action="store_true",
                     help="elle dağıtımcıda (RouteNote) yayın panelden kaldırıldı, kaydet")
     gc.set_defaults(fn=_geri_cek)
+    bs = alt.add_parser("bastan", help="şarkıları baştan üretime al (adaylar, paket arşive; yüklenmişler geri çekilir)")
+    bs.add_argument("kimlik", nargs="*", help="boşsa hepsi")
+    bs.add_argument("--uygula", action="store_true", help="yalnız planı göstermek yerine uygula")
+    bs.add_argument("--kaldirildi", action="store_true",
+                    help="elle dağıtımcıdaki (RouteNote) yayınlar panelden kaldırıldı/kaldırma istendi")
+    bs.add_argument("--neden", default="baştan üretim: kiralık GPU, tam sürüm (Scryne, 2026-10-10)")
+    bs.set_defaults(fn=_bastan)
     oc = alt.add_parser("oac", help="YouTube resmi sanatçı kanalı (OAC) talebi Tunearo'ya")
     oc.add_argument("--ana", required=True, help="sanatçının YouTube kanalı adresi")
     oc.add_argument("--konu", required=True, help="YouTube'un açtığı '<Sanatçı> - Topic' kanalının adresi")
@@ -1230,7 +1283,8 @@ def main(argv: list[str] | None = None) -> int:
 
 
 YAZAN_KOMUTLAR = {"hazirla", "uret", "calistir", "yeniden", "kunye", "paketle", "yuklendi", "kesif", "takip",
-                  "temizle", "yedekle", "dagitim-red", "geri-cek", "gunduz", "yukle", "dagitim-durum", "kapak"}
+                  "temizle", "yedekle", "dagitim-red", "geri-cek", "bastan", "gunduz", "yukle", "dagitim-durum",
+                  "kapak"}
 
 
 if __name__ == "__main__":

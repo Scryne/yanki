@@ -371,7 +371,7 @@ class Tunearo:
             bilgi["haric_magazalar"] = list(self.ayar["haric_magazalar"])
         return bilgi
 
-    def geri_cek(self, calisma: Path, d: durum.Durum, neden: str) -> str:
+    def geri_cek(self, calisma: Path, d: durum.Durum, neden: str, bastan: bool = False) -> str:
         """Yüklenmiş yayını geri çeker (`dagitim.geri_cek`). API incelemedeki (`pending`) yayını geri çekemiyor
         (takedown 409, PATCH/DELETE yalnız taslak ve redde): yükleme `geri_cek` diye işaretlenir, yoklama sonuç
         gelince bitirir (red → aynı yayın kuyruğa; canlı → takedown). Dönen: "tamam" | "bekliyor"."""
@@ -380,7 +380,8 @@ class Tunearo:
         rid = (takip.yukleme_bilgisi(calisma, d.kimlik) or {}).get("release_id")
         if not rid:
             raise ValueError("Tunearo yayın kimliği kayıtlı değil")
-        takip.yukleme_kaydet(calisma, d.kimlik, {"geri_cek": {"neden": neden, "tarih": date.today().isoformat()}})
+        takip.yukleme_kaydet(calisma, d.kimlik, {"geri_cek": {"neden": neden, "tarih": date.today().isoformat(),
+                                                              "bastan": bastan}})
         try:
             st = self.api.get(f"/releases/{rid}/status")
         except ag.Bulunamadi:

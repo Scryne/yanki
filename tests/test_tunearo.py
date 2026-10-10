@@ -595,3 +595,13 @@ def test_surekli_takvim_kabul_beklemez_red_varken_durur(tmp_path):
     dagitim.red_kaydet(c, "tn", "Tunearo: derivative work")
     p = dagitim.plan(c, t, date(2026, 10, 20), {}, dagitimci="tunearo")
     assert "reddetti" in p.beklemede and p.bugun_yuklenecek is None
+
+
+def test_tunearo_incelemedeki_yayin_bastan_isaretiyle_bitince_uretime_doner(tmp_path):
+    c, api, t, rid = _yuklenmis(tmp_path)
+    assert t.geri_cek(c, durum.oku(c, "keane-sowk"), "baştan", bastan=True) == "bekliyor"
+    with durum.guncelle(c, "keane-sowk") as d:  # yoklama sonuç gelince bitirsin diye üretim bilgisi
+        d.analiz = {"stil": "piano rock"}
+    api.yayinlar[rid]["status"] = "rejected"
+    ((d, s, _),) = t.yokla(c)
+    assert s == "geri_cekildi" and d.asama == "analiz" and not (c / "keane-sowk" / "paket").exists()

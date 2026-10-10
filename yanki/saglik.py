@@ -75,7 +75,8 @@ def anahtar_kontrolleri(a: Ayarlar) -> list[Kontrol]:
 
     # .env'nin tamamı (spotify.env_oku Spotify dışındakileri de okur) + ortam değişkenleri (Tunearo ve TypeSafe orada
     # da olabilir)
-    e = {**spotify.env_oku(a.kok), **{k: v for k, v in os.environ.items() if k.startswith(("TUNEARO_", "TYPESAFE_"))}}
+    e = {**spotify.env_oku(a.kok),
+         **{k: v for k, v in os.environ.items() if k.startswith(("TUNEARO_", "TYPESAFE_", "RUNPOD_"))}}
     var =lambda *adlar: all(e.get(x) for x in adlar)  # noqa: E731
     return [
         Kontrol("Tunearo anahtarı", var("TUNEARO_API_KEY"), "yükleme ve durum yoklaması" if var("TUNEARO_API_KEY")
@@ -85,4 +86,6 @@ def anahtar_kontrolleri(a: Ayarlar) -> list[Kontrol]:
                 else ".env → SPOTIFY_CLIENT_ID/SECRET yok: keşif doğrulanmaz, takip yok"),
         Kontrol("TypeSafe anahtarı", var("TYPESAFE_API_KEY"), "keşif özgünlük kararı (Jev)" if var("TYPESAFE_API_KEY")
                 else ".env → TYPESAFE_API_KEY yok: özgünlük regex yedeğiyle"),
+        *([Kontrol("RunPod anahtarı", var("RUNPOD_API_KEY"), "üretim kiralık GPU'da" if var("RUNPOD_API_KEY")
+                   else ".env → RUNPOD_API_KEY yok: kiralık GPU kullanılamaz")] if a.uzak.acik else []),
     ]

@@ -91,13 +91,17 @@ def isci_kos(p: runpod.Pod, hedef: str, zaman_asimi_sn: float, aralik_sn: float 
 
 def calistir(a: Ayarlar, isler: list[motor.Is], klasor: Path, zaman_asimi_sn: float, gpu_bekleme_sn: float = 0,
              pod_sinifi=runpod.Pod, kur=runpod.acestep_kur, commit: str | None = None,
-             bakiye: Callable[[str], float] = runpod.bakiye) -> list[motor.Sonuc]:
+             bakiye: Callable[[str], float] = runpod.bakiye, kapat=runpod.kapat_artiklari) -> list[motor.Sonuc]:
     """`motor.calistir` ile aynı sözleşme: işlerin sonuçları (yerel çıktı yollarıyla). `gpu_bekleme_sn` yok sayılır
     (sunucunun GPU'su bizim). Bütçe yoksa ya da pod açılamazsa `RunPodHatasi` (çağıran evdeki motora döner)."""
     if not isler:
         return []
     api = runpod.anahtar(a.kok)
     butce_kontrol(a, api, bakiye)
+    # önceki koşudan açık kalan pod (bilgisayar koşu ortasında kapandı/uyudu) saatlik yanmasın: bu koşu kilitli, başka
+    # bir koşunun pod'u olamaz
+    if artik := kapat(api, a.kok / "calisma" / ".runpod"):
+        print(f"önceki koşudan açık kalan pod silindi: {', '.join(artik)}")
     klasor = klasor.resolve()
     klasor.mkdir(parents=True, exist_ok=True)
     commit = commit or acestep_commit(a)
@@ -165,29 +169,33 @@ def durma_yolu(kok: Path) -> Path:
 
 
 def motor_sec(a: Ayarlar, kayit: Callable[[str], None] = print, stok=runpod.stok,
-              bakiye: Callable[[str], float] = runpod.bakiye) -> tuple[Callable[..., list[motor.Sonuc]], float, bool]:
+              bakiye: Callable[[str], float] = runpod.bakiye
+              ) -> tuple[Callable[..., list[motor.Sonuc]] | None, float, bool]:
     """Üretimin motoru ve tek parça eşiği, işler planlanmadan önce: uzak açık, son 3 saatte düşmemiş, anahtar ve
     bütçe yerinde, GPU stokta ise sunucu (tek parça); değilse evdeki kart (INT8, parçalı). Karar sonradan değişmez:
     sunucu için tek parça planlanan iş evde 8 GB'a ve motorun iç zaman aşımına sığmaz. Sunucu koşu ortasında düşerse
     hata yükselir (şarkılar sırada kalır) ve uzak motor `DURMA_SAAT` devre dışı kalır.
-    Dönen: (calistir, tek_parca_sn, uzak_mi)."""
+    Dönen: (calistir, tek_parca_sn, uzak_mi); calistir None: sunucu yok ve evde üretim kapalı (`yerel_yedek`)."""
     from yanki import uretim
 
     yerel = (motor.calistir, uretim.TEK_PARCA_SN, False)
     if not a.uzak.acik:
         return yerel
+    # sunucu yoksa: evde üretim açıksa evdeki kart, kapalıysa üretim yok (çağıran bekler)
+    yedek = yerel if a.uzak.yerel_yedek else (None, uretim.TEK_PARCA_SN, False)
+    nerede = "üretim evde" if a.uzak.yerel_yedek else "üretim sunucu açılabilene kadar bekliyor"
     durdu = durma_yolu(a.kok)
     if durdu.exists() and time.time() - durdu.stat().st_mtime < DURMA_SAAT * 3600:
-        kayit(f"uzak GPU {DURMA_SAAT} saat devre dışı ({durdu.read_text(encoding='utf-8')[:200]}); üretim evde")
-        return yerel
+        kayit(f"uzak GPU {DURMA_SAAT} saat devre dışı ({durdu.read_text(encoding='utf-8')[:200]}); {nerede}")
+        return yedek
     try:
         api = runpod.anahtar(a.kok)
         butce_kontrol(a, api, bakiye)
         if (durum_ := stok(api, a.uzak.gpu)) in (None, "None", "Low"):
             raise runpod.RunPodHatasi(f"{a.uzak.gpu} stok: {durum_}")
     except (runpod.RunPodHatasi, OSError) as e:
-        kayit(f"uzak GPU kullanılmıyor ({e}); üretim evde")
-        return yerel
+        kayit(f"uzak GPU kullanılmıyor ({e}); {nerede}")
+        return yedek
 
     def uzak_calistir(a_, isler, klasor, zaman_asimi_sn, **_k):
         try:

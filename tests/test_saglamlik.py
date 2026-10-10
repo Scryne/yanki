@@ -703,7 +703,8 @@ def test_uzak_motor_girdileri_bir_kez_gonderir_ciktilari_yerele_indirir(tmp_path
     isler = [motor.Is(id=f"s|cover|{n}|1", gorev="cover", kaynak=str(kaynak), cikti_klasor=str(tmp_path / "c" / str(n)),
                       soz="söz", adim=100, tohum=t, guc=0.7) for n, t in ((1, 42), (2, 7))]
     sonuc = uzak.calistir(a, isler, tmp_path / "_motor", 900, pod_sinifi=_SahtePod,
-                          kur=lambda p, c, m: "/root/ACE-Step-1.5", commit="ca1e85f", bakiye=lambda _k: 10.0)
+                          kur=lambda p, c, m: "/root/ACE-Step-1.5", commit="ca1e85f", bakiye=lambda _k: 10.0,
+                          kapat=lambda *_: ["eski-pod"])
     p = _SahtePod.acilan[-1]
     assert p.kapandi and list(p.gonderilen.values()).count("/root/is/girdi/0.wav") == 1  # aynı kaynak bir kez
     is_ = json.loads(p.is_json)
@@ -763,3 +764,66 @@ def test_tek_parca_esigi_uzakta_tam_sarki(tmp_path):
                                             encoding="utf-8")
     assert len(uretim.parca_plani(c, d)[0]) > 1  # evde parçalı
     assert len(uretim.parca_plani(c, d, tek_parca_sn=480)[0]) == 1  # kiralık GPU'da tek parça
+
+
+# ── baştan üretim (Scryne: "makinede tam sürümüyle üreticez, 0'dan başlayalım") ──
+def _uretilmis(c, kimlik="s", asama="paketlendi"):
+    d = durum.Durum(kimlik, "X", "S", asama=asama, analiz={"stil": "piano ballad"}, secilen=1,
+                    kaynak={"dosya": "kaynak.wav", "sure_sn": 200.0})
+    d.adaylar = [durum.Aday(1, "adaylar/1/tam.flac", 42, gecti=True)]
+    durum.yaz(c, d)
+    k = c / kimlik
+    for yol in ("adaylar/1/tam.flac", "paket/X.wav", "parcalar/kaynak_1.wav", "kaynak.wav", "soz.txt",
+                "kapak_pinterest.jpg"):
+        (k / yol).parent.mkdir(parents=True, exist_ok=True)
+        (k / yol).write_bytes(b"x")
+    return d
+
+
+def test_bastan_adaylari_arsive_tasir_girdileri_korur(tmp_path):
+    from yanki import uretim
+
+    c = tmp_path / "c"
+    _uretilmis(c)
+    d = uretim.bastan(c, "s", "deneme", arsiv=tmp_path / "arsiv")
+    k = c / "s"
+    assert d.asama == "analiz" and d.adaylar == [] and d.secilen is None
+    assert not (k / "adaylar").exists() and not (k / "paket").exists() and not (k / "parcalar").exists()
+    assert (tmp_path / "arsiv" / "adaylar" / "1" / "tam.flac").exists() and (tmp_path / "arsiv" / "paket").exists()
+    assert all((k / x).exists() for x in ("kaynak.wav", "soz.txt", "kapak_pinterest.jpg"))
+    assert d.notlar[-1]["bastan"]["onceki_asama"] == "paketlendi"
+
+
+def test_bastan_yuklenmis_ya_da_analizsiz_sarkiyi_almaz(tmp_path):
+    from yanki import uretim
+
+    c = tmp_path / "c"
+    _uretilmis(c, "y", asama="yuklendi")
+    durum.yaz(c, durum.Durum("h", "X", "H", asama="hata"))
+    for kimlik in ("y", "h"):
+        with pytest.raises(ValueError):
+            uretim.bastan(c, kimlik, "x")
+
+
+def test_geri_cekilen_sarki_eski_paketle_degil_bastan_uretime_doner(tmp_path):
+    c = tmp_path / "c"
+    _uretilmis(c, "rn", asama="yuklendi")
+    (c / "rn" / "paket" / "metadata.json").write_text(json.dumps({"yukleme": {"dagitimci": "routenote",
+                                                                              "isrc": "GXM2X2626596"}}),
+                                                      encoding="utf-8")
+    assert dagitim.geri_cek(c, "rn", "baştan", kaldirildi=True, bastan=True) == "tamam"
+    d = durum.oku(c, "rn")
+    assert d.asama == "analiz" and d.adaylar == [] and not (c / "rn" / "paket").exists()
+    arsiv = json.loads(next(c.glob("_arsiv/*/rn/paket/metadata.json")).read_text(encoding="utf-8"))
+    assert arsiv["yukleme_gecmisi"][0]["isrc"] == "GXM2X2626596"  # dağıtım geçmişi arşivde
+
+
+def test_evde_uretim_kapaliyken_sunucu_yoksa_uretim_yok(tmp_path, monkeypatch):
+    from yanki import uzak
+
+    monkeypatch.setenv("RUNPOD_API_KEY", "x")
+    a = _uzak_ayar(tmp_path, yerel_yedek=False)
+    calistir, _, uzak_mi = uzak.motor_sec(a, kayit=lambda _m: None, stok=lambda k, g: None, bakiye=lambda _k: 10.0)
+    assert calistir is None and uzak_mi is False
+    a2 = _uzak_ayar(tmp_path, yerel_yedek=True)
+    assert uzak.motor_sec(a2, kayit=lambda _m: None, stok=lambda k, g: None, bakiye=lambda _k: 10.0)[0] is not None

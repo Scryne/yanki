@@ -54,6 +54,10 @@ aylik_butce = 15.0
 sarki = 8
 # Bu süreden kısa şarkı tek parça (sunucuda bölmeye gerek yok; ACE-Step sınırı 8 dk)
 tek_parca_sn = 480
+# Sunucu kullanılamazsa evdeki kartta (INT8, parçalı) üretilsin mi. Kapalı (Scryne, 2026-10-10: "benim bilgisayarımda
+# şarkı üretmicez artık"): üretim sunucu açılabilene kadar sırada bekler. Ayrıca evde kullanıcı etkinken VAE çözme
+# paylaşımlı belleğe taşıp bir saat takıldı (2026-10-10).
+yerel_yedek = false
 
 [araclar]
 fpcalc = "araclar/fpcalc.exe"

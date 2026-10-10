@@ -654,7 +654,7 @@ function kazancPaneli() {
 }
 
 function gecePaneli(g) {
-  const kutu = el("section", { class: "cam yan-panel", "aria-label": "Son gece koşusu" }, el("h2", {}, "Son gece koşusu"));
+  const kutu = el("section", { class: "cam yan-panel", "aria-label": "Son koşu" }, el("h2", {}, "Son koşu"));
   if (!g) { kutu.append(el("p", { class: "kazanc-alt" }, "Henüz koşu yok.")); return kutu; }
   const sorun = !g.suruyor && (g.kod || g.sorunlu);
   const durum = g.suruyor ? `sürüyor · ${g.adim || "başlıyor"}` : sorun ? `sorunlu: ${g.sorunlu || `kod ${g.kod}`}` : "sorunsuz bitti";
@@ -667,6 +667,8 @@ function ayarPaneli(a, kota) {
   const satir = (ad, deger) => [el("dt", {}, ad), el("dd", {}, deger)];
   return el("section", { class: "cam yan-panel", "aria-label": "Otomasyon" }, el("h2", {}, "Otomasyon"),
     el("dl", { class: "ayar-listesi" },
+      ...satir("Üretim", a.uretim || "—"),
+      ...(a.uzak_ay_usd != null ? satir("Bu ay GPU", `${a.uzak_ay_usd.toFixed(2)} $ / ${a.uzak_butce} $`) : []),
       ...satir("Dağıtımcı", DAGITIMCI[a.dagitimci] || a.dagitimci || "—"),
       ...satir("Takvim", !a.takvim_acik ? "kapalı" : a.haftada >= 7 ? "açık · her gün" : `açık · haftada ${a.haftada}`),
       ...satir("Otomatik onay", a.oto_onay ? `${a.oto_onay_saat} sa` : "kapalı"),

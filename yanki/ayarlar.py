@@ -62,6 +62,7 @@ class Uzak:
     aylik_butce: float = 15.0
     sarki: int = 8
     tek_parca_sn: float = 480.0
+    yerel_yedek: bool = True  # sunucu yoksa evdeki kartta üret
 
 
 @dataclass(frozen=True)
@@ -102,7 +103,8 @@ def yukle(yol: Path | None = None, kok: Path = KOK) -> Ayarlar:
 
 def _uzak(u: dict) -> Uzak:
     return Uzak(bool(u.get("acik", False)), str(u.get("gpu", "NVIDIA A40")), float(u.get("en_az_bakiye", 3.0)),
-                float(u.get("aylik_butce", 15.0)), max(1, int(u.get("sarki", 8))), float(u.get("tek_parca_sn", 480)))
+                float(u.get("aylik_butce", 15.0)), max(1, int(u.get("sarki", 8))), float(u.get("tek_parca_sn", 480)),
+                bool(u.get("yerel_yedek", True)))
 
 
 @dataclass(frozen=True)

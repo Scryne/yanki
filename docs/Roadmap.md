@@ -549,3 +549,12 @@ düzeyde; iki deneme ~0,16 $. `yanki/runpod.py` (pod yaşam döngüsü, SSH, her
 (`motor.calistir` ile aynı sözleşme, bütçe ve stok ön kontrolü, motor işler planlanmadan seçilir; sunucu koşu
 ortasında düşerse şarkılar sırada kalır, 3 saat evdeki kart). Üretim varsayılanı kiralık GPU. Kalite kararı Scryne'ın
 kulağında: `calisma/dinleme/s19/`. Orijinal kaydın ISRC'siyle yükleme önerisi reddedildi (gerekçe `06`). 9 yeni test.
+
+**Baştan, tam sürüm (2026-10-10, Scryne: "benim bilgisayarımda şarkı üretmicez artık; tüm şarkıları kaldır, makinede
+tam sürümüyle 0'dan başlayalım"):** evdeki koşu durduruldu (işçi 14:10'dan beri takılıydı: VAE çözme boş VRAM 0,76
+GB'ta paylaşımlı belleğe taştı → motor bekçisi: işçi 20 dk günlüğe yazmazsa durdurulur). Evde üretim kapalı
+(`[uzak] yerel_yedek = false`). `yanki bastan --uygula --kaldirildi`: 23 şarkı; adaylar ve paketler
+`calisma/_arsiv/2026-10-10/`'e, RouteNote'taki 3 kaldırıldı sayıldı (ticket), Tunearo'daki 2 geri çekilmek üzere
+işaretli (inceleme bitince baştan üretime; `geri_cek.bastan`). Kaynak, söz, künye, stil, kapak korundu. Yetim pod
+temizliği her uzak koşunun başında; `yanki durum` RunPod anahtarı; pano: üretim yeri, bu ay GPU harcaması, "Son koşu".
+İlk otomatik kiralık GPU koşusu `\Yanki\Surekli` ile başladı (8 şarkı). 7 yeni test, toplam 335.

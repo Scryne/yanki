@@ -72,9 +72,11 @@ bildirilir. İlk parça Spotify'da görülünce "profili sahiplen" (Spotify for 
 
 **Kiralık GPU:** üretim RunPod'da (A40 48 GB, saniye faturalı; `config/motor.toml` → `[uzak]`, `yanki/uzak.py`):
 sunucu açılır, ACE-Step yereldeki sürümle kurulur, şarkılar nicelemesiz ve tek parça üretilir (tam şarkı ~140 sn), sonuç
-iner, sunucu silinir. Anahtar `.env` → `RUNPOD_API_KEY`. Bakiye 3 $'ın altında, aylık harcama 15 $'a ulaşmış ya da GPU
-stokta yoksa üretim evdeki kartta (INT8, parçalı). Harcama: `calisma/gunluk/runpod.json`. Ölçümler:
-`docs/arastirma/06`.
+iner, sunucu silinir. Anahtar `.env` → `RUNPOD_API_KEY`. Evde üretim kapalı (Scryne, 2026-10-10; `yerel_yedek =
+false`): bakiye 3 $'ın altında, aylık harcama 15 $'a ulaşmış ya da GPU stokta yoksa üretim sırada bekler. Koşu ortasında
+kapanan bilgisayarın açık bıraktığı sunucu bir sonraki koşuda silinir. Harcama: `calisma/gunluk/runpod.json`, panoda
+"Bu ay GPU". Ölçümler: `docs/arastirma/06`. `yanki bastan [--uygula]`: şarkıları baştan üretime alır (adaylar ve paket
+`calisma/_arsiv/<tarih>/`'e; yüklenmişler geri çekilir, inceleme bitince üretime döner).
 
 **Tür çizgisi:** keşif hattın tarifi dinlenmiş türlerinde kalır (balad, pop, piyano/akustik, rock). Rap, metal,
 elektronik, Latin/Brezilya vb. aday Deezer türünden tanınır, puan almaz, kendiliğinden listeye girmez (dinleme
