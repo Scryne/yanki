@@ -471,3 +471,53 @@ kırmızıydı):
 - **Küçükler:** `yanki durum` winget ffmpeg'ini görmüyordu; günlükte "None BPM"; işçi sonucu ve keşif/STILLMORE
   JSON'ları atomik değildi; `httpx2` doğrudan import edilip bağımlılıkta yoktu; `.env.example`'da TypeSafe anahtarı
   yoktu; testler gerçek Whisper modeli yükleyip Deezer'a istek atıyordu (`tests/conftest.py`: ağ ve model kapalı).
+
+## Denetim 2 (2026-10-10, Scryne: "baştan sona incele, denetle, eksik ve hataların tamamını çöz, iyileştir, yeni şeyler ekle; her şey sende")
+
+Kodun tamamı okundu; gece/gündüz/oda günlükleri, olay kaydı ve zamanlanmış görevler gerçek çalışma kanıtı olarak
+tarandı. Testler `tests/test_saglamlik.py` (32): her düzeltmenin ve eklemenin testi düzeltmesiz kodda kırmızı (31/31
+denendi), toplam 312 yeşil.
+
+**Hatalar (çözüldü):**
+- **Oda 500 (canlı günlükte):** "Başka kapak"ta Pinterest görsel deposu bağlantıyı yarıda kesti (`IncompleteRead`),
+  yakalanmıyordu. İndirme bir kez yeniden denenir, olmazsa sıradaki uygun görsele geçilir; gerçek görsel boyutu da
+  doğrulanır (açıklamadaki boyut tutmayabilir).
+- **Ağ:** bağlantı kurulduktan sonra kopan cevaplar (`IncompleteRead`, `RemoteDisconnected`, yarım JSON) `URLError`
+  değildi, yeniden denenmiyor ve gece adımını düşürüyordu (`ag.GECICI`). Spotify istemcisi de aynı. Gece günlüğündeki
+  LRCLIB/MusicBrainz birer hata bu sınıftan.
+- **Deezer tür adları Türkçe geliyordu** (IP'nin dili: "dans", "brezilya müziği"): MusicBrainz'de türü olmayan
+  sanatçıda ACE-Step'e Türkçe stil gidebiliyordu, tür süzgeci kaçırıyordu. Bütün isteklerde `Accept-Language: en`.
+- **Atomik yazım:** Windows'ta dinleme odası `durum.json`'u okurken yerine koyma `PermissionError` verebiliyordu;
+  geçici dosya adı da süreçler arasında ortaktı. Kısa yeniden deneme + süreç/iş parçacığına özgü geçici ad. Paketin
+  `metadata.json`/`YUKLE.md`'si de artık atomik.
+- **YouTube:** boyutu bilinmeyen videoda ilk parça 403/boş dönünce 0 baytlık dosya "başarılı" sayılıyordu.
+- **Söz:** elle bırakılmış söz dosyası varken bozuk LRCLIB cevabı şarkıyı "söz bulunamadı"ya düşürüyordu.
+- **Temizlik:** ilk yükleme tarihine bakıyordu; geri çekilip yeniden yüklenen şarkının adayları erken silinirdi.
+- **Takip:** Tunearo'da gecikme bildirimi elle `yanki dagitim-red` öneriyordu (red API'den kendiliğinden geliyor).
+- **Gündüz görevi** hazırlıkta düşen şarkıyı her 30 dk'da bir yeniden indiriyordu: en erken 4 saat sonra, `girdi/`'ye
+  söz/ses bırakılınca hemen.
+- **Takvim:** `bugun_yuklenecek` planın gününü değil gerçek bugünü kullanıyordu.
+- **Yedek** olay kaydını (bildirim tekrar anahtarları) almıyordu; **oda günlüğü** sınırsız büyüyordu (5 MB'ta döner).
+
+**Ürün düzeltmeleri:**
+- **Tür çizgisi (keşif):** keşifteki 8 doğrulanmış adayın 8'i hattın yapamadığı türdendi (rap, metal, Brezilya
+  müziği; üç rap şarkısının dokuz adayı da söz kapısında kalmıştı). Aday sanatçının Deezer türü ölçülür
+  (`kesif.Aday.turler`), `onay.DENENMEMIS`'e uyan puan almaz, Spotify'a sorulmaz, kendiliğinden listeye girmez; odada
+  "tür uymuyor" ve tür görünür, "Yine de ekle" kalır. Kalıp Deezer'ın tür adlarıyla genişledi (electro, dance, reggae,
+  brazilian, films/games…), otomatik onay da aynı kalıbı kullanır.
+- **Keşif ayarları Orvane'e göre:** playlist arama sorguları ("brazilian funk", "rap hits", "phonk", "latino" →
+  "sad songs", "piano ballads", "acoustic love songs"…), Deezer liste türlerinden rap çıktı. Keşif pazarları yalnız
+  yayın yaptıklarımız (US ve MX çıktı: orada yayın yok, yalnız oralarda kapalı şarkı puan alıyordu).
+- Bekleyen iki şarkı (Cadavers in My Cadillac, Love Kills: rap, glam metal) aynı gerekçeyle reddedildi (geri alınabilir).
+- **Kuyruk beslemesi:** sürekli yayın için listeye 8 balad (Bruno Mars, Passenger, Lewis Capaldi, Christina Perri,
+  Snow Patrol, The Fray, James Blunt, Adele; Faz 7 ölçütü). Sekizi hazırlandı: dil İngilizce, künye ve yazarlar tam.
+
+**Yeni:**
+- **Apple Music profili** Tunearo sanatçısına bağlanır (`tunearo.apple_bagla`): kimlik ad aramasıyla değil yayınımızın
+  UPC'siyle (iTunes Lookup, anahtarsız), aynı adlı başka sanatçıya bağlanma riski yok; bölünme bildirilir.
+- **Sanatçı hesabı adımları** bir kez bildirilir (`takip.profil_olaylari`): ilk canlı parçada Spotify for Artists'ten
+  sahiplenme (profil fotoğrafı AI insan olmasın), iki canlı yayında YouTube resmi sanatçı kanalı. `yanki oac --ana
+  --konu`: Tunearo OAC talebi (en az 2 canlı yayın ve sanatçının kendi YouTube kanalı; kanal açmak insanda).
+- **Gündüz dağıtım yoklaması** (3 saatte bir, yayın başına bir istek): red/kabul ve geri çekme geceyi beklemez.
+- **`yanki durum`:** Tunearo/Spotify/TypeSafe anahtarları (değer yazılmaz) ve disk (≥ 20 GB).
+- **Oda:** dağıtımda "geri çekilecek", takvim "her gün", keşifte tür. Görsel doğrulama 24 kare 0 sorun.

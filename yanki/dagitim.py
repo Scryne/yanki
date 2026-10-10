@@ -129,10 +129,12 @@ class Plan:
     beklemede: str | None  # takvim neden işlemiyor (None: işliyor)
     son_yukleme: date | None
     duzeltme: list[str]  # dağıtımcının reddettiği, yeniden paketlenmeyi bekleyen şarkılar
+    bugun: date = date.min  # planın kurulduğu gün (verilmezse bugün)
 
     @property
     def bugun_yuklenecek(self) -> Sira | None:
-        return self.sira[0] if self.sira and not self.beklemede and self.sira[0].yukleme <= date.today() else None
+        gun = self.bugun if self.bugun != date.min else date.today()
+        return self.sira[0] if self.sira and not self.beklemede and self.sira[0].yukleme <= gun else None
 
 
 def _meta(calisma: Path, d: durum.Durum) -> dict:
@@ -207,7 +209,7 @@ def plan(calisma: Path, t: Takvim, bugun: date | None = None, puanlar: dict[str,
         adlar = ", ".join(d.ad for d in hepsi if d.kimlik in reddedilen)
         beklemede = (f"dağıtımcı reddetti ({adlar}); neden anlaşılıp düzeltilmeden yeni yükleme yok "
                      "(düzeltilen şarkı: yanki paketle --yeniden, sonra yanki yukle <kimlik>)")
-    return Plan(sira, beklemede, son, reddedilen)
+    return Plan(sira, beklemede, son, reddedilen, bugun)
 
 
 RED_ONEKI = "dağıtımcı reddi: "

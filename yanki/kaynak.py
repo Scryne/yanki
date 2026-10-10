@@ -122,6 +122,8 @@ def _indir_bir(video_id: str, hedef: Path) -> Path:
                 break
     if boyut and bas < boyut:
         raise OSError(f"eksik indirme: {bas}/{boyut} bayt{son}")
+    if bas == 0:  # boyutu bilinmeyen videoda ilk parça boş/403: yeniden denensin, boş dosya kaynak sayılmasın
+        raise OSError(f"boş indirme{son}")
     return hedef
 
 

@@ -13,7 +13,7 @@ from pathlib import Path
 ISTEK: Counter = Counter()
 HATA: Counter = Counter()
 SERVIS_ADI = {"lrclib.net": "LRCLIB", "musicbrainz.org": "MusicBrainz", "api.deezer.com": "Deezer",
-              "api.spotify.com": "Spotify", "accounts.spotify.com": "Spotify"}
+              "api.spotify.com": "Spotify", "accounts.spotify.com": "Spotify", "itunes.apple.com": "Apple"}
 
 
 def servis(url: str) -> str:

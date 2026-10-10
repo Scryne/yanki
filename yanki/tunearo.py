@@ -568,3 +568,70 @@ def profil_bagla(calisma: Path, istemci: Istemci, sanatci_adi: str, bildir=None)
         bildir("dagitim", "Spotify profili bağlandı", f"Tunearo'daki {sanatci_adi} artık Spotify profili {kimlik}'e "
                "bağlı: yeni yayınlar aynı profile düşer.", f"profil_bag:{kimlik}")
     return kimlik
+
+
+ITUNES = "https://itunes.apple.com/lookup"
+APPLE_ULKE = "GB"  # ABD hariç bölgede (mekanik lisans); arama ülkesi yayınladığımız bir mağaza olmalı
+
+
+def apple_bagla(calisma: Path, istemci: Istemci, sanatci_adi: str, json_al=ag.json_al, bildir=None) -> str | None:
+    """Apple Music sanatçı kimliğini Tunearo'daki sanatçıya bağlar (`apple_id`), Spotify'daki gibi: sonraki yayınlar
+    aynı Apple profiline düşer. Kimlik ad aramasıyla değil yayınımızın UPC'siyle bulunur (iTunes Lookup, anahtarsız;
+    aynı adlı başka sanatçıya bağlanma riski yok). Dönen: bağlanan kimlik."""
+    upcler = []
+    for d in durum.hepsi(calisma):
+        y = (_meta_oku(calisma, d.kimlik).get("yukleme") or {})
+        if y.get("dagitimci") == "tunearo" and y.get("upc") and y.get("dagitim_durumu") in ("live", "approved"):
+            upcler.append(y["upc"])
+    if not upcler:
+        return None
+    sanatci = next((x for x in _liste(istemci.get("/artists"), "artists")
+                    if (x.get("artist_name") or "").casefold() == sanatci_adi.casefold()), None)
+    if sanatci is None or sanatci.get("apple_id"):
+        return None
+    kimlikler: dict[str, int] = {}
+    for upc in upcler:
+        try:
+            cevap = json_al(ITUNES, {"upc": upc, "country": APPLE_ULKE, "entity": "song"})
+        except (ag.Bulunamadi, OSError):
+            continue
+        for r in cevap.get("results") or []:
+            if (r.get("artistName") or "").casefold() == sanatci_adi.casefold() and r.get("artistId"):
+                kimlikler[str(r["artistId"])] = kimlikler.get(str(r["artistId"]), 0) + 1
+    if not kimlikler:
+        return None  # henüz Apple'da değil
+    kimlik = max(kimlikler, key=kimlikler.get)
+    if len(kimlikler) > 1 and bildir:
+        bildir("kayip", "Apple Music profili bölünmüş", f"{sanatci_adi} parçaları {len(kimlikler)} ayrı Apple "
+               f"profilinde: {', '.join(kimlikler)}. Yeni yayınlar {kimlik}'e bağlandı.",
+               f"apple_bolunme:{'-'.join(sorted(kimlikler))}")
+    istemci.patch(f"/artists/{sanatci['id']}", {"apple_id": kimlik})
+    if bildir:
+        bildir("dagitim", "Apple Music profili bağlandı", f"Tunearo'daki {sanatci_adi} artık Apple Music sanatçısı "
+               f"{kimlik}'e bağlı: yeni yayınlar aynı profile düşer.", f"apple_bag:{kimlik}")
+    return kimlik
+
+
+def _meta_oku(calisma: Path, kimlik: str) -> dict:
+    try:
+        return json.loads((durum.klasor(calisma, kimlik) / "paket" / "metadata.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
+def oac_iste(istemci: Istemci, sanatci_adi: str, ana_kanal: str, konu_kanali: str) -> dict:
+    """YouTube resmi sanatçı kanalı (OAC) talebi: Tunearo en az 2 canlı yayın ve sanatçının iki YouTube kanalını
+    ister (ana kanal ve YouTube'un kendiliğinden açtığı "<Sanatçı> - Topic"). Talep varsa onu döner (tek etkin
+    talep)."""
+    if not all(x.startswith("https://www.youtube.com/") for x in (ana_kanal, konu_kanali)):
+        raise ValueError("kanal adresleri https://www.youtube.com/… olmalı")
+    sanatci = next((x for x in _liste(istemci.get("/artists"), "artists")
+                    if (x.get("artist_name") or "").casefold() == sanatci_adi.casefold()), None)
+    if sanatci is None:
+        raise ValueError(f"Tunearo'da {sanatci_adi} sanatçısı yok")
+    try:
+        return istemci.get(f"/artists/{sanatci['id']}/oac-request")
+    except ag.Bulunamadi:
+        pass
+    return istemci.post(f"/artists/{sanatci['id']}/oac-request",
+                        {"youtube_main_channel_url": ana_kanal, "youtube_topic_channel_url": konu_kanali})

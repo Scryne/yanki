@@ -19,19 +19,19 @@ Erişim: Pinterest'in resmi API'si iş hesabı ve uygulama onayı istiyor; siten
 import io
 import json
 import re
-import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import datetime
 from pathlib import Path
 
-from yanki import dosya, durum, sayac
+from yanki import ag, dosya, durum, sayac
 
 ARAMA = "https://www.pinterest.com/resource/BaseSearchResource/get/"
 TARAYICI = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 "
             "Safari/537.36")
 SERVIS = "Pinterest"
 EN_KUCUK = 600  # kısa kenar; altı 3000'e büyütülünce dağılıyor
+INDIRME_DENEME = 4  # sorgu başına en iyi kaç görsel indirilmeye çalışılır
 
 # stil sözcüğü → görsel mod (sıra önemli: ilk ikisi sorguya girer)
 MODLAR = (
@@ -112,9 +112,11 @@ def ara(q: str) -> list[dict]:
             sonuc = json.load(c)["resource_response"]["data"]["results"]
         sayac.say(SERVIS, True)
         return sonuc
-    except (urllib.error.URLError, TimeoutError, KeyError, ValueError):
+    except (*ag.GECICI, KeyError, ValueError) as e:
         sayac.say(SERVIS, False)
-        raise
+        if isinstance(e, OSError | LookupError | ValueError):
+            raise
+        raise OSError(f"Pinterest araması: {type(e).__name__}: {e}") from e
 
 
 def _gorsel(pin: dict) -> dict:
@@ -147,22 +149,35 @@ def kullanilanlar(calisma: Path) -> set[str]:
     return sonuc
 
 
-def sec(adaylar: list[dict], kullanilan: set[str]) -> dict | None:
+def sirali_adaylar(adaylar: list[dict], kullanilan: set[str]) -> list[dict]:
+    """Uygun ve kullanılmamış pinler, en iyiden kötüye (ilki indirilemezse sıradaki denenir)."""
     temiz = [p for p in adaylar if uygun(p) and p.get("id") not in kullanilan
              and p.get("image_signature") not in kullanilan]
-    return max(temiz, key=_puan, default=None)
+    return sorted(temiz, key=_puan, reverse=True)
 
 
-def _indir(url: str) -> bytes:
+def sec(adaylar: list[dict], kullanilan: set[str]) -> dict | None:
+    return next(iter(sirali_adaylar(adaylar, kullanilan)), None)
+
+
+def _indir(url: str, deneme: int = 2) -> bytes:
+    """Görsel deposu büyük dosyada bağlantıyı yarıda kesebiliyor (`IncompleteRead`, 2026-10-10: odada "Başka kapak"
+    500 verdi): bir kez daha denenir, olmazsa OSError (çağıran sıradaki görsele geçer)."""
+    import time
+
     istek = urllib.request.Request(url, headers={"User-Agent": TARAYICI, "Referer": "https://www.pinterest.com/"})
-    try:
-        with urllib.request.urlopen(istek, timeout=60) as c:
-            veri = c.read()
-        sayac.say(SERVIS, True)
-        return veri
-    except (urllib.error.URLError, TimeoutError):
-        sayac.say(SERVIS, False)
-        raise
+    for i in range(deneme):
+        try:
+            with urllib.request.urlopen(istek, timeout=60) as c:
+                veri = c.read()
+            sayac.say(SERVIS, True)
+            return veri
+        except ag.GECICI as e:
+            sayac.say(SERVIS, False)
+            if i == deneme - 1:
+                raise OSError(f"görsel indirilemedi: {type(e).__name__}: {e}") from e
+            time.sleep(2)
+    raise AssertionError("ulaşılmaz")
 
 
 def getir(calisma: Path, d: durum.Durum, yeni: bool = False, arayici=ara, indirici=_indir) -> Path:
@@ -177,17 +192,25 @@ def getir(calisma: Path, d: durum.Durum, yeni: bool = False, arayici=ara, indiri
     kullanilan = kullanilanlar(calisma)
     soz_yolu = k / "soz.txt"
     q = sorgu(d, soz_yolu.read_text(encoding="utf-8") if soz_yolu.exists() else None)
-    secilen = None
+    secilen, son_hata = None, None
     for deneme in (q, f"{q.split(' scenery')[0]} landscape aesthetic", "moody scenery aesthetic"):
-        secilen = sec(arayici(deneme), kullanilan)
+        for pin in sirali_adaylar(arayici(deneme), kullanilan)[:INDIRME_DENEME]:
+            try:  # indirilemeyen ya da açıklamasındaki boyutu tutmayan görselde sıradakine geçilir
+                with Image.open(io.BytesIO(indirici(_gorsel(pin)["url"]))) as img:
+                    if min(img.size) < EN_KUCUK:
+                        raise ValueError(f"gerçek boyut {img.size[0]}×{img.size[1]} küçük")
+                    img.convert("RGB").save(hedef, "JPEG", quality=95)
+            except (OSError, ValueError) as e:  # PIL.UnidentifiedImageError OSError türevi
+                son_hata = e
+                continue
+            secilen, q = pin, deneme
+            break
         if secilen:
-            q = deneme
             break
     if secilen is None:
-        raise Bulunamadi(f"Pinterest'te uygun görsel yok (sorgu: {q})")
+        raise Bulunamadi(f"Pinterest'te uygun görsel yok (sorgu: {q})" + (f"; son hata: {son_hata}" if son_hata
+                                                                            else ""))
     g = _gorsel(secilen)
-    with Image.open(io.BytesIO(indirici(g["url"]))) as img:
-        img.convert("RGB").save(hedef, "JPEG", quality=95)
     dosya.json_yaz(kaynak_yolu, {
         "pin_id": secilen["id"], "imza": secilen.get("image_signature"), "url": g["url"],
         "pin": f"https://www.pinterest.com/pin/{secilen['id']}/", "aciklama": secilen.get("seo_alt_text"),

@@ -23,8 +23,13 @@ from yanki import durum
 # tarifi dinleme testiyle seçilmiş tür ve dil (piyano/akustik balad, pop, piyano rock; İngilizce) ve sözü anlaşılır
 # aday. Rap, metal vb. ACE-Step'te hiç dinlenmedi; kötü bir cover atlanır, atlama profili algoritmada aşağı çeker ve
 # Orvane'in tür kimliğini bulandırır. Bunlar Scryne'ın kulağına kalır (bildirilir).
+# Keşif de aynı kalıpla süzer (`kesif.Aday.uygun`), Deezer'ın tür adları ("Brazilian Music", "Electro", "Films/Games")
+# dahil: hattın yapamadığı türdeki aday kendiliğinden listeye girmez, GPU ve kulak boşa gitmez (2026-10-10: üç rap
+# şarkısının dokuz adayı da söz kapısında kaldı).
 DENENMEMIS = re.compile(r"\b(rap|hip[ -]?hop|trap|drill|metal|punk|grunge|hardcore|edm|techno|house|dubstep|trance|"
-                        r"reggaeton|latin|salsa|country|jazz|blues|gospel|opera|k-?pop|afrobeats?)\b", re.I)
+                        r"electro|dance|reggae|reggaeton|latin|salsa|mexicano|brazilian|sertanejo|forr[oó]|african|"
+                        r"afrobeats?|asian|indian|bollywood|country|jazz|blues|gospel|opera|classical|kids|films|games|"
+                        r"k-?pop|j-?pop|anime)\b", re.I)
 
 
 @dataclass(frozen=True)

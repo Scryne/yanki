@@ -4,6 +4,7 @@ yükleme kaydı, yedek."""
 import json
 import subprocess
 import sys
+import time
 from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
@@ -327,13 +328,22 @@ def test_calistir_dusen_adimdan_sonra_surer_ve_1_doner(tmp_path, monkeypatch, ca
     assert "GPU 6 saat boşalmadı" in cikti and "sorunlu adım: üretim" in cikti
 
 
-def test_hazirlanacak_mi():
+def test_hazirlanacak_mi(tmp_path):
     from yanki.cli import _hazirlanacak_mi
 
     d = durum.Durum("a", "A", "B")
     assert _hazirlanacak_mi(None, False) and _hazirlanacak_mi(d, False)
     d.gec("hata", "söz bulunamadı")
-    assert _hazirlanacak_mi(d, False)  # hazırlık hatası: Scryne dosya bırakmış olabilir
+    # hazırlık hatası yeniden denenir, ama gündüz görevi her 30 dk'da bir aynı istekleri atmasın
+    assert not _hazirlanacak_mi(d, False, tmp_path)
+    (tmp_path / "sozler").mkdir()
+    (tmp_path / "sozler" / "a.txt").write_text("söz", encoding="utf-8")
+    d.gecmis[-1]["zaman"] = "2026-01-01T00:00:00"
+    assert _hazirlanacak_mi(d, False)  # süre doldu
+    d.gecmis[-1]["zaman"] = datetime.now().isoformat(timespec="seconds")
+    import os
+    os.utime(tmp_path / "sozler" / "a.txt", (time.time() + 5, time.time() + 5))
+    assert _hazirlanacak_mi(d, False, tmp_path)  # Scryne söz dosyasını bıraktı: hemen
     d.analiz = {"stil": "s"}
     assert not _hazirlanacak_mi(d, False)  # üretim hatası: yeniden indirmek çözmez
     for asama in ("onaylandi", "paketlendi", "yuklendi", "yayinda", "onarim"):

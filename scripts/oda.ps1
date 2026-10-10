@@ -12,6 +12,8 @@ if (-not $uv) { $uv = Join-Path $env:USERPROFILE ".local\bin\uv.exe" }
 $gunluk = Join-Path $kok "calisma\gunluk"
 New-Item -ItemType Directory -Force $gunluk | Out-Null
 $log = Join-Path $gunluk "oda.log"
+# günlük sınırsız büyümesin (2026-10-10: 227 KB, çoğu izleme satırı): 5 MB'ı geçince .1'e döner
+if ((Test-Path $log) -and (Get-Item $log).Length -gt 5MB) { Move-Item $log "$log.1" -Force }
 $utf8 = New-Object System.Text.UTF8Encoding $false
 [Console]::OutputEncoding = $utf8
 function Yaz($m) { [IO.File]::AppendAllText($log, "$(Get-Date -Format s) $m`r`n", $utf8) }

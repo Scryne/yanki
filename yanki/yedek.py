@@ -26,6 +26,7 @@ DESENLER = (
     "calisma/*/paket/metadata.json",
     "calisma/*/paket/YUKLE.md",
     "calisma/kesif/*.json",
+    "calisma/olaylar.jsonl",  # bildirimlerin tekrar anahtarları: geri yüklemede eski olaylar yeniden bildirilmesin
     "girdi/liste.toml",
     "girdi/sozler/*.txt",
     "config/*.toml",

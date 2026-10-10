@@ -23,6 +23,7 @@ Kısa 429'da (≤ 10 sn) bir kez beklenip tekrar denenir.
 
 import base64
 import hashlib
+import http.client
 import json
 import os
 import secrets
@@ -136,7 +137,7 @@ class Spotify:
         except urllib.error.HTTPError as h:
             sayac.say("Spotify", h.code in (400, 403, 404))  # 429 ve 5xx servis sorunu
             return h.code, dict(h.headers or {}), h.read() or b""
-        except (urllib.error.URLError, TimeoutError, ConnectionError) as e:
+        except (urllib.error.URLError, TimeoutError, ConnectionError, http.client.HTTPException) as e:
             sayac.say("Spotify", False)
             # ağ kesintisi keşfi/takibi düşürmesin: çağıranlar SpotifyHatasi'nı zaten yakalıyor
             raise SpotifyHatasi(f"Spotify'a ulaşılamadı: {getattr(e, 'reason', e)}") from e

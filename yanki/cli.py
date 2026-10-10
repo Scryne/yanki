@@ -30,14 +30,27 @@ def _durum(_: argparse.Namespace) -> int:
 YENIDEN_HAZIRLANIR = ("yeni", "hazir", "analiz", "uretildi", "hata")
 
 
-def _hazirlanacak_mi(d: durum.Durum | None, yeniden: bool) -> bool:
+HAZIRLIK_TEKRAR_SAAT = 4  # hazırlıkta düşen şarkı en erken bu kadar sonra yeniden denenir
+
+
+def _hazirlanacak_mi(d: durum.Durum | None, yeniden: bool, girdi: Path | None = None) -> bool:
     if d is None:
         return True
     if yeniden:
         return d.asama in YENIDEN_HAZIRLANIR
-    # hazırlıkta düşen şarkı (söz/kaynak yok) her koşuda yeniden denenir: Scryne dosyayı girdi/'ye bırakmış olabilir.
     # Analizden sonra düşen şarkıyı (kapı, motor) yeniden indirmek çözmez: stil değişikliği ya da `yanki yeniden`.
-    return d.asama == "yeni" or (d.asama == "hata" and not d.analiz)
+    if d.asama != "hata" or d.analiz:
+        return d.asama == "yeni"
+    # Hazırlıkta düşen şarkı (söz/kaynak yok) yeniden denenir, ama gündüz görevi her 30 dk'da bir aynı YouTube/LRCLIB
+    # isteklerini atmasın: son denemeden HAZIRLIK_TEKRAR_SAAT sonra. Scryne girdi/'ye söz ya da ses bıraktıysa hemen.
+    from datetime import datetime, timedelta
+
+    son = datetime.fromisoformat(d.gecmis[-1]["zaman"]) if d.gecmis else datetime.min
+    if girdi is not None:
+        elle = [*girdi.glob(f"sozler/{d.kimlik}.txt"), *girdi.glob(f"kaynak/{d.kimlik}.*")]
+        if any(datetime.fromtimestamp(f.stat().st_mtime) > son for f in elle):
+            return True
+    return datetime.now() - son >= timedelta(hours=HAZIRLIK_TEKRAR_SAAT)
 
 
 def _hazirla(args: argparse.Namespace) -> int:
@@ -49,7 +62,7 @@ def _hazirla(args: argparse.Namespace) -> int:
         return 0
     for s in sarkilar:
         mevcut = durum.oku(calisma, s.kimlik)
-        if not _hazirlanacak_mi(mevcut, args.yeniden):
+        if not _hazirlanacak_mi(mevcut, args.yeniden, girdi):
             if args.yeniden and mevcut:
                 print(f"atlandı ({mevcut.asama}): {s.sanatci} — {s.ad}; onaylı şarkıya yeni aday: `yanki yeniden`")
             continue
@@ -234,7 +247,7 @@ def _spotify_baglan(_: argparse.Namespace) -> int:
 def _kesif(args: argparse.Namespace) -> int:
     from collections import Counter
 
-    from yanki import katalog, kesif, spotify
+    from yanki import ag, katalog, kesif, spotify
 
     a = ayarlar.yukle()
     calisma = a.kok / "calisma"
@@ -339,6 +352,17 @@ def _kesif(args: argparse.Namespace) -> int:
         yargic.kapat()
     if olculecek:
         print(f"ücretsiz ölçüm: {len(olculecek)} aday (YouTube, Jev, LRCLIB)")
+    # tür (Deezer, ücretsiz): hattın yapamadığı türdeki aday Spotify'a sorulmaz, kendiliğinden listeye girmez.
+    # Ölçümü taze ama türüne hiç bakılmamış eski adaylar da burada tamamlanır.
+    turu_yok = [x for x in tekil if x.turler is None and x.sanatci_uyusuyor is True and x.soz_var is True]
+    for x in turu_yok:
+        try:
+            x.turler = katalog.sanatci_turleri(x.sanatci)
+        except (OSError, katalog.DeezerHatasi, ag.Bulunamadi) as e:
+            print(f"  Deezer türü alınamadı ({x.sanatci}): {e}")
+    if uymayan := [x for x in turu_yok if x.uygun is False]:
+        print(f"tür uymuyor ({len(uymayan)}): " + ", ".join(f"{x.sanatci} — {x.ad} [{'; '.join(x.turler)}]"
+                                                           for x in uymayan[:5]))
     sorulacak = [x for x in tekil if kesif.spotifya_sorulur(x) and not kesif.taze(x.kontrol)]
     if dogrula and sorulacak:
         print(f"Spotify doğrulaması: {len(sorulacak)}/{len(tekil)} aday ücretsiz elemeleri geçti")
@@ -706,10 +730,16 @@ def _dagitim_durum(args: argparse.Namespace) -> int:
     sonuc = d.yokla(a.kok / "calisma", _bildirici(a.kok / "calisma"))
     from yanki import tunearo
 
-    if d.ad == "tunearo" and (profil := tunearo.profil_bagla(
-            a.kok / "calisma", d.api, paket.yayin_ayarlari(a.kok / "config" / "yayin.toml").sanatci_adi,
-            _bildirici(a.kok / "calisma"))):
-        print(f"Spotify profili bağlandı: {profil}")
+    if d.ad == "tunearo":
+        sanatci_adi = paket.yayin_ayarlari(a.kok / "config" / "yayin.toml").sanatci_adi
+        bildir = _bildirici(a.kok / "calisma")
+        if profil := tunearo.profil_bagla(a.kok / "calisma", d.api, sanatci_adi, bildir):
+            print(f"Spotify profili bağlandı: {profil}")
+        try:  # Apple bağlama en iyi çaba: iTunes'a ulaşılamazsa sonraki gece
+            if apple := tunearo.apple_bagla(a.kok / "calisma", d.api, sanatci_adi, bildir=bildir):
+                print(f"Apple Music profili bağlandı: {apple}")
+        except (OSError, tunearo.TunearoHatasi) as e:
+            print(f"  Apple Music profili bağlanamadı: {e}")
     if not sonuc:
         print(f"{d.ad}: izlenen yükleme yok")
     for s, yeni, eski in sonuc:
@@ -751,9 +781,71 @@ def _geri_cek(args: argparse.Namespace) -> int:
     return kod
 
 
+def _oac(args: argparse.Namespace) -> int:
+    """YouTube resmi sanatçı kanalı (OAC) talebi Tunearo'ya (en az 2 canlı yayından sonra)."""
+    from yanki import tunearo
+
+    a = ayarlar.yukle()
+    try:
+        cevap = tunearo.oac_iste(tunearo.Istemci.kokten(a.kok),
+                                 paket.yayin_ayarlari(a.kok / "config" / "yayin.toml").sanatci_adi, args.ana, args.konu)
+    except (ValueError, RuntimeError) as e:  # adres, sanatçı yok, Tunearo 422 (2 canlı yayın yok) / 409
+        print(f"✗ {e}")
+        return 1
+    talep = cevap.get("oac_request") or cevap
+    print(f"OAC talebi: {talep.get('status')} (oluşturuldu {str(talep.get('created_at'))[:10]}); Tunearo ekibi "
+          "onaylayınca YouTube'daki konu kanalı resmi kanalda birleşir")
+    return 0
+
+
+YOKLAMA_ARALIK_SAAT = 3  # gündüz Tunearo durum yoklaması en sık bu kadar saatte bir
+
+
+def _seyrek_yokla(kok: Path, simdi=None) -> None:
+    """API'li dağıtımcıdaki yayınların durumunu gündüz de yoklar (yayın başına bir istek, en sık
+    YOKLAMA_ARALIK_SAAT'te bir): red ya da kabul gece koşusunu beklemeden görülür ve bildirilir; geri çekilmek üzere
+    işaretli yayın incelemeden çıkınca hemen kuyruğa döner. Yalnız değişiklik yazılır (gündüz günlüğü kısa kalsın)."""
+    from datetime import datetime, timedelta
+
+    from yanki import dagitim, takip
+
+    calisma = kok / "calisma"
+    simdi = simdi or datetime.now()
+    isaret = calisma / ".dagitim_yoklama"
+    try:
+        son = datetime.fromtimestamp(isaret.stat().st_mtime)
+    except OSError:
+        son = datetime.min
+    if simdi - son < timedelta(hours=YOKLAMA_ARALIK_SAAT):
+        return
+    yuklu = {(takip.yukleme_bilgisi(calisma, d.kimlik) or {}).get("dagitimci") for d in durum.hepsi(calisma)
+             if d.asama in ("yuklendi", "yayinda")}
+    if not yuklu:
+        return
+    try:
+        ad = paket.yayin_ayarlari(kok / "config" / "yayin.toml").dagitimci
+        d = dagitim.sec(ad, kok)
+    except (OSError, ValueError, KeyError) as e:
+        print(f"dağıtım yoklaması yapılamadı: {e}")
+        return
+    if ad not in yuklu or not d.otomatik:
+        return
+    isaret.parent.mkdir(parents=True, exist_ok=True)
+    isaret.touch()
+    try:
+        sonuc = d.yokla(calisma, _bildirici(calisma))
+    except Exception as e:  # noqa: BLE001 — anahtar yok, ağ: gündüz üretimini etkilemez
+        print(f"dağıtım yoklaması yapılamadı: {type(e).__name__}: {e}")
+        return
+    for x, yeni, eski in sonuc:
+        if yeni != eski:
+            print(f"dağıtım: {x.sanatci} — {x.ad}: {eski} → {yeni}")
+
+
 def _gunduz(args: argparse.Namespace) -> int:
     """Gündüz boşta üretim (`\\Yanki\\Gunduz` görevi, her 30 dk): koşullar uygunsa kuyruktan bir şarkı üretir.
-    Koşul tutmazsa tek satır nedenle çıkar (görev günde ~34 kez çalışır, günlük kısa kalsın)."""
+    Koşul tutmazsa tek satır nedenle çıkar (görev günde ~34 kez çalışır, günlük kısa kalsın). Üretim koşullarından
+    bağımsız olarak dağıtım durumu seyrek yoklanır (`_seyrek_yokla`)."""
     from datetime import datetime
 
     from yanki import saglik, sistem
@@ -762,6 +854,7 @@ def _gunduz(args: argparse.Namespace) -> int:
     calisma = a.kok / "calisma"
     op = ayarlar.operasyon_oku(a.kok)
     simdi = datetime.now()
+    _seyrek_yokla(a.kok, simdi)
     if not op.gunduz_acik:
         return print("gündüz üretimi kapalı (config/operasyon.toml)") or 0
     if not op.gunduz_saatinde(simdi.hour) and not args.zorla:
@@ -939,6 +1032,10 @@ def main(argv: list[str] | None = None) -> int:
     gc.add_argument("--kaldirildi", action="store_true",
                     help="elle dağıtımcıda (RouteNote) yayın panelden kaldırıldı, kaydet")
     gc.set_defaults(fn=_geri_cek)
+    oc = alt.add_parser("oac", help="YouTube resmi sanatçı kanalı (OAC) talebi Tunearo'ya")
+    oc.add_argument("--ana", required=True, help="sanatçının YouTube kanalı adresi")
+    oc.add_argument("--konu", required=True, help="YouTube'un açtığı '<Sanatçı> - Topic' kanalının adresi")
+    oc.set_defaults(fn=_oac)
     gz = alt.add_parser("gunduz", help="boştayken kuyruktan bir şarkı üret (\\Yanki\\Gunduz görevi çalıştırır)")
     gz.add_argument("--zorla", action="store_true", help="saat ve boşta kalma koşulunu atla (pil ve GPU yine bakılır)")
     gz.add_argument("--liste", help="varsayılan girdi/liste.toml")

@@ -126,3 +126,46 @@ ad = "MAMACITA"
 [[sarki]]  # YouTube 678,761 izlenme, rakip cover 4; playlist:6Rp2bOX82WJkjktyU9pj73
 sanatci = "Vinnie Vincent Invasion"
 ad = "Love Kills"
+
+# 2026-10-10: sürekli yayın için kuyruk beslemesi (Scryne: "sürekli olarak şarkı atalım", seçim Claude). Keşifteki
+# adayların hepsi Orvane'in çizgisi dışında çıktı (rap, metal, Brezilya müziği); Faz 7 ölçütüyle: İngilizce, tek solo
+# vokal, piyano/akustik balad, çok dinlenen. Stil/BPM/ton otomatik (MusicBrainz), vokal cinsiyeti elle.
+[[sarki]]
+sanatci = "Bruno Mars"
+ad = "When I Was Your Man"
+vokal = "erkek"
+
+[[sarki]]
+sanatci = "Passenger"
+ad = "Let Her Go"
+vokal = "erkek"
+
+[[sarki]]
+sanatci = "Lewis Capaldi"
+ad = "Before You Go"
+vokal = "erkek"
+
+[[sarki]]
+sanatci = "Christina Perri"
+ad = "Jar of Hearts"
+vokal = "kadin"
+
+[[sarki]]
+sanatci = "Snow Patrol"
+ad = "Chasing Cars"
+vokal = "erkek"
+
+[[sarki]]
+sanatci = "The Fray"
+ad = "How to Save a Life"
+vokal = "erkek"
+
+[[sarki]]
+sanatci = "James Blunt"
+ad = "You're Beautiful"
+vokal = "erkek"
+
+[[sarki]]
+sanatci = "Adele"
+ad = "Hello"
+vokal = "kadin"

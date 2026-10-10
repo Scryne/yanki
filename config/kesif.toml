@@ -3,9 +3,11 @@
 # Global çalışılıyor (Scryne, 2026-10-09): kapalılık ve arama sırası tek ülkede değil, aşağıdaki pazarlarda ölçülür.
 
 [kesif]
-# İlki ana pazar (aramalar orada; en geniş katalog). Bir şarkı hepsinde kapalıysa "kaldirildi", bazılarında "kismi";
-# puan kapalı pazar oranıyla çarpılır. Her ek pazar, aday başına bir Spotify isteği.
-pazarlar = ["US", "GB", "DE", "FR", "BR", "MX", "JP", "TR"]
+# İlki ana pazar (aramalar orada). Bir şarkı hepsinde kapalıysa "kaldirildi", bazılarında "kismi"; puan kapalı pazar
+# oranıyla çarpılır. Her ek pazar, aday başına bir Spotify isteği. Yalnız yayın yaptığımız pazarlar (2026-10-10):
+# US ve MX'te yayın yok (mekanik lisans, config/yayin.toml → [tunearo]); yalnız oralarda kapalı bir şarkı Orvane için
+# boşluk değil ama önce puan alıyordu.
+pazarlar = ["GB", "DE", "FR", "BR", "JP", "TR"]
 # Web API ile taranacak playlist'ler: yalnız Scryne'ın kendi ya da ortak olduğu playlist'ler (başkasınınki 403).
 # Hem çalınamayan parçaları verir hem de sanatçıları katalog farkına tohum olur. STILLMORE CSV'leri: girdi/kesif/.
 playlistler = [
@@ -28,9 +30,12 @@ playlistler = [
   "5tD40BIv9CShuFmAad8Tcw",
 ]
 # Havuz büyütme: Web API playlist araması (sorgu başı 1 istek); en az `min_parca` parçalı sonuçlar havuza girer
+# Orvane'in çizgisi (piyano/akustik balad, pop, piyano rock; İngilizce): sorgular o türde playlist'leri getirsin.
+# Önce "brazilian funk", "rap hits", "phonk", "latino" vardı; adayların hepsi hattın yapamadığı türden çıktı
+# (2026-10-10: 8 adayın 8'i rap/metal/Brezilya müziği).
 arama = [
-  "throwback hits", "2000s hits", "2010s hits", "old songs", "tiktok viral 2020", "brazilian funk", "rap hits 2017",
-  "emo 2000s", "sad songs 2019", "türkçe pop 2000ler", "latino hits 2015", "phonk",
+  "sad songs", "piano ballads", "acoustic love songs", "2000s ballads", "2010s hits", "throwback hits",
+  "breakup songs", "emotional songs", "indie folk", "old love songs", "emo 2000s", "singer songwriter",
 ]
 arama_gece = 2
 min_parca = 100
@@ -48,9 +53,9 @@ tohumlar = [
 ]
 # Playlist'lerde en sık geçen kaç sanatçı tohum olsun (Scryne'ın zevki)
 playlist_sanatcilari = 30
-# Deezer tür listeleri (0 hepsi, 132 pop, 116 rap, 152 rock, 165 R&B, 85 alternatif). Deezer listeyi IP'nin
-# ülkesine göre veriyor (bu ağda Türkiye); global genişleme benzer sanatçılardan gelir.
-liste_turleri = [0, 132, 116, 152, 165, 85]
+# Deezer tür listeleri (0 hepsi, 132 pop, 152 rock, 165 R&B, 85 alternatif; 116 rap çıkarıldı: hattın türü değil).
+# Deezer listeyi IP'nin ülkesine göre veriyor (bu ağda Türkiye); global genişleme benzer sanatçılardan gelir.
+liste_turleri = [0, 132, 152, 165, 85]
 liste_adet = 25
 benzer_adet = 5
 parca_adet = 15

@@ -12,8 +12,10 @@ aramada ilk sıraya çıkar. Fikrin kaynağı STILLMORE FINDER'ın playlist "kal
 3. **Talep:** YouTube'daki en çok izlenen orijinal yüklemenin izlenme sayısı (anahtarsız, hat zaten yt-dlp kullanıyor).
    STILLMORE CSV'sinde Spotify dinlenme sayısı varsa o da tutulur.
 
-Sıra: izlenme / (1 + rakip cover sayısı). Formül kasıtlı olarak basit; ilk yayınların arama sırası ölçüldükçe
-(`yanki takip`) düzeltilir. Sonuç `calisma/kesif/adaylar.json`; listeye ekleme açık bir adım (`--ekle N`).
+Sıra: izlenme / (1 + rakip cover sayısı); hattın yapamadığı türdeki aday (rap, metal, Brezilya müziği…; Deezer
+sanatçı türlerinden, `onay.DENENMEMIS`) puan almaz, dinleme odasından elle eklenebilir. Formül kasıtlı olarak
+basit; ilk yayınların arama sırası ölçüldükçe (`yanki takip`) düzeltilir. Sonuç `calisma/kesif/adaylar.json`;
+listeye ekleme açık bir adım (`--ekle N`).
 """
 
 import csv
@@ -71,6 +73,8 @@ class Aday:
     geri_geldi: bool | None = None  # None: doğrulanmadı
     geri_gelen: list = field(default_factory=list)  # [{"id", "sanatci", "ad", "neden": "isrc"|"ad"}]
     rakip_cover: int | None = None
+    # sanatçının Deezer türleri ("rap, hip hop"); hattın yapamadığı tür kendiliğinden listeye girmez (`uygun`)
+    turler: list | None = None
     kontrol: str | None = None  # Spotify doğrulamasının zamanı
     olcum: str | None = None  # ücretsiz ölçümlerin (YouTube, LRCLIB) zamanı
     ilk_gorulme: str | None = None
@@ -85,9 +89,18 @@ class Aday:
         return bool(DUZENLEME.search(self.ad))
 
     @property
+    def uygun(self) -> bool | None:
+        """Tür hattın tarifi dinlenmiş türlerinden mi (balad, pop, piyano rock…). None: tür bilinmiyor."""
+        if self.turler is None:
+            return None
+        from yanki.onay import DENENMEMIS
+
+        return not DENENMEMIS.search(" ".join(self.turler))
+
+    @property
     def puan(self) -> float:
         if (self.geri_geldi or not self.youtube_izlenme or self.sanatci_uyusuyor is not True or self.duzenleme
-                or self.soz_var is False or (self.sure_sn or 0) > SURE_SINIRI_SN):
+                or self.soz_var is False or (self.sure_sn or 0) > SURE_SINIRI_SN or self.uygun is False):
             return 0.0
         # global çalışılıyor (Scryne, 2026-10-09): boşluk ne kadar çok pazarda açıksa o kadar değerli
         kapsam = len(self.kapali_pazarlar) / len(self.bakilan_pazarlar) if self.bakilan_pazarlar else 1.0
@@ -103,7 +116,7 @@ class Aday:
 def spotifya_sorulur(a: Aday) -> bool:
     """Ücretsiz elemeleri geçti mi: talep ölçüldü, sanatçı eşleşti, sözlü ve süresi uygun."""
     return (not a.duzenleme and bool(a.youtube_izlenme) and a.sanatci_uyusuyor is True and a.soz_var is True
-            and (a.sure_sn or 0) <= SURE_SINIRI_SN)
+            and (a.sure_sn or 0) <= SURE_SINIRI_SN and a.uygun is not False)
 
 
 def hal(a: Aday) -> str:
@@ -124,6 +137,8 @@ def hal(a: Aday) -> str:
         return "söz yok"
     if (a.sure_sn or 0) > SURE_SINIRI_SN:
         return "çok uzun"
+    if a.uygun is False:
+        return "tür uymuyor"
     if a.geri_geldi is None:
         return "doğrulanmadı"
     return {"kaldirildi": "kaldırılmış", "kismi": "kısmen kapalı", "spotify_yok": "Spotify'da yok"}.get(a.neden,
@@ -380,7 +395,7 @@ KIMLIK_ALANLARI = ("spotify_dinlenme", "isrc", "spotify_id", "album", "cikis")
 # Aynı adımda birlikte ölçülen alanlar grup olarak taşınır: taze ölçümde None da geçerli bir sonuçtur ("belirsiz"),
 # eski kaydın değeriyle doldurulmaz (2026-10-09: Jev "belirsiz" dediği aday eski regex "uymuyor"uyla eziliyordu).
 UCRETSIZ_ALANLAR = ("youtube_izlenme", "youtube_baslik", "youtube_id", "youtube_kanit", "sanatci_uyusuyor", "soz_var",
-                    "sure_sn", "ozgunluk", "olcum")
+                    "sure_sn", "ozgunluk", "olcum", "turler")
 SPOTIFY_ALANLARI = ("geri_geldi", "geri_gelen", "rakip_cover", "kontrol", "bakilan_pazarlar", "kapali_pazarlar")
 
 

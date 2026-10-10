@@ -27,7 +27,8 @@ class Plan:
 
 
 def yuklenme(d: durum.Durum) -> datetime | None:
-    for g in d.gecmis:
+    """Son yükleme: geri çekilip yeniden yüklenen şarkıda süre yeni yüklemeden sayılır."""
+    for g in reversed(d.gecmis):
         if g.get("asama") == "yuklendi":
             return datetime.fromisoformat(g["zaman"])
     return None

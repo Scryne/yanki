@@ -478,7 +478,9 @@ function kesifSatiri(x, guncelle) {
       el("span", { class: "rozet " + (iyi ? "ok" : "no") }, x.elendi ? "elendi" : x.hal),
       el("span", { title: "YouTube'daki orijinal yüklemenin izlenmesi" }, "YouTube ", el("b", {}, kisaSayi(x.youtube_izlenme))),
       el("span", { title: "Aynı adla Spotify'da çalınabilen başka parça sayısı" }, "rakip ", el("b", {}, x.rakip_cover ?? "—")),
-      el("span", { title: "Kapalı olduğu pazar / bakılan pazar" }, "pazar ", el("b", {}, pazar))),
+      el("span", { title: "Kapalı olduğu pazar / bakılan pazar" }, "pazar ", el("b", {}, pazar)),
+      x.turler?.length ? el("span", { title: "Sanatçının Deezer türleri; hattın denemediği türdeki aday kendiliğinden listeye girmez" },
+        "tür ", el("b", {}, x.turler[0])) : null),
     el("div", { class: "kayit-eylem" },
       el("a", { class: "dugme", href: dinle, target: "_blank", rel: "noopener" }, "Dinle"),
       // amber yalnız önerilende; boşluğu kapanmış (geri gelmiş) ya da düzenleme olan şarkı eklenemez
@@ -544,6 +546,7 @@ function yayinSatiri(s) {
     el("div", { class: "olculer" },
       el("span", { class: "rozet " + hal[1] }, hal[0]),
       el("span", {}, DAGITIMCI[s.dagitimci] || s.dagitimci || "—", dd ? [" · ", el("b", {}, DAGITIM[dd] || dd)] : null),
+      s.geri_cek ? el("span", { class: "rozet", title: "Geri çekilmesi istendi; inceleme bitince hat kaldırır ve şarkıyı yeniden sıraya alır" }, "geri çekilecek") : null,
       el("span", {}, "çıkış ", el("b", {}, tarih(s.yayin_tarihi))),
       el("span", {}, "son bakış ", el("b", {}, tarih(son?.zaman))),
       siralar.length ? el("span", { class: "siralar", title: `Şarkının adı arandığında ilk ${son.arama_limiti} sonuçtaki sıramız` },
@@ -621,7 +624,7 @@ function dagitimBolumu(liste) {
   return el("section", { class: "bolum", "aria-label": "Dağıtımda" },
     el("h2", { class: "bolum-baslik" }, "Dağıtımda", el("span", { class: "g-sayi" }, String(liste.length))),
     el("ul", { class: "kayitlar" }, ...liste.map((s) => {
-      const dd = s.dagitim_durumu, hal = s.canli ? ["Spotify'da", "ok"] : dd === "rejected" ? ["reddedildi", "no"]
+      const dd = s.dagitim_durumu, hal = s.geri_cek ? ["geri çekilecek", "gumus"] : s.canli ? ["Spotify'da", "ok"] : dd === "rejected" ? ["reddedildi", "no"]
         : dd === "approved" || dd === "live" ? [DAGITIM[dd], "ok"] : [DAGITIM[dd] || "incelemede", "gumus"];
       return el("li", { class: "kayit kapakli" },
         kapakImg(s.kapak, "kapak-kucuk kapak-orta"),
@@ -665,7 +668,7 @@ function ayarPaneli(a, kota) {
   return el("section", { class: "cam yan-panel", "aria-label": "Otomasyon" }, el("h2", {}, "Otomasyon"),
     el("dl", { class: "ayar-listesi" },
       ...satir("Dağıtımcı", DAGITIMCI[a.dagitimci] || a.dagitimci || "—"),
-      ...satir("Takvim", a.takvim_acik ? `açık · haftada ${a.haftada}` : "kapalı"),
+      ...satir("Takvim", !a.takvim_acik ? "kapalı" : a.haftada >= 7 ? "açık · her gün" : `açık · haftada ${a.haftada}`),
       ...satir("Otomatik onay", a.oto_onay ? `${a.oto_onay_saat} sa` : "kapalı"),
       ...satir("Kapak", a.kapak === "pinterest" ? "Pinterest" : "üretilen"),
       ...satir("Spotify", !kota?.bagli ? "bağlı değil" : kota.kilit_sn ? `kilitli · ${saatYazi(kota.kilit_sn)}` : `${kota.bugun}/${kota.tavan} istek`)));

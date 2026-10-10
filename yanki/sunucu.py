@@ -413,7 +413,8 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None) -> FastA
                              "yayin_tarihi": y.get("yayin_tarihi"), "dagitimci": y.get("dagitimci"),
                              "dagitim_durumu": y.get("dagitim_durumu"), "upc": y.get("upc"),
                              "isrc": y.get("isrc"), "son": (d.yayin or {}).get("son"),
-                             "gecmis": (d.yayin or {}).get("gecmis", []), "kapak": _kapak_url(calisma, d.kimlik)})
+                             "gecmis": (d.yayin or {}).get("gecmis", []), "kapak": _kapak_url(calisma, d.kimlik),
+                             "geri_cek": bool(y.get("geri_cek"))})
         sarkilar.sort(key=lambda s: s["yayin_tarihi"] or "")
         return {"sarkilar": sarkilar, "kota": _kota(a.kok), "profiller": sorted(takip.profil_kimlikleri(calisma)),
                 "takvim": _takvim(a.kok, calisma), "olaylar": olay.oku(calisma, son=8)[::-1]}
@@ -435,7 +436,8 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None) -> FastA
                 y = takip.yukleme_bilgisi(calisma, d.kimlik) or {}
                 dagitimda.append({**_ozet(d, calisma), "dagitimci": y.get("dagitimci"),
                                   "dagitim_durumu": y.get("dagitim_durumu"), "yayin_tarihi": y.get("yayin_tarihi"),
-                                  "canli": bool(((d.yayin or {}).get("son") or {}).get("canli"))})
+                                  "canli": bool(((d.yayin or {}).get("son") or {}).get("canli")),
+                                  "geri_cek": bool(y.get("geri_cek"))})
         dagitimda.sort(key=lambda x: x["yayin_tarihi"] or "")
         try:
             kesif_oneri = sum(x.puan > 0 and not x.elendi for x in kesif.oku(calisma).values())

@@ -22,7 +22,9 @@ yüklenen parçanın Spotify'da çıkıp çıkmadığını ve adı arandığınd
    `uv run yanki calistir` (aynı anda tek koşu, kilitli). Dinleme odası koşu sürerken de açık kalabilir: kararlar
    şarkı başına kilitle yazılır, gece koşusu onları ezmez.
    **Gündüz:** `\Yanki\Gunduz` her 30 dk bakar (08:00–01:00); 20 dk klavye/fareye dokunulmadıysa, prizdeyse ve GPU
-   boşsa kuyruktan bir şarkı üretir (önce bekleyen onarımlar), bitince "dinlemeye hazır" bildirimi. Ayar:
+   boşsa kuyruktan bir şarkı üretir (önce bekleyen onarımlar), bitince "dinlemeye hazır" bildirimi. Tunearo'daki
+   yayınların durumunu da 3 saatte bir yoklar (red/kabul geceyi beklemez). Hazırlıkta düşen şarkı (söz/kaynak yok) en
+   erken 4 saat sonra yeniden denenir; `girdi/`'ye söz ya da ses bırakılırsa hemen. Ayar:
    `config/operasyon.toml` → `[gunduz]`, günlük: `calisma/gunluk/gunduz.log`.
 3. Dinleme odası oturum açılınca kendiliğinden başlar (`\Yanki\Oda`, `scripts/oda.ps1`): http://127.0.0.1:8765/,
    özet Windows bildirimiyle gelir, bildirime tıklayınca oda açılır. Elle: `yanki dinle` ya da Kokpit → Yanki → Çalıştır. Orijinalle karşılaştır; bozuk yer varsa dalga üzerinde sürükleyip
@@ -58,7 +60,16 @@ komut Spotify'a istek atmaz; günlük tavan 400 istek. Dinleme odası Spotify'a 
 Bildirimler `calisma/olaylar.jsonl`'a da yazılır (aynı olay bir kez). Gece koşusu sonunda dış servislerin (YouTube,
 LRCLIB, MusicBrainz, Deezer, Spotify) istek/hata sayısı günlüğe, günlük toplamı `calisma/gunluk/servisler.json`'a.
 
-Diğer komutlar: `yanki durum` (motor, model, araçlar, GPU, şarkıların aşaması), `yanki ozet` (tek satır),
+**Sanatçı hesabı:** tek dağıtımcı Tunearo, tek Orvane kaydı. Spotify ve Apple Music profilleri ilk canlı yayından
+sonra Tunearo'daki sanatçıya kendiliğinden bağlanır (Spotify takipten, Apple yayının UPC'siyle); profil bölünürse
+bildirilir. İlk parça Spotify'da görülünce "profili sahiplen" (Spotify for Artists), iki canlı yayından sonra
+"YouTube resmi sanatçı kanalı" bildirimi gelir; kanalı açınca `yanki oac --ana <kanal> --konu <Topic kanalı>`.
+
+**Tür çizgisi:** keşif hattın tarifi dinlenmiş türlerinde kalır (balad, pop, piyano/akustik, rock). Rap, metal,
+elektronik, Latin/Brezilya vb. aday Deezer türünden tanınır, puan almaz, kendiliğinden listeye girmez (dinleme
+odasında "Yine de ekle"). Aynı kalıp otomatik onayı da sınırlar (`yanki/onay.py` → `DENENMEMIS`).
+
+Diğer komutlar: `yanki durum` (motor, model, araçlar, GPU, anahtarlar, disk, şarkıların aşaması), `yanki ozet` (tek satır),
 `yanki temizle [--uygula]` (yüklenmiş şarkıların ara sesleri; gece koşusu 14 günden eskileri kendisi siler),
 `yanki yedekle [--zorla]` (seçimler, yükleme bilgisi, keşif kaydı, liste, ayarlar; ses ve sır yok; gece haftada bir),
 `yanki hazirla [--yeniden]` (onaylı/yüklenmiş şarkılara dokunmaz), `yanki uret`,

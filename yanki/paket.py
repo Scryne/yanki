@@ -15,7 +15,7 @@ from pathlib import Path
 
 import numpy as np
 
-from yanki import durum, ses, sozler
+from yanki import dosya, durum, ses, sozler
 
 FONT_KALIN = Path("C:/Windows/Fonts/bahnschrift.ttf")
 KAPAK_BOYUT = 3000
@@ -452,9 +452,8 @@ def _paketle_bir(calisma: Path, d: durum.Durum, y: Yayin) -> durum.Durum:
     for eski_dosya in [*p.glob("*.flac"), *p.glob("*.wav"), *p.glob("*.jpg")]:  # noktalılar dahil (eski küçük resim)
         if eski_dosya not in (ses_yolu, kapak_yolu):
             eski_dosya.unlink()
-    (p / "metadata.json").write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
-    (p / "YUKLE.md").write_text(yukle_md(meta, y, {"ses": ses_yolu.name, "kapak": kapak_yolu.name}),
-                                encoding="utf-8")
+    dosya.json_yaz(p / "metadata.json", meta)  # atomik: yükleyici ve dinleme odası yarım dosya görmesin
+    dosya.yaz(p / "YUKLE.md", yukle_md(meta, y, {"ses": ses_yolu.name, "kapak": kapak_yolu.name}))
     with durum.guncelle(calisma, d.kimlik) as taze:
         # paketleme sürerken seçim değiştiyse (yeniden üretim, ret) paket eskidir: aşamaya dokunma
         if taze.asama == d.asama and taze.secilen == d.secilen:

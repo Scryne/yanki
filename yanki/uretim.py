@@ -41,7 +41,7 @@ def _satirlar(calisma: Path, d: durum.Durum, lrclib: Callable | None = None) -> 
         try:
             satirlar = (lrclib or sozler.lrclib)(d.sanatci, d.ad).satirlar
             yol.write_text(json.dumps(satirlar, ensure_ascii=False), encoding="utf-8")
-        except (ag.Bulunamadi, OSError):
+        except (ag.Bulunamadi, OSError, ValueError):
             pass
     return [tuple(x) for x in json.loads(yol.read_text(encoding="utf-8"))] if yol.exists() else []
 

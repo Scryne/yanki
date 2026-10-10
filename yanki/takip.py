@@ -157,9 +157,38 @@ def olaylar(d: durum.Durum, onceki: dict, son: dict, bugun: date | None = None) 
                       "panelinden bak", f"kayip:{d.kimlik}:{son['zaman'][:10]}"))
     tarih = son.get("yayin_tarihi")
     if not son["canli"] and tarih and bugun >= date.fromisoformat(tarih) + timedelta(days=GECIKME_GUN):
-        sonuc.append(("gecikme", f"yayın tarihi geçti: {d.ad}", f"{tarih} yayın tarihine rağmen Spotify'da yok: "
-                      "dağıtımcı panelinde red ya da gecikme olabilir. Reddedildiyse: yanki dagitim-red "
-                      f"{d.kimlik} --neden …", f"gecikme:{d.kimlik}:{tarih}"))
+        if son.get("dagitimci") == "tunearo":  # red API'den kendiliğinden gelir; burada yalnız gecikme
+            ne = (f"Tunearo durumu: {son.get('dagitim_durumu') or '?'}. İnceleme ya da mağazaya teslim uzamış "
+                  "olabilir; red gelirse gece yoklaması kendisi bildirir (elle: yanki dagitim-durum)")
+        else:
+            ne = (f"dağıtımcı panelinde red ya da gecikme olabilir. Reddedildiyse: yanki dagitim-red {d.kimlik} "
+                  "--neden …")
+        sonuc.append(("gecikme", f"yayın tarihi geçti: {d.ad}", f"{tarih} yayın tarihine rağmen Spotify'da yok: {ne}",
+                      f"gecikme:{d.kimlik}:{tarih}"))
+    return sonuc
+
+
+S4A = "https://artists.spotify.com/claim"
+
+
+def profil_olaylari(calisma: Path, sanatci_adi: str) -> list[tuple[str, str, str, str]]:
+    """Sanatçı hesabı adımları, bir kez: ilk parça Spotify'da görülünce profili sahiplenme (Spotify for Artists:
+    profil fotoğrafı, biyografi, pitch; giriş gerektirir, insanda); iki yayın canlıyken YouTube resmi sanatçı kanalı
+    (OAC: Tunearo en az 2 canlı yayın ve sanatçının kendi YouTube kanalını istiyor)."""
+    canli = [d for d in durum.hepsi(calisma) if ((d.yayin or {}).get("son") or {}).get("canli")]
+    sonuc = []
+    if canli:
+        profil = next((k for d in canli if (k := d.yayin["son"].get("sanatci_id"))), None)
+        adres = f"https://open.spotify.com/artist/{profil}" if profil else "Spotify'da sanatçı sayfası"
+        sonuc.append(("profil", f"{sanatci_adi} Spotify'da: profili sahiplen",
+                      f"{S4A} → Claim your profile → {adres}. Profil fotoğrafı yapay zekâyla üretilmiş gerçekçi bir "
+                      "insan olmasın (AI Persona etiketi önerilerden çıkarır): soyut görsel ya da logo.",
+                      "profil:spotify_for_artists"))
+    if len(canli) >= 2:
+        sonuc.append(("profil", "YouTube resmi sanatçı kanalı (OAC) açılabilir",
+                      f"{sanatci_adi}'in iki yayını canlı. YouTube'da {sanatci_adi} adıyla bir kanal aç (giriş "
+                      f"gerektirir), sonra: yanki oac --ana <kanal adresi> --konu <\"{sanatci_adi} - Topic\" "
+                      "kanalının adresi>. Konu kanalı ve yayınlar resmi kanalda birleşir.", "profil:oac"))
     return sonuc
 
 
@@ -179,7 +208,8 @@ def takip_et(sp, calisma: Path, sanatci_adi: str, pazarlar, kimlikler: list[str]
                                   "ekle"]))
             continue
         son = kontrol_et(sp, d, y["isrc"].upper(), sanatci_adi, pazarlar, arama_limiti)
-        son["yayin_tarihi"] = y.get("yayin_tarihi")
+        son.update(yayin_tarihi=y.get("yayin_tarihi"), dagitimci=y.get("dagitimci"),
+                   dagitim_durumu=y.get("dagitim_durumu"))
         with durum.guncelle(calisma, d.kimlik) as taze:
             onceki = dict((taze.yayin or {}).get("son") or {})
             uyarilar = kaydet(taze, son)
@@ -187,6 +217,9 @@ def takip_et(sp, calisma: Path, sanatci_adi: str, pazarlar, kimlikler: list[str]
             for olay in olaylar(taze, onceki, son):
                 bildir(*olay)
         sonuc.append((taze, uyarilar))
+    if bildir:
+        for olay in profil_olaylari(calisma, sanatci_adi):
+            bildir(*olay)
     return sonuc
 
 

@@ -149,7 +149,7 @@ def bul(sanatci: str, ad: str, dosya: Path, json_al=ag.json_al) -> Soz:
             onlarin = {_sade(m) for _, m in uzak.satirlar if m.strip()}
             if benim and onlarin and len(benim & onlarin) / len(benim) >= 0.8:
                 satirlar = uzak.satirlar
-        except (ag.Bulunamadi, OSError):
+        except (ag.Bulunamadi, OSError, ValueError, KeyError):  # LRCLIB yalnız yardımcı: düşerse söz dosyası yeter
             pass
         return Soz(metin, "dosya", sure, satirlar)
     return lrclib(sanatci, ad, json_al)
