@@ -662,7 +662,7 @@ class _SahtePod:
     def __exit__(self, *_):
         self.kapandi = True
 
-    def komut(self, betik, zaman_asimi=3600):
+    def komut(self, betik, zaman_asimi=3600, tekrar=True):
         if "motor_sonuc.json" in betik and "cat " in betik:
             isler = json.loads(self.is_json)["isler"]
             sonuc = [{"id": i["id"], "basari": True, "cikti": f"{i['cikti_klasor']}/x.flac", "sure_sn": 20.0,
@@ -827,3 +827,41 @@ def test_evde_uretim_kapaliyken_sunucu_yoksa_uretim_yok(tmp_path, monkeypatch):
     assert calistir is None and uzak_mi is False
     a2 = _uzak_ayar(tmp_path, yerel_yedek=True)
     assert uzak.motor_sec(a2, kayit=lambda _m: None, stok=lambda k, g: None, bakiye=lambda _k: 10.0)[0] is not None
+
+
+def test_pod_aktarimi_baglanti_koparsa_yeniden_dener(tmp_path, monkeypatch):
+    import subprocess
+
+    from yanki import runpod
+
+    p = runpod.Pod.__new__(runpod.Pod)
+    p.gizli, p.klasor, p.port, p.ip = tmp_path / "k", tmp_path, 22, "1.2.3.4"
+    kodlar = [255, 255, 0]
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: subprocess.CompletedProcess(a, kodlar.pop(0), "", "kopma"))
+    monkeypatch.setattr(runpod.time, "sleep", lambda _: None)
+    p.gonder(tmp_path / "kaynak.wav", "/root/is/girdi/6.wav")  # 2 kopma, 3. denemede geçer
+    assert kodlar == []
+    kodlar[:] = [255]
+    with pytest.raises(runpod.RunPodHatasi):
+        p.komut("nohup işçi &", tekrar=False)  # işçiyi başlatma tekrar gönderilmez
+    assert kodlar == []
+
+
+def test_uzak_kosu_duserse_maliyet_yine_kaydedilir(tmp_path, monkeypatch):
+    from yanki import motor, runpod, uzak
+
+    monkeypatch.setenv("RUNPOD_API_KEY", "x")
+
+    class DusenPod(_SahtePod):
+        def gonder(self, yerel, uzak_yol):
+            raise runpod.RunPodHatasi("gönderilemedi (kaynak.wav, 255)")
+
+    kaynak = tmp_path / "kaynak.wav"
+    kaynak.write_bytes(b"RIFF")
+    isler = [motor.Is(id="s|cover|1|1", gorev="cover", kaynak=str(kaynak), cikti_klasor=str(tmp_path / "c"),
+                      soz="söz", adim=100, tohum=42, guc=0.7)]
+    with pytest.raises(runpod.RunPodHatasi):
+        uzak.calistir(_uzak_ayar(tmp_path), isler, tmp_path / "_m", 900, pod_sinifi=DusenPod,
+                      kur=lambda p, c, m: "/r", commit="x", bakiye=lambda _k: 10.0, kapat=lambda *_: [])
+    kayit = json.loads(uzak.harcama_yolu(tmp_path).read_text(encoding="utf-8"))[-1]
+    assert kayit["usd"] == 0.05 and "255" in kayit["hata"]

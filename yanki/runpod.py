@@ -145,22 +145,39 @@ class Pod:
                 "-o", f"UserKnownHostsFile={self.klasor / 'known_hosts'}",
                 "-o", "LogLevel=ERROR", "-o", "ServerAliveInterval=30", "-o", "ConnectTimeout=20"]
 
-    def komut(self, betik: str, zaman_asimi: float = 3600) -> str:
-        r = subprocess.run(["ssh", *self._ssh(), "-p", str(self.port), f"root@{self.ip}", "bash -lc " +
-                            shlex.quote(betik)], capture_output=True, text=True, encoding="utf-8", errors="replace",
-                           timeout=zaman_asimi)
+    # SSH/scp 255: bağlantı koptu (2026-10-10: 8 şarkının ~400 MB kaynağı yüklenirken 7. dosyada koptu, bütün koşu
+    # düştü). Dosya aktarımı ve tekrarlanabilir komutlar birkaç kez yeniden denenir.
+    DENEME, BEKLEME_SN = 4, 10
+
+    def _tekrarla(self, arg: list[str], zaman_asimi: float, deneme: int) -> subprocess.CompletedProcess:
+        for i in range(deneme):
+            r = subprocess.run(arg, capture_output=True, text=True, encoding="utf-8", errors="replace",
+                               timeout=zaman_asimi)
+            if r.returncode != 255 or i == deneme - 1:
+                return r
+            time.sleep(self.BEKLEME_SN * (i + 1))
+        raise AssertionError("ulaşılmaz")
+
+    def komut(self, betik: str, zaman_asimi: float = 3600, tekrar: bool = True) -> str:
+        """`tekrar=False`: tekrarlanamayan komut (işçiyi başlatmak) bağlantı koparsa yeniden gönderilmez."""
+        r = self._tekrarla(["ssh", *self._ssh(), "-p", str(self.port), f"root@{self.ip}", "bash -lc " +
+                            shlex.quote(betik)], zaman_asimi, self.DENEME if tekrar else 1)
         if r.returncode != 0:
             raise RunPodHatasi(f"komut {r.returncode}: {(r.stderr or r.stdout)[-1500:]}")
         return r.stdout
 
     def gonder(self, yerel: Path, uzak: str, zaman_asimi: float = 1800) -> None:
-        subprocess.run(["scp", *self._ssh(), "-P", str(self.port), "-q", str(yerel), f"root@{self.ip}:{uzak}"],
-                       check=True, timeout=zaman_asimi)
+        r = self._tekrarla(["scp", *self._ssh(), "-P", str(self.port), "-q", str(yerel), f"root@{self.ip}:{uzak}"],
+                           zaman_asimi, self.DENEME)
+        if r.returncode != 0:
+            raise RunPodHatasi(f"gönderilemedi ({yerel.name}, {r.returncode}): {r.stderr[-500:]}")
 
     def al(self, uzak: str, yerel: Path, zaman_asimi: float = 1800) -> Path:
         yerel.parent.mkdir(parents=True, exist_ok=True)
-        subprocess.run(["scp", *self._ssh(), "-P", str(self.port), "-q", f"root@{self.ip}:{uzak}", str(yerel)],
-                       check=True, timeout=zaman_asimi)
+        r = self._tekrarla(["scp", *self._ssh(), "-P", str(self.port), "-q", f"root@{self.ip}:{uzak}", str(yerel)],
+                           zaman_asimi, self.DENEME)
+        if r.returncode != 0:
+            raise RunPodHatasi(f"alınamadı ({uzak}, {r.returncode}): {r.stderr[-500:]}")
         return yerel
 
     def maliyet(self) -> float:

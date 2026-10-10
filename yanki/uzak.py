@@ -71,7 +71,7 @@ def isci_kos(p: runpod.Pod, hedef: str, zaman_asimi_sn: float, aralik_sn: float 
     dosyasından izlenir: `pgrep -f motor_isci.py` kendi `bash -lc` satırını eşleştirip hep "sürüyor" diyordu (S19)."""
     p.komut(f"cd {hedef} && export PATH=$HOME/.local/bin:$PATH ACESTEP_GENERATION_TIMEOUT=3600 PYTHONUTF8=1 && "
             f"nohup uv run python {UZAK_DIZIN}/motor_isci.py {UZAK_DIZIN}/motor_is.json {UZAK_DIZIN}/motor_sonuc.json "
-            f"> {UZAK_DIZIN}/motor.log 2>&1 & echo $! > {UZAK_DIZIN}/motor.pid")
+            f"> {UZAK_DIZIN}/motor.log 2>&1 & echo $! > {UZAK_DIZIN}/motor.pid", tekrar=False)
     bitis = time.monotonic() + zaman_asimi_sn
     sonuc: list[dict] = []
     while time.monotonic() < bitis:
@@ -113,8 +113,10 @@ def calistir(a: Ayarlar, isler: list[motor.Is], klasor: Path, zaman_asimi_sn: fl
                 girdiler[yol] = f"{UZAK_DIZIN}/girdi/{len(girdiler)}{Path(yol).suffix}"
     kayit: dict = {"zaman": datetime.now().isoformat(timespec="seconds"), "is": len(isler), "gpu": a.uzak.gpu}
     sonuclar: list[motor.Sonuc] = []
+    pod = None
     try:
         with pod_sinifi(a.kok, gpu=a.uzak.gpu, ad="yanki-motor") as p:
+            pod = p
             kayit["pod"] = p.id
             t = time.time()
             hedef = kur(p, commit, (a.motor.model,))
@@ -152,16 +154,21 @@ def calistir(a: Ayarlar, isler: list[motor.Is], klasor: Path, zaman_asimi_sn: fl
                     except (subprocess.SubprocessError, OSError) as e:
                         r.update(basari=False, hata=f"çıktı indirilemedi: {e}", cikti=None)
                 sonuclar.append(motor.Sonuc(**{k: r.get(k) for k in motor.Sonuc.__dataclass_fields__}))
-            kayit["usd"] = p.maliyet()
+    except Exception as e:
+        kayit["hata"] = f"{type(e).__name__}: {str(e)[:300]}"
+        raise
     finally:
-        kayit.setdefault("usd", 0.0)
+        # hata olsa da açık kalınan süre ödendi: bütçe hesabı eksik kalmasın (önce düşen koşuya 0 $ yazılıyordu)
+        kayit["usd"] = pod.maliyet() if pod is not None else 0.0
         kayit["basarili"] = sum(s.basari for s in sonuclar)
         harcama_yaz(a.kok, kayit)
     gelen = {s.id for s in sonuclar}
     return sonuclar + [motor.Sonuc(i.id, False, "uzak işçi sonuç yazmadı") for i in isler if i.id not in gelen]
 
 
-DURMA_SAAT = 3  # sunucu koşu ortasında düşerse bu kadar saat evdeki motor kullanılır
+# sunucu koşu ortasında düşerse bu kadar saat yeniden denenmez (evde üretim kapalıysa üretim o kadar bekler; tek bir
+# geçici bağlantı kopması 3 saat üretimsiz bırakıyordu)
+DURMA_SAAT = 1
 
 
 def durma_yolu(kok: Path) -> Path:
