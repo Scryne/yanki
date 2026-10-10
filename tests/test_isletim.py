@@ -267,3 +267,15 @@ def test_surekli_betik_kilit_mesajini_gunluge_yazmaz():
     assert '-like "başka bir yanki koşusu sürüyor*"' in metin
     gece = (Path(__file__).resolve().parents[1] / "scripts" / "gece.ps1").read_text(encoding="utf-8-sig")
     assert "run --no-sync python -m yanki calistir" in gece
+
+
+def test_listeye_yaz_bozuk_eklemede_dosyaya_dokunmaz_ve_atomik_yazar(tmp_path):
+    lyol = tmp_path / "liste.toml"
+    lyol.write_text('# açıklama\n[[sarki]]\nsanatci = "A"\nad = "B"', encoding="utf-8")  # sonda satır sonu yok
+    once = lyol.read_bytes()
+    with pytest.raises(ValueError, match="iki kez"):
+        kesif.listeye_yaz([kesif.Aday("A", "B", "k", youtube_izlenme=1)], lyol)
+    assert lyol.read_bytes() == once  # önce sona eklenip sonra doğrulanıyordu: bozuk liste kalıyordu
+    kesif.listeye_yaz([kesif.Aday("C", "D", "k", youtube_izlenme=1)], lyol)
+    assert [s.sanatci for s in liste.yukle(lyol)] == ["A", "C"]
+    assert not list(tmp_path.glob("*.tmp"))

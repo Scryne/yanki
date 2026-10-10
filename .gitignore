@@ -35,3 +35,5 @@ girdi/kaynak/
 durum/
 # STILLMORE "Kaldırılmış şarkılar" CSV çıktıları (yanki kesif girdisi)
 girdi/kesif/*.csv
+# liste.toml yazım kilidi (yanki/kesif.py → liste_kilidi)
+girdi/.*.kilit

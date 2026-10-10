@@ -395,16 +395,19 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None) -> FastA
     def kesif_ekle(kimlik: str):
         if kimlik in kesif.listedekiler(liste_yolu, calisma):
             raise HTTPException(409, "bu şarkı zaten listede")
-        # liste.toml'a gece koşusu da yazıyor: aynı anda yazılmasın
-        with kilit.tek_kosu(calisma / ".yanki.kilit") as alindi:
-            if not alindi:
-                raise HTTPException(409, "gece koşusu sürüyor; bitince tekrar dene")
+        # liste.toml'a gece keşfi de yazıyor: liste kendi kilidiyle yazılır (koşu sürerken de eklenebilir; hazırlık
+        # adımı listeyi okur, atomik yazım yarım dosya göstermez)
+        try:
             with kesif.kayit_kilidi(calisma):
                 kayit = kesif.oku(calisma)
                 x = kesif_adayi(kayit, kimlik)
                 kesif.listeye_yaz([x], liste_yolu, "dinleme odasından eklendi")
                 x.elendi = False
                 kesif.kaydet(calisma, kayit)
+        except kilit.KilitMesgul as e:
+            raise HTTPException(409, "liste şu an güncelleniyor; birkaç saniye sonra tekrar dene") from e
+        except ValueError as e:  # aynı şarkı o arada eklendi
+            raise HTTPException(409, f"listeye eklenemedi: {e}") from e
         return _kesif_ozet(x, kesif.listedekiler(liste_yolu, calisma))
 
     @app.post("/api/kesif/{kimlik}/ele")

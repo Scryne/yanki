@@ -162,14 +162,15 @@ def test_kesif_listesi_ekle_ele(kesif_ortami):
     assert istemci.post("/api/kesif/yok/ele", json={}).status_code == 404
 
 
-def test_kesif_eklemesi_gece_kosusunu_bekler(kesif_ortami):
-    from yanki import kilit
+def test_kesif_eklemesi_kosu_surerken_de_calisir(kesif_ortami):
+    """Kiralık GPU'da üretim ~1 saat koşu kilidini tutuyor; liste kendi kilidiyle yazılır (önce 409 dönüyordu)."""
+    from yanki import kilit, liste
 
-    istemci, c, _ = kesif_ortami
+    istemci, c, liste_yolu = kesif_ortami
     with kilit.tek_kosu(c / ".yanki.kilit") as alindi:
         assert alindi
         r = istemci.post("/api/kesif/haarper-cadavers-in-my-cadillac/ekle")
-    assert r.status_code == 409 and "gece" in r.json()["detail"]
+    assert r.status_code == 200 and [s.ad for s in liste.yukle(liste_yolu)] == ["Cadavers in My Cadillac"]
 
 
 def test_yayin_listesi(tmp_path):

@@ -46,8 +46,13 @@ def kimlik(sanatci: str, ad: str) -> str:
 
 
 def yukle(yol: Path) -> list[Sarki]:
-    with open(yol, "rb") as f:
-        d = tomllib.load(f)
+    return coz(yol.read_text(encoding="utf-8-sig"), yol.name)  # Not Defteri BOM ekleyebilir
+
+
+def coz(metin: str, ad: str = "liste.toml") -> list[Sarki]:
+    """Liste metnini doğrular ve çözer (eksik/bilinmeyen alan, aynı şarkı iki kez: ValueError)."""
+    yol = Path(ad)
+    d = tomllib.loads(metin)
     sarkilar, gorulen = [], set()
     for i, s in enumerate(d.get("sarki", []), 1):
         eksik = [k for k in ("sanatci", "ad") if not str(s.get(k, "")).strip()]

@@ -11,7 +11,7 @@ yüklenen parçanın Spotify'da çıkıp çıkmadığını ve adı arandığınd
 0. **Keşif (kendiliğinden):** gece koşusu üç kaynaktan kaldırılmış şarkı arar: Deezer katalog farkı (Deezer'da
    dinlenen ama Spotify'da kapalı/olmayan), `config/kesif.toml` → `playlistler`, ve varsa `girdi/kesif/`'teki STILLMORE
    CSV'leri. Adaylar ücretsiz elemelerden (düzenleme, YouTube talebi, sanatçı, söz) sonra Spotify'da doğrulanır
-   (geri gelmiş mi, hangi pazarlarda kapalı, kaç rakip cover) ve en iyi `gece_ekle` tanesi listeye girer. Dinleme
+   (geri gelmiş mi, hangi pazarlarda kapalı, kaç rakip cover) ve en iyi `gece_ekle` tanesi listeye girer (sırada bekleyen şarkısı olan sanatçıdan yenisi eklenmez). Dinleme
    odasında **Keşif**: adayı dinle, listeye ekle ya da ele. Elle: `uv run yanki kesif [--ekle N]`.
 1. `girdi/liste.toml`'a şarkı ekle (sanatçı + şarkı adı yeter) ya da 0. adımdaki gibi keşiften.
 2. **Sürekli koşu:** bilgisayar açıkken her 30 dk `\Yanki\Surekli` (`scripts/surekli.ps1`) `yanki calistir`

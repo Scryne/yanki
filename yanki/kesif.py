@@ -472,8 +472,20 @@ def listedekiler(liste_yolu: Path, calisma: Path) -> set[str]:
     return {s.kimlik for s in liste.yukle(liste_yolu)} | {p.name for p in calisma.iterdir() if p.is_dir()}
 
 
+def liste_kilidi(liste_yolu: Path):
+    """`liste.toml` yazım kilidi: gece keşfi ile odadaki "Listeye ekle" aynı anda yazmasın. Koşunun genel kilidi
+    (`.yanki.kilit`) değil: kiralık GPU'da üretim ~1 saat sürüyor, oda o süre boyunca listeye ekleyemiyordu."""
+    from yanki import kilit
+
+    return kilit.bekleyerek(liste_yolu.with_name(f".{liste_yolu.name}.kilit"))
+
+
 def listeye_yaz(secilen: list[Aday], liste_yolu: Path, not_: str = "yanki kesif") -> list[Aday]:
-    """Adayları `liste.toml`'un sonuna ekler (eleme yapmaz; çağıran seçer). Dosyanın açıklamaları korunur."""
+    """Adayları `liste.toml`'un sonuna ekler (eleme yapmaz; çağıran seçer). Dosyanın açıklamaları korunur. Yeni metin
+    yazılmadan önce doğrulanır (aynı şarkı iki kez, bozuk TOML: ValueError, dosyaya dokunulmaz) ve atomik yazılır:
+    önce sona eklenip sonra doğrulanıyordu, bozuk ekleme bütün hattın listesini okunmaz bırakırdı."""
+    from yanki import dosya
+
     if not secilen:
         return []
     bloklar = [f"\n# kesif {datetime.now():%Y-%m-%d}: Spotify'da kaldırılmış şarkılar ({not_})"]
@@ -482,9 +494,11 @@ def listeye_yaz(secilen: list[Aday], liste_yolu: Path, not_: str = "yanki kesif"
         bloklar.append(f"\n[[sarki]]  # YouTube {a.youtube_izlenme:,} izlenme{ek}; {a.kaynak}\n"
                        f"sanatci = {json.dumps(a.sanatci, ensure_ascii=False)}\n"
                        f"ad = {json.dumps(sade_ad_gorunur(a.ad), ensure_ascii=False)}\n")
-    with open(liste_yolu, "a", encoding="utf-8") as f:
-        f.write("".join(bloklar))
-    liste.yukle(liste_yolu)  # yazılan dosya hâlâ geçerli mi
+    with liste_kilidi(liste_yolu):
+        eski = liste_yolu.read_text(encoding="utf-8-sig") if liste_yolu.exists() else ""
+        yeni = eski + ("" if not eski or eski.endswith("\n") else "\n") + "".join(bloklar)
+        liste.coz(yeni, liste_yolu.name)
+        dosya.yaz(liste_yolu, yeni)
     return secilen
 
 

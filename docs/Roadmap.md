@@ -562,8 +562,8 @@ temizliği her uzak koşunun başında; `yanki durum` RunPod anahtarı; pano: ü
 ## Denetim 3 (2026-10-10 akşam, Scryne: "baştan sona incele, denetle, eksik ve hataların tamamını çöz, iyileştir, yeni şeyler ekle; her şey sende")
 
 Kod, betikler ve günün gerçek çalışma kanıtı (gece/sürekli günlüğü, `runpod.log`, `runpod.json`, servis sayaçları,
-zamanlanmış görevler) tarandı. Testler `tests/test_isletim.py` (13): hepsi düzeltmesiz kodda kırmızı (13/13 denendi),
-toplam 352 yeşil.
+zamanlanmış görevler) tarandı. Testler `tests/test_isletim.py` (14) ve odanın liste testi: hepsi düzeltmesiz kodda kırmızı (15/15
+denendi), toplam 353 yeşil.
 
 **Hatalar (çözüldü):**
 - **Kiralık GPU'da işçi başlatma her koşuda 120 sn asılıydı** (`runpod.log`: beş koşunun beşi "zaman aşımı (120 sn)").
@@ -594,6 +594,9 @@ toplam 352 yeşil.
   da reddedilince eklenir); odadaki elle "Listeye ekle" serbest.
 - **`yanki durum`:** kiralık GPU'nun bu ayki harcaması / bütçe ve devre dışıysa nedeni (yerel kayıttan, ağsız).
 - **Yedek** kiralık GPU harcama kaydını da alır (aylık bütçe sınırı ondan hesaplanıyor).
+- **Odadan "Listeye ekle" koşu sürerken de çalışır:** kiralık GPU'da üretim ~1 saat genel koşu kilidini tutuyor, oda o
+  süre 409 veriyordu. `liste.toml` kendi kilidiyle yazılır; yeni metin yazılmadan doğrulanır ve atomik yazılır (önce
+  sona eklenip sonra doğrulanıyordu: bozuk ekleme bütün hattın listesini okunmaz bırakırdı).
 
 **Keşif tohumları (uygulandı, geri alınabilir):** katalog farkının elle tohumları (Xiu Xiu, Deerhoof, Godspeed You!
 Black Emperor, King Gizzard, Massive Attack, Hotline TNT) kataloğunu Spotify'dan 2025'te protestoyla çeken, çoğu deneysel
