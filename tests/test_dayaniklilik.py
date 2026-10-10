@@ -314,16 +314,18 @@ def test_calistir_dusen_adimdan_sonra_surer_ve_1_doner(tmp_path, monkeypatch, ca
     a = replace(ayarlar.yukle(), kok=tmp_path)
     monkeypatch.setattr(cli.ayarlar, "yukle", lambda: a)
     monkeypatch.setattr(cli, "_kesif_ayarlari", lambda _k: {"kesif": {"gece_ekle": 0}})
-    for ad in ("_hazirla", "_otomatik_onay", "_paketle", "_temizle", "_yedekle"):
+    for ad in ("_hazirla", "_otomatik_onay", "_paketle", "_dagitim_durum", "_takvim_hatirlat", "_temizle",
+               "_yedekle"):
         monkeypatch.setattr(cli, ad, lambda *_a, ad=ad: sira.append(ad) or 0)
 
-    def uret_duser(_):
+    def uret_duser(*_):
         sira.append("_uret")
         raise RuntimeError("GPU 6 saat boşalmadı")
 
-    monkeypatch.setattr(cli, "_uret", uret_duser)
+    monkeypatch.setattr(cli, "_uret_surekli", uret_duser)
     assert cli._calistir(cli.argparse.Namespace(liste=None, analizsiz=False)) == 1
-    assert sira == ["_hazirla", "_uret", "_otomatik_onay", "_paketle", "_temizle", "_yedekle"]
+    assert sira == ["_hazirla", "_uret", "_otomatik_onay", "_paketle", "_dagitim_durum", "_takvim_hatirlat",
+                    "_temizle", "_yedekle"]
     cikti = capsys.readouterr().out
     assert "GPU 6 saat boşalmadı" in cikti and "sorunlu adım: üretim" in cikti
 

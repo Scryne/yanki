@@ -29,14 +29,23 @@ Register-ScheduledTask -TaskPath "\Yanki\" -TaskName "Oda" -Action $eylem -Trigg
     -Principal $kim -Force | Out-Null
 "Yanki\Oda kuruldu: oturum açılınca → $kok\scripts\oda.ps1 (http://127.0.0.1:8765/)"
 
-# Yanki\Gunduz: gündüz boşta üretim (Roadmap Faz 13). 08:00'den itibaren 17 saat boyunca her 30 dk; koşulları
-# `yanki gunduz` denetler (saat penceresi, 20 dk boşta, priz, GPU). Pilde başlamaz; 2 saatten uzun sürerse durdurulur.
-$arg = "--headless `"$ps`" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File `"$kok\scripts\gunduz.ps1`""
+# Yanki\Surekli: bilgisayar açıkken her 30 dk (Scryne, 2026-10-10: "gece 3'ü beklemeye gerek yok, açıkken hep
+# çalışsın"). Hangi adımın koşacağına `yanki calistir` karar verir (üretim prizde ve GPU boşken; keşif ve takip günde
+# bir, Spotify uygulaması serbestken). Oturum açılınca da başlar; pilde başlar ama üretim pilde yapılmaz. Önceki
+# Yanki\Gunduz (yalnız boştayken üretim) bunun içinde, kaldırılır. Yanki\Gece 03:00'te uyandırmak için kalır.
+$arg = "--headless `"$ps`" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File `"$kok\scripts\surekli.ps1`""
 $eylem = New-ScheduledTaskAction -Execute (Join-Path $env:WINDIR "System32\conhost.exe") -Argument $arg -WorkingDirectory $kok
-$zaman = New-ScheduledTaskTrigger -Daily -At 08:00
-$zaman.Repetition = (New-ScheduledTaskTrigger -Once -At 08:00 -RepetitionInterval (New-TimeSpan -Minutes 30) `
-    -RepetitionDuration (New-TimeSpan -Hours 17)).Repetition
-$ayar = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Hours 2) -MultipleInstances IgnoreNew
-Register-ScheduledTask -TaskPath "\Yanki\" -TaskName "Gunduz" -Action $eylem -Trigger $zaman -Settings $ayar `
-    -Principal $kim -Force | Out-Null
-"Yanki\Gunduz kuruldu: 08:00–01:00 her 30 dk → $kok\scripts\gunduz.ps1"
+$gunluk = New-ScheduledTaskTrigger -Daily -At 00:00
+$gunluk.Repetition = (New-ScheduledTaskTrigger -Once -At 00:00 -RepetitionInterval (New-TimeSpan -Minutes 30) `
+    -RepetitionDuration (New-TimeSpan -Days 1)).Repetition
+$acilis = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
+$acilis.Delay = "PT2M"  # oturum açılışının yükü geçsin
+$ayar = New-ScheduledTaskSettingsSet -StartWhenAvailable -ExecutionTimeLimit (New-TimeSpan -Hours 4) `
+    -MultipleInstances IgnoreNew -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
+Register-ScheduledTask -TaskPath "\Yanki\" -TaskName "Surekli" -Action $eylem -Trigger @($gunluk, $acilis) `
+    -Settings $ayar -Principal $kim -Force | Out-Null
+"Yanki\Surekli kuruldu: bilgisayar açıkken her 30 dk → $kok\scripts\surekli.ps1"
+if (Get-ScheduledTask -TaskPath "\Yanki\" -TaskName "Gunduz" -ErrorAction SilentlyContinue) {
+    Unregister-ScheduledTask -TaskPath "\Yanki\" -TaskName "Gunduz" -Confirm:$false
+    "Yanki\Gunduz kaldırıldı (Yanki\Surekli'ye katıldı)"
+}

@@ -532,3 +532,13 @@ haftada bir API'den (`web_gun = 7`, arada önceki sıra). İstemcinin ISRC arama
 için parça yalnız ad + sanatçı eşleşince "bizim". Canlı doğrulama: RouteNote'taki 3 parça 3 istemci aramasıyla, API
 0; bilinen bir yayında (Kylie Minogue, GBAYE0000351) canlı, sanatçı kimliği, TR sırası 1. Bulunan hata: Spotify'ı
 açınca CDP portu hazır ama arayüz sayfası yüklenmemişken köprü düşüyordu (`kopru_bekle`). 5 yeni test.
+
+**Sürekli koşu (2026-10-10, Scryne: "gece 3'ü beklemeye gerek yok, bilgisayar açık olduğu her zaman çalışsın"):**
+`\Yanki\Surekli` bilgisayar açıkken her 30 dk ve oturum açılınca `yanki calistir`; `\Yanki\Gunduz` (yalnız boştayken
+üretim) buna katıldı, `\Yanki\Gece` 03:00'te uyandırıp aynısını koşar. Adım aralıkları (`.adimlar.json`): keşif,
+takip, temizlik günde bir; Tunearo yoklaması 3 saatte bir; hazırlık, üretim, onay, paket, yükleme sırası her koşuda.
+Üretim kullanıcı etkinken de (prizde, GPU boşken), koşu başına 2 şarkı, GPU dolarsa 10 dk sonra vazgeçer. Spotify
+uygulamasına gereken adımlar uygulama serbestken (kapalı, CDP'li ya da 20 dk boşta); API kilitliyken keşif bekler.
+İş yapılmayan koşu günlüğe yazmaz, bildirim yalnız hatada. İlk gerçek koşu (13:39): keşif kilitli API'yle hakkını
+yaktı ve hazırlık analizdeki 8 şarkıyı her koşuda yeniden yazıyordu → ikisi düzeltildi; üretim kullanıcı etkinken
+başladı (GPU %100, 6,6 GB). 13 yeni test, toplam 325.

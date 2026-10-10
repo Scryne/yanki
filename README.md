@@ -14,18 +14,19 @@ yüklenen parçanın Spotify'da çıkıp çıkmadığını ve adı arandığınd
    (geri gelmiş mi, hangi pazarlarda kapalı, kaç rakip cover) ve en iyi `gece_ekle` tanesi listeye girer. Dinleme
    odasında **Keşif**: adayı dinle, listeye ekle ya da ele. Elle: `uv run yanki kesif [--ekle N]`.
 1. `girdi/liste.toml`'a şarkı ekle (sanatçı + şarkı adı yeter) ya da 0. adımdaki gibi keşiften.
-2. Her gece 03:00'te zamanlanmış görev (`\Yanki\Gece`, `scripts/gece.ps1`; pilde başlamaz, kaçırırsa açılınca yetişir)
-   `yanki calistir` koşar: kaynak ses (YouTube), sözler (LRCLIB), künye ve stil (MusicBrainz), üç cover adayı, kapılar,
-   bekleyen onarımlar, onaylılar için paket, takip, disk temizliği, haftalık yedek. GPU başka bir işle doluysa
-   boşalmasını bekler; şarkı başı ~30 dk. Adımlar birbirinden yalıtılmış: biri düşerse hatası günlüğe yazılır, koşu
-   sürer ve sonunda hata bildirimi gelir. Günlük: `calisma/gunluk/<tarih>.log`. Hemen istersen elle
-   `uv run yanki calistir` (aynı anda tek koşu, kilitli). Dinleme odası koşu sürerken de açık kalabilir: kararlar
-   şarkı başına kilitle yazılır, gece koşusu onları ezmez.
-   **Gündüz:** `\Yanki\Gunduz` her 30 dk bakar (08:00–01:00); 20 dk klavye/fareye dokunulmadıysa, prizdeyse ve GPU
-   boşsa kuyruktan bir şarkı üretir (önce bekleyen onarımlar), bitince "dinlemeye hazır" bildirimi. Tunearo'daki
-   yayınların durumunu da 3 saatte bir yoklar (red/kabul geceyi beklemez). Hazırlıkta düşen şarkı (söz/kaynak yok) en
-   erken 4 saat sonra yeniden denenir; `girdi/`'ye söz ya da ses bırakılırsa hemen. Ayar:
-   `config/operasyon.toml` → `[gunduz]`, günlük: `calisma/gunluk/gunduz.log`.
+2. **Sürekli koşu:** bilgisayar açıkken her 30 dk `\Yanki\Surekli` (`scripts/surekli.ps1`) `yanki calistir`
+   koşar (Scryne, 2026-10-10: "gece 3'ü beklemeye gerek yok"); `\Yanki\Gece` 03:00'te bilgisayarı uykudan uyandırıp
+   aynısını koşar ve özet bildirimi gösterir. Her koşuda: hazırlık (kaynak ses YouTube, sözler LRCLIB, künye ve stil
+   MusicBrainz), üretim, veto penceresi, paket, yükleme sırası. Üretim prizde ve GPU boşken, kullanıcı etkinken de,
+   koşu başına en çok 2 şarkı (bekleyen onarımlar önce; şarkı başı ~30 dk); GPU doluysa (oyun, başka iş) sonraki
+   koşuya kalır. Tunearo durumu 3 saatte bir; keşif, takip ve disk temizliği günde bir. Keşif ve takip Spotify
+   uygulamasını kullanır: uygulama kapalıysa ya da bilgisayar 20 dk'dır kullanılmıyorsa, bir şey çalmıyorsa; Spotify
+   API'si kilitliyken keşif kilit kalkana kadar bekler. Hazırlıkta düşen şarkı (söz/kaynak yok) en erken 4 saat sonra
+   yeniden denenir; `girdi/`'ye söz ya da ses bırakılırsa hemen. Adımlar birbirinden yalıtılmış: biri düşerse hatası
+   günlüğe yazılır, koşu sürer ve hata bildirimi gelir. İş yapılmayan koşu günlüğe yazmaz. Günlük:
+   `calisma/gunluk/<tarih>.log`; ayar: `config/operasyon.toml` → `[surekli]`. Hemen istersen elle
+   `uv run yanki calistir` (`--hepsi`: zamanı gelmemiş adımlar da; aynı anda tek koşu, kilitli). Dinleme odası koşu
+   sürerken de açık kalabilir: kararlar şarkı başına kilitle yazılır, koşu onları ezmez.
 3. Dinleme odası oturum açılınca kendiliğinden başlar (`\Yanki\Oda`, `scripts/oda.ps1`): http://127.0.0.1:8765/,
    özet Windows bildirimiyle gelir, bildirime tıklayınca oda açılır. Elle: `yanki dinle` ya da Kokpit → Yanki → Çalıştır. Orijinalle karşılaştır; bozuk yer varsa dalga üzerinde sürükleyip
    **Bu aralığı onar**; iyi olanı **Bu adayı onayla**. Yanlışlıkla reddedilen şarkı **Reddi geri al** ile döner.
@@ -91,7 +92,7 @@ uv run acestep-download
 winget install Gyan.FFmpeg.Shared                          # ffmpeg/ffprobe
 # fpcalc (Chromaprint 1.5.1, Windows x64) → araclar/fpcalc.exe
 uv run yanki durum                                         # hepsi ✓ olmalı
-powershell -File scripts/gorev_kur.ps1                     # \Yanki\Gece (03:00), \Yanki\Oda (oturum açılışı), \Yanki\Gunduz
+powershell -File scripts/gorev_kur.ps1                     # \Yanki\Surekli (açıkken 30 dk), \Yanki\Gece (03:00), \Yanki\Oda
 # Keşif ve takip için: developer.spotify.com → Create app (Premium hesap), Redirect URI http://127.0.0.1:8766/callback
 copy .env.example .env                                     # SPOTIFY_*, TYPESAFE_API_KEY, TUNEARO_API_KEY
 uv run yanki spotify-baglan                                # yalnız kendi playlist'lerini taramak için

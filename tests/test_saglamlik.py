@@ -518,3 +518,131 @@ def test_takip_uygulama_acilamazsa_web_apiyle(monkeypatch):
     gelen = []
     assert cli._istemciyle(_SahteSp(), lambda ist: gelen.append(ist) or "tamam", True) == "tamam"
     assert gelen == [None]
+
+
+# ── sürekli koşu (Scryne: "gece 3'ü beklemeye gerek yok, bilgisayar açıkken hep çalışsın") ──
+@pytest.fixture
+def surekli(tmp_path, monkeypatch):
+    from dataclasses import replace
+
+    from yanki import ayarlar, cli
+
+    a = replace(ayarlar.yukle(), kok=tmp_path)
+    monkeypatch.setattr(cli.ayarlar, "yukle", lambda: a)
+    monkeypatch.setattr(cli.ayarlar, "operasyon_oku", lambda _k: ayarlar.Operasyon(tmp_path))
+    monkeypatch.setattr(cli, "_kesif_ayarlari", lambda _k: {"kesif": {"gece_ekle": 2}})
+    monkeypatch.setattr(cli, "_spotify_serbest", lambda _op: True)
+    import yanki.spotify as sp
+
+    monkeypatch.setattr(sp.Spotify, "__init__", lambda self, kok, *x, **k: setattr(self, "client_id", "x"))
+    monkeypatch.setattr(sp.Spotify, "kota", lambda self: {"kilit": 0})
+    kosan = []
+    for ad, cikti in (("_kesif", "listeye eklendi: X"), ("_hazirla", ""), ("_uret_surekli", "üretilecek bir şey yok"),
+                      ("_otomatik_onay", ""), ("_paketle", "paketlenecek onaylı şarkı yok"),
+                      ("_dagitim_durum", "tunearo: izlenen yükleme yok"), ("_takip", ""),
+                      ("_takvim_hatirlat", "takvim: kuyruk boş"), ("_temizle", ""),
+                      ("_yedekle", "yedek güncel (son: …)")):
+        monkeypatch.setattr(cli, ad, lambda *_a, ad=ad, cikti=cikti: kosan.append(ad) or print(cikti) or 0)
+    (tmp_path / "calisma").mkdir()
+    return cli, kosan, tmp_path
+
+
+def test_surekli_kosu_gunluk_adimlari_zamani_gelince_koşturur(surekli, capsys):
+    cli, kosan, kok = surekli
+    ns = cli.argparse.Namespace(liste=None, analizsiz=False)
+    assert cli._calistir(ns) == 0
+    assert {"_kesif", "_dagitim_durum", "_takip", "_temizle"} <= set(kosan)
+    assert "── keşif" in capsys.readouterr().out  # iş yapan adım yazılır
+    kosan.clear()
+    assert cli._calistir(ns) == 0  # 30 dk sonra: günlük/3 saatlik adımlar atlanır
+    assert kosan == ["_hazirla", "_uret_surekli", "_otomatik_onay", "_paketle", "_takvim_hatirlat", "_yedekle"]
+    assert capsys.readouterr().out == ""  # hiçbir adım iş yapmadı: günlüğe hiçbir şey
+    kosan.clear()
+    cli._calistir(cli.argparse.Namespace(liste=None, analizsiz=False, hepsi=True))
+    assert {"_kesif", "_dagitim_durum", "_takip", "_temizle"} <= set(kosan)
+
+
+def test_surekli_kosu_spotify_serbest_degilse_kesif_ve_takip_bekler(surekli, monkeypatch):
+    cli, kosan, _ = surekli
+    monkeypatch.setattr(cli, "_spotify_serbest", lambda _op: False)
+    cli._calistir(cli.argparse.Namespace(liste=None, analizsiz=False))
+    assert "_kesif" not in kosan and "_takip" not in kosan and "_dagitim_durum" in kosan
+
+
+@pytest.fixture
+def uretim_ortami(tmp_path, monkeypatch):
+    from dataclasses import replace
+
+    from yanki import ayarlar, cli, saglik, sistem, uretim
+
+    a = replace(ayarlar.yukle(), kok=tmp_path)
+    monkeypatch.setattr(cli.ayarlar, "yukle", lambda: a)
+    monkeypatch.setattr(sistem, "prizde_mi", lambda: True)
+    monkeypatch.setattr(sistem, "bosta_sn", lambda: 0)  # kullanıcı etkin
+    monkeypatch.setattr(saglik, "gpu_kullanilan_mib", lambda: 500)
+    c = tmp_path / "calisma"
+    for i, asama in enumerate(("analiz", "analiz", "onarim", "analiz")):
+        d = durum.Durum(f"s{i}", "X", f"S{i}", asama=asama)
+        d.gecmis = [{"zaman": f"2026-10-10T0{i}:00:00", "asama": asama}]
+        durum.yaz(c, d)
+    uretilen = []
+
+    def sahte(_a, calisma, kimlikler, calistir=None):
+        uretilen.append(kimlikler)
+        return [durum.oku(calisma, k) for k in kimlikler]
+
+    monkeypatch.setattr(uretim, "uret", sahte)
+    return cli, ayarlar.Operasyon(tmp_path), uretilen, monkeypatch
+
+
+def test_surekli_uretim_kullanici_etkinken_de_onarim_once_sinirli(uretim_ortami):
+    cli, op, uretilen, _ = uretim_ortami
+    assert cli._uret_surekli(None, op) == 0
+    assert uretilen == [["s2", "s0"]]  # onarım önce, koşu başına 2 şarkı
+
+
+@pytest.mark.parametrize("engel", ["gpu", "pil", "bosta"])
+def test_surekli_uretim_bekler(uretim_ortami, engel, capsys):
+    from dataclasses import replace
+
+    from yanki import saglik, sistem
+
+    cli, op, uretilen, mp = uretim_ortami
+    if engel == "gpu":
+        mp.setattr(saglik, "gpu_kullanilan_mib", lambda: 7000)
+    elif engel == "pil":
+        mp.setattr(sistem, "prizde_mi", lambda: False)
+    else:
+        op = replace(op, surekli_bosta_bekle=True)
+    assert cli._uret_surekli(None, op) == 0 and uretilen == []
+    assert "üretim bekliyor" in capsys.readouterr().out
+
+
+def test_spotify_serbest(monkeypatch):
+    from yanki import ayarlar, cli, sistem, stillmore
+
+    op = ayarlar.Operasyon(ayarlar.KOK)
+    monkeypatch.setattr(stillmore, "cdp_acik", lambda: False)
+    monkeypatch.setattr(stillmore, "calisiyor_mu", lambda: False)
+    assert cli._spotify_serbest(op)  # kapalı: açılabilir
+    monkeypatch.setattr(stillmore, "calisiyor_mu", lambda: True)
+    monkeypatch.setattr(sistem, "bosta_sn", lambda: 60)
+    assert not cli._spotify_serbest(op)  # Scryne Spotify'ı kullanıyor olabilir
+    monkeypatch.setattr(sistem, "bosta_sn", lambda: 3600)
+    assert cli._spotify_serbest(op)
+
+
+def test_surekli_kosu_spotify_kilitliyken_kesfi_ertelir(surekli, monkeypatch):
+    """Kilit varken keşif koşsa doğrulayamaz ve günlük hakkı yanardı; kilit kalkınca ilk koşuda yapılır."""
+    import time
+
+    import yanki.spotify as sp
+
+    cli, kosan, kok = surekli
+    monkeypatch.setattr(sp.Spotify, "kota", lambda self: {"kilit": time.time() + 3600})
+    cli._calistir(cli.argparse.Namespace(liste=None, analizsiz=False))
+    assert "_kesif" not in kosan
+    monkeypatch.setattr(sp.Spotify, "kota", lambda self: {"kilit": 0})
+    kosan.clear()
+    cli._calistir(cli.argparse.Namespace(liste=None, analizsiz=False))
+    assert "_kesif" in kosan

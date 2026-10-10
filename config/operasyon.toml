@@ -15,10 +15,17 @@ sakla = 8
 gun = 14
 
 [gunduz]
-# Gündüz boşta üretim (`yanki gunduz`, \Yanki\Gunduz görevi her 30 dk): kullanıcı `bosta_dk` dakikadır klavye/fareye
-# dokunmadıysa, bilgisayar prizdeyse ve GPU boşsa kuyruktan `sarki` şarkı üretir (önce bekleyen onarımlar). Şarkı başı
-# ~30 dk; dönünce GPU bir süre dolu kalabilir. Gece koşusuyla (03:00) çakışmasın diye yalnız `saatler` arasında başlar.
+# `bosta_dk`: bilgisayar bu kadar dakikadır kullanılmıyorsa "boşta" sayılır. Sürekli koşu buna bakarak açık Spotify
+# uygulamasını (keşif, takip) yeniden başlatır; `[surekli] bosta_bekle = true` ise üretim de bunu bekler.
+# Diğerleri yalnız elle `yanki gunduz` (eski boştayken üretim görevi, 2026-10-10'da \Yanki\Surekli'ye katıldı).
 acik = true
 bosta_dk = 20
 sarki = 1
 saatler = [8, 1]  # 08:00'den 01:00'e
+
+[surekli]
+# Sürekli koşu (\Yanki\Surekli, bilgisayar açıkken her 30 dk; Scryne 2026-10-10: "açıkken hep çalışsın").
+# Bir koşuda en çok kaç şarkı üretilsin: uzun üretim (şarkı başı ~30 dk) yüklemeyi ve yoklamayı saatlerce kilitlemesin
+uretim_sarki = 2
+# true: üretim yalnız bilgisayar [gunduz] bosta_dk'dır kullanılmıyorken (oyun/iş sırasında GPU yükü olmasın)
+bosta_bekle = false

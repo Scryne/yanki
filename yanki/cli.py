@@ -69,10 +69,12 @@ def _hazirla(args: argparse.Namespace) -> int:
         d = hazirlik.girdi_hazirla(a, s, calisma, girdi)
         print(f"{d.asama:6} {s.sanatci} — {s.ad}" + (f": {d.hata}" if d.hata else f" [{d.kaynak.get('nereden')}]"))
     if not args.analizsiz:
+        # yalnız bu koşuda analiz edilenler yazılır (sürekli koşuda zaten analizde bekleyenler her 30 dk'da yazılmasın)
+        hazir = {s.kimlik for s in sarkilar if (d := durum.oku(calisma, s.kimlik)) and d.asama == "hazir"}
         hazirlik.analiz_et(a, sarkilar, calisma)
         for s in sarkilar:
             d = durum.oku(calisma, s.kimlik)
-            if d and d.asama == "analiz" and d.analiz.get("stil"):
+            if d and s.kimlik in hazir and d.asama == "analiz" and d.analiz.get("stil"):
                 tempo = " · ".join(x for x in (f"{d.analiz['bpm']} BPM" if d.analiz.get("bpm") else "",
                                                d.analiz.get("ton") or "") if x)
                 print(f"analiz {s.ad}: {d.analiz['stil']} | {tempo or 'tempo/ton modele bırakıldı'}")
@@ -574,56 +576,167 @@ def _ozet(args: argparse.Namespace) -> int:
     return 0
 
 
-def _calistir(args: argparse.Namespace) -> int:
-    """Arka plan koşusu: (açıksa) kaldırılmış şarkı keşfi → listeye ekle, yeni şarkıları hazırla, üret (bekleyen
-    onarımlar dahil), veto penceresi, onaylıları paketle, yüklenenleri takip et, disk temizliği, haftalık yedek.
-    Liste boş olsa da onarım ve paketleme yapılır; Spotify anahtarı yoksa keşif ve takip atlanır.
+# Adımların en sık ne zaman koşacağı (saat). Listede olmayan adım her koşuda (sürekli koşu her 30 dk): hazırlık,
+# üretim, veto penceresi, paketleme, yükleme sırası, yedek (kendi haftalık eşiği var). Keşif ve takip Spotify kotası
+# ve Spotify uygulamasını yeniden başlatma yüzünden günde bir; dağıtım yoklaması dağıtımcıyı yormamak için.
+ADIM_ARALIGI_SAAT = {"keşif": 24, "takip": 24, "dağıtım durumu": 3, "temizlik": 24}
+# Bu çıktılar "yapılacak iş yoktu" demek: sürekli koşuda yalnız bunları üreten adım günlüğe yazılmaz
+BOS_CIKTI = ("üretilecek bir şey yok", "paketlenecek onaylı şarkı yok", "takvim: ", "yedek güncel",
+             "liste boş", "tunearo: izlenen yükleme yok", "takip edilecek yüklenmiş şarkı yok", "toplam 0 MB")
 
-    Adımlar birbirinden yalıtılmış: biri düşerse (YouTube, Deezer, GPU, ağ) hatası günlüğe yazılır, koşu sonraki
-    adımla sürer ve sonunda 1 döner (gece.ps1 hatayı bildirim olarak gösterir). Önce keşifteki tek bir ağ hatası
-    üretimi, paketlemeyi ve takibi de durduruyordu."""
+
+def _adim_zamanlari(calisma: Path) -> dict:
+    import json
+
+    try:
+        return json.loads((calisma / ".adimlar.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
+def _spotify_serbest(op) -> bool:
+    """Spotify uygulaması (STILLMORE, takip araması) şimdi kullanılabilir mi: kapalıysa ya da zaten CDP'yle açıksa evet;
+    kullanıcının açık uygulaması ancak bilgisayar `gunduz_bosta_dk` dakikadır kullanılmıyorsa yeniden başlatılır
+    (çalıyorsa köprü zaten dokunmaz)."""
+    import subprocess
+
+    from yanki import sistem, stillmore
+
+    try:
+        if stillmore.cdp_acik() or not stillmore.calisiyor_mu():
+            return True
+        return sistem.bosta_sn() >= op.gunduz_bosta_dk * 60
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
+def _calistir(args: argparse.Namespace) -> int:
+    """Sürekli koşu (`\\Yanki\\Surekli` her 30 dk, `\\Yanki\\Gece` 03:00'te uyandırarak; Scryne 2026-10-10: "gece 3'ü
+    beklemeye gerek yok, bilgisayar açıkken hep çalışsın"): kaldırılmış şarkı keşfi → liste, hazırlık, üretim (bekleyen
+    onarımlar önce), veto penceresi, paketleme, dağıtım durumu, takip, yükleme sırası, temizlik, yedek. Her adım
+    zamanı gelince (`ADIM_ARALIGI_SAAT`); `--hepsi` hepsini şimdi koşturur.
+
+    Üretim kullanıcı etkinken de yapılır (ayar: `config/operasyon.toml` → `[surekli]`), prizde ve GPU boşken, koşu
+    başına en çok `uretim_sarki` şarkı: saatler süren tek koşu yüklemeyi ve yoklamayı kilitlemesin. Spotify uygulamasına
+    gereken adımlar (keşif, takip) uygulama serbestken (`_spotify_serbest`), değilse sonraki koşuya kalır.
+
+    Adımlar birbirinden yalıtılmış: biri düşerse hatası günlüğe yazılır, koşu sürer ve 1 döner. Yapılacak işi olmayan
+    adım yazmaz; hiçbir adım iş yapmadıysa koşu hiçbir şey yazmaz (günlük her 30 dk'da bir şişmesin)."""
+    import contextlib
+    import io
     import time
     import traceback
-    from datetime import datetime
+    from datetime import datetime, timedelta
 
-    from yanki import spotify
+    from yanki import dosya, spotify
 
     kok = ayarlar.yukle().kok
+    calisma = kok / "calisma"
     op = ayarlar.operasyon_oku(kok)
+    simdi = datetime.now()
+    hepsi = bool(getattr(args, "hepsi", False))
+    zamanlar = _adim_zamanlari(calisma)
     spotify_var = bool(spotify.Spotify(kok).client_id)
     gece_ekle = int(_kesif_ayarlari(kok)["kesif"].get("gece_ekle", 0))
+
+    def zamani(ad: str) -> bool:
+        if hepsi or ad not in ADIM_ARALIGI_SAAT or ad not in zamanlar:
+            return True
+        return datetime.fromisoformat(zamanlar[ad]) <= simdi - timedelta(hours=ADIM_ARALIGI_SAAT[ad])
+
     args.yeniden = False
     adimlar: list = []
-    if gece_ekle and spotify_var:
+    serbest = None  # Spotify uygulaması: yalnız gerekince sorulur (tasklist/pencere sorgusu)
+    # Web API kilitliyken keşif doğrulayamaz: günlük hakkı yanmasın, kilit kalkınca ilk koşuda (2026-10-10: kilit
+    # 16:00'da kalkacakken 13:39'da koştu, bir sonraki ancak ertesi gün olurdu)
+    kilitli = spotify_var and spotify.Spotify(kok).kota().get("kilit", 0) > time.time()
+    if gece_ekle and spotify_var and not kilitli and zamani("keşif") and (serbest := _spotify_serbest(op)):
         adimlar.append(("keşif", lambda: _kesif(argparse.Namespace(
             csv=[], playlist=[], pazar=None, ekle=gece_ekle, goster=10, katalogsuz=False, yeniden_olc=False,
             stillmoresuz=False, spotify_yeniden_baslat=True))))
-    adimlar += [("hazırlık", lambda: _hazirla(args)), ("üretim", lambda: _uret(args)),
-                ("veto penceresi", lambda: _otomatik_onay(kok)), ("paketleme", lambda: _paketle(args)),
-                # takipten önce: kabul gelince Tunearo'nun atadığı ISRC takibe girsin
-                ("dağıtım durumu", lambda: _dagitim_durum(argparse.Namespace()))]
-    if spotify_var:
+    adimlar += [("hazırlık", lambda: _hazirla(args)), ("üretim", lambda: _uret_surekli(kok, op)),
+                ("veto penceresi", lambda: _otomatik_onay(kok)), ("paketleme", lambda: _paketle(args))]
+    if zamani("dağıtım durumu"):  # takipten önce: kabul gelince Tunearo'nun atadığı ISRC takibe girsin
+        adimlar.append(("dağıtım durumu", lambda: _dagitim_durum(argparse.Namespace())))
+    if spotify_var and zamani("takip") and (serbest if serbest is not None else _spotify_serbest(op)):
         adimlar.append(("takip", lambda: _takip(argparse.Namespace(kimlik=[], spotify_yeniden_baslat=True))))
-    else:
-        print("takip atlandı: Spotify anahtarı yok (.env → SPOTIFY_CLIENT_ID/SECRET)")
-    adimlar += [("takvim", lambda: _takvim_hatirlat(kok)),
-                ("temizlik", lambda: _temizle(argparse.Namespace(uygula=True, gun=op.temizlik_gun))),
-                ("yedek", lambda: _yedekle(argparse.Namespace(zorla=False)))]
-    sorunlu = []
+    adimlar += [("takvim", lambda: _takvim_hatirlat(kok))]
+    if zamani("temizlik"):
+        adimlar.append(("temizlik", lambda: _temizle(argparse.Namespace(uygula=True, gun=op.temizlik_gun))))
+    adimlar.append(("yedek", lambda: _yedekle(argparse.Namespace(zorla=False))))
+
+    sorunlu, yazilan = [], []
     for ad, fn in adimlar:
         bas = time.monotonic()
-        print(f"── {ad} ({datetime.now():%H:%M:%S})", flush=True)
-        try:
-            kod = fn() or 0
-        except Exception:  # noqa: BLE001 — adım yalıtımı: iz günlüğe, koşu sürer
-            traceback.print_exc(file=sys.stdout)
-            kod = 1
+        tampon = io.StringIO()
+        with contextlib.redirect_stdout(tampon):
+            try:
+                kod = fn() or 0
+            except Exception:  # noqa: BLE001 — adım yalıtımı: iz günlüğe, koşu sürer
+                traceback.print_exc(file=sys.stdout)
+                kod = 1
+        if ad in ADIM_ARALIGI_SAAT:
+            zamanlar[ad] = simdi.isoformat(timespec="seconds")
+        cikti = tampon.getvalue().strip()
+        bos = not cikti or all(any(x in satir for x in BOS_CIKTI) for satir in cikti.splitlines())
         if kod:
             sorunlu.append(ad)
-            print(f"✗ {ad} adımı sorunlu bitti ({time.monotonic() - bas:.0f} sn)", flush=True)
-    print(f"── koşu bitti ({datetime.now():%H:%M:%S})" + (f"; sorunlu adım: {', '.join(sorunlu)}" if sorunlu else ""))
-    _servis_ozeti(kok)
+        if kod or not bos or hepsi:
+            yazilan.append(ad)
+            print(f"── {ad} ({datetime.now():%H:%M:%S})", flush=True)
+            if cikti:
+                print(cikti, flush=True)
+            if kod:
+                print(f"✗ {ad} adımı sorunlu bitti ({time.monotonic() - bas:.0f} sn)", flush=True)
+    dosya.json_yaz(calisma / ".adimlar.json", zamanlar)
+    if yazilan:
+        print(f"── koşu bitti ({datetime.now():%H:%M:%S})"
+              + (f"; sorunlu adım: {', '.join(sorunlu)}" if sorunlu else ""))
+        _servis_ozeti(kok)
     return 1 if sorunlu else 0
+
+
+def _uret_surekli(kok: Path, op) -> int:
+    """Sürekli koşunun üretimi: prizde ve GPU boşken, bekleyen onarımlar önce, en çok `surekli_uretim_sarki` şarkı;
+    GPU doluysa (oyun, başka iş) beklemez, sonraki koşu dener. Biten şarkı "dinlemeye hazır" diye bildirilir."""
+    import functools
+
+    from yanki import motor, saglik, sistem
+
+    a = ayarlar.yukle()
+    calisma = a.kok / "calisma"
+    hedef = sorted((d for d in durum.hepsi(calisma) if d.asama in ("onarim", "analiz")),
+                   key=lambda d: (d.asama != "onarim", d.gecmis[-1]["zaman"] if d.gecmis else ""))
+    if not hedef:
+        print("üretilecek bir şey yok (analiz ya da onarım bekleyen şarkı yok)")
+        return 0
+    if not sistem.prizde_mi():
+        print(f"üretim bekliyor: pilde ({len(hedef)} şarkı sırada)")
+        return 0
+    if op.surekli_bosta_bekle and sistem.bosta_sn() < op.gunduz_bosta_dk * 60:
+        print(f"üretim bekliyor: bilgisayar kullanılıyor ({len(hedef)} şarkı sırada)")
+        return 0
+    if (kullanilan := saglik.gpu_kullanilan_mib()) is None or kullanilan >= a.gpu.bos_esik_mib:
+        print(f"üretim bekliyor: GPU dolu ({kullanilan} MiB; {len(hedef)} şarkı sırada)")
+        return 0
+    secilen = hedef[: op.surekli_uretim_sarki]
+    print("üretim: " + ", ".join(f"{d.sanatci} — {d.ad}" for d in secilen) + f" ({len(hedef)} sırada)", flush=True)
+    # GPU başlamadan dolarsa (oyun açıldı) saatlerce beklemesin: 10 dk sonra vazgeçer, şarkılar sırada kalır
+    calistir = functools.partial(motor.calistir, gpu_bekleme_sn=600)
+    bildir = _bildirici(calisma)
+    try:
+        uretilen = uretim.uret(a, calisma, [d.kimlik for d in secilen], calistir=calistir)
+    except motor.GpuMesgul as e:
+        print(f"üretim bekliyor: {e}")
+        return 0
+    for d in uretilen:
+        gecen = sum(x.gecti for x in d.adaylar)
+        ek = f" ({d.hata})" if d.hata else ""
+        print(f"{d.asama:9} {d.sanatci} — {d.ad}: {gecen}/{len(d.adaylar)} aday kapıdan geçti{ek}")
+        if d.asama == "uretildi":
+            bildir("dinleme", f"dinlemeye hazır: {d.ad}", f"{d.sanatci} — {d.ad}: {gecen} aday kapıdan geçti",
+                   f"dinleme:{d.kimlik}:{d.gecmis[-1]['zaman']}")
+    return 0
 
 
 def _servis_ozeti(kok: Path) -> None:
@@ -1008,6 +1121,7 @@ def main(argv: list[str] | None = None) -> int:
     alt.add_parser("uret", help="cover adaylarını ve bekleyen onarımları üret (GPU)").set_defaults(fn=_uret)
     c = alt.add_parser("calistir", help="gece koşusu: keşif, hazırlık, üretim, paket, takip, temizlik, yedek")
     c.add_argument("--liste", help="varsayılan girdi/liste.toml")
+    c.add_argument("--hepsi", action="store_true", help="zamanı gelmemiş adımlar dahil hepsini şimdi koştur")
     c.set_defaults(fn=_calistir, yeniden=False, analizsiz=False)
     yn = alt.add_parser("yeniden", help="onaylı/paketli şarkıya güncel hatla yeni adaylar (eskiler kalır)")
     yn.add_argument("kimlik", nargs="+")
