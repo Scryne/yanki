@@ -835,7 +835,7 @@ def test_pod_aktarimi_baglanti_koparsa_yeniden_dener(tmp_path, monkeypatch):
     from yanki import runpod
 
     p = runpod.Pod.__new__(runpod.Pod)
-    p.gizli, p.klasor, p.port, p.ip = tmp_path / "k", tmp_path, 22, "1.2.3.4"
+    p.gizli, p.klasor, p.port, p.ip, p.kok, p.id = tmp_path / "k", tmp_path, 22, "1.2.3.4", tmp_path, "pod-1"
     kodlar = [255, 255, 0]
     monkeypatch.setattr(subprocess, "run", lambda *a, **k: subprocess.CompletedProcess(a, kodlar.pop(0), "", "kopma"))
     monkeypatch.setattr(runpod.time, "sleep", lambda _: None)
@@ -890,3 +890,26 @@ def test_hazir_olmayan_pod_silinir_baska_pod_denenir_ikisinin_maliyeti_kaydedili
     assert s.basari and acilis["n"] == 2
     kayit = json.loads(uzak.harcama_yolu(tmp_path).read_text(encoding="utf-8"))[-1]
     assert kayit["usd"] == 0.1  # iki pod × 0,05
+
+
+def test_pod_komutu_asili_kalirsa_zaman_asimi_yeniden_denenir(tmp_path, monkeypatch):
+    """2026-10-10: RunPod'un TCP vekili bağlantıyı kabul edip cevap vermedi, `mkdir` 1 saat asılı kaldı (0,61 $)."""
+    import subprocess
+
+    from yanki import runpod
+
+    p = runpod.Pod.__new__(runpod.Pod)
+    p.gizli, p.klasor, p.port, p.ip, p.kok, p.id = tmp_path / "k", tmp_path, 22, "1.2.3.4", tmp_path, "pod-1"
+    olaylar = ["asili", "asili", 0]
+
+    def run(arg, **k):
+        assert k["stdin"] == subprocess.DEVNULL and k["timeout"] == runpod.Pod.KISA_SN
+        x = olaylar.pop(0)
+        if x == "asili":
+            raise subprocess.TimeoutExpired(arg, k["timeout"])
+        return subprocess.CompletedProcess(arg, 0, "tamam", "")
+
+    monkeypatch.setattr(subprocess, "run", run)
+    monkeypatch.setattr(runpod.time, "sleep", lambda _: None)
+    assert p.komut("mkdir -p /root/is") == "tamam" and olaylar == []
+    assert "zaman aşımı" in (tmp_path / "calisma" / "gunluk" / "runpod.log").read_text(encoding="utf-8")

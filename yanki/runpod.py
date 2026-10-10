@@ -149,25 +149,45 @@ class Pod:
                            f"son SSH hatası: {son_hata})")
 
     def _ssh(self) -> list[str]:
-        # her pod yeni anahtar: bilinen sunucular projeye yazılır (/dev/null Windows OpenSSH'ta yok)
+        # her pod yeni anahtar: bilinen sunucular projeye yazılır (/dev/null Windows OpenSSH'ta yok). BatchMode: soru
+        # sorup beklemesin; ServerAlive 15 sn × 4: ölü bağlantı ~1 dk'da 255 verir
         return ["-i", str(self.gizli), "-o", "StrictHostKeyChecking=no",
-                "-o", f"UserKnownHostsFile={self.klasor / 'known_hosts'}",
-                "-o", "LogLevel=ERROR", "-o", "ServerAliveInterval=30", "-o", "ConnectTimeout=20"]
+                "-o", f"UserKnownHostsFile={self.klasor / 'known_hosts'}", "-o", "BatchMode=yes",
+                "-o", "LogLevel=ERROR", "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=4",
+                "-o", "ConnectTimeout=20"]
 
-    # SSH/scp 255: bağlantı koptu (2026-10-10: 8 şarkının ~400 MB kaynağı yüklenirken 7. dosyada koptu, bütün koşu
-    # düştü). Dosya aktarımı ve tekrarlanabilir komutlar birkaç kez yeniden denenir.
+    # Geçici bağlantı sorunları yeniden denenir: SSH/scp 255 (2026-10-10: ~400 MB kaynak yüklenirken 7. dosyada koptu)
+    # ve zaman aşımı (2026-10-10: RunPod'un TCP vekili bağlantıyı kabul edip cevap vermedi, kısa bir `mkdir` 1 saat
+    # asılı kaldı; komutların zaman aşımı artık işine göre kısa).
     DENEME, BEKLEME_SN = 4, 10
+    KISA_SN = 120  # basit komut
 
     def _tekrarla(self, arg: list[str], zaman_asimi: float, deneme: int) -> subprocess.CompletedProcess:
         for i in range(deneme):
-            r = subprocess.run(arg, capture_output=True, text=True, encoding="utf-8", errors="replace",
-                               timeout=zaman_asimi)
+            t = time.time()
+            try:
+                r = subprocess.run(arg, capture_output=True, text=True, encoding="utf-8", errors="replace",
+                                   timeout=zaman_asimi, stdin=subprocess.DEVNULL)
+            except subprocess.TimeoutExpired:
+                r = subprocess.CompletedProcess(arg, 255, "", f"zaman aşımı ({zaman_asimi:.0f} sn)")
+            self._gunluk(f"{arg[0]} {arg[-1][:80]!r} → {r.returncode} ({time.time() - t:.0f} sn)"
+                         + (f" {r.stderr.strip()[-200:]}" if r.returncode else ""))
             if r.returncode != 255 or i == deneme - 1:
                 return r
             time.sleep(self.BEKLEME_SN * (i + 1))
         raise AssertionError("ulaşılmaz")
 
-    def komut(self, betik: str, zaman_asimi: float = 3600, tekrar: bool = True) -> str:
+    def _gunluk(self, satir: str) -> None:
+        """Uzak adımların zaman çizelgesi (`calisma/gunluk/runpod.log`): koşu düşünce nerede takıldığı görünsün."""
+        try:
+            yol = self.kok / "calisma" / "gunluk" / "runpod.log"
+            yol.parent.mkdir(parents=True, exist_ok=True)
+            with open(yol, "a", encoding="utf-8") as f:
+                f.write(f"{time.strftime('%Y-%m-%dT%H:%M:%S')} {self.id} {satir}\n")
+        except OSError:
+            pass
+
+    def komut(self, betik: str, zaman_asimi: float = KISA_SN, tekrar: bool = True) -> str:
         """`tekrar=False`: tekrarlanamayan komut (işçiyi başlatmak) bağlantı koparsa yeniden gönderilmez."""
         r = self._tekrarla(["ssh", *self._ssh(), "-p", str(self.port), f"root@{self.ip}", "bash -lc " +
                             shlex.quote(betik)], zaman_asimi, self.DENEME if tekrar else 1)
@@ -175,13 +195,13 @@ class Pod:
             raise RunPodHatasi(f"komut {r.returncode}: {(r.stderr or r.stdout)[-1500:]}")
         return r.stdout
 
-    def gonder(self, yerel: Path, uzak: str, zaman_asimi: float = 1800) -> None:
+    def gonder(self, yerel: Path, uzak: str, zaman_asimi: float = 900) -> None:
         r = self._tekrarla(["scp", *self._ssh(), "-P", str(self.port), "-q", str(yerel), f"root@{self.ip}:{uzak}"],
                            zaman_asimi, self.DENEME)
         if r.returncode != 0:
             raise RunPodHatasi(f"gönderilemedi ({yerel.name}, {r.returncode}): {r.stderr[-500:]}")
 
-    def al(self, uzak: str, yerel: Path, zaman_asimi: float = 1800) -> Path:
+    def al(self, uzak: str, yerel: Path, zaman_asimi: float = 900) -> Path:
         yerel.parent.mkdir(parents=True, exist_ok=True)
         r = self._tekrarla(["scp", *self._ssh(), "-P", str(self.port), "-q", f"root@{self.ip}:{uzak}", str(yerel)],
                            zaman_asimi, self.DENEME)
@@ -213,7 +233,7 @@ def acestep_kur(p: Pod, commit: str, modeller: tuple[str, ...] = ("acestep-v15-x
         [ -d {hedef} ] || git clone -q {ACESTEP_DEPO} {hedef}
         cd {hedef} && git fetch -q origin && git checkout -q {commit}
         uv sync -q
-        uv run acestep-download && {indir}""", zaman_asimi=3600)
+        uv run acestep-download && {indir}""", zaman_asimi=1800)
     # indirme sessizce boş geçebilir: model klasörü gerçekten dolu mu (2026-10-10 ilk denemede kurulum 40 sn sürdü)
     for m in modeller:
         boyut = (p.komut(f"du -sm {hedef}/checkpoints/{m} 2>/dev/null | cut -f1").strip() or "0").split()[0]

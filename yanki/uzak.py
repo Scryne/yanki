@@ -69,9 +69,19 @@ def acestep_commit(a: Ayarlar) -> str:
 def isci_kos(p: runpod.Pod, hedef: str, zaman_asimi_sn: float, aralik_sn: float = 20) -> list[dict]:
     """İşçiyi arka planda başlatır (SSH kopsa da sürer), bitene kadar bekler; sonuç listesini döner. Süreç pid
     dosyasından izlenir: `pgrep -f motor_isci.py` kendi `bash -lc` satırını eşleştirip hep "sürüyor" diyordu (S19)."""
-    p.komut(f"cd {hedef} && export PATH=$HOME/.local/bin:$PATH ACESTEP_GENERATION_TIMEOUT=3600 PYTHONUTF8=1 && "
-            f"nohup uv run python {UZAK_DIZIN}/motor_isci.py {UZAK_DIZIN}/motor_is.json {UZAK_DIZIN}/motor_sonuc.json "
-            f"> {UZAK_DIZIN}/motor.log 2>&1 & echo $! > {UZAK_DIZIN}/motor.pid", tekrar=False)
+    # setsid + </dev/null: arka plandaki işçi SSH'ın girdi kanalını devralırsa Windows OpenSSH kanal kapanana kadar
+    # bekliyor (2026-10-10, zamanlanmış görevde başlatma komutu asılı kaldı; Git'in ssh'ı beklemiyordu)
+    baslat = (f"cd {hedef} && export PATH=$HOME/.local/bin:$PATH ACESTEP_GENERATION_TIMEOUT=3600 PYTHONUTF8=1 && "
+              f"setsid nohup uv run python {UZAK_DIZIN}/motor_isci.py {UZAK_DIZIN}/motor_is.json "
+              f"{UZAK_DIZIN}/motor_sonuc.json > {UZAK_DIZIN}/motor.log 2>&1 < /dev/null & "
+              f"echo $! > {UZAK_DIZIN}/motor.pid")
+    try:
+        p.komut(baslat, tekrar=False)
+    except runpod.RunPodHatasi:
+        # komut kanalı koptu ama işçi başlamış olabilir: başlamadıysa hata, başladıysa izlemeye devam (iki kez başlatma)
+        if "VAR" not in p.komut(f"kill -0 $(cat {UZAK_DIZIN}/motor.pid 2>/dev/null) 2>/dev/null && echo VAR || "
+                                "echo YOK"):
+            raise
     bitis = time.monotonic() + zaman_asimi_sn
     sonuc: list[dict] = []
     while time.monotonic() < bitis:
