@@ -286,6 +286,29 @@ def test_otomatik_onay_bildirilir(tmp_path, monkeypatch):
     assert o["tur"] == "onay" and "aday 2" in o["metin"]
 
 
+def test_otomatik_onay_denenmemis_tur_dil_ve_anlasilmaz_sozde_bekler(tmp_path):
+    from datetime import datetime
+
+    from yanki import durum, onay
+
+    ayar = onay.Ayar(acik=True, sure_saat=24)
+    sonra = datetime(2026, 10, 9)
+    d = _uretilmis(tmp_path)
+    d.analiz = {"stil": "rap, hip hop song, clean modern studio recording", "dil": "en"}
+    durum.yaz(tmp_path, d)
+    assert onay.uygula(tmp_path, ayar, sonra) == [] and "rap" in onay.kulak_bekleyen(tmp_path, ayar)[0][1]
+    d.analiz = {"stil": "emotional piano ballad", "dil": "tr"}
+    durum.yaz(tmp_path, d)
+    assert onay.uygula(tmp_path, ayar, sonra) == [] and "dil tr" in onay.engel(d, ayar)
+    d.analiz = {"stil": "emotional piano ballad", "dil": "en"}
+    d.adaylar[1].kapilar["soz_wer"]["deger"] = 0.3  # en iyi aday artık 1 (0,2): eşiğin üstünde
+    durum.yaz(tmp_path, d)
+    assert onay.uygula(tmp_path, ayar, sonra) == [] and "0.2 > 0.15" in onay.engel(d, ayar)
+    d.adaylar[0].kapilar["soz_wer"]["deger"] = 0.1
+    durum.yaz(tmp_path, d)
+    assert onay.engel(d, ayar) is None and onay.uygula(tmp_path, ayar, sonra)[0][1].no == 1
+
+
 def test_otomatik_onay_bekleyen_onarimli_adayi_onermez(tmp_path):
     from yanki import onay
 

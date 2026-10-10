@@ -29,6 +29,10 @@ ornekleme = 44100
 # Kendiliğinden onaylanan her şarkı bildirilir.
 acik = true
 sure_saat = 24
+# Yalnız tarifi dinlenmiş tür ve dil, sözü anlaşılır aday (yanki/onay.py → DENENMEMIS). Rap, metal vb. ve İngilizce
+# dışı Scryne'ın kulağına kalır (bildirilir). Ölçü: Scryne'ın onayladığı baladların en iyi söz WER'i çoğunlukla ≤ 0,1.
+diller = ["en"]
+en_yuksek_wer = 0.15
 
 [takvim]
 # Yayın takvimi (yanki/dagitim.py): paketlenmiş şarkılar kuyruk, sıra keşif puanı sonra onay sırası. Sırası gelen paketi
