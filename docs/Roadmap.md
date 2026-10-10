@@ -341,6 +341,9 @@ veto eder.
   otomatik çalışsın" → açık; `ilk_kabul` kapısı When We Were Young kabul edilene kadar yeni gönderimi bekletir.
   `\Yanki\Gece` artık bilgisayarı uykudan uyandırıyor (`WakeToRun`, güç planında prizde uyandırma zamanlayıcısı
   açıldı: `RTCWAKE` 2 → 1; pilde kapalı).
+- **Otomatik onay açık, 24 saat (Scryne, 2026-10-10: "her şey otomatik çalışsın"; 15'te 4 ölçümü ikinci kez
+  gösterildi, 24 saat seçildi):** karar gelmeyen şarkıda en düşük söz WER'li aday gece onaylanır ve bildirilir. İlki
+  Cadavers in My Cadillac (aday 3), 2026-10-11 gecesi.
 - **Bitti kriterinden kalan:** ilk Tunearo kararı (kabul → UPC/ISRC kaydı, takip; red → neden), takvimin 2 hafta
   kesintisiz işlemesi, veto penceresinin uçtan uca bir şarkıda çalışması (kapalı, Faz 12 ölçümü bekliyor).
 - **Risk (Tunearo kalite kontrolü):** hesaptaki iki yayın "derivative work (remix, sample, or cover)" diye

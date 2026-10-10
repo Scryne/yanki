@@ -272,6 +272,20 @@ def test_otomatik_onay_sure_dolunca_en_dusuk_wer(tmp_path):
     assert (d.asama, d.secilen, a.no) == ("onaylandi", 2, 2) and d.notlar[-1]["otomatik_onay"]["aday"] == 2
 
 
+def test_otomatik_onay_bildirilir(tmp_path, monkeypatch):
+    from yanki import cli, durum, olay
+
+    c = tmp_path / "calisma"
+    c.mkdir()
+    _uretilmis(c)
+    (tmp_path / "config").mkdir()
+    (tmp_path / "config" / "yayin.toml").write_text("[otomatik_onay]\nacik = true\nsure_saat = 24\n", encoding="utf-8")
+    assert cli._otomatik_onay(tmp_path) == 0
+    assert durum.oku(c, "a-b").asama == "onaylandi"
+    (o,) = olay.oku(c)
+    assert o["tur"] == "onay" and "aday 2" in o["metin"]
+
+
 def test_otomatik_onay_bekleyen_onarimli_adayi_onermez(tmp_path):
     from yanki import onay
 

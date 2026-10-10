@@ -768,8 +768,13 @@ def _otomatik_onay(kok: Path) -> int:
     from yanki import onay
 
     ayar = onay.ayar_oku(kok / "config" / "yayin.toml")
+    bildir = _bildirici(kok / "calisma")
     for d, a in onay.uygula(kok / "calisma", ayar):
         print(f"otomatik onay ({ayar.sure_saat:g} sa veto penceresi doldu): {d.sanatci} — {d.ad}, aday {a.no}")
+        # kulaktan geçmeden onaylandı: haberin olsun (yüklenmeden önce dinleme odasında geri alınabilir)
+        bildir("onay", f"kendiliğinden onaylandı: {d.ad}",
+               f"{d.sanatci} — {d.ad}: {ayar.sure_saat:g} saatte karar gelmedi, sözü en net aday {a.no} onaylandı. "
+               "Yüklenmeden önce dinleyip değiştirebilirsin.", f"otomatik_onay:{d.kimlik}:{a.no}")
     return 0
 
 

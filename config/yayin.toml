@@ -25,9 +25,10 @@ ornekleme = 44100
 [otomatik_onay]
 # Veto penceresi (yanki/onay.py): dinlemeye çıkan şarkıya `sure_saat` içinde onay/onarım/ret gelmezse kapılardan geçmiş,
 # sözü en anlaşılır (en düşük söz WER) aday onaylanır. Ölçüm: bu kural Scryne'ın seçimini 15'te 4 tuttu (rastgele
-# kadar) → kapalı; dağıtım API'siyle tam otomasyonda açılır (Roadmap Faz 10).
-acik = false
-sure_saat = 72
+# kadar). Açık (Scryne, 2026-10-10: "her şey otomatik çalışsın", ölçüm ikinci kez gösterildi, 24 saat seçildi).
+# Kendiliğinden onaylanan her şarkı bildirilir.
+acik = true
+sure_saat = 24
 
 [takvim]
 # Yayın takvimi (yanki/dagitim.py): paketlenmiş şarkılar kuyruk, sıra keşif puanı sonra onay sırası. Sırası gelen paketi
