@@ -1,7 +1,7 @@
 ---
 proje: Yanki
 created: 2026-10-06
-modified: 2026-10-09
+modified: 2026-10-10
 type: roadmap
 status: aktif
 ---
@@ -356,6 +356,27 @@ veto eder.
   kapak" (Pinterest). Görsel doğrulama ilk koşuda gerçek bir hata buldu: küçük resimler `paket/`'e yazılıyor, kapak
   sanılıp çoğalıyor ve yükleyicinin "pakette tek JPG" kuralını bozuyordu → `calisma/.kapak_onbellek/`, testli. Eski bir
   hata da çıktı (söz zamanı olmayan şarkıda sayfaya "null" yazıyordu). Son koşu 24 kare 0 sorun.
+- **Baştan yayın (Scryne, 2026-10-10: "şuanki şarkıların hepsini kaldıralım, en baştan sağlam bir şekilde artist
+  hesabımızı yapalım; yayın tarihlerini ileri atma, sürekli şarkı atalım; her şeyi sana bırakıyorum"):**
+  - Sorun: Orvane iki dağıtımcıya dağılmıştı. RouteNote'ta üç parça incelemede (yayın 28 Ekim–11 Kasım, her biri
+    "Create a new profile" ile: canlıya çıksalar Spotify'da üç ayrı Orvane profili riski), Tunearo'da When We Were
+    Young 31 Ekim tarihli ve eski mağaza listesiyle (Rights Manager, Audible Magic açık) incelemede.
+  - Karar: tek dağıtımcı Tunearo, tek sanatçı kaydı (`f796ccc7-…`), hiçbir şey canlı değilken temiz başlangıç. Ad
+    Orvane kalır: Spotify, Deezer ve MusicBrainz'de aynı adda sanatçı yok (yalnız "Orvane North"), profil çakışması
+    riski yok. Tunearo sanatçısına biyografi yazıldı (İngilizce, "AI-assisted" açık).
+  - `yanki geri-cek` (`dagitim.geri_cek`, `tunearo.Tunearo.geri_cek`): taslak silinir (`DELETE`), canlı yayına
+    takedown; incelemedeki yayın API'den geri çekilemiyor (canlı: takedown 409 "Cannot takedown release in status
+    'pending'"; PATCH/DELETE yalnız taslak ve redde) → işaretlenir, yoklama sonuç gelince bitirir (red → aynı yayın
+    yeni tarihle yeniden gönderilir, kota yanmaz; canlı → takedown, sonra yeni yayın). Geri çekilen şarkı
+    `onaylandi`ya döner, gece güncel ayarlarla (WAV, kapak) yeniden paketlenir. RouteNote'ta API yok: panelden
+    kaldırılır, sonra `--kaldirildi`. Yeniden paketleme `tunearo_gecmisi`'ni korur. 6 yeni test, toplam 280.
+  - **Takvim sürekli:** her gün bir yükleme (`haftada = 7`), yayın tarihi yüklemeden 1 gün sonra, `baslangic =
+    "surekli"`: ilk kabul beklenmez, yalnız düzeltilmemiş bir red yeni yüklemeyi durdurur.
+  - Uygulandı: When We Were Young geri çekilmek üzere işaretlendi (pending). A Thousand Years gönderildi (yayın
+    2026-10-11, alanlar API'den geri okunup doğrulandı); kuyrukta 10 paket, gece birer birer.
+  - Bekleyen: RouteNote'taki üç yayını Scryne panelden kaldırır (tarayıcı eklentisi bağlı değildi), sonra
+    `yanki geri-cek <kimlik> --kaldirildi`. When We Were Young için arkadaştan panelden reddetmesi istenirse aynı
+    yayın hemen yeni tarihle döner; istenmezse kabul edilip canlıya çıkınca hat takedown ister.
 - **Bitti kriterinden kalan:** ilk Tunearo kararı (kabul → UPC/ISRC kaydı, takip; red → neden), takvimin 2 hafta
   kesintisiz işlemesi, veto penceresinin uçtan uca bir şarkıda çalışması (kapalı, Faz 12 ölçümü bekliyor).
 - **Risk (Tunearo kalite kontrolü):** hesaptaki iki yayın "derivative work (remix, sample, or cover)" diye

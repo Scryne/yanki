@@ -33,7 +33,7 @@ ajanla yapıldı; aşağıdaki iddialar kaynaklı, "öneri" olanlar ayrıca işa
 | Otomatik onay yalnız denenmiş tür (balad/pop/piyano rock) ve İngilizcede, en iyi aday söz WER ≤ 0,15 | Kulaktan geçmemiş kötü cover atlanır, atlama profili algoritmada aşağı çeker; Orvane'in tür kimliği tutarlı kalır | `yanki/onay.py`, `config/yayin.toml` |
 | Kapakta insan, yazı yok (Pinterest süzgeci) | AI Persona etiketi albüm görselinde fotogerçekçi insanı da sayıyor | `yanki/pinterest.py` |
 | Mağazalar: Amazon açık; Content ID, Rights Manager, Audible Magic kapalı | Erişim ve gelir; cover'ın parmak izi kaydı yanlış hak talebi üretir | `config/yayin.toml` → `[tunearo]` |
-| Haftada 1 yayın, yayın tarihi en erken | Release Radar zaten haftada bir parça gösteriyor; asıl trafik arama (kaldırılmış şarkı) | `[takvim]` |
+| ~~Haftada 1 yayın~~ → her gün bir yayın (Scryne, 2026-10-10: "sürekli şarkı atalım"), yayın tarihi en erken | Release Radar haftada bir parça gösterir ama asıl trafik arama (kaldırılmış şarkı), o yayın sayısıyla büyür; spam filtresi toplu yüklemeye bakıyor, günde bir tekil yayın toplu değil | `[takvim]` |
 | Spotify profili Tunearo sanatçısına kendiliğinden bağlanır | Yeni yayınlar aynı profile düşer, bölünme bildirilir | `tunearo.profil_bagla` |
 | Kapıdan geçemeyen iki rap şarkısı reddedildi (geri alınabilir) | Rap tarifi denenmedi; üç aday da söz kapısında kaldı | dinleme odası |
 

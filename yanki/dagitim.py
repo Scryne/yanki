@@ -10,7 +10,13 @@ Takvim (`config/yayin.toml` → `[takvim]`): `paketlendi` şarkılar kuyruk; sı
 tarihi yüklemeden `yayin_on_gun` gün sonra (Tunearo'da 1: en erken; RouteNote'ta 21 kullanılıyordu).
 `baslangic = "ilk_kabul"`: etkin dağıtımcıda ilk kabul gelene kadar incelemede en çok bir yükleme; o reddedilirse
 neden anlaşılana kadar yeni yükleme yok (Roadmap Faz 7: red gelirse nedeni kapak mı AI mı önce o anlaşılmalı; aynı
-nedenle kuyruğun tamamı ve hesabın parça kotası yanmasın).
+nedenle kuyruğun tamamı ve hesabın parça kotası yanmasın). `"surekli"`: kabul beklenmez, her gün yükleme sürer;
+yalnız düzeltilmemiş bir red varken durur. `"hemen"`: hiçbir kapı yok.
+
+Geri çekme (`geri_cek`): yüklenmiş yayın dağıtımcıdan kaldırılır, şarkı `onaylandi`ya döner; gece koşusu onu güncel
+ayarlarla (dağıtımcının ses biçimi, kapak kaynağı) yeniden paketler ve kuyruğa girer (red değildir, takvimi
+durdurmaz). Elle dağıtımcıda insan panelden kaldırır; Tunearo'da taslak silinir, canlı yayına takedown istenir,
+incelemedeki yayın API'den geri çekilemediği için işaretlenir ve sonuç gelince yoklama bitirir.
 """
 
 import tomllib
@@ -83,7 +89,7 @@ class Takvim:
     acik: bool = True
     haftada: int = 1
     yayin_on_gun: int = 21
-    baslangic: str = "ilk_kabul"  # "ilk_kabul" | "hemen"
+    baslangic: str = "ilk_kabul"  # "ilk_kabul" | "surekli" | "hemen"
 
     @property
     def aralik(self) -> timedelta:
@@ -94,8 +100,8 @@ def takvim_oku(yayin_yolu: Path) -> Takvim:
     with open(yayin_yolu, "rb") as f:
         t = tomllib.load(f).get("takvim", {})
     baslangic = t.get("baslangic", "ilk_kabul")
-    if baslangic not in ("ilk_kabul", "hemen"):
-        raise ValueError(f"takvim.baslangic ilk_kabul ya da hemen olmalı: {baslangic}")
+    if baslangic not in ("ilk_kabul", "surekli", "hemen"):
+        raise ValueError(f"takvim.baslangic ilk_kabul, surekli ya da hemen olmalı: {baslangic}")
     return Takvim(bool(t.get("acik", True)), int(t.get("haftada", 1)), int(t.get("yayin_on_gun", 21)), baslangic)
 
 
@@ -197,6 +203,10 @@ def plan(calisma: Path, t: Takvim, bugun: date | None = None, puanlar: dict[str,
         beklemede = "takvim kapalı (config/yayin.toml → [takvim])"
     elif t.baslangic == "ilk_kabul":
         beklemede = _ilk_kabul_bekleme(calisma, hepsi, dagitimci)
+    elif t.baslangic == "surekli" and reddedilen:
+        adlar = ", ".join(d.ad for d in hepsi if d.kimlik in reddedilen)
+        beklemede = (f"dağıtımcı reddetti ({adlar}); neden anlaşılıp düzeltilmeden yeni yükleme yok "
+                     "(düzeltilen şarkı: yanki paketle --yeniden, sonra yanki yukle <kimlik>)")
     return Plan(sira, beklemede, son, reddedilen)
 
 
@@ -224,3 +234,61 @@ def red_kaydet(calisma: Path, kimlik: str, neden: str) -> durum.Durum:
         d.yayin = {}
         d.gec("paketlendi", f"{RED_ONEKI}{neden}")  # takvim bunu düzeltilene (yeniden paketlenene) kadar atlar
     return d
+
+
+# ── geri çekme ──────────────────────────────────────────────
+def geri_cekildi_kaydet(calisma: Path, kimlik: str, neden: str | None = None, yeni_yayin: bool = True,
+                        son_durum: str | None = None) -> durum.Durum:
+    """Yayın dağıtımcıdan kalktı: yükleme bilgisi geçmişe (`geri_cekildi`), şarkı `onaylandi`ya döner (eski paket
+    başka dağıtımcının biçiminde ya da eski kapakla olabilir: sonraki paketleme güncel ayarlarla yeniler).
+    `yeni_yayin`: Tunearo kaydı da geçmişe taşınır, sonraki yükleme yeni yayın açar (silinen taslak, takedown);
+    False: reddedilmiş yayın aynı kayıtla düzeltilip yeniden gönderilir (parça kotası yanmaz)."""
+    import json
+
+    from yanki import dosya
+
+    bugun = date.today().isoformat()
+    with durum.guncelle(calisma, kimlik) as d:
+        if d.asama not in ("yuklendi", "yayinda"):
+            raise ValueError(f"yüklenmiş bir şarkı değil (aşama: {d.asama})")
+        meta_yolu = durum.klasor(calisma, kimlik) / "paket" / "metadata.json"
+        if meta_yolu.exists():
+            meta = json.loads(meta_yolu.read_text(encoding="utf-8"))
+            y = meta.pop("yukleme", None) or {}
+            neden = neden or (y.pop("geri_cek", None) or {}).get("neden") or "geri çekildi"
+            y.pop("geri_cek", None)
+            meta.setdefault("yukleme_gecmisi", []).append(
+                {**y, "geri_cekildi": neden, "geri_cekme_tarihi": bugun, **({"son_durum": son_durum} if son_durum
+                                                                            else {})})
+            if meta.get("tunearo"):
+                if yeni_yayin:
+                    meta.setdefault("tunearo_gecmisi", []).append(meta.pop("tunearo"))
+                else:
+                    meta["tunearo"]["durum"] = son_durum
+            dosya.json_yaz(meta_yolu, meta)
+        neden = neden or "geri çekildi"
+        d.notlar.append({"geri_cekildi": {"neden": neden, "tarih": bugun}})
+        d.yayin = {}
+        d.gec("onaylandi")
+    return d
+
+
+def geri_cek(calisma: Path, kimlik: str, neden: str, kok: Path | None = None, kaldirildi: bool = False) -> str:
+    """Yüklenmiş şarkıyı dağıtımcıdan geri çeker. Dönen: "tamam" (kuyruğa döndü) | "bekliyor" (Tunearo incelemesinde:
+    işaretlendi, gece yoklaması sonuç gelince bitirir). Elle dağıtımcıda yayını insan panelden kaldırır, sonra
+    `kaldirildi=True` ile kaydedilir."""
+    from yanki import takip
+
+    d = durum.oku(calisma, kimlik)
+    if d is None:
+        raise durum.Yok(kimlik)
+    if d.asama not in ("yuklendi", "yayinda"):
+        raise ValueError(f"yüklenmiş bir şarkı değil (aşama: {d.asama})")
+    ad = (takip.yukleme_bilgisi(calisma, kimlik) or {}).get("dagitimci") or "routenote"
+    dagitimci = sec(ad, kok)
+    if dagitimci.otomatik:
+        return dagitimci.geri_cek(calisma, d, neden)
+    if not kaldirildi:
+        raise ValueError(f"{ad} için API yok: yayını panelden kaldır, sonra aynı komutu --kaldirildi ile ver")
+    geri_cekildi_kaydet(calisma, kimlik, neden)
+    return "tamam"

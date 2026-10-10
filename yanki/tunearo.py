@@ -115,6 +115,9 @@ class Istemci:
     def patch(self, yol: str, govde: dict) -> dict:
         return self.istek("PATCH", yol, govde)
 
+    def delete(self, yol: str) -> dict:
+        return self.istek("DELETE", yol)
+
     def dosya_yukle(self, imzali_adres: str, yol: Path, tur: str) -> None:
         """Ön imzalı adrese (Tunearo deposu, 2 saat geçerli) doğrudan PUT; dosya API sunucusundan geçmez."""
         r = urllib.request.Request(imzali_adres, data=yol.read_bytes(), method="PUT",
@@ -368,6 +371,40 @@ class Tunearo:
             bilgi["haric_magazalar"] = list(self.ayar["haric_magazalar"])
         return bilgi
 
+    def geri_cek(self, calisma: Path, d: durum.Durum, neden: str) -> str:
+        """Yüklenmiş yayını geri çeker (`dagitim.geri_cek`). API incelemedeki (`pending`) yayını geri çekemiyor
+        (takedown 409, PATCH/DELETE yalnız taslak ve redde): yükleme `geri_cek` diye işaretlenir, yoklama sonuç
+        gelince bitirir (red → aynı yayın kuyruğa; canlı → takedown). Dönen: "tamam" | "bekliyor"."""
+        from yanki import takip
+
+        rid = (takip.yukleme_bilgisi(calisma, d.kimlik) or {}).get("release_id")
+        if not rid:
+            raise ValueError("Tunearo yayın kimliği kayıtlı değil")
+        takip.yukleme_kaydet(calisma, d.kimlik, {"geri_cek": {"neden": neden, "tarih": date.today().isoformat()}})
+        try:
+            st = self.api.get(f"/releases/{rid}/status")
+        except ag.Bulunamadi:
+            st = {"status": None}  # panelden silinmiş
+        return self._geri_cek_ilerlet(calisma, d, rid, st)
+
+    def _geri_cek_ilerlet(self, calisma: Path, d: durum.Durum, rid: str, st: dict) -> str:
+        from yanki import dagitim
+
+        s = st.get("status")
+        if s == "draft":
+            self.api.delete(f"/releases/{rid}")
+        elif s in KABUL:
+            try:
+                self.api.post(f"/releases/{rid}/takedown")
+            except TunearoHatasi as e:
+                if e.kod != 409:  # approved: takedown yalnız canlıda; canlıya çıkınca yoklama yeniden dener
+                    raise
+                return "bekliyor"
+        elif s not in (None, "rejected", *KALDIRMA):
+            return "bekliyor"  # pending
+        dagitim.geri_cekildi_kaydet(calisma, d.kimlik, yeni_yayin=s != "rejected", son_durum=s or "silindi")
+        return "tamam"
+
     def yokla(self, calisma: Path, bildir=None) -> list[tuple[durum.Durum, str, str | None]]:
         """Tunearo'ya yüklenmiş şarkıların durumu. Değişeni kaydeder ve bildirir; red şarkıyı `paketlendi`ye döndürür
         (`dagitim.red_kaydet`). Dönen: (şarkı, durum, önceki durum)."""
@@ -392,7 +429,22 @@ class Tunearo:
                 sonuc.append((d, "hata", y.get("dagitim_durumu")))
                 continue
             yeni, eski = st.get("status"), y.get("dagitim_durumu")
-            guncel = {"dagitim_durumu": yeni, "dagitim_kontrol": datetime.now().isoformat(timespec="seconds")}
+            if y.get("geri_cek"):  # geri çekilmesi istenmiş yayın: incelemeden çıktıysa bitir
+                try:
+                    sonuc_ = self._geri_cek_ilerlet(calisma, d, rid, st)
+                except TunearoHatasi as e:
+                    print(f"  {d.ad}: geri çekilemedi: {e}")
+                    sonuc.append((d, "hata", eski))
+                    continue
+                if sonuc_ == "tamam":
+                    d = durum.oku(calisma, d.kimlik) or d
+                if sonuc_ == "tamam" and bildir:
+                    bildir("dagitim", f"Tunearo'dan geri çekildi: {d.ad}",
+                           f"durum {yeni}: yayın kaldırıldı; gece koşusu yeniden paketleyip kuyruğa alır",
+                           f"tunearo:geri:{d.kimlik}:{rid}")
+                sonuc.append((d, "geri_cekildi" if sonuc_ == "tamam" else f"geri çekilecek ({yeni})", eski))
+                continue
+            guncel ={"dagitim_durumu": yeni, "dagitim_kontrol": datetime.now().isoformat(timespec="seconds")}
             if st.get("upc"):
                 guncel["upc"] = st["upc"]
             if yeni in KABUL and not y.get("isrc") and y.get("track_id"):

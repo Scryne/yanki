@@ -730,6 +730,27 @@ def _dagitim_red(args: argparse.Namespace) -> int:
     return 0
 
 
+def _geri_cek(args: argparse.Namespace) -> int:
+    """Yüklenmiş şarkıları dağıtımcıdan geri çeker; şarkı yükleme kuyruğuna döner (red sayılmaz)."""
+    from yanki import dagitim
+
+    a = ayarlar.yukle()
+    calisma = a.kok / "calisma"
+    kimlikler = args.kimlik or [d.kimlik for d in durum.hepsi(calisma) if d.asama in ("yuklendi", "yayinda")]
+    kod = 0
+    for kimlik in kimlikler:
+        try:
+            sonuc = dagitim.geri_cek(calisma, kimlik, args.neden, a.kok, kaldirildi=args.kaldirildi)
+        except (ValueError, LookupError, RuntimeError) as e:  # yüklenmemiş, panelden kaldırılmamış, Tunearo hatası
+            print(f"✗ {kimlik}: {e}")
+            kod = 1
+            continue
+        print(f"  {kimlik}: " + ("geri çekildi; gece koşusu güncel ayarlarla paketleyip kuyruğa alır"
+                                 if sonuc == "tamam" else
+                                 "incelemede, API geri çekemiyor: işaretlendi, sonuç gelince gece yoklaması bitirir"))
+    return kod
+
+
 def _gunduz(args: argparse.Namespace) -> int:
     """Gündüz boşta üretim (`\\Yanki\\Gunduz` görevi, her 30 dk): koşullar uygunsa kuyruktan bir şarkı üretir.
     Koşul tutmazsa tek satır nedenle çıkar (görev günde ~34 kez çalışır, günlük kısa kalsın)."""
@@ -912,6 +933,12 @@ def main(argv: list[str] | None = None) -> int:
     dr.add_argument("kimlik")
     dr.add_argument("--neden", required=True, help="dağıtımcının red gerekçesi (ör. kapak, AI içerik)")
     dr.set_defaults(fn=_dagitim_red)
+    gc = alt.add_parser("geri-cek", help="yüklenmiş şarkıyı dağıtımcıdan geri çek (yeniden paketlenip kuyruğa döner)")
+    gc.add_argument("kimlik", nargs="*", help="boşsa yüklenmiş hepsi")
+    gc.add_argument("--neden", default="baştan yayın (Scryne, 2026-10-10)")
+    gc.add_argument("--kaldirildi", action="store_true",
+                    help="elle dağıtımcıda (RouteNote) yayın panelden kaldırıldı, kaydet")
+    gc.set_defaults(fn=_geri_cek)
     gz = alt.add_parser("gunduz", help="boştayken kuyruktan bir şarkı üret (\\Yanki\\Gunduz görevi çalıştırır)")
     gz.add_argument("--zorla", action="store_true", help="saat ve boşta kalma koşulunu atla (pil ve GPU yine bakılır)")
     gz.add_argument("--liste", help="varsayılan girdi/liste.toml")
@@ -940,7 +967,7 @@ def main(argv: list[str] | None = None) -> int:
 
 
 YAZAN_KOMUTLAR = {"hazirla", "uret", "calistir", "yeniden", "kunye", "paketle", "yuklendi", "kesif", "takip",
-                  "temizle", "yedekle", "dagitim-red", "gunduz", "yukle", "dagitim-durum", "kapak"}
+                  "temizle", "yedekle", "dagitim-red", "geri-cek", "gunduz", "yukle", "dagitim-durum", "kapak"}
 
 
 if __name__ == "__main__":

@@ -64,6 +64,12 @@ class SahteApi:
             t = {"id": self._id("trk"), "release_id": p[1], "isrc": None, "audio_file_url": None, **govde}
             self.parcalar[t["id"]] = t
             return {"track": t}
+        if p[-1] == "takedown":
+            r = self.yayinlar[p[1]]
+            if r["status"] != "live":
+                raise tunearo.TunearoHatasi(409, f"Cannot takedown release in status '{r['status']}'")
+            r["status"] = "takedown_requested"
+            return {"release": {"id": p[1], "status": r["status"]}}
         if p[-1] == "submit":
             r = self.yayinlar[p[1]]
             assert r["status"] in ("draft", "rejected") and any(t["release_id"] == p[1] for t in self.parcalar.values())
@@ -79,6 +85,13 @@ class SahteApi:
         else:
             hedef = self.parcalar[p[3]] if len(p) == 4 else self.yayinlar[p[1]]
         hedef.update(govde)
+        return {}
+
+    def delete(self, yol):
+        self.cagrilar.append(("DELETE", yol))
+        p = yol.strip("/").split("/")
+        assert self.yayinlar[p[1]]["status"] == "draft"  # gerçek API yalnız taslağı siler (409)
+        del self.yayinlar[p[1]]
         return {}
 
     def dosya_yukle(self, adres, yol, tur):
@@ -498,3 +511,87 @@ def test_kazanc_yalniz_bizim_yayinlar_ve_onbellek(tmp_path):
     assert sorted(v["yayinlar"]) == ["rel-a", "rel-eski"] and Kazanc.cagri == 2
     tunearo.kazanc(c, Kazanc())
     assert Kazanc.cagri == 2  # önbellekten
+
+
+# ── geri çekme ve sürekli takvim (Scryne, 2026-10-10: "hepsini kaldıralım, sürekli şarkı atalım") ──
+def test_incelemedeki_yayin_isaretlenir_red_gelince_ayni_yayin_kuyruga_doner(tmp_path):
+    c, api, t, rid = _yuklenmis(tmp_path)
+    monkey_sec = dagitim.sec
+    try:
+        dagitim.sec = lambda ad, kok=None: t  # noqa: E731
+        assert dagitim.geri_cek(c, "keane-sowk", "baştan yayın") == "bekliyor"
+    finally:
+        dagitim.sec = monkey_sec
+    assert durum.oku(c, "keane-sowk").asama == "yuklendi" and takip.yukleme_bilgisi(c, "keane-sowk")["geri_cek"]
+    ((_, s, _),) = t.yokla(c)  # hâlâ incelemede: dokunulmaz
+    assert s == "geri çekilecek (pending)" and api.yayinlar[rid]["status"] == "pending"
+    # arkadaş panelden reddetti → red sayılmaz, aynı yayın düzeltilip yeniden gönderilir (kota yanmaz)
+    api.yayinlar[rid].update(status="rejected", rejection_reason="geri çekildi")
+    ((d, s, _),) = t.yokla(c, lambda *a: olay.bildir(c, *a))
+    assert s == "geri_cekildi" and d.asama == "onaylandi" and not d.hata
+    with durum.guncelle(c, "keane-sowk") as x:  # gece koşusu güncel ayarlarla yeniden paketler
+        x.gec("paketlendi")
+    meta = _meta(c)
+    assert "yukleme" not in meta and meta["yukleme_gecmisi"][-1]["geri_cekildi"] == "baştan yayın"
+    assert "red" not in meta["yukleme_gecmisi"][-1] and meta["tunearo"]["release_id"] == rid
+    assert dagitim.plan(c, dagitim.Takvim(baslangic="surekli"), date.today(), {},
+                        dagitimci="tunearo").bugun_yuklenecek.kimlik == "keane-sowk"
+    dagitim.otomatik_yukle(c, t, "keane-sowk", date(2026, 10, 12))
+    assert len(api.yayinlar) == 1 and len(api.parcalar) == 1
+    assert api.yayinlar[rid]["status"] == "pending" and api.yayinlar[rid]["release_date"] == "2026-10-12"
+
+
+def test_canli_yayina_takedown_istenir_sonraki_yukleme_yeni_yayin_acar(tmp_path):
+    c, api, t, rid = _yuklenmis(tmp_path)
+    api.yayinlar[rid]["status"] = "live"
+    assert t.geri_cek(c, durum.oku(c, "keane-sowk"), "baştan yayın") == "tamam"
+    assert api.yayinlar[rid]["status"] == "takedown_requested"
+    meta = _meta(c)
+    assert "tunearo" not in meta and meta["tunearo_gecmisi"][0]["release_id"] == rid
+    with durum.guncelle(c, "keane-sowk") as x:
+        x.gec("paketlendi")
+    dagitim.otomatik_yukle(c, t, "keane-sowk", date(2026, 10, 12))
+    assert len(api.yayinlar) == 2
+
+
+def test_onaylanmis_yayin_canliya_cikinca_yoklama_takedown_ister(tmp_path):
+    c, api, t, rid = _yuklenmis(tmp_path)
+    api.yayinlar[rid]["status"] = "approved"
+    assert t.geri_cek(c, durum.oku(c, "keane-sowk"), "baştan") == "bekliyor"  # takedown yalnız canlıda (409)
+    api.yayinlar[rid]["status"] = "live"
+    ((d, s, _),) = t.yokla(c)
+    assert s == "geri_cekildi" and d.asama == "onaylandi" and api.yayinlar[rid]["status"] == "takedown_requested"
+
+
+def test_taslak_silinir(tmp_path):
+    c = tmp_path / "calisma"
+    _paket(c, asama="yuklendi")
+    api = SahteApi()
+    api.yayinlar["rel-9"] = {"id": "rel-9", "status": "draft"}
+    takip.yukleme_kaydet(c, "keane-sowk", {"release_id": "rel-9"}, "tunearo")
+    assert _dagitimci(tmp_path, api).geri_cek(c, durum.oku(c, "keane-sowk"), "x") == "tamam"
+    assert "rel-9" not in api.yayinlar and durum.oku(c, "keane-sowk").asama == "onaylandi"
+
+
+def test_elle_dagitimcida_panelden_kaldirilmadan_kaydedilmez(tmp_path):
+    c = tmp_path / "calisma"
+    _yukleme(c, "rn", "yuklendi", dagitimci="routenote", isrc="GXM2X2626596")
+    with pytest.raises(ValueError, match="--kaldirildi"):
+        dagitim.geri_cek(c, "rn", "baştan")
+    assert durum.oku(c, "rn").asama == "yuklendi"
+    assert dagitim.geri_cek(c, "rn", "baştan", kaldirildi=True) == "tamam"
+    d, meta = durum.oku(c, "rn"), _meta(c, "rn")
+    assert d.asama == "onaylandi" and not d.hata and meta["yukleme_gecmisi"][0]["isrc"] == "GXM2X2626596"
+
+
+def test_surekli_takvim_kabul_beklemez_red_varken_durur(tmp_path):
+    c = tmp_path / "calisma"
+    t = dagitim.Takvim(haftada=7, yayin_on_gun=1, baslangic="surekli")
+    _yukleme(c, "tn", "yuklendi", dagitimci="tunearo", dagitim_durumu="pending")
+    _paket(c, kimlik="kuyruk")
+    p = dagitim.plan(c, t, date(2026, 10, 20), {}, dagitimci="tunearo")
+    assert p.beklemede is None
+    assert (p.sira[0].yukleme, p.sira[0].yayin_tarihi) == (date(2026, 10, 20), date(2026, 10, 21))
+    dagitim.red_kaydet(c, "tn", "Tunearo: derivative work")
+    p = dagitim.plan(c, t, date(2026, 10, 20), {}, dagitimci="tunearo")
+    assert "reddetti" in p.beklemede and p.bugun_yuklenecek is None

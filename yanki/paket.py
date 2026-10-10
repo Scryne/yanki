@@ -404,7 +404,7 @@ def paketle(calisma: Path, yayin_yolu: Path, kimlikler: list[str] | None = None,
     return islenen
 
 
-KALICI_ALANLAR = ("yukleme", "yukleme_gecmisi", "tunearo")
+KALICI_ALANLAR = ("yukleme", "yukleme_gecmisi", "tunearo", "tunearo_gecmisi")  # geri çekilen yayınlar da
 
 
 def _paketle_bir(calisma: Path, d: durum.Durum, y: Yayin) -> durum.Durum:

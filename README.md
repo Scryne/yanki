@@ -43,10 +43,14 @@ yüklenen parçanın Spotify'da çıkıp çıkmadığını ve adı arandığınd
    pazar pazar arama sırasını gösterir. Bildirim gelir: yayına çıktı, en iyi arama sırası değişti, Spotify'dan kalktı,
    yayın tarihinin üstünden 3 gün geçtiği halde yok (dağıtımcı reddi şüphesi). Reddedildiyse
    `yanki dagitim-red <kimlik> --neden "…"`: şarkı `paketlendi`ye döner, düzeltip `yanki paketle --yeniden`.
-8. **Takvim:** `yanki takvim` paketleri yükleme sırasıyla gösterir (keşif puanı önce, haftada bir, önerilen yayın
-   tarihi +21 gün; `config/yayin.toml` → `[takvim]`). Etkin dağıtımcı ilk parçayı kabul edene kadar incelemede en
-   çok bir yükleme; reddederse neden anlaşılıp düzeltilene kadar yeni yükleme yok. Sırası gelen paket Tunearo'ya gece
-   yüklenir (elle dağıtımcıda bildirilir). Dinleme odası **Yayın**'da da görünür.
+8. **Takvim:** `yanki takvim` paketleri yükleme sırasıyla gösterir (keşif puanı önce, her gün bir, yayın tarihi
+   yüklemeden 1 gün sonra; `config/yayin.toml` → `[takvim]`). Kabul beklenmez; dağıtımcı bir parçayı reddederse neden
+   anlaşılıp düzeltilene kadar yeni yükleme yok. Sırası gelen paket Tunearo'ya gece yüklenir (elle dağıtımcıda
+   bildirilir). Dinleme odası **Yayın**'da da görünür.
+9. **Geri çekme:** `yanki geri-cek [kimlik…]` yüklenmiş şarkıyı dağıtımcıdan kaldırır, şarkı `onaylandi`ya döner ve
+   gece güncel ayarlarla yeniden paketlenip kuyruğa girer. Tunearo'da taslak silinir, canlı yayına takedown istenir;
+   incelemedeki yayın API'den geri çekilemiyor: işaretlenir, sonuç gelince gece yoklaması bitirir. Elle dağıtımcıda
+   (RouteNote) önce panelden kaldır, sonra `--kaldirildi`.
 
 Spotify kotası dar: uzun 429 alınırsa kilit `calisma/.spotify_kota.json`'a yazılır ve süresi dolana kadar hiçbir
 komut Spotify'a istek atmaz; günlük tavan 400 istek. Dinleme odası Spotify'a hiç istek atmaz.
