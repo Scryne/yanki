@@ -1,7 +1,7 @@
 ---
 proje: Yanki
 created: 2026-10-06
-modified: 2026-10-09
+modified: 2026-10-10
 type: final-dokuman
 status: onaylandi
 ---
@@ -26,6 +26,21 @@ olmadığı için yükleme adımı bilerek insanda kalır.
 gerçekten açık olduğunu (şarkı geri gelmemiş) doğrular, talebe göre sıralar, listeye ekler (`yanki kesif`). Başarı
 ölçüsü yüklenen parçanın ad aramasındaki sırası (`yanki takip`). **Yükleme:** arkadaşın dağıtım sitesinin API'si
 gelince otomatik yüklemeye geçilir (Scryne, 2026-10-09); o zamana kadar insanda.
+
+## Değişen kararlar (2026-10-08 – 10-10)
+
+Aşağıdaki tablo ve mimari ilk kararları tarihiyle korur; bunlar onların yerini aldı (ayrıntı ve ölçüm: `docs/Roadmap.md`).
+
+| Konu | İlk karar | Bugün | Neden |
+| --- | --- | --- | --- |
+| Üretim yeri | Evdeki RTX 4060 8 GB, XL INT8, parçalı | Kiralık GPU (RunPod A40 48 GB, saniye faturalı): nicelemesiz bf16, şarkı tek parça (~140 sn); evde üretim kapalı (`[uzak] yerel_yedek = false`), aylık bütçe 15 $ | Scryne: "güçlü GPU ile daha iyi", "benim bilgisayarımda üretmicez" (2026-10-10); S19 (`docs/arastirma/06`) |
+| Dağıtım | RouteNote, form insanda | Tunearo API: hat paketi kendisi yükler, durumu yoklar (kabulde UPC/ISRC, redde neden); takvim her gün bir yükleme, yayın tarihi +1 gün | Arkadaşın API'si geldi (2026-10-10, `docs/arastirma/04`) |
+| Onay | Her şarkıda Scryne | Veto penceresi 24 sa: denenmiş tür/dilde, sözü anlaşılır (WER ≤ 0,15) aday kendiliğinden onaylanır; diğerleri kulağa kalır | "Her şey otomatik çalışsın" (2026-10-10) |
+| Kapak | Dalga formundan tipografik | Şarkının moduna göre Pinterest görseli (insansız, yazısız); `kapak_ozel.jpg` önce | Scryne: "üretilen kapağı istemiyorum" (2026-10-10) |
+| Zamanlama | `\Yanki\Gece` 03:00 | `\Yanki\Surekli` bilgisayar açıkken her 30 dk (adımlar kendi aralığıyla), `\Yanki\Gece` 03:00'te uyandırır, `\Yanki\Oda` oturum açılışında | "Açıkken hep çalışsın" (2026-10-10) |
+| Yayın takibi | Spotify Web API | Canlılık ve TR sırası Spotify istemcisinin kendi aramasıyla (kotasız), diğer pazarlar haftada bir Web API | Web API kotası (2026-10-09 kilidi) |
+| Keşif çizgisi | Her tür | Hattın tarifi dinlenmiş türler (balad, pop, piyano/akustik, rock); rap/metal/elektronik vb. kendiliğinden girmez; sanatçı başına sırada bir şarkı | Rap adaylarının hepsi söz kapısında kaldı; Denetim 2–3 |
+| Dinleme odası güvenliği | Yalnız 127.0.0.1 | + Host yerel olmalı, yazan istek başka kökenden gelemez | Denetim 3 |
 
 ## Teknoloji Stack
 
