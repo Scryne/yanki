@@ -337,9 +337,10 @@ veto eder.
   dizüstü ekranında çizgi film) → süzgeç sıkılaştırıldı, üçü değiştirildi. Süzgeç kusursuz değil: her yeni kapak
   bildirilir, beğenilmeyen `yanki kapak <kimlik> --yeni`. When We Were Young üretilen kapakla gönderilmişti
   (incelemede değişmiyor). 13 yeni test, toplam 265.
-- **Takvim durduruldu (Scryne, 2026-10-10):** "şimdilik yayınlamayalım, yüklediğimiz şarkının durumuna göre
-  bakalım" → `[takvim] acik = false`. When We Were Young'ın Tunearo kararı gelince Scryne'la birlikte karar
-  verilir; yoklama, takip, üretim, paketleme sürer.
+- **Takvim (Scryne, 2026-10-10):** önce "şimdilik yayınlamayalım" (kapatıldı), aynı gece "devam et, her şey
+  otomatik çalışsın" → açık; `ilk_kabul` kapısı When We Were Young kabul edilene kadar yeni gönderimi bekletir.
+  `\Yanki\Gece` artık bilgisayarı uykudan uyandırıyor (`WakeToRun`, güç planında prizde uyandırma zamanlayıcısı
+  açıldı: `RTCWAKE` 2 → 1; pilde kapalı).
 - **Bitti kriterinden kalan:** ilk Tunearo kararı (kabul → UPC/ISRC kaydı, takip; red → neden), takvimin 2 hafta
   kesintisiz işlemesi, veto penceresinin uçtan uca bir şarkıda çalışması (kapalı, Faz 12 ölçümü bekliyor).
 - **Risk (Tunearo kalite kontrolü):** hesaptaki iki yayın "derivative work (remix, sample, or cover)" diye

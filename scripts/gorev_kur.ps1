@@ -7,7 +7,10 @@ $ps = Join-Path $env:WINDIR "System32\WindowsPowerShell\v1.0\powershell.exe"
 $arg = "--headless `"$ps`" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File `"$kok\scripts\gece.ps1`""
 $eylem = New-ScheduledTaskAction -Execute (Join-Path $env:WINDIR "System32\conhost.exe") -Argument $arg -WorkingDirectory $kok
 $zaman = New-ScheduledTaskTrigger -Daily -At 03:00
-$ayar = New-ScheduledTaskSettingsSet -StartWhenAvailable -ExecutionTimeLimit (New-TimeSpan -Hours 8) `
+# Uyandırır (Scryne, 2026-10-10: "her şey otomatik çalışsın"): bilgisayar uykudaysa 03:00'te uyanır. Güç planında
+# prizdeyken uyandırma zamanlayıcısı açık olmalı (varsayılan "yalnız önemli" görevi uyandırmıyor):
+#   powercfg /setacvalueindex SCHEME_CURRENT SUB_SLEEP RTCWAKE 1; powercfg /setactive SCHEME_CURRENT
+$ayar = New-ScheduledTaskSettingsSet -StartWhenAvailable -WakeToRun -ExecutionTimeLimit (New-TimeSpan -Hours 8) `
     -MultipleInstances IgnoreNew  # pil: varsayılan olarak pilde başlamaz, pile geçince durur
 $kim = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel Limited
 Register-ScheduledTask -TaskPath "\Yanki\" -TaskName "Gece" -Action $eylem -Trigger $zaman -Settings $ayar `
