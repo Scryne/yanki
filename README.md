@@ -70,6 +70,12 @@ sonra Tunearo'daki sanatçıya kendiliğinden bağlanır (Spotify takipten, Appl
 bildirilir. İlk parça Spotify'da görülünce "profili sahiplen" (Spotify for Artists), iki canlı yayından sonra
 "YouTube resmi sanatçı kanalı" bildirimi gelir; kanalı açınca `yanki oac --ana <kanal> --konu <Topic kanalı>`.
 
+**Kiralık GPU:** üretim RunPod'da (A40 48 GB, saniye faturalı; `config/motor.toml` → `[uzak]`, `yanki/uzak.py`):
+sunucu açılır, ACE-Step yereldeki sürümle kurulur, şarkılar nicelemesiz ve tek parça üretilir (tam şarkı ~140 sn), sonuç
+iner, sunucu silinir. Anahtar `.env` → `RUNPOD_API_KEY`. Bakiye 3 $'ın altında, aylık harcama 15 $'a ulaşmış ya da GPU
+stokta yoksa üretim evdeki kartta (INT8, parçalı). Harcama: `calisma/gunluk/runpod.json`. Ölçümler:
+`docs/arastirma/06`.
+
 **Tür çizgisi:** keşif hattın tarifi dinlenmiş türlerinde kalır (balad, pop, piyano/akustik, rock). Rap, metal,
 elektronik, Latin/Brezilya vb. aday Deezer türünden tanınır, puan almaz, kendiliğinden listeye girmez (dinleme
 odasında "Yine de ekle"). Aynı kalıp otomatik onayı da sınırlar (`yanki/onay.py` → `DENENMEMIS`).

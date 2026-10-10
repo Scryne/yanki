@@ -51,14 +51,14 @@ def _ortak(d: durum.Durum) -> dict:
                 ton=d.analiz.get("ton") or "")
 
 
-def parca_plani(calisma: Path, d: durum.Durum, lrclib: Callable | None = None
+def parca_plani(calisma: Path, d: durum.Durum, lrclib: Callable | None = None, tek_parca_sn: float = TEK_PARCA_SN
                 ) -> tuple[list[parcalama.Parca], list[str]]:
     """Parçalar ve her parçanın sözü. Kısa şarkı ya da zaman damgası yoksa tek parça, tüm söz (sözü yanlış parçaya
     koymaktansa yavaş yol; uzun şarkıda bu durum durum.json'a uyarı olarak yazılır)."""
     sure = d.kaynak["sure_sn"]
-    satirlar = _satirlar(calisma, d, lrclib) if sure > TEK_PARCA_SN else []
-    if sure <= TEK_PARCA_SN or not satirlar:
-        if sure > TEK_PARCA_SN:
+    satirlar = _satirlar(calisma, d, lrclib) if sure > tek_parca_sn else []
+    if sure <= tek_parca_sn or not satirlar:
+        if sure > tek_parca_sn:
             d.notlar.append({"uyari": f"söz zaman damgası yok: {sure:.0f} sn tek parça üretildi (yavaş yol)"})
         return [parcalama.Parca(1, 0.0, sure, 0.0, sure)], [_soz(calisma, d)]
     plan = parcalama.plan(sure, [t for t, _ in satirlar])
@@ -149,10 +149,11 @@ def _dik_pencere(temel: Path, pencere: Path, bas: float, hedef: Path, gecis_sn: 
     return hedef
 
 
-def _cover_isleri(a: Ayarlar, calisma: Path, d: durum.Durum) -> tuple[tuple, list[motor.Is]]:
+def _cover_isleri(a: Ayarlar, calisma: Path, d: durum.Durum, tek_parca_sn: float = TEK_PARCA_SN
+                  ) -> tuple[tuple, list[motor.Is]]:
     """Cover adaylarının planı ve ilk tur işleri (her adayın ilk parçası)."""
     k = durum.klasor(calisma, d.kimlik)
-    plan, sozler_ = parca_plani(calisma, d)
+    plan, sozler_ = parca_plani(calisma, d, tek_parca_sn=tek_parca_sn)
     # stil değişikliğinden sonra yeni adaylar eskilerin ardından (geçmiş adaylar dinlenebilir kalır)
     ilk_no = max((x.no for x in d.adaylar if x.dosya), default=0)
     numaralar = [(ilk_no + n, a.cover.tohumlar[n - 1]) for n in range(1, a.cover.aday_sayisi + 1)]
@@ -281,7 +282,8 @@ def _yalniz_motor_dustu(adaylar: list[durum.Aday]) -> bool:
 
 def uret(a: Ayarlar, calisma: Path, kimlikler: list[str] | None = None,
          calistir: Callable[..., list[motor.Sonuc]] = motor.calistir,
-         degerlendir: Callable[..., dict] | None = None) -> list[durum.Durum]:
+         degerlendir: Callable[..., dict] | None = None, tek_parca_sn: float = TEK_PARCA_SN) -> list[durum.Durum]:
+    """`tek_parca_sn`: bundan kısa şarkı tek parça üretilir (evde 110 sn; kiralık GPU'da 480, `uzak.motor_sec`)."""
     degerlendir = degerlendir or (lambda aday, kaynak, soz, dil="en":
                                   kapilar.degerlendir(aday, kaynak, soz, a.fpcalc, dil=dil))
     hedef = [d for d in durum.hepsi(calisma) if d.asama in ("analiz", "onarim")
@@ -299,7 +301,7 @@ def uret(a: Ayarlar, calisma: Path, kimlikler: list[str] | None = None,
         n0 = len(d.notlar)
         try:  # bir şarkının hazırlığı (eksik dosya, bozuk söz zamanı) diğerlerini durdurmaz
             if d.asama == "analiz":
-                planlar[d.kimlik], isler = _cover_isleri(a, calisma, d)
+                planlar[d.kimlik], isler = _cover_isleri(a, calisma, d, tek_parca_sn)
             else:
                 isler = _onarim_isleri(a, calisma, d, pencere_bas)
         except Exception as e:  # noqa: BLE001

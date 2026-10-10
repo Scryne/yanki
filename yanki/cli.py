@@ -82,8 +82,12 @@ def _hazirla(args: argparse.Namespace) -> int:
 
 
 def _uret(_: argparse.Namespace) -> int:
+    from yanki import uzak
+
     a = ayarlar.yukle()
-    islenen = uretim.uret(a, a.kok / "calisma")
+    calistir, tek_parca_sn, uzak_mi = uzak.motor_sec(a)
+    print(f"üretim: {'kiralık GPU' if uzak_mi else 'evdeki GPU'}")
+    islenen = uretim.uret(a, a.kok / "calisma", calistir=calistir, tek_parca_sn=tek_parca_sn)
     if not islenen:
         print("üretilecek bir şey yok (analiz ya da onarım bekleyen şarkı yok)")
     for d in islenen:
@@ -701,7 +705,7 @@ def _uret_surekli(kok: Path, op) -> int:
     GPU doluysa (oyun, başka iş) beklemez, sonraki koşu dener. Biten şarkı "dinlemeye hazır" diye bildirilir."""
     import functools
 
-    from yanki import motor, saglik, sistem
+    from yanki import motor, saglik, sistem, uzak
 
     a = ayarlar.yukle()
     calisma = a.kok / "calisma"
@@ -710,6 +714,9 @@ def _uret_surekli(kok: Path, op) -> int:
     if not hedef:
         print("üretilecek bir şey yok (analiz ya da onarım bekleyen şarkı yok)")
         return 0
+    calistir, tek_parca_sn, uzak_mi = uzak.motor_sec(a)
+    if uzak_mi:  # kiralık GPU: evdeki kart, priz ve kullanıcı etkinliği önemsiz
+        return _uret_ve_bildir(a, hedef[: a.uzak.sarki], len(hedef), calistir, tek_parca_sn, "kiralık GPU")
     if not sistem.prizde_mi():
         print(f"üretim bekliyor: pilde ({len(hedef)} şarkı sırada)")
         return 0
@@ -719,13 +726,20 @@ def _uret_surekli(kok: Path, op) -> int:
     if (kullanilan := saglik.gpu_kullanilan_mib()) is None or kullanilan >= a.gpu.bos_esik_mib:
         print(f"üretim bekliyor: GPU dolu ({kullanilan} MiB; {len(hedef)} şarkı sırada)")
         return 0
-    secilen = hedef[: op.surekli_uretim_sarki]
-    print("üretim: " + ", ".join(f"{d.sanatci} — {d.ad}" for d in secilen) + f" ({len(hedef)} sırada)", flush=True)
     # GPU başlamadan dolarsa (oyun açıldı) saatlerce beklemesin: 10 dk sonra vazgeçer, şarkılar sırada kalır
-    calistir = functools.partial(motor.calistir, gpu_bekleme_sn=600)
+    return _uret_ve_bildir(a, hedef[: op.surekli_uretim_sarki], len(hedef),
+                           functools.partial(motor.calistir, gpu_bekleme_sn=600), tek_parca_sn, "evdeki GPU")
+
+
+def _uret_ve_bildir(a, secilen: list, sirada: int, calistir, tek_parca_sn: float, nerede: str) -> int:
+    from yanki import motor
+
+    calisma = a.kok / "calisma"
+    print(f"üretim ({nerede}): " + ", ".join(f"{d.sanatci} — {d.ad}" for d in secilen) + f" ({sirada} sırada)",
+          flush=True)
     bildir = _bildirici(calisma)
     try:
-        uretilen = uretim.uret(a, calisma, [d.kimlik for d in secilen], calistir=calistir)
+        uretilen = uretim.uret(a, calisma, [d.kimlik for d in secilen], calistir=calistir, tek_parca_sn=tek_parca_sn)
     except motor.GpuMesgul as e:
         print(f"üretim bekliyor: {e}")
         return 0

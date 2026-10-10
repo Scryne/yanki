@@ -542,3 +542,10 @@ uygulamasına gereken adımlar uygulama serbestken (kapalı, CDP'li ya da 20 dk 
 İş yapılmayan koşu günlüğe yazmaz, bildirim yalnız hatada. İlk gerçek koşu (13:39): keşif kilitli API'yle hakkını
 yaktı ve hazırlık analizdeki 8 şarkıyı her koşuda yeniden yazıyordu → ikisi düzeltildi; üretim kullanıcı etkinken
 başladı (GPU %100, 6,6 GB). 13 yeni test, toplam 325.
+
+**Kiralık GPU (2026-10-10, Scryne: "güçlü GPU ile çıktıları daha iyi yapalım", RunPod hesabı açtı):** S19 (A40,
+`docs/arastirma/06`): nicelemesiz bf16 kesit 21 sn, tam şarkı tek parça 140 sn, VRAM tepe 14,4 GB, kapılar aynı
+düzeyde; iki deneme ~0,16 $. `yanki/runpod.py` (pod yaşam döngüsü, SSH, her durumda silme), `yanki/uzak.py`
+(`motor.calistir` ile aynı sözleşme, bütçe ve stok ön kontrolü, motor işler planlanmadan seçilir; sunucu koşu
+ortasında düşerse şarkılar sırada kalır, 3 saat evdeki kart). Üretim varsayılanı kiralık GPU. Kalite kararı Scryne'ın
+kulağında: `calisma/dinleme/s19/`. Orijinal kaydın ISRC'siyle yükleme önerisi reddedildi (gerekçe `06`). 9 yeni test.

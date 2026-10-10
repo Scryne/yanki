@@ -575,7 +575,7 @@ def uretim_ortami(tmp_path, monkeypatch):
 
     from yanki import ayarlar, cli, saglik, sistem, uretim
 
-    a = replace(ayarlar.yukle(), kok=tmp_path)
+    a = replace(ayarlar.yukle(), kok=tmp_path, uzak=ayarlar.Uzak())  # evdeki motor (kiralık GPU ayrı sınanır)
     monkeypatch.setattr(cli.ayarlar, "yukle", lambda: a)
     monkeypatch.setattr(sistem, "prizde_mi", lambda: True)
     monkeypatch.setattr(sistem, "bosta_sn", lambda: 0)  # kullanıcı etkin
@@ -587,7 +587,7 @@ def uretim_ortami(tmp_path, monkeypatch):
         durum.yaz(c, d)
     uretilen = []
 
-    def sahte(_a, calisma, kimlikler, calistir=None):
+    def sahte(_a, calisma, kimlikler, calistir=None, **_k):
         uretilen.append(kimlikler)
         return [durum.oku(calisma, k) for k in kimlikler]
 
@@ -646,3 +646,120 @@ def test_surekli_kosu_spotify_kilitliyken_kesfi_ertelir(surekli, monkeypatch):
     kosan.clear()
     cli._calistir(cli.argparse.Namespace(liste=None, analizsiz=False))
     assert "_kesif" in kosan
+
+
+# ── kiralık GPU (RunPod): uzak motor ──
+class _SahtePod:
+    acilan: list = []
+
+    def __init__(self, kok, gpu="NVIDIA A40", ad="yanki-motor", **_k):
+        self.id, self.gonderilen, self.is_json = "pod-1", {}, None
+        _SahtePod.acilan.append(self)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_):
+        self.kapandi = True
+
+    def komut(self, betik, zaman_asimi=3600):
+        if "motor_sonuc.json" in betik and "cat " in betik:
+            isler = json.loads(self.is_json)["isler"]
+            sonuc = [{"id": i["id"], "basari": True, "cikti": f"{i['cikti_klasor']}/x.flac", "sure_sn": 20.0,
+                      "vram_tepe_gb": 14.0} for i in isler]
+            return json.dumps(sonuc) + "\n#DURUM#\nBITTI\n"
+        return ""
+
+    def gonder(self, yerel, uzak):
+        self.gonderilen[str(yerel)] = uzak
+        if uzak.endswith("motor_is.json"):
+            self.is_json = Path(yerel).read_text(encoding="utf-8")
+
+    def al(self, uzak, yerel):
+        Path(yerel).parent.mkdir(parents=True, exist_ok=True)
+        Path(yerel).write_bytes(b"fLaC")
+        return Path(yerel)
+
+    def maliyet(self):
+        return 0.05
+
+
+def _uzak_ayar(tmp_path, **k):
+    from dataclasses import replace
+
+    from yanki import ayarlar
+
+    return replace(ayarlar.yukle(), kok=tmp_path, uzak=ayarlar.Uzak(acik=True, **k))
+
+
+def test_uzak_motor_girdileri_bir_kez_gonderir_ciktilari_yerele_indirir(tmp_path, monkeypatch):
+    from yanki import motor, uzak
+
+    monkeypatch.setenv("RUNPOD_API_KEY", "x")
+    monkeypatch.setattr(uzak.time, "sleep", lambda _: None)
+    a = _uzak_ayar(tmp_path)
+    kaynak = tmp_path / "kaynak.wav"
+    kaynak.write_bytes(b"RIFF")
+    isler = [motor.Is(id=f"s|cover|{n}|1", gorev="cover", kaynak=str(kaynak), cikti_klasor=str(tmp_path / "c" / str(n)),
+                      soz="söz", adim=100, tohum=t, guc=0.7) for n, t in ((1, 42), (2, 7))]
+    sonuc = uzak.calistir(a, isler, tmp_path / "_motor", 900, pod_sinifi=_SahtePod,
+                          kur=lambda p, c, m: "/root/ACE-Step-1.5", commit="ca1e85f", bakiye=lambda _k: 10.0)
+    p = _SahtePod.acilan[-1]
+    assert p.kapandi and list(p.gonderilen.values()).count("/root/is/girdi/0.wav") == 1  # aynı kaynak bir kez
+    is_ = json.loads(p.is_json)
+    assert is_["motor"]["niceleme"] is None and is_["motor"]["cpu_offload"] is False
+    assert [i["cikti_klasor"] for i in is_["isler"]] == ["/root/is/cikti/0", "/root/is/cikti/1"]
+    assert all(s.basari and Path(s.cikti).exists() and Path(s.cikti).parent == tmp_path / "c" / s.id.split("|")[2]
+               for s in sonuc)
+    kayit = json.loads(uzak.harcama_yolu(tmp_path).read_text(encoding="utf-8"))
+    assert kayit[-1]["usd"] == 0.05 and kayit[-1]["basarili"] == 2 and uzak.bu_ay_harcama(tmp_path) == 0.05
+
+
+def test_uzak_butce(tmp_path, monkeypatch):
+    from yanki import uzak
+
+    a = _uzak_ayar(tmp_path, aylik_butce=1.0, en_az_bakiye=3.0)
+    with pytest.raises(uzak.ButceYok, match="bakiyesi"):
+        uzak.butce_kontrol(a, "x", bakiye=lambda _k: 2.5)
+    uzak.harcama_yaz(tmp_path, {"zaman": datetime.now().isoformat(), "usd": 1.2})
+    with pytest.raises(uzak.ButceYok, match="bu ay"):
+        uzak.butce_kontrol(a, "x", bakiye=lambda _k: 20.0)
+
+
+def test_motor_secimi(tmp_path, monkeypatch):
+    from dataclasses import replace
+
+    from yanki import ayarlar, motor, uretim, uzak
+
+    monkeypatch.setenv("RUNPOD_API_KEY", "x")
+    kapali = replace(ayarlar.yukle(), kok=tmp_path, uzak=ayarlar.Uzak(acik=False))
+    assert uzak.motor_sec(kapali) == (motor.calistir, uretim.TEK_PARCA_SN, False)
+    a = _uzak_ayar(tmp_path)
+    _, tek, uzak_mi = uzak.motor_sec(a, kayit=lambda _m: None, stok=lambda k, g: "High", bakiye=lambda _k: 10.0)
+    assert uzak_mi and tek == 480
+    assert uzak.motor_sec(a, kayit=lambda _m: None, stok=lambda k, g: "Low", bakiye=lambda _k: 10.0)[2] is False
+    assert uzak.motor_sec(a, kayit=lambda _m: None, stok=lambda k, g: "High", bakiye=lambda _k: 1.0)[2] is False
+    # koşu ortasında düşen sunucu: hata yükselir (şarkılar sırada kalır), 3 saat evdeki motor
+    calistir, _, _ = uzak.motor_sec(a, kayit=lambda _m: None, stok=lambda k, g: "High", bakiye=lambda _k: 10.0)
+
+    def duser(*_a, **_k):
+        raise uzak.runpod.RunPodHatasi("A40 açılamadı")
+
+    monkeypatch.setattr(uzak, "calistir", duser)
+    with pytest.raises(uzak.runpod.RunPodHatasi):
+        calistir(a, [], tmp_path, 10)
+    assert uzak.durma_yolu(tmp_path).exists()
+    assert uzak.motor_sec(a, kayit=lambda _m: None, stok=lambda k, g: "High", bakiye=lambda _k: 10.0)[2] is False
+
+
+def test_tek_parca_esigi_uzakta_tam_sarki(tmp_path):
+    from yanki import uretim
+
+    c = tmp_path / "c"
+    d = durum.Durum("s", "X", "S", kaynak={"sure_sn": 285.0, "dosya": "kaynak.wav"}, soz={"dosya": "soz.txt"})
+    durum.yaz(c, d)
+    (c / "s" / "soz.txt").write_text("[verse]\nla la", encoding="utf-8")
+    (c / "s" / "soz_zaman.json").write_text(json.dumps([[float(t), f"satır {t}"] for t in range(0, 280, 7)]),
+                                            encoding="utf-8")
+    assert len(uretim.parca_plani(c, d)[0]) > 1  # evde parçalı
+    assert len(uretim.parca_plani(c, d, tek_parca_sn=480)[0]) == 1  # kiralık GPU'da tek parça
