@@ -210,6 +210,12 @@ def test_kapak_kucuk_kare_onbellekli_ve_listede(ortam):
     (c / "a-b" / "paket").mkdir()
     _jpeg(c / "a-b" / "paket" / "Orvane_-_B.jpg", (3000, 3000))  # paketteki önce gelir
     assert sunucu.kapak_kaynagi(c, "a-b").parent.name == "paket"
+    for _ in range(3):  # tekrar tekrar istense de küçük resim paketin dışında, kaynak hep aynı dosya
+        assert istemci.get(istemci.get("/api/sarkilar").json()[0]["kapak"] + "&boyut=96").status_code == 200
+    assert [x.name for x in (c / "a-b" / "paket").iterdir()] == ["Orvane_-_B.jpg"]
+    assert sunucu.kapak_kaynagi(c, "a-b").name == "Orvane_-_B.jpg"
+    (c / "a-b" / "paket" / ".kapak_eski_96.jpg").write_bytes(b"x")  # eski sürümün bıraktığı küçük resim sayılmaz
+    assert sunucu.kapak_kaynagi(c, "a-b").name == "Orvane_-_B.jpg"
 
 
 def test_baska_kapak_pinterestten_ve_yuklenmiste_yasak(ortam, monkeypatch):

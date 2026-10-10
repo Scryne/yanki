@@ -3,8 +3,10 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Yanki · dinleme odası</title>
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%230B0A1A%27/%3E%3Cpath d=%27M6 16h3M11 10v12M16 6v20M21 11v10M26 15v2%27 stroke=%27%23F2A93B%27 stroke-width=%272.4%27 stroke-linecap=%27round%27/%3E%3C/svg%3E">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#08090C">
+  <title>Yanki · kontrol odası</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Cdefs%3E%3ClinearGradient id=%27g%27 x1=%270%27 y1=%270%27 x2=%270%27 y2=%271%27%3E%3Cstop offset=%270%27 stop-color=%27%23F4F6F9%27/%3E%3Cstop offset=%271%27 stop-color=%27%238E98A8%27/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width=%2732%27 height=%2732%27 rx=%278%27 fill=%27%2312151B%27/%3E%3Cpath d=%27M6 16h3M11 10v12M16 6v20M21 11v10M26 15v2%27 stroke=%27url(%23g)%27 stroke-width=%272.4%27 stroke-linecap=%27round%27/%3E%3C/svg%3E">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500&family=Space+Grotesk:wght@600&display=swap" rel="stylesheet">
@@ -12,19 +14,26 @@
 </head>
 <body>
   <div class="duzen">
-    <nav class="kuyruk" aria-label="Şarkılar">
-      <div class="marka">Yanki</div>
+    <nav class="kuyruk" aria-label="Gezinme">
+      <a class="marka" href="#">
+        <svg width="26" height="26" viewBox="0 0 32 32" aria-hidden="true">
+          <defs><linearGradient id="marka-g" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#F4F6F9"/><stop offset="1" stop-color="#8E98A8"/></linearGradient></defs>
+          <path d="M6 16h3M11 10v12M16 6v20M21 11v10M26 15v2" stroke="url(#marka-g)" stroke-width="2.6" stroke-linecap="round" fill="none"/>
+        </svg>
+        <span class="gumus-yazi">Yanki</span><small>Orvane</small>
+      </a>
       <p id="sayac" class="sayac" aria-live="polite"></p>
       <ul class="gorunumler" aria-label="Görünümler">
+        <li><a href="#" data-g="_pano"><span>Pano</span><span id="g-pano" class="g-sayi"></span></a></li>
         <li><a href="#_kesif" data-g="_kesif"><span>Keşif</span><span id="g-kesif" class="g-sayi"></span></a></li>
         <li><a href="#_yayin" data-g="_yayin"><span>Yayın</span><span id="g-yayin" class="g-sayi"></span></a></li>
       </ul>
-      <ul id="liste" class="liste"></ul>
-      <p id="liste-bos" class="ipucu" hidden>Henüz şarkı yok. <code>girdi/liste.toml</code>'a şarkı ekleyip
-        <code>yanki calistir</code> çalıştır.</p>
+      <ul id="liste" class="liste" aria-label="Şarkılar"></ul>
+      <p id="liste-bos" class="ipucu" hidden>Henüz şarkı yok. Gece koşusu keşiften şarkı ekleyince burada görünür.</p>
     </nav>
     <main id="ana" class="ana" tabindex="-1">
-      <p class="ipucu bos-durum">Soldan bir şarkı seç.</p>
+      <p class="ipucu bos-durum">Yükleniyor…</p>
     </main>
   </div>
   <div id="bildirim" class="bildirim" role="status" aria-live="polite"></div>

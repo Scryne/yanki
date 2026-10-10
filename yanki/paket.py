@@ -449,7 +449,7 @@ def _paketle_bir(calisma: Path, d: durum.Durum, y: Yayin) -> durum.Durum:
         eski = json.loads(eski_yol.read_text(encoding="utf-8"))
         meta.update({a: eski[a] for a in KALICI_ALANLAR if a in eski})
     # başka biçimde ya da adla kalmış eski ses/kapak (FLAC → WAV, sanatçı adı değişti): yükleyici tek dosya bekler
-    for eski_dosya in [*p.glob("*.flac"), *p.glob("*.wav"), *p.glob("*.jpg")]:
+    for eski_dosya in [*p.glob("*.flac"), *p.glob("*.wav"), *p.glob("*.jpg")]:  # noktalılar dahil (eski küçük resim)
         if eski_dosya not in (ses_yolu, kapak_yolu):
             eski_dosya.unlink()
     (p / "metadata.json").write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")

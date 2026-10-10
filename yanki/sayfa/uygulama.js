@@ -19,6 +19,24 @@ const ASAMA = {
   onaylandi: "onaylandı", paketlendi: "paketlendi", yuklendi: "yüklendi", yayinda: "yayında", hata: "hata", reddedildi: "reddedildi",
 };
 const KAPI = { parmak_izi: "parmak izi", dalga: "dalga", soz_wer: "söz", sure_fark: "süre", motor: "motor" };
+const DAGITIM = { draft: "taslak", pending: "incelemede", approved: "onaylandı", live: "mağazalarda", rejected: "reddedildi",
+  takedown: "kaldırıldı", takedown_requested: "kaldırılıyor", taken_down: "kaldırıldı" };
+const DAGITIMCI = { tunearo: "Tunearo", routenote: "RouteNote", distrokid: "DistroKid" };
+
+// kapak: sunucu adres verdiyse küçük resim, yoksa dalga işaretli boş kare (olmayan kapağa istek atılmaz)
+function kapakImg(url, sinif = "kapak-kucuk", boyut = 96) {
+  if (!url) return el("span", { class: `${sinif} bos`, "aria-hidden": "true" }, dalgaIsareti());
+  return el("img", { class: sinif, src: `${url}&boyut=${boyut}`, alt: "", loading: "lazy", decoding: "async", width: 32, height: 32 });
+}
+function dalgaIsareti() {
+  const ns = "http://www.w3.org/2000/svg", svg = document.createElementNS(ns, "svg");
+  svg.setAttribute("viewBox", "0 0 32 32"); svg.setAttribute("width", "16"); svg.setAttribute("height", "16");
+  const yol = document.createElementNS(ns, "path");
+  yol.setAttribute("d", "M6 16h3M11 10v12M16 6v20M21 11v10M26 15v2"); yol.setAttribute("stroke", "currentColor");
+  yol.setAttribute("stroke-width", "2.4"); yol.setAttribute("stroke-linecap", "round"); yol.setAttribute("fill", "none");
+  svg.append(yol);
+  return svg;
+}
 
 function bildir(mesaj, hata = false) {
   const b = $("#bildirim");
@@ -128,16 +146,27 @@ async function sarkiGoster(kimlik) {
   let d;
   try { d = await api(`/api/sarki/${kimlik}`); } catch (e) { ana.replaceChildren(el("p", { class: "ipucu" }, `Şarkı açılamadı: ${e.message}`)); return; }
   const k = d.kunye || {};
+  const y = d.yukleme;
   const parcalar = [
-    el("header", { class: "baslik" }, el("h1", {}, d.ad), el("span", { class: "sanatci" }, d.sanatci),
-      el("span", { class: "asama", "data-a": d.asama }, ASAMA[d.asama] || d.asama)),
-    el("p", { class: "kunye" },
-      el("span", {}, "Yazarlar: ", el("b", {}, (k.yazarlar || []).join(", ") || "bulunamadı")),
-      el("span", {}, "Stil: ", el("b", {}, d.analiz?.stil || "—")),
-      el("span", {}, "Tempo/ton: ", el("b", {}, [d.analiz?.bpm && `${d.analiz.bpm} BPM`, d.analiz?.ton].filter(Boolean).join(" · ") || "—")),
-      el("span", {}, "Kaynak: ", el("b", {}, d.kaynak?.baslik || "—"))),
+    el("div", { class: "sarki-ust" },
+      kapakKutu(d),
+      el("div", {},
+        el("header", { class: "baslik" }, el("h1", {}, d.ad), el("span", { class: "sanatci" }, d.sanatci),
+          el("span", { class: "asama", "data-a": d.asama }, ASAMA[d.asama] || d.asama)),
+        el("p", { class: "kunye" },
+          el("span", {}, "Yazarlar: ", el("b", {}, (k.yazarlar || []).join(", ") || "bulunamadı")),
+          el("span", {}, "Stil: ", el("b", {}, d.analiz?.stil || "—")),
+          el("span", {}, "Tempo/ton: ", el("b", {}, [d.analiz?.bpm && `${d.analiz.bpm} BPM`, d.analiz?.ton].filter(Boolean).join(" · ") || "—")),
+          el("span", {}, "Kaynak: ", el("b", {}, d.kaynak?.baslik || "—"))),
+        y ? el("p", { class: "kunye" },
+          el("span", {}, "Dağıtım: ", el("b", {}, DAGITIMCI[y.dagitimci] || y.dagitimci || "—")),
+          y.dagitim_durumu ? el("span", {}, "Durum: ", el("b", {}, DAGITIM[y.dagitim_durumu] || y.dagitim_durumu)) : null,
+          el("span", {}, "Çıkış: ", el("b", {}, tarih(y.yayin_tarihi))),
+          y.isrc ? el("span", {}, "ISRC: ", el("b", {}, y.isrc)) : null, y.upc ? el("span", {}, "UPC: ", el("b", {}, y.upc)) : null) : null)),
   ];
   if (d.hata) parcalar.push(el("p", { class: "uyari", role: "alert" }, d.hata));
+  if (d.onay_engeli) parcalar.push(el("p", { class: "not" },
+    `Bu şarkı kendiliğinden onaylanmaz (${d.onay_engeli}). Sen karar verene kadar yayına girmez.`));
   if (d.otomatik_onay) parcalar.push(el("p", { class: "ipucu bekleyen" },
     `Karar vermezsen ${new Date(d.otomatik_onay.zaman).toLocaleString("tr-TR", { weekday: "long", hour: "2-digit", minute: "2-digit" })}`
     + ` aday ${d.otomatik_onay.aday} kendiliğinden onaylanır (sözü en anlaşılır olan). Onaylamak, onarım istemek ya da reddetmek bunu iptal eder.`));
@@ -163,7 +192,28 @@ async function sarkiGoster(kimlik) {
       el("button", { class: "dugme ikincil", type: "button",
         onclick: () => eylem(d, "geri-al", {}, `"${d.ad}" yeniden listede, reddetmeden önceki aşamasında.`) }, "Reddi geri al")));
   }
-  ana.replaceChildren(...parcalar);
+  ana.replaceChildren(...parcalar.filter(Boolean));
+}
+
+function kapakKutu(d) {
+  const degisir = ["uretildi", "onarim", "onaylandi", "paketlendi"].includes(d.asama) && !d.kapak_elle;
+  const gorsel = d.kapak ? el("img", { class: "kapak-buyuk", src: `${d.kapak}&boyut=480`, alt: `${d.ad} kapağı`, width: 132, height: 132 })
+    : el("div", { class: "kapak-buyuk kapak-yok" }, degisir ? "Kapak paketlemede Pinterest'ten seçilir" : "Kapak yok");
+  const bilgi = d.kapak_elle ? "elle seçilen (kapak_ozel.jpg)"
+    : d.kapak_bilgi?.aciklama ? `Pinterest: ${d.kapak_bilgi.aciklama}` : null;
+  const dugme = degisir ? el("button", { class: "dugme ikincil kucuk", type: "button",
+    onclick: (e) => kapakDegistir(d, e.currentTarget) }, d.kapak ? "Başka kapak" : "Kapak bul") : null;
+  return el("div", { class: "kapak-kutu" }, gorsel, bilgi && el("p", { class: "ipucu", title: bilgi }, bilgi), dugme);
+}
+
+async function kapakDegistir(d, dugme) {
+  dugme.disabled = true; dugme.setAttribute("aria-busy", "true");
+  const eski = dugme.textContent; dugme.textContent = d.asama === "paketlendi" ? "Kapak ve paket yenileniyor…" : "Aranıyor…";
+  try {
+    const r = await api(`/api/sarki/${d.kimlik}/kapak`, {});
+    bildir(`Yeni kapak: ${r.kapak_bilgi?.aciklama || "Pinterest"}. Eskisi bir daha seçilmez.`);
+    await yenile(d.kimlik);
+  } catch (e) { bildir(e.message, true); dugme.disabled = false; dugme.removeAttribute("aria-busy"); dugme.textContent = eski; }
 }
 
 // ---- hızlı karşılaştırma: aynı kesit, adaylar arasında konumu koruyarak geçiş ----
@@ -315,7 +365,7 @@ function adayKutu(d, a, duzenlenebilir, stilFarkli) {
   const baslik = `Aday ${a.no}`;
   if (!a.dosya) return el("section", { class: "serit dusen" }, el("div", { class: "serit-ust" }, el("h2", {}, baslik), ...rozetler(a.kapilar)));
   const s = new Serit({ kimlik: d.kimlik, dosya: a.dosya, secilebilir: duzenlenebilir && a.gecti, etiket: baslik });
-  const onar = el("button", { class: "dugme ikincil", type: "button", disabled: true, onclick: () => onarimIste(d, a, s.secim) }, "Bu aralığı onar");
+  const onar = el("button", { class: "dugme punch", type: "button", disabled: true, onclick: () => onarimIste(d, a, s.secim) }, "Bu aralığı onar");
   const secimCal = el("button", { class: "dugme", type: "button", disabled: true, onclick: () => s.cal(Math.max(0, s.secim[0] - 3), s.secim[1] + 3) }, "Seçimi çal");
   s.onSecim = (sec) => { onar.disabled = !sec; secimCal.disabled = !sec; };
   const bekleyen = a.onarimlar.some((o) => o.durum === "bekliyor");
@@ -339,7 +389,7 @@ function onarimKutu(d, a, o) {
   if (o.durum !== "hazir" && o.durum !== "kabul") return el("div", { class: "onarim", "data-d": o.durum }, etiket);
   const s = new Serit({ kimlik: d.kimlik, dosya: o.dosya, vurgu: [bas, son], kucuk: true, etiket: `Onarım ${aralik(bas, son)}` });
   const bolgeCal = el("button", { class: "dugme", type: "button", onclick: () => s.cal(Math.max(0, bas - 3), son + 3) }, "Bölgeyi çal");
-  const kabul = o.durum === "hazir" ? el("button", { class: "dugme ikincil", type: "button", onclick: () => onarimKabul(d, a, o) }, "Bunu kabul et") : null;
+  const kabul = o.durum === "hazir" ? el("button", { class: "dugme punch", type: "button", onclick: () => onarimKabul(d, a, o) }, "Bunu kabul et") : null;
   return el("div", { class: "onarim", "data-d": o.durum }, etiket, s.kap,
     el("div", { class: "serit-alt" }, bolgeCal, s.zaman, ...rozetler(o.kapilar), el("span", { class: "bosluk" }), kabul, s.ses));
 }
@@ -459,7 +509,7 @@ async function yayinGoster() {
     el("h2", { class: "bolum-baslik" }, "Son bildirimler"),
     el("ul", { class: "olaylar" }, ...d.olaylar.map((o) => el("li", {},
       el("span", { class: "olay-zaman" }, tarih(o.zaman)), el("b", {}, o.baslik), " ", el("span", { class: "olay-metin" }, o.metin))))));
-  ana.replaceChildren(...parcalar);
+  ana.replaceChildren(...parcalar.filter(Boolean));
 }
 
 // paketlenmiş şarkıların yükleme sırası (yanki/dagitim.py; ölçüm değil, durumdan hesap)
@@ -468,7 +518,8 @@ function takvimBolumu(t) {
   const ust = el("h2", { class: "bolum-baslik" }, "Yükleme sırası", el("span", { class: "g-sayi" }, t.sira.length ? String(t.sira.length) : ""));
   const not = t.hata ? el("p", { class: "uyari" }, `Takvim okunamadı: ${t.hata}`)
     : t.beklemede ? el("p", { class: "ipucu" }, `Takvim bekliyor: ${t.beklemede}. Tarihler o zamana kadar öneri.`) : null;
-  const sira = t.sira.length ? el("ol", { class: "kayitlar" }, ...t.sira.map((x, i) => el("li", { class: "kayit" + (t.beklemede ? " soluk" : "") },
+  const sira = t.sira.length ? el("ol", { class: "kayitlar" }, ...t.sira.map((x, i) => el("li", { class: "kayit kapakli" + (t.beklemede ? " soluk" : "") },
+    kapakImg(x.kapak, "kapak-kucuk kapak-orta"),
     el("div", { class: "kayit-ad" }, el("a", { class: "ad", href: `#${x.kimlik}` }, x.ad), el("span", { class: "sanatci" }, x.sanatci)),
     el("div", { class: "olculer" },
       el("span", { class: "rozet " + (i === 0 && !t.beklemede ? "ok" : "") }, i === 0 ? "sıradaki" : `${i + 1}.`),
@@ -486,10 +537,13 @@ function yayinSatiri(s) {
   const son = s.son;
   const hal = !son ? ["ölçülmedi", ""] : son.kayip ? ["kayıp", "no"] : son.canli ? ["yayında", "ok"] : ["yayın bekliyor", ""];
   const siralar = Object.entries(son?.siralar || {});
-  return el("li", { class: "kayit" },
+  const dd = s.dagitim_durumu;
+  return el("li", { class: "kayit kapakli" },
+    kapakImg(s.kapak, "kapak-kucuk kapak-orta"),
     el("div", { class: "kayit-ad" }, el("a", { class: "ad", href: `#${s.kimlik}` }, s.ad), el("span", { class: "sanatci" }, s.sanatci)),
     el("div", { class: "olculer" },
       el("span", { class: "rozet " + hal[1] }, hal[0]),
+      el("span", {}, DAGITIMCI[s.dagitimci] || s.dagitimci || "—", dd ? [" · ", el("b", {}, DAGITIM[dd] || dd)] : null),
       el("span", {}, "çıkış ", el("b", {}, tarih(s.yayin_tarihi))),
       el("span", {}, "son bakış ", el("b", {}, tarih(son?.zaman))),
       siralar.length ? el("span", { class: "siralar", title: `Şarkının adı arandığında ilk ${son.arama_limiti} sonuçtaki sıramız` },
@@ -500,10 +554,121 @@ function yayinSatiri(s) {
 
 async function gorunumSayilari() {
   try {
-    const [k, y] = await Promise.all([api("/api/kesif"), api("/api/yayin")]);
+    const [k, y, p] = await Promise.all([api("/api/kesif"), api("/api/yayin"), api("/api/pano")]);
+    const bekleyen = p.kulak.length + p.hatada.length;
+    $("#g-pano").textContent = bekleyen ? String(bekleyen) : "";
+    $("#g-pano").classList.toggle("dikkat", bekleyen > 0);
+    $("#g-pano").title = bekleyen ? "Senden beklenen" : "";
     $("#g-kesif").textContent = String(k.adaylar.filter(SUZGEC.oneri.f).length || "");
     $("#g-yayin").textContent = y.sarkilar.length ? `${y.sarkilar.filter((s) => s.son?.canli).length}/${y.sarkilar.length}` : "";
   } catch { /* sayılar ikincil: sunucu yoksa ana hata zaten bildirilir */ }
+}
+
+// ---- pano: hattın sinyal zinciri, senden beklenenler, dağıtım, kazanç, son gece koşusu ----
+const saatDakika = (iso) => iso ? new Date(iso).toLocaleString("tr-TR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "—";
+const ZINCIR_HEDEF = { "Keşif": "#_kesif", "Dinleme": null, "İnceleme": "#_yayin", "Yayında": "#_yayin" };
+
+async function panoGoster() {
+  const ana = $("#ana");
+  let p;
+  try { p = await api("/api/pano"); } catch (e) { ana.replaceChildren(el("p", { class: "ipucu" }, `Pano açılamadı: ${e.message}`)); return; }
+  const ilkDinleme = (await api("/api/sarkilar").catch(() => [])).find((s) => s.asama === "uretildi");
+  const zincir = el("section", { class: "cam zincir", "aria-label": "Hat" }, ...p.hat.map((d) => {
+    const hedef = d.ad === "Dinleme" ? (ilkDinleme ? `#${ilkDinleme.kimlik}` : null) : ZINCIR_HEDEF[d.ad];
+    const dikkat = d.ad === "Dinleme" && d.sayi > 0;
+    return el(hedef ? "a" : "div", { class: "durak" + (dikkat ? " dikkat" : d.sayi ? " dolu" : ""), href: hedef || false,
+      "aria-label": `${d.ad}: ${d.sayi} ${d.alt}` },
+      el("span", { class: "durak-isik", "aria-hidden": "true" }),
+      el("span", { class: "durak-sayi" + (d.sayi ? " gumus-yazi" : "") }, String(d.sayi)),
+      el("span", { class: "durak-ad" }, d.ad), el("span", { class: "durak-alt" }, d.alt));
+  }));
+
+  const ayar = p.ayarlar || {};
+  const ozet = [ayar.takvim_acik === false ? "yayın takvimi kapalı" : ayar.haftada ? `haftada ${ayar.haftada} yayın` : null,
+    ayar.oto_onay ? `${ayar.oto_onay_saat} saatte karar yoksa kendiliğinden onay` : "onay sende"].filter(Boolean).join(" · ");
+
+  ana.replaceChildren(
+    el("header", { class: "pano-ust" }, el("h1", { class: "gumus-yazi" }, "Kontrol odası"), el("p", { class: "ipucu" }, ozet)),
+    zincir,
+    el("div", { class: "pano-izgara" },
+      el("div", { class: "pano-sol" }, beklenenBolumu(p), dagitimBolumu(p.dagitim), takvimBolumu(p.takvim),
+        p.olaylar?.length ? el("section", { class: "bolum", "aria-label": "Son bildirimler" },
+          el("h2", { class: "bolum-baslik" }, "Son bildirimler"),
+          el("ul", { class: "olaylar" }, ...p.olaylar.map((o) => el("li", {},
+            el("span", { class: "olay-zaman" }, saatDakika(o.zaman)),
+            el("span", {}, el("b", {}, o.baslik), " ", el("span", { class: "olay-metin" }, o.metin)))))) : null),
+      el("div", { class: "pano-sag" }, kazancPaneli(), gecePaneli(p.gece), ayarPaneli(ayar, p.kota))));
+}
+
+function beklenenBolumu(p) {
+  const satirlar = [
+    ...p.kulak.map((s) => ({ s, rozet: ["dinlemen gerekiyor", "amber"], metin: s.neden })),
+    ...p.hatada.map((s) => ({ s, rozet: ["hata", "no"], metin: s.hata })),
+    ...p.yakinda.map((s) => ({ s, rozet: ["kendiliğinden onaylanacak", "gumus"], metin: saatDakika(s.zaman) })),
+  ];
+  return el("section", { class: "bolum", "aria-label": "Senden beklenen" },
+    el("h2", { class: "bolum-baslik" }, "Senden beklenen", satirlar.length ? el("span", { class: "g-sayi dikkat" }, String(satirlar.length)) : null),
+    satirlar.length ? el("ul", { class: "kayitlar" }, ...satirlar.map(({ s, rozet, metin }) => el("li", { class: "kayit kapakli" },
+      kapakImg(s.kapak, "kapak-kucuk kapak-orta"),
+      el("div", { class: "kayit-ad" }, el("a", { class: "ad", href: `#${s.kimlik}` }, s.ad), el("span", { class: "sanatci" }, s.sanatci)),
+      el("div", { class: "olculer" }, el("span", { class: `rozet ${rozet[1]}` }, rozet[0]), el("span", {}, metin || "")),
+      el("div", { class: "kayit-eylem" }, el("a", { class: "dugme ikincil", href: `#${s.kimlik}` }, "Aç")))))
+      : el("p", { class: "bos-kutu" }, "Şu an senden beklenen bir şey yok. Hat kendi kendine çalışıyor."));
+}
+
+function dagitimBolumu(liste) {
+  if (!liste?.length) return null;
+  return el("section", { class: "bolum", "aria-label": "Dağıtımda" },
+    el("h2", { class: "bolum-baslik" }, "Dağıtımda", el("span", { class: "g-sayi" }, String(liste.length))),
+    el("ul", { class: "kayitlar" }, ...liste.map((s) => {
+      const dd = s.dagitim_durumu, hal = s.canli ? ["Spotify'da", "ok"] : dd === "rejected" ? ["reddedildi", "no"]
+        : dd === "approved" || dd === "live" ? [DAGITIM[dd], "ok"] : [DAGITIM[dd] || "incelemede", "gumus"];
+      return el("li", { class: "kayit kapakli" },
+        kapakImg(s.kapak, "kapak-kucuk kapak-orta"),
+        el("div", { class: "kayit-ad" }, el("a", { class: "ad", href: `#${s.kimlik}` }, s.ad), el("span", { class: "sanatci" }, s.sanatci)),
+        el("div", { class: "olculer" }, el("span", { class: `rozet ${hal[1]}` }, hal[0]),
+          el("span", {}, DAGITIMCI[s.dagitimci] || s.dagitimci || "—"), el("span", {}, "çıkış ", el("b", {}, tarih(s.yayin_tarihi)))),
+        el("div", { class: "kayit-eylem" }));
+    })));
+}
+
+function kazancPaneli() {
+  const kutu = el("section", { class: "cam yan-panel", "aria-label": "Kazanç" }, el("h2", {}, "Kazanç"),
+    el("p", { class: "kazanc-alt" }, "Yükleniyor…"));
+  const para = (n, birim) => new Intl.NumberFormat("tr-TR", { style: "currency", currency: birim || "GBP" }).format(n || 0);
+  api("/api/kazanc").then((k) => {
+    if (!k.bagli) { kutu.replaceChildren(el("h2", {}, "Kazanç"), el("p", { class: "kazanc-alt" }, "Tunearo anahtarı yok (.env).")); return; }
+    const enCok = Math.max(...k.kaynaklar.map((x) => x.tutar), 0.01);
+    kutu.replaceChildren(el("h2", {}, "Kazanç"),
+      el("p", { class: "kazanc-toplam gumus-yazi" }, para(k.toplam, k.para)),
+      el("p", { class: "kazanc-alt" }, `bu ay ${para(k.bu_ay, k.para)} · ${k.yayinlar.length} yayın · aylık raporla güncellenir`),
+      k.kaynaklar.length ? el("ul", { class: "cubuklar" }, ...k.kaynaklar.slice(0, 6).map((x) => el("li", {},
+        el("span", {}, x.kaynak), el("b", {}, para(x.tutar, k.para)),
+        el("span", { class: "cubuk", "aria-hidden": "true" }, el("i", { style: `width:${Math.round((x.tutar / enCok) * 100)}%` })))))
+        : el("p", { class: "ipucu", style: "margin:0;font-size:12px" }, "İlk rapor, parçalar mağazalarda dinlendikten sonraki ay gelir."));
+  }).catch((e) => kutu.replaceChildren(el("h2", {}, "Kazanç"), el("p", { class: "kazanc-alt" }, e.message)));
+  return kutu;
+}
+
+function gecePaneli(g) {
+  const kutu = el("section", { class: "cam yan-panel", "aria-label": "Son gece koşusu" }, el("h2", {}, "Son gece koşusu"));
+  if (!g) { kutu.append(el("p", { class: "kazanc-alt" }, "Henüz koşu yok.")); return kutu; }
+  const sorun = !g.suruyor && (g.kod || g.sorunlu);
+  const durum = g.suruyor ? `sürüyor · ${g.adim || "başlıyor"}` : sorun ? `sorunlu: ${g.sorunlu || `kod ${g.kod}`}` : "sorunsuz bitti";
+  kutu.append(el("p", { class: "gece-satir" }, el("span", { class: "nokta" + (g.suruyor ? " suruyor" : sorun ? " sorun" : "") }), durum),
+    el("p", { class: "kazanc-alt" }, `${saatDakika(g.bas)}${g.bit ? ` → ${new Date(g.bit).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })}` : ""}`));
+  return kutu;
+}
+
+function ayarPaneli(a, kota) {
+  const satir = (ad, deger) => [el("dt", {}, ad), el("dd", {}, deger)];
+  return el("section", { class: "cam yan-panel", "aria-label": "Otomasyon" }, el("h2", {}, "Otomasyon"),
+    el("dl", { class: "ayar-listesi" },
+      ...satir("Dağıtımcı", DAGITIMCI[a.dagitimci] || a.dagitimci || "—"),
+      ...satir("Takvim", a.takvim_acik ? `açık · haftada ${a.haftada}` : "kapalı"),
+      ...satir("Otomatik onay", a.oto_onay ? `${a.oto_onay_saat} sa` : "kapalı"),
+      ...satir("Kapak", a.kapak === "pinterest" ? "Pinterest" : "üretilen"),
+      ...satir("Spotify", !kota?.bagli ? "bağlı değil" : kota.kilit_sn ? `kilitli · ${saatYazi(kota.kilit_sn)}` : `${kota.bugun}/${kota.tavan} istek`)));
 }
 
 // ---- kuyruk ----
@@ -517,18 +682,19 @@ async function listeGoster(secili) {
   $("#sayac").textContent = dinlemede ? `${dinlemede} şarkı dinlemede` : "";
   $("#liste").replaceChildren(...liste.map((s) => el("li", {},
     el("a", { href: `#${s.kimlik}`, "aria-current": s.kimlik === secili ? "page" : false },
+      kapakImg(s.kapak),
       el("span", { class: "ad" }, s.ad),
       el("span", { class: "alt" }, s.sanatci, el("span", { class: "asama", "data-a": s.asama }, ASAMA[s.asama] || s.asama))))));
 }
 
-const GORUNUM = { _kesif: kesifGoster, _yayin: yayinGoster };
-async function yenile(kimlik = decodeURIComponent(location.hash.slice(1))) {
+const GORUNUM = { _pano: panoGoster, _kesif: kesifGoster, _yayin: yayinGoster };
+async function yenile(kimlik = decodeURIComponent(location.hash.slice(1)) || "_pano") {
   await listeGoster(kimlik);
   gorunumSayilari();
   if (GORUNUM[kimlik]) await GORUNUM[kimlik]();
-  else if (kimlik) await sarkiGoster(kimlik);
+  else await sarkiGoster(kimlik);
 }
 addEventListener("hashchange", () => { calan?.ses.pause(); yenile().then(() => $("#ana").focus()); });
 yenile().catch((e) => bildir(`Sunucuya ulaşılamadı: ${e.message}`, true));
 // arka planda ilerleyen aşamaları kuyrukta göster (oynatmayı bölmeden yalnız listeyi yeniler)
-setInterval(() => listeGoster(decodeURIComponent(location.hash.slice(1))).catch(() => {}), 30000);
+setInterval(() => listeGoster(decodeURIComponent(location.hash.slice(1)) || "_pano").catch(() => {}), 30000);

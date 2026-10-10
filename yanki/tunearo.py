@@ -245,8 +245,9 @@ def wav_hazirla(ses: Path, klasor: Path) -> Path:
 
 # ── yükleme ─────────────────────────────────────────────────
 def _paket_dosyalari(p: Path) -> tuple[Path, Path]:
-    sesler = sorted([*p.glob("*.flac"), *p.glob("*.wav")])
-    kapaklar = sorted(p.glob("*.jpg"))
+    gorunur = lambda desen: [x for x in p.glob(desen) if not x.name.startswith(".")]  # noqa: E731
+    sesler = sorted([*gorunur("*.flac"), *gorunur("*.wav")])
+    kapaklar = sorted(gorunur("*.jpg"))
     if len(sesler) != 1 or len(kapaklar) != 1:
         raise ValueError(f"pakette tek ses ve tek kapak olmalı ({p}): {len(sesler)} ses, {len(kapaklar)} kapak")
     return sesler[0], kapaklar[0]

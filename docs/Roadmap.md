@@ -344,6 +344,18 @@ veto eder.
 - **Otomatik onay açık, 24 saat (Scryne, 2026-10-10: "her şey otomatik çalışsın"; 15'te 4 ölçümü ikinci kez
   gösterildi, 24 saat seçildi):** karar gelmeyen şarkıda en düşük söz WER'li aday gece onaylanır ve bildirilir. İlki
   Cadavers in My Cadillac (aday 3), 2026-10-11 gecesi.
+- **Büyüme ayarları (Scryne, 2026-10-10: "en kazançlı, artist hesabım en iyi, dinlenme en yüksek; her şeyi sana
+  bırakıyorum"):** araştırma ve kararlar `docs/arastirma/05`. Otomatik onay yalnız denenmiş tür/dilde ve sözü
+  anlaşılır adayda (rap, metal, İngilizce dışı kulağa kalır, bildirilir); mağazalarda Amazon açık, parmak izi hak
+  kayıtları (Content ID, Rights Manager, Audible Magic) kapalı; Spotify profili Tunearo sanatçısına kendiliğinden
+  bağlanır; Tunearo kazancı (yalnız bizim yayınlar) odada. Gece koşusu 2026-10-10: iki rap şarkısının üç adayı da söz
+  kapısında kaldı → rap tarifi Faz 12'de; ikisi reddedildi (geri alınabilir).
+- **Dinleme odası yenilendi (Scryne, 2026-10-10: "silver/dark glassmorphism, en iyi haline getir"):** `DESIGN.md`
+  silver/dark'a çevrildi. Yeni açılış ekranı **Pano**: hattın sinyal zinciri (Keşif → Yayında), senden beklenenler,
+  dağıtım, yükleme sırası, kazanç, son gece koşusu, otomasyon ayarları. Kuyrukta ve şarkı ekranında kapaklar, "Başka
+  kapak" (Pinterest). Görsel doğrulama ilk koşuda gerçek bir hata buldu: küçük resimler `paket/`'e yazılıyor, kapak
+  sanılıp çoğalıyor ve yükleyicinin "pakette tek JPG" kuralını bozuyordu → `calisma/.kapak_onbellek/`, testli. Eski bir
+  hata da çıktı (söz zamanı olmayan şarkıda sayfaya "null" yazıyordu). Son koşu 24 kare 0 sorun.
 - **Bitti kriterinden kalan:** ilk Tunearo kararı (kabul → UPC/ISRC kaydı, takip; red → neden), takvimin 2 hafta
   kesintisiz işlemesi, veto penceresinin uçtan uca bir şarkıda çalışması (kapalı, Faz 12 ölçümü bekliyor).
 - **Risk (Tunearo kalite kontrolü):** hesaptaki iki yayın "derivative work (remix, sample, or cover)" diye

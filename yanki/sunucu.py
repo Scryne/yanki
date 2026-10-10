@@ -10,6 +10,7 @@ istekleri durum.json'a, keşif kararları calisma/kesif/adaylar.json'a ve girdi/
 import contextlib
 import json
 import re
+import threading
 from dataclasses import asdict
 from pathlib import Path
 
@@ -91,33 +92,49 @@ def _takvim(kok: Path, calisma: Path) -> dict:
         return {"hata": str(e), "sira": [], "beklemede": None, "duzeltme": []}
     return {"beklemede": p.beklemede, "duzeltme": p.duzeltme,
             "sira": [{"kimlik": x.kimlik, "sanatci": x.sanatci, "ad": x.ad, "yukleme": x.yukleme.isoformat(),
-                      "yayin_tarihi": x.yayin_tarihi.isoformat(), "kesif": x.puan > 0} for x in p.sira]}
+                      "yayin_tarihi": x.yayin_tarihi.isoformat(), "kesif": x.puan > 0,
+                      "kapak": _kapak_url(calisma, x.kimlik)} for x in p.sira]}
 
 
 KAPAK_BOYUTLARI = (96, 480)
 
 
 def kapak_kaynagi(calisma: Path, kimlik: str) -> Path | None:
-    """Şarkının görünen kapağı: paketteki (dağıtımcıya giden) > elle seçilen > Pinterest'ten seçilen."""
+    """Şarkının görünen kapağı: paketteki (dağıtımcıya giden) > elle seçilen > Pinterest'ten seçilen. Noktalı
+    dosyalar sayılmaz."""
     k = durum.klasor(calisma, kimlik)
-    for yol in (*sorted((k / "paket").glob("*.jpg")), k / "kapak_ozel.jpg", k / "kapak_pinterest.jpg"):
+    paketteki = sorted(x for x in (k / "paket").glob("*.jpg") if not x.name.startswith("."))
+    for yol in (*paketteki, k / "kapak_ozel.jpg", k / "kapak_pinterest.jpg"):
         if yol.is_file():
             return yol
     return None
 
 
-def kapak_kucuk(kaynak: Path, boyut: int) -> Path:
-    """Kare küçük kapak, kaynağın değişme zamanına göre önbellekli (3000 px'lik JPG listede ağır)."""
+_KUCUK_KILIDI = threading.Lock()
+
+
+def kapak_kucuk(calisma: Path, kimlik: str, kaynak: Path, boyut: int) -> Path:
+    """Kare küçük kapak, `calisma/.kapak_onbellek/`'te, kaynağın değişme zamanına göre. Paket klasörüne yazılmaz:
+    oraya yazılan küçük resim kapak sanılıyor ve yükleyicinin "pakette tek JPG" kuralını bozuyordu (2026-10-10,
+    görsel doğrulamada bulundu). Aynı anda gelen istekler tek üretim yapar."""
     from PIL import Image
 
-    hedef = kaynak.parent / f".kapak_{kaynak.parent.name}_{kaynak.stem}_{boyut}.jpg"
-    if hedef.exists() and hedef.stat().st_mtime >= kaynak.stat().st_mtime:
+    hedef = calisma / ".kapak_onbellek" / f"{kimlik}_{kaynak.parent.name}_{kaynak.stem}_{boyut}.jpg"
+    taze = lambda: hedef.exists() and hedef.stat().st_mtime >= kaynak.stat().st_mtime  # noqa: E731
+    if taze():
         return hedef
-    with Image.open(kaynak) as img:
-        en, boy = img.size
-        kenar = min(en, boy)
-        kare = img.convert("RGB").crop(((en - kenar) // 2, (boy - kenar) // 2, (en + kenar) // 2, (boy + kenar) // 2))
-        kare.resize((boyut, boyut), Image.Resampling.LANCZOS).save(hedef, "JPEG", quality=86)
+    with _KUCUK_KILIDI:
+        if taze():
+            return hedef
+        hedef.parent.mkdir(exist_ok=True)
+        with Image.open(kaynak) as img:
+            en, boy = img.size
+            kenar = min(en, boy)
+            kare = img.convert("RGB").crop(((en - kenar) // 2, (boy - kenar) // 2, (en + kenar) // 2,
+                                            (boy + kenar) // 2))
+            gecici = hedef.with_suffix(".yaziliyor")
+            kare.resize((boyut, boyut), Image.Resampling.LANCZOS).save(gecici, "JPEG", quality=86)
+        gecici.replace(hedef)
     return hedef
 
 
@@ -214,7 +231,8 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None) -> FastA
         yol = kapak_kaynagi(calisma, kimlik)
         if yol is None:
             raise HTTPException(404, "kapak yok")
-        return FileResponse(kapak_kucuk(yol, boyut), headers={"Cache-Control": "max-age=86400"})
+        return FileResponse(kapak_kucuk(calisma, kimlik, yol, boyut), media_type="image/jpeg",
+                            headers={"Cache-Control": "max-age=86400"})
 
     @app.post("/api/sarki/{kimlik}/kapak")
     def yeni_kapak(kimlik: str):
