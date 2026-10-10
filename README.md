@@ -54,8 +54,12 @@ yüklenen parçanın Spotify'da çıkıp çıkmadığını ve adı arandığınd
    incelemedeki yayın API'den geri çekilemiyor: işaretlenir, sonuç gelince gece yoklaması bitirir. Elle dağıtımcıda
    (RouteNote) önce panelden kaldır, sonra `--kaldirildi`.
 
-Spotify kotası dar: uzun 429 alınırsa kilit `calisma/.spotify_kota.json`'a yazılır ve süresi dolana kadar hiçbir
-komut Spotify'a istek atmaz; günlük tavan 400 istek. Dinleme odası Spotify'a hiç istek atmaz.
+Spotify kotası dar (geliştirici API'si, 2026-10-09'da ~1.000 istekte 23 saatlik ceza): uzun 429 alınırsa kilit
+`calisma/.spotify_kota.json`'a yazılır ve süresi dolana kadar hiçbir komut API'ye istek atmaz; günlük tavan 400
+istek. Takip API'yi neredeyse hiç kullanmaz: canlılık ve Türkiye'deki arama sırası her gece Spotify uygulamasının
+kendi aramasıyla (STILLMORE köprüsü, kotasız), diğer pazarların sırası şarkı başına haftada bir API'den
+(`config/kesif.toml` → `[takip]`). Uygulama açılamazsa (o an bir şey çalıyorsa) takip API'yle sürer. Dinleme
+odası Spotify'a hiç istek atmaz.
 
 Bildirimler `calisma/olaylar.jsonl`'a da yazılır (aynı olay bir kez). Gece koşusu sonunda dış servislerin (YouTube,
 LRCLIB, MusicBrainz, Deezer, Spotify) istek/hata sayısı günlüğe, günlük toplamı `calisma/gunluk/servisler.json`'a.

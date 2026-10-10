@@ -96,7 +96,7 @@ class Oturum:
         try:
             if self.biz_actik or self.bayraksiz_geri_ac:
                 ac(cdp=True, port=self.port)
-            k = Kopru(self.port)
+            k = kopru_bekle(self.port)
             k.hazir_bekle()
         except BaseException:
             # `with` gövdesine girilmeden düşerse __exit__ çağrılmaz: Spotify'ı burada eski hâline getir
@@ -116,6 +116,19 @@ class Oturum:
 
 
 # ── CDP ─────────────────────────────────────────────────────
+def kopru_bekle(port: int = PORT, sn: int = 60, uyku=None) -> "Kopru":
+    """CDP portu açıldıktan sonra arayüz sayfası (xpui) birkaç saniye daha yükleniyor; o ana kadar bekler
+    (2026-10-10: Spotify'ı yeni açınca "arayüz sayfası bulunamadı" ile düştü)."""
+    for i in range(sn):
+        try:
+            return Kopru(port)
+        except StillmoreYok:
+            if i == sn - 1:
+                raise
+            (uyku or time.sleep)(1)
+    raise AssertionError("ulaşılmaz")
+
+
 class Kopru:
     def __init__(self, port: int = PORT):
         try:
@@ -175,6 +188,71 @@ class Kopru:
           }}));
         }})()"""
         return self.degerlendir(ifade, zaman_asimi) or []
+
+
+    def ara(self, terim: str, adet: int = 20, islem: str = "searchDesktop") -> list[dict]:
+        """Spotify istemcisinin kendi araması (GraphQL): Web API kotası harcamaz, hesabın ülkesinde arar (2026-10-10
+        canlı: 20 sonuç ~1 sn; istemci token'ıyla Web API ise hemen 429). Sonuç Web API biçiminde."""
+        ifade = f"({ISTEMCI_ARAMA})({json.dumps(terim)}, {int(adet)}, {json.dumps(islem)})"
+        return self.degerlendir(ifade, 60) or []
+
+    def isrc_ara(self, isrc: str) -> list[dict]:
+        """ISRC araması bulanık eşleşme de döndürebilir: çağıran ad ve sanatçıyla ayrıca doğrular."""
+        return self.ara(f"isrc:{isrc}", 20, "searchTracks")
+
+    def ulke(self) -> str | None:
+        ifade = ("(async () => { try { return (await Spicetify.Platform.ProductStateAPI.getValues()).country; } "
+                 "catch (e) { return null; } })()")
+        return self.degerlendir(ifade, 20)
+
+
+# İstemcinin GraphQL araması; tanım istemci sürümünde yoksa STILLMORE'un yedek özetleri (stillmore-finder.js →
+# GQL_FALLBACK). Sonuç Web API parça biçiminde: takip ve keşif aynı kodla okur.
+ISTEMCI_ARAMA = """async (terim, adet, islem) => {
+  const ozet = { searchDesktop: "db61238974d27839a136c9dc02bfdbe3fab7635f21cf85976ebff9a1ee281345",
+                 searchTracks: "59ee4a659c32e9ad894a71308207594a65ba67bb6b632b183abe97303a51fa55" };
+  const tanim = Spicetify.GraphQL.Definitions[islem]
+    || { name: islem, operation: "query", sha256Hash: ozet[islem], value: null };
+  const r = await Spicetify.GraphQL.Request(tanim, { searchTerm: terim, offset: 0, limit: adet, numberOfTopResults: 5,
+    includeAudiobooks: false, includePreReleases: false });
+  if (!r?.data && r?.errors?.length) throw new Error(islem + ": " + (r.errors[0].message || "hata"));
+  const kimlik = (uri) => String(uri || "").split(":").pop();
+  return (r?.data?.searchV2?.tracksV2?.items || []).map((x) => x?.item?.data || x?.data || x).filter((t) => t && t.uri)
+    .map((t) => ({ id: kimlik(t.uri), name: t.name || "", is_playable: t.playability?.playable ?? null,
+      artists: (t.artists?.items || []).map((a) => ({ id: kimlik(a.uri), name: a.profile?.name || "" })) }));
+}"""
+
+
+class IstemciArama:
+    """Takip için Spotify istemcisi üzerinden arama (`Kopru`): Web API'yle aynı imza (`isrc_ara`, `ara`), ama yalnız
+    hesabın ülkesinde (`ulke`); başka pazar istenirse Web API'ye (`yedek`) düşer."""
+
+    def __init__(self, kopru: "Kopru", yedek=None):
+        self.kopru, self.yedek = kopru, yedek
+        self.ulke = (kopru.ulke() or "").upper() or None
+        self.istek_sayisi = 0  # istemci aramaları (Web API kotasına sayılmaz)
+
+    def isrc_ara(self, isrc: str, market: str | None = None) -> list[dict]:
+        self.istek_sayisi += 1
+        try:
+            return self.kopru.isrc_ara(isrc)
+        except StillmoreYok:  # istemci o an cevap vermedi: bu çağrı Web API'yle
+            if self.yedek is None:
+                raise
+            return self.yedek.isrc_ara(isrc, market or self.ulke or "GB")
+
+    def ara(self, sorgu: str, market: str, adet: int = 20) -> list[dict]:
+        if market and self.ulke and market.upper() != self.ulke:
+            if self.yedek is None:
+                raise StillmoreYok(f"istemci yalnız {self.ulke}'de arar ({market} istendi)")
+            return self.yedek.ara(sorgu, market, adet)
+        self.istek_sayisi += 1
+        try:
+            return self.kopru.ara(sorgu, adet)
+        except StillmoreYok:
+            if self.yedek is None:
+                raise
+            return self.yedek.ara(sorgu, market or self.ulke or "GB", adet)
 
 
 def adaylara(satirlar: list[dict], playlist_id: str):

@@ -378,6 +378,7 @@ def test_stillmore_hazir_olmazsa_spotify_eski_haline_doner(monkeypatch):
             raise stillmore.StillmoreYok("eklenti yüklenmedi")
 
     monkeypatch.setattr(stillmore, "Kopru", Kirik)
+    monkeypatch.setattr(stillmore.time, "sleep", lambda _: None)  # arayüz sayfası beklemesi (kopru_bekle)
     with pytest.raises(stillmore.StillmoreYok), stillmore.Oturum(yeniden_baslat=True):
         pass
     # Scryne'ın açık Spotify'ı kapatıldı, CDP'li açıldı; hata sonrası kapatılıp bayraksız geri açıldı

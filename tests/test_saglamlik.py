@@ -398,3 +398,123 @@ def test_istekler_ingilizce_ister(monkeypatch):
     monkeypatch.setattr(urllib.request, "urlopen", urlopen)
     ag.json_al("https://api.deezer.com/genre")
     assert gorulen.get("Accept-language") == "en"
+
+
+# ── takip: Spotify uygulamasının kendi araması (kotasız) + haftalık Web API ──
+def _parca(id_, ad, sanatci, playable=True, isrc=None):
+    t = {"id": id_, "name": ad, "is_playable": playable, "artists": [{"id": f"art-{sanatci}", "name": sanatci}]}
+    if isrc is not None:
+        t["external_ids"] = {"isrc": isrc}
+    return t
+
+
+class _SahteSp:
+    """Web API: her çağrı sayılır."""
+
+    def __init__(self):
+        self.cagri = []
+
+    def isrc_ara(self, isrc, market):
+        self.cagri.append(("isrc", market))
+        return [_parca("bizim", "Fix You", "Orvane", isrc=isrc)]
+
+    def ara(self, sorgu, market, adet=20):
+        self.cagri.append(("ara", market))
+        return [_parca("x", "Fix You", "Coldplay"), _parca("bizim", "Fix You", "Orvane")]
+
+
+class _SahteIstemci:
+    ulke = "TR"
+
+    def __init__(self, isrc_sonuc):
+        self.isrc_sonuc, self.cagri = isrc_sonuc, []
+
+    def isrc_ara(self, isrc, market=None):
+        self.cagri.append("isrc")
+        return self.isrc_sonuc
+
+    def ara(self, sorgu, market, adet=20):
+        self.cagri.append(("ara", market))
+        return [_parca("bizim", "Fix You", "Orvane")]
+
+
+def test_takip_istemciyle_kotasiz_web_api_haftalik():
+    d = durum.Durum("fix", "Coldplay", "Fix You")
+    sp, ist = _SahteSp(), _SahteIstemci([_parca("bizim", "Fix You", "Orvane")])
+    pazar = ("GB", "DE", "TR")
+    t0 = datetime(2026, 10, 20, 3, 0)
+    son = takip.kontrol_et(sp, d, "QZABC2600001", "Orvane", pazar, onceki=None, istemci=ist, simdi=t0)
+    assert son["canli"] and son["siralar"] == {"GB": 2, "DE": 2, "TR": 1} and son["arama_sirasi"] == 1
+    assert ("isrc", "GB") not in sp.cagri and [c for c in sp.cagri] == [("ara", "GB"), ("ara", "DE")]
+    # ertesi gece: Web API'ye hiç gidilmez, TR istemciden, GB/DE önceki ölçüm
+    sp.cagri.clear()
+    son2 = takip.kontrol_et(sp, d, "QZABC2600001", "Orvane", pazar, onceki=son, istemci=ist,
+                            simdi=t0 + timedelta(days=1))
+    assert sp.cagri == [] and son2["siralar"] == {"GB": 2, "DE": 2, "TR": 1}
+    assert son2["web_kontrol"] == son["web_kontrol"]
+    son3 = takip.kontrol_et(sp, d, "QZABC2600001", "Orvane", pazar, onceki=son2, istemci=ist,
+                            simdi=t0 + timedelta(days=7))
+    assert sp.cagri == [("ara", "GB"), ("ara", "DE")] and son3["web_kontrol"] > son["web_kontrol"]
+
+
+def test_takip_istemcinin_bulanik_isrc_sonucu_bizim_sayilmaz():
+    d = durum.Durum("fix", "Coldplay", "Fix You")
+    # ISRC araması yayında olmayan parçada başka şarkılar döndürebiliyor (canlı: GBAYE… → 20 farklı albüm)
+    ist = _SahteIstemci([_parca("a", "Fix You", "Coldplay"), _parca("b", "Spinning Around", "Orvane")])
+    son = takip.kontrol_et(_SahteSp(), d, "QZABC2600001", "Orvane", ("TR",), istemci=ist)
+    assert son["canli"] is False and ist.cagri == ["isrc"]  # canlı değilken ad araması yapılmaz
+
+
+def test_istemci_aramasi_dusunce_web_apiye_gecer():
+    from yanki import stillmore
+
+    class Kopru:
+        def ulke(self):
+            return "tr"
+
+        def isrc_ara(self, isrc):
+            raise stillmore.StillmoreYok("CDP koptu")
+
+        def ara(self, terim, adet=20, islem="searchDesktop"):
+            raise stillmore.StillmoreYok("CDP koptu")
+
+    sp = _SahteSp()
+    ist = stillmore.IstemciArama(Kopru(), sp)
+    assert ist.ulke == "TR"
+    assert ist.isrc_ara("QZ")[0]["id"] == "bizim" and ist.ara("Fix You", "TR")[1]["id"] == "bizim"
+    assert sp.cagri == [("isrc", "TR"), ("ara", "TR")]
+    ist.ara("Fix You", "GB")  # başka pazar doğrudan Web API
+    assert sp.cagri[-1] == ("ara", "GB")
+    with pytest.raises(stillmore.StillmoreYok):
+        stillmore.IstemciArama(Kopru(), None).ara("x", "GB")
+
+
+def test_kopru_arayuz_sayfasini_bekler(monkeypatch):
+    from yanki import stillmore
+
+    deneme = {"n": 0}
+
+    class Gec:
+        def __init__(self, port):
+            deneme["n"] += 1
+            if deneme["n"] < 3:
+                raise stillmore.StillmoreYok("Spotify arayüz sayfası bulunamadı")
+
+    monkeypatch.setattr(stillmore, "Kopru", Gec)
+    assert isinstance(stillmore.kopru_bekle(uyku=lambda _: None), Gec) and deneme["n"] == 3
+
+
+def test_takip_uygulama_acilamazsa_web_apiyle(monkeypatch):
+    from yanki import cli, stillmore
+
+    class Acilmaz:
+        def __init__(self, **_k):
+            pass
+
+        def __enter__(self):
+            raise stillmore.StillmoreYok("Spotify şu an çalıyor")
+
+    monkeypatch.setattr(stillmore, "Oturum", Acilmaz)
+    gelen = []
+    assert cli._istemciyle(_SahteSp(), lambda ist: gelen.append(ist) or "tamam", True) == "tamam"
+    assert gelen == [None]

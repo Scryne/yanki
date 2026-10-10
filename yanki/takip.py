@@ -80,17 +80,42 @@ def yukleme_kaydet(calisma: Path, kimlik: str, bilgi: dict, dagitimci: str = "")
     return yukleme
 
 
-def kontrol_et(sp, d: durum.Durum, isrc: str, sanatci_adi: str, pazarlar, arama_limiti: int = 20) -> dict:
-    """Tek şarkı: ISRC araması (ana pazar, yayınladığımız bir pazar olmalı) + her pazarda ad araması."""
+WEB_GUN = 7  # istemcinin bakamadığı pazarların arama sırası (Web API) şarkı başına en sık bu kadar günde bir
+
+
+def _web_zamani_mi(onceki: dict | None, simdi: datetime, web_gun: int) -> bool:
+    z = (onceki or {}).get("web_kontrol")
+    return not z or datetime.fromisoformat(z) <= simdi - timedelta(days=web_gun)
+
+
+def kontrol_et(sp, d: durum.Durum, isrc: str, sanatci_adi: str, pazarlar, arama_limiti: int = 20,
+               onceki: dict | None = None, istemci=None, web_gun: int = WEB_GUN, simdi: datetime | None = None) -> dict:
+    """Tek şarkı: canlı mı (ISRC araması) + pazar pazar ad aramasında sıra.
+
+    Kota (2026-10-10): şarkı başına her gece ISRC + 6 pazar × 2 sayfa = 13 Web API isteği, ~15 canlı şarkıda günlük
+    400 tavanını dolduruyordu. `istemci` (Spotify uygulamasının kendi araması, `stillmore.IstemciArama`) varsa
+    canlılık ve hesabın ülkesindeki sıra ondan, kotasız ve her gece; diğer pazarlar Web API'den şarkı başına
+    `web_gun`'de bir (arada önceki sıra taşınır). İstemci ISRC'de bulanık eşleşme de döndürebildiği için parça ancak
+    sanatçısı bizimse ve adı aynıysa "bizim" sayılır."""
     if isinstance(pazarlar, str):
         pazarlar = (pazarlar,)
+    simdi = simdi or datetime.now()
     market = pazarlar[0]
-    son: dict = {"zaman": datetime.now().isoformat(timespec="seconds"), "market": market, "canli": False,
+    son: dict = {"zaman": simdi.isoformat(timespec="seconds"), "market": market, "canli": False,
                  "spotify_id": None, "sanatci_id": None, "arama_sirasi": None, "siralar": {},
-                 "arama_limiti": arama_limiti}
+                 "arama_limiti": arama_limiti, "web_kontrol": (onceki or {}).get("web_kontrol")}
+    sade = sade_ad(d.ad)
+    bizim_sanatci = lambda t: any(  # noqa: E731
+        a.get("name", "").casefold() == sanatci_adi.casefold() for a in t.get("artists") or [])
     bizim = None
-    for t in sp.isrc_ara(isrc, market):
-        if t.get("is_playable") is not False and (t.get("external_ids") or {}).get("isrc", isrc).upper() == isrc:
+    for t in (istemci or sp).isrc_ara(isrc, market):
+        if t.get("is_playable") is False:
+            continue
+        if "external_ids" in t:  # Web API: ISRC kesin
+            if (t["external_ids"] or {}).get("isrc", isrc).upper() == isrc:
+                bizim = t
+                break
+        elif bizim_sanatci(t) and sade_ad(t.get("name") or "") == sade:  # istemci: ad + sanatçıyla doğrula
             bizim = t
             break
     if bizim:
@@ -99,16 +124,23 @@ def kontrol_et(sp, d: durum.Durum, isrc: str, sanatci_adi: str, pazarlar, arama_
                                   if a.get("name", "").casefold() == sanatci_adi.casefold()), None)
     if not bizim:
         return son  # yayında değilken ad araması boşuna istek
-    sade = sade_ad(d.ad)
+    istemci_pazari = getattr(istemci, "ulke", None)
+    web_zamani = _web_zamani_mi(onceki, simdi, web_gun)
     for m in pazarlar:
+        if m == istemci_pazari:
+            kaynak = istemci
+        elif web_zamani:
+            kaynak = sp
+        else:
+            son["siralar"][m] = ((onceki or {}).get("siralar") or {}).get(m)  # haftalık: önceki ölçüm taşınır
+            continue
         son["siralar"][m] = None
-        for i, t in enumerate(sp.ara(d.ad, m, adet=arama_limiti), 1):
-            ayni_parca = t.get("id") == bizim["id"]
-            bizim_adla = sade_ad(t.get("name") or "") == sade and any(
-                a.get("name", "").casefold() == sanatci_adi.casefold() for a in t.get("artists") or [])
-            if ayni_parca or bizim_adla:
+        for i, t in enumerate(kaynak.ara(d.ad, m, adet=arama_limiti), 1):
+            if t.get("id") == bizim["id"] or (sade_ad(t.get("name") or "") == sade and bizim_sanatci(t)):
                 son["siralar"][m] = i
                 break
+    if web_zamani and any(m != istemci_pazari for m in pazarlar):
+        son["web_kontrol"] = son["zaman"]
     bulunan = [x for x in son["siralar"].values() if x]
     son["arama_sirasi"] = min(bulunan) if bulunan else None
     return son
@@ -193,8 +225,10 @@ def profil_olaylari(calisma: Path, sanatci_adi: str) -> list[tuple[str, str, str
 
 
 def takip_et(sp, calisma: Path, sanatci_adi: str, pazarlar, kimlikler: list[str] | None = None,
-             arama_limiti: int = 20, bildir=None) -> list[tuple[durum.Durum, list[str]]]:
-    """`bildir(tur, baslik, metin, anahtar)` verilirse değişiklikler bildirilir (gece koşusu, `yanki takip`)."""
+             arama_limiti: int = 20, bildir=None, istemci=None, web_gun: int = WEB_GUN
+             ) -> list[tuple[durum.Durum, list[str]]]:
+    """`bildir(tur, baslik, metin, anahtar)` verilirse değişiklikler bildirilir (gece koşusu, `yanki takip`).
+    `istemci`: Spotify uygulaması üzerinden kotasız arama (`kontrol_et`)."""
     sonuc = []
     for d in durum.hepsi(calisma):
         if d.asama not in ("yuklendi", "yayinda") or (kimlikler and d.kimlik not in kimlikler):
@@ -207,7 +241,8 @@ def takip_et(sp, calisma: Path, sanatci_adi: str, pazarlar, kimlikler: list[str]
                 sonuc.append((d, [f"ISRC yok: dağıtımcının atadığı ISRC'yi `yanki yuklendi {d.kimlik} --isrc …` ile "
                                   "ekle"]))
             continue
-        son = kontrol_et(sp, d, y["isrc"].upper(), sanatci_adi, pazarlar, arama_limiti)
+        son = kontrol_et(sp, d, y["isrc"].upper(), sanatci_adi, pazarlar, arama_limiti,
+                         onceki=(d.yayin or {}).get("son"), istemci=istemci, web_gun=web_gun)
         son.update(yayin_tarihi=y.get("yayin_tarihi"), dagitimci=y.get("dagitimci"),
                    dagitim_durumu=y.get("dagitim_durumu"))
         with durum.guncelle(calisma, d.kimlik) as taze:

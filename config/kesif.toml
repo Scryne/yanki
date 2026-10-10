@@ -71,3 +71,8 @@ tazeleme_gun = 30
 pazarlar = ["GB", "DE", "FR", "BR", "TR", "AU"]
 # Şarkının adı arandığında ilk kaç sonuçta bizim parçaya bakılsın (sayfa başı 10, her 10 için bir istek, pazar başına)
 arama_derinligi = 20
+# Spotify uygulamasının kendi araması (STILLMORE köprüsü, kotasız): canlılık ve hesabın ülkesindeki (TR) sıra her
+# gece ondan. Önce şarkı başına her gece 13 Web API isteği gidiyordu, ~15 canlı şarkıda günlük 400 tavanı dolardı.
+istemci = true
+# Uygulamanın bakamadığı pazarların sırası (Web API) şarkı başına kaç günde bir; arada önceki ölçüm taşınır
+web_gun = 7

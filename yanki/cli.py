@@ -450,9 +450,17 @@ def _takip(args: argparse.Namespace) -> int:
     t = _kesif_ayarlari(a.kok)["takip"]
     y = paket.yayin_ayarlari(a.kok / "config" / "yayin.toml")
     sp = spotify.Spotify(a.kok)
+
+    def calistir(istemci):
+        return takip.takip_et(sp, calisma, y.sanatci_adi, tuple(t["pazarlar"]), args.kimlik or None,
+                              int(t["arama_derinligi"]), bildir=_bildirici(calisma), istemci=istemci,
+                              web_gun=int(t.get("web_gun", takip.WEB_GUN)))
+
     try:
-        sonuc = takip.takip_et(sp, calisma, y.sanatci_adi, tuple(t["pazarlar"]), args.kimlik or None,
-                               int(t["arama_derinligi"]), bildir=_bildirici(calisma))
+        if t.get("istemci", True) and _takip_gerekli(calisma, args.kimlik):
+            sonuc = _istemciyle(sp, calistir, getattr(args, "spotify_yeniden_baslat", False))
+        else:
+            sonuc = calistir(None)
     except spotify.Sinirli as e:  # kota kilidi beklenen bir durum: özet bildirimi gösterir, koşu hatası değil
         print(f"takip ertelendi: {e}")
         return 0
@@ -478,6 +486,36 @@ def _takip(args: argparse.Namespace) -> int:
         print(f"✗ {y.sanatci_adi} profili bölünmüş: {len(profiller)} ayrı sanatçı kimliği "
               f"({', '.join(sorted(profiller))})")
     return 0
+
+
+def _takip_gerekli(calisma: Path, kimlikler: list[str] | None) -> bool:
+    """ISRC'si belli yüklenmiş şarkı var mı (yoksa Spotify uygulaması boşuna açılmasın)."""
+    from yanki import takip
+
+    return any(d.asama in ("yuklendi", "yayinda") and (not kimlikler or d.kimlik in kimlikler)
+               and (takip.yukleme_bilgisi(calisma, d.kimlik) or {}).get("isrc") for d in durum.hepsi(calisma))
+
+
+def _istemciyle(sp, fn, yeniden_baslat: bool):
+    """`fn(istemci)`: Spotify uygulamasının kendi aramasıyla (kotasız). Uygulama açılamazsa (çalıyor, yama yok, kapalı
+    ve elle komut) Web API'yle (`fn(None)`); açıldıktan sonraki tek tek aksaklıkta o çağrı Web API'ye düşer."""
+    import subprocess
+
+    from yanki import stillmore
+
+    try:
+        oturum = stillmore.Oturum(yeniden_baslat=yeniden_baslat)
+        kopru = oturum.__enter__()
+    except (stillmore.StillmoreYok, OSError, subprocess.SubprocessError) as e:
+        print(f"takip Spotify uygulaması olmadan (Web API): {e}")
+        return fn(None)
+    try:
+        istemci = stillmore.IstemciArama(kopru, sp)
+        sonuc = fn(istemci)
+        print(f"takip: Spotify uygulamasıyla {istemci.istek_sayisi} arama ({istemci.ulke}), Web API {sp.istek_sayisi}")
+        return sonuc
+    finally:
+        oturum.__exit__(None, None, None)
 
 
 def ozet(kok: Path) -> dict:
@@ -565,7 +603,7 @@ def _calistir(args: argparse.Namespace) -> int:
                 # takipten önce: kabul gelince Tunearo'nun atadığı ISRC takibe girsin
                 ("dağıtım durumu", lambda: _dagitim_durum(argparse.Namespace()))]
     if spotify_var:
-        adimlar.append(("takip", lambda: _takip(argparse.Namespace(kimlik=[]))))
+        adimlar.append(("takip", lambda: _takip(argparse.Namespace(kimlik=[], spotify_yeniden_baslat=True))))
     else:
         print("takip atlandı: Spotify anahtarı yok (.env → SPOTIFY_CLIENT_ID/SECRET)")
     adimlar += [("takvim", lambda: _takvim_hatirlat(kok)),

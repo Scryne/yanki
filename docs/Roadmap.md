@@ -521,3 +521,14 @@ denendi), toplam 312 yeşil.
 - **Gündüz dağıtım yoklaması** (3 saatte bir, yayın başına bir istek): red/kabul ve geri çekme geceyi beklemez.
 - **`yanki durum`:** Tunearo/Spotify/TypeSafe anahtarları (değer yazılmaz) ve disk (≥ 20 GB).
 - **Oda:** dağıtımda "geri çekilecek", takvim "her gün", keşifte tür. Görsel doğrulama 24 kare 0 sorun.
+
+**Spotify kotası (2026-10-10, Scryne: "kilitleniyor mu, hep böyle mi olacak; öyleyse başka yol bulalım"):** kilit
+9 Ekim'deki tek seferlik aşırı kullanımdan (~1.000 istek, 23 saat ceza). Ama takip şarkı başına her gece 13 API
+isteği harcıyordu: ~15 canlı şarkıda günlük 400 tavanı dolup takip ve keşif yarıda kalacaktı. Spike (canlı, Spotify
+1.3.4 + Spicetify): istemcinin GraphQL araması (`searchDesktop`, `searchTracks`; STILLMORE'un yedek özetleri)
+çalışıyor, 20 sonuç ~1 sn, hesabın ülkesinde (TR); istemci token'ıyla genel API ise hemen 429 → kullanılmadı.
+`stillmore.IstemciArama`: takip canlılığı ve TR sırasını her gece istemciden alır, diğer pazarlar şarkı başına
+haftada bir API'den (`web_gun = 7`, arada önceki sıra). İstemcinin ISRC araması bulanık eşleşme döndürebildiği
+için parça yalnız ad + sanatçı eşleşince "bizim". Canlı doğrulama: RouteNote'taki 3 parça 3 istemci aramasıyla, API
+0; bilinen bir yayında (Kylie Minogue, GBAYE0000351) canlı, sanatçı kimliği, TR sırası 1. Bulunan hata: Spotify'ı
+açınca CDP portu hazır ama arayüz sayfası yüklenmemişken köprü düşüyordu (`kopru_bekle`). 5 yeni test.
