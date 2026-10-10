@@ -150,8 +150,39 @@ def _kunye(args: argparse.Namespace) -> int:
     return kod
 
 
+def _elle_yazarlari_uygula(kok: Path) -> list[str]:
+    """`liste.toml`'da `yazarlar` yazılmış ama künyesi yazarsız onaylı/paketli şarkılar: künye güncellenir, paketliyse
+    paket yeniden çıkar (yazarsız paket dağıtımcıya yüklenemiyor; Scryne yalnız listeye yazarları ekler). Dönen:
+    güncellenen şarkıların kimlikleri."""
+    calisma = kok / "calisma"
+    try:
+        elle = {s.kimlik: s.yazarlar for s in liste.yukle(kok / "girdi" / "liste.toml") if s.yazarlar}
+    except (OSError, ValueError):
+        return []
+    from yanki import kunye
+
+    guncellenen = []
+    for d in durum.hepsi(calisma):
+        yazarlar = elle.get(d.kimlik)
+        mevcut = tuple((d.kunye or {}).get("yazarlar") or ())
+        if not yazarlar or d.asama not in ("onaylandi", "paketlendi") or mevcut == tuple(map(kunye.duz, yazarlar)):
+            continue
+        with durum.guncelle(calisma, d.kimlik) as taze:
+            taze.kunye = kunye.elle_yazarlar(taze.kunye or {}, yazarlar)
+        print(f"yazarlar listeden: {d.sanatci} — {d.ad}: {', '.join(yazarlar)}")
+        guncellenen.append(d.kimlik)
+    paketli = [k for k in guncellenen if (durum.oku(calisma, k) or durum.Durum(k, "", "")).asama == "paketlendi"]
+    if paketli:
+        hatalar: list = []
+        paket.paketle(calisma, kok / "config" / "yayin.toml", paketli, yeniden=True, hatalar=hatalar)
+        for d, hata in hatalar:
+            print(f"✗ yeniden paketlenemedi: {d.sanatci} — {d.ad}: {hata}")
+    return guncellenen
+
+
 def _paketle(args: argparse.Namespace) -> int:
     a = ayarlar.yukle()
+    _elle_yazarlari_uygula(a.kok)
     hatalar: list = []
     islenen = paket.paketle(a.kok / "calisma", a.kok / "config" / "yayin.toml", yeniden=args.yeniden,
                             hatalar=hatalar)
@@ -872,7 +903,19 @@ def _takvim_hatirlat(kok: Path) -> int:
             print(f"✗ {s.sanatci} — {s.ad}: {e}")
             hatali += 1
             continue
-        except (ValueError, LookupError, RuntimeError, OSError) as e:  # bozuk paket, ağ: sıradaki pakete geç
+        except ValueError as e:
+            if "orijinal yazarlar yok" not in str(e):
+                print(f"✗ {s.sanatci} — {s.ad}: {e}")
+                hatali += 1
+                continue
+            # kaynakta yazar yok (MusicBrainz'de kaydı olmayan şarkı): her 30 dk hata değil, Scryne'a bir kez
+            print(f"takvim: {s.sanatci} — {s.ad} yazarsız, bekliyor (girdi/liste.toml → yazarlar)")
+            bildir("onay", f"yazarlar gerekli: {s.ad}",
+                   f"{s.sanatci} — {s.ad} için orijinal söz yazarı/besteci bulunamadı; dağıtımcı yazarsız cover "
+                   "almıyor. girdi/liste.toml'da şarkıya yazarlar = [\"Ad Soyad\"] ekle (sonraki koşu paketleyip "
+                   "yükler) ya da dinleme odasında reddet.", f"yazar_yok:{s.kimlik}")
+            continue
+        except (LookupError, RuntimeError, OSError) as e:  # bozuk paket, ağ: sıradaki pakete geç
             print(f"✗ {s.sanatci} — {s.ad}: {type(e).__name__}: {e}")
             hatali += 1
             continue

@@ -656,3 +656,40 @@ def test_sinirsiz_takvim_parca_kotasi_dolunca_durur_ve_bildirir(tmp_path, monkey
     assert [durum.oku(c, k).asama for k in "abc"] == ["yuklendi", "paketlendi", "paketlendi"]
     assert any(o["baslik"] == "Tunearo parça kotası doldu" for o in olay.oku(c))
     assert len(api.yayinlar) == 2  # ikinci denemenin taslağı kaldı: kota açılınca aynı yayın tamamlanır
+
+
+def test_yazarsiz_paket_kosuyu_hataya_dusurmez_bir_kez_bildirilir(tmp_path, monkeypatch):
+    """Janice Javier "Heaven Knows" (2026-10-10): MusicBrainz'de kaydı yok, yükleme her 30 dk "koşu hata verdi" diye
+    düşüyordu. Yazarsız paket bekler, Scryne'a bir kez söylenir; diğer paketler yüklenir."""
+    from yanki import cli
+
+    c = tmp_path / "calisma"
+    _paket(c, kimlik="yazarsiz", orijinal_yazarlar=[], orijinal_yazar_adlari=[])
+    _paket(c, kimlik="tam")
+    _sinirsiz_ayar(tmp_path)
+    api = SahteApi()
+    monkeypatch.setattr(tunearo.Istemci, "kokten", classmethod(lambda cls, kok: api))
+    assert cli._takvim_hatirlat(tmp_path) == 0
+    assert durum.oku(c, "tam").asama == "yuklendi" and durum.oku(c, "yazarsiz").asama == "paketlendi"
+    assert cli._takvim_hatirlat(tmp_path) == 0
+    assert [o["baslik"] for o in olay.oku(c)].count("yazarlar gerekli: Somewhere Only We Know") == 1
+
+
+def test_listedeki_elle_yazarlar_kunyeye_ve_pakete_islenir(tmp_path, monkeypatch):
+    from yanki import cli, liste, paket
+
+    c = tmp_path / "calisma"
+    _paket(c, kimlik="janice-javier-heaven-knows", orijinal_yazarlar=[], orijinal_yazar_adlari=[])
+    (tmp_path / "girdi").mkdir()
+    (tmp_path / "girdi" / "liste.toml").write_text(
+        '[[sarki]]\nsanatci = "Janice Javier"\nad = "Heaven Knows"\nyazarlar = ["Ana  Yazar", "Tek"]\n',
+        encoding="utf-8")
+    yeniden = []
+    monkeypatch.setattr(paket, "paketle", lambda *a, **k: yeniden.append(a[2]) or [])
+    assert cli._elle_yazarlari_uygula(tmp_path) == ["janice-javier-heaven-knows"]
+    k = durum.oku(c, "janice-javier-heaven-knows").kunye
+    assert k["yazarlar"] == ["Ana Yazar", "Tek"] and k["yazar_adlari"] == [["Ana", "Yazar"], ["Tek", ""]]
+    assert yeniden == [["janice-javier-heaven-knows"]]
+    assert cli._elle_yazarlari_uygula(tmp_path) == []  # bir kez: künye zaten listeyle aynı
+    with pytest.raises(ValueError, match="yazarlar"):
+        liste.coz('[[sarki]]\nsanatci = "A"\nad = "B"\nyazarlar = "Tek Ad"\n')

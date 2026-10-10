@@ -45,6 +45,8 @@ def girdi_hazirla(a: Ayarlar, s: Sarki, calisma: Path, girdi: Path) -> durum.Dur
         alanlar["kunye"] = asdict(kunye.bul(s.sanatci, s.ad))
     except Exception as e:  # noqa: BLE001 — künye paketlemeden önce elle de tamamlanabilir
         alanlar["kunye"] = {"uyari": f"künye bulunamadı: {e}"}
+    if s.yazarlar:  # listedeki elle yazarlar esas (MusicBrainz'de kaydı olmayan şarkı)
+        alanlar["kunye"] = kunye.elle_yazarlar(alanlar["kunye"], s.yazarlar)
 
     try:
         kyn = kaynak.hazirla(s.kimlik, s.sanatci, s.ad, soz.sure_sn, girdi / "kaynak", k, youtube=s.youtube)

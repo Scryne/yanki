@@ -12,6 +12,7 @@ bu dosyanın sonuna ekler (2026-10-09).
     # vokal = "kadin"                                     # "kadin" | "erkek"
     # bpm = 68
     # ton = "A major"
+    # yazarlar = ["Ad Soyad", "Ad Soyad"]                # orijinal söz yazarı/besteciler (MusicBrainz'de yoksa)
 """
 
 import re
@@ -32,6 +33,8 @@ class Sarki:
     vokal: str | None = None
     bpm: int | None = None
     ton: str | None = None
+    # orijinal yazarlar, "Ad Soyad" (MusicBrainz'de kaydı olmayan şarkı: dağıtımcı cover'da yazarsız yayın almıyor)
+    yazarlar: tuple[str, ...] | None = None
 
     @property
     def kimlik(self) -> str:
@@ -58,12 +61,19 @@ def coz(metin: str, ad: str = "liste.toml") -> list[Sarki]:
         eksik = [k for k in ("sanatci", "ad") if not str(s.get(k, "")).strip()]
         if eksik:
             raise ValueError(f"{yol.name}: {i}. şarkıda eksik alan: {', '.join(eksik)}")
-        bilinmeyen = set(s) - {"sanatci", "ad", "youtube", "stil", "vokal", "bpm", "ton"}
+        bilinmeyen = set(s) - {"sanatci", "ad", "youtube", "stil", "vokal", "bpm", "ton", "yazarlar"}
         if bilinmeyen:
             raise ValueError(f"{yol.name}: {i}. şarkıda bilinmeyen alan: {', '.join(sorted(bilinmeyen))}")
         if s.get("vokal") is not None and s["vokal"] not in VOKAL:
             raise ValueError(f"{yol.name}: {i}. şarkı vokal 'kadin' ya da 'erkek' olmalı: {s['vokal']}")
-        sarki = Sarki(**{k: (v.strip() if isinstance(v, str) else v) for k, v in s.items()})
+        yazarlar = s.get("yazarlar")
+        if yazarlar is not None and (not isinstance(yazarlar, list) or not yazarlar
+                                     or not all(isinstance(x, str) and x.strip() for x in yazarlar)):
+            raise ValueError(f"{yol.name}: {i}. şarkı yazarlar [\"Ad Soyad\", …] biçiminde olmalı: {yazarlar}")
+        alanlar = {k: (v.strip() if isinstance(v, str) else v) for k, v in s.items()}
+        if yazarlar is not None:
+            alanlar["yazarlar"] = tuple(" ".join(x.split()) for x in yazarlar)
+        sarki = Sarki(**alanlar)
         if sarki.kimlik in gorulen:
             raise ValueError(f"{yol.name}: aynı şarkı iki kez: {sarki.sanatci} — {sarki.ad}")
         gorulen.add(sarki.kimlik)

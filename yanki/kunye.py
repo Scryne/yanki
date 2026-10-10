@@ -99,3 +99,12 @@ def bul(sanatci: str, ad: str, json_al=ag.json_al, uyku=time.sleep) -> Kunye:
         return Kunye(kayit["id"], eser["id"], eser.get("title"), tuple(yazarlar), yazar_adlari,
                      tuple(ayrinti.get("isrcs", [])), ilk_yayin, turler, tip, cinsiyet)
     raise ag.Bulunamadi(f"MusicBrainz kaydında eser bağlantısı yok: {sanatci} — {ad}")
+
+
+def elle_yazarlar(kunye: dict, yazarlar: tuple[str, ...] | list[str]) -> dict:
+    """Listedeki elle yazılmış yazarlar (`liste.toml` → `yazarlar`) künyeye işlenir; MusicBrainz'in yazarlarının
+    yerine geçer (Scryne'ın bilgisi esas). Ad + soyad son boşluktan bölünür ("Rick Price" → Rick / Price)."""
+    adlar = [duz(" ".join(x.split())) for x in yazarlar]
+    bolunmus = [tuple(a.rsplit(" ", 1)) if " " in a else (a, "") for a in adlar]
+    return {k: v for k, v in kunye.items() if k != "uyari"} | {
+        "yazarlar": adlar, "yazar_adlari": [list(x) for x in bolunmus], "yazar_kaynak": "liste"}

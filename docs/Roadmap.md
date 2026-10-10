@@ -611,3 +611,9 @@ hesap parça kotası dolarsa ("Track limit reached", 403) yükleme durur, bildir
 taslak kota açılınca aynı yayınla tamamlanır. Toplu yüklemede tek bildirim. Red kapısı aynı (düzeltilmemiş red yeni
 yüklemeyi durdurur). Risk bir kez söylendi: ortak bir red nedeni (ör. "derivative work") o koşuda gönderilen her
 şarkıyı birlikte etkiler. 2 yeni test (eski kodda kırmızı).
+
+**Yazarsız paket (2026-10-10 gece, canlıda bulundu):** Janice Javier "Heaven Knows"un MusicBrainz'de kaydı yok (web
+aramasında da yazar bilgisi yok); paketi yazarsız çıktı, Tunearo yüklemesi her koşuda düşüp koşuyu "hata verdi" diye
+bitiriyordu (22:11, kod 1). Artık yazarsız paket bekler ve Scryne'a bir kez bildirilir, koşu hatasız biter; diğer
+paketler yüklenir. `liste.toml`'da şarkıya `yazarlar = ["Ad Soyad"]` yazılınca sonraki koşu künyeyi günceller, paketi
+yeniden çıkarır ve yükler (hazırlıkta da listedeki yazarlar MusicBrainz'in yerine geçer). Yazar uydurulmaz. 2 yeni test.
