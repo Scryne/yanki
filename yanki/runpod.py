@@ -22,7 +22,10 @@ import urllib.request
 from pathlib import Path
 
 API = "https://api.runpod.io/graphql"
-IMAJ = "runpod/pytorch:1.3.3-cu1281-torch271-ubuntu2204"  # CUDA 12.8; ACE-Step kendi torch'unu uv ile kurar
+# Küçük temel imaj (0,7 GB, CUDA araç seti yok): PyTorch cu128 tekerlekleri CUDA kütüphanelerini getiriyor, sürücü
+# sunucudan. Önce `runpod/pytorch` (11,8 GB) vardı: önbellekte olmayan makinede indirme 15 dk'yı aştı, SSH açılmadı
+# (2026-10-10, iki koşu düştü).
+IMAJ = "runpod/base:1.4.0-ubuntu2204"
 ACESTEP_DEPO = "https://github.com/ace-step/ACE-Step-1.5"
 
 
@@ -103,6 +106,8 @@ class Pod:
 
     def __enter__(self) -> "Pod":
         self.gizli, acik = ssh_anahtari(self.klasor)
+        # her pod yeni host anahtarıyla gelir; eski pod'un aynı IP:port'taki kaydı bağlantıyı bozmasın
+        (self.klasor / "known_hosts").unlink(missing_ok=True)
         d = gql(self.api, """mutation($girdi: PodFindAndDeployOnDemandInput) {
             podFindAndDeployOnDemand(input: $girdi) { id costPerHr machineId } }""", {"girdi": {
             "cloudType": self.bulut, "gpuCount": 1, "gpuTypeId": self.gpu, "name": self.ad, "imageName": IMAJ,
@@ -123,21 +128,25 @@ class Pod:
 
     def _ssh_bekle(self) -> None:
         bitis = time.time() + self.bekleme_sn
+        son_durum, son_hata = None, None
         while time.time() < bitis:
             p = gql(self.api, """query($id: String!) { pod(input: {podId: $id}) { desiredStatus
                 runtime { uptimeInSeconds ports { ip isIpPublic privatePort publicPort type } } } }""",
                     {"id": self.id})["pod"]
-            ssh = next((x for x in ((p or {}).get("runtime") or {}).get("ports") or []
-                        if x["privatePort"] == 22 and x["isIpPublic"]), None)
+            calisma = (p or {}).get("runtime") or {}
+            son_durum = {"durum": (p or {}).get("desiredStatus"), "uptime": calisma.get("uptimeInSeconds"),
+                         "portlar": [(x["privatePort"], x["isIpPublic"]) for x in calisma.get("ports") or []]}
+            ssh = next((x for x in calisma.get("ports") or [] if x["privatePort"] == 22 and x["isIpPublic"]), None)
             if ssh:
                 self.ip, self.port = ssh["ip"], int(ssh["publicPort"])
                 try:
-                    if self.komut("echo hazir", zaman_asimi=30).strip().endswith("hazir"):
+                    if self.komut("echo hazir", zaman_asimi=30, tekrar=False).strip().endswith("hazir"):
                         return
-                except (RunPodHatasi, subprocess.TimeoutExpired):
-                    pass
+                except (RunPodHatasi, subprocess.TimeoutExpired) as e:
+                    son_hata = str(e)[-300:]
             time.sleep(10)
-        raise RunPodHatasi(f"pod {self.id} {self.bekleme_sn} sn içinde SSH'a açılmadı")
+        raise RunPodHatasi(f"pod {self.id} {self.bekleme_sn} sn içinde SSH'a açılmadı (son durum {son_durum}; "
+                           f"son SSH hatası: {son_hata})")
 
     def _ssh(self) -> list[str]:
         # her pod yeni anahtar: bilinen sunucular projeye yazılır (/dev/null Windows OpenSSH'ta yok)

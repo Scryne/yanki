@@ -865,3 +865,28 @@ def test_uzak_kosu_duserse_maliyet_yine_kaydedilir(tmp_path, monkeypatch):
                       kur=lambda p, c, m: "/r", commit="x", bakiye=lambda _k: 10.0, kapat=lambda *_: [])
     kayit = json.loads(uzak.harcama_yolu(tmp_path).read_text(encoding="utf-8"))[-1]
     assert kayit["usd"] == 0.05 and "255" in kayit["hata"]
+
+
+def test_hazir_olmayan_pod_silinir_baska_pod_denenir_ikisinin_maliyeti_kaydedilir(tmp_path, monkeypatch):
+    from yanki import motor, runpod, uzak
+
+    monkeypatch.setenv("RUNPOD_API_KEY", "x")
+    monkeypatch.setattr(uzak.time, "sleep", lambda _: None)
+    acilis = {"n": 0}
+
+    class IlkiHazirOlmaz(_SahtePod):
+        def __enter__(self):
+            acilis["n"] += 1
+            if acilis["n"] == 1:
+                raise runpod.RunPodHatasi("pod 600 sn içinde SSH'a açılmadı")
+            return self
+
+    kaynak = tmp_path / "kaynak.wav"
+    kaynak.write_bytes(b"RIFF")
+    isler = [motor.Is(id="s|cover|1|1", gorev="cover", kaynak=str(kaynak), cikti_klasor=str(tmp_path / "c"),
+                      soz="söz", adim=100, tohum=42, guc=0.7)]
+    (s,) = uzak.calistir(_uzak_ayar(tmp_path), isler, tmp_path / "_m", 900, pod_sinifi=IlkiHazirOlmaz,
+                         kur=lambda p, c, m: "/r", commit="x", bakiye=lambda _k: 10.0, kapat=lambda *_: [])
+    assert s.basari and acilis["n"] == 2
+    kayit = json.loads(uzak.harcama_yolu(tmp_path).read_text(encoding="utf-8"))[-1]
+    assert kayit["usd"] == 0.1  # iki pod × 0,05

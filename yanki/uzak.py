@@ -89,6 +89,34 @@ def isci_kos(p: runpod.Pod, hedef: str, zaman_asimi_sn: float, aralik_sn: float 
     return sonuc
 
 
+POD_DENEME = 2  # hazır olmayan pod silinip başka bir makinede yeniden denenir
+
+
+class PodAcici:
+    """Hazır (SSH'a açık) bir pod; açılamazsa silinip `POD_DENEME` kez yeniden (başka makine). Açılan her pod
+    `acilan`'a eklenir: hazır olmayanın süresi de ödendi."""
+
+    def __init__(self, a: Ayarlar, pod_sinifi, acilan: list):
+        self.a, self.pod_sinifi, self.acilan, self.pod = a, pod_sinifi, acilan, None
+
+    def __enter__(self):
+        son: Exception | None = None
+        for _ in range(POD_DENEME):
+            aday = self.pod_sinifi(self.a.kok, gpu=self.a.uzak.gpu, ad="yanki-motor")
+            self.acilan.append(aday)
+            try:
+                self.pod = aday.__enter__()  # hazır olmazsa kendi __exit__'iyle silinir
+                return self.pod
+            except runpod.RunPodHatasi as e:
+                son = e
+                print(f"pod hazır olmadı, yeniden deneniyor: {e}")
+        raise son or runpod.RunPodHatasi("pod açılamadı")
+
+    def __exit__(self, *bilgi):
+        if self.pod is not None:
+            self.pod.__exit__(*bilgi)
+
+
 def calistir(a: Ayarlar, isler: list[motor.Is], klasor: Path, zaman_asimi_sn: float, gpu_bekleme_sn: float = 0,
              pod_sinifi=runpod.Pod, kur=runpod.acestep_kur, commit: str | None = None,
              bakiye: Callable[[str], float] = runpod.bakiye, kapat=runpod.kapat_artiklari) -> list[motor.Sonuc]:
@@ -113,10 +141,9 @@ def calistir(a: Ayarlar, isler: list[motor.Is], klasor: Path, zaman_asimi_sn: fl
                 girdiler[yol] = f"{UZAK_DIZIN}/girdi/{len(girdiler)}{Path(yol).suffix}"
     kayit: dict = {"zaman": datetime.now().isoformat(timespec="seconds"), "is": len(isler), "gpu": a.uzak.gpu}
     sonuclar: list[motor.Sonuc] = []
-    pod = None
+    acilan: list = []  # açılan her pod (hazır olmayan dahil): maliyeti kayda
     try:
-        with pod_sinifi(a.kok, gpu=a.uzak.gpu, ad="yanki-motor") as p:
-            pod = p
+        with PodAcici(a, pod_sinifi, acilan) as p:
             kayit["pod"] = p.id
             t = time.time()
             hedef = kur(p, commit, (a.motor.model,))
@@ -141,7 +168,7 @@ def calistir(a: Ayarlar, isler: list[motor.Is], klasor: Path, zaman_asimi_sn: fl
             kayit["uretim_sn"] = round(time.time() - t)
             try:
                 p.al(f"{UZAK_DIZIN}/motor.log", klasor / "motor.log")
-            except (subprocess.SubprocessError, OSError):
+            except (runpod.RunPodHatasi, subprocess.SubprocessError, OSError):
                 pass
             yerel_is = {i.id: i for i in isler}
             for r in ham:
@@ -151,7 +178,7 @@ def calistir(a: Ayarlar, isler: list[motor.Is], klasor: Path, zaman_asimi_sn: fl
                     hedef_yol = Path(yerel_is[r["id"]].cikti_klasor) / Path(r["cikti"]).name
                     try:
                         r["cikti"] = str(p.al(r["cikti"], hedef_yol))
-                    except (subprocess.SubprocessError, OSError) as e:
+                    except (runpod.RunPodHatasi, subprocess.SubprocessError, OSError) as e:
                         r.update(basari=False, hata=f"çıktı indirilemedi: {e}", cikti=None)
                 sonuclar.append(motor.Sonuc(**{k: r.get(k) for k in motor.Sonuc.__dataclass_fields__}))
     except Exception as e:
@@ -159,7 +186,8 @@ def calistir(a: Ayarlar, isler: list[motor.Is], klasor: Path, zaman_asimi_sn: fl
         raise
     finally:
         # hata olsa da açık kalınan süre ödendi: bütçe hesabı eksik kalmasın (önce düşen koşuya 0 $ yazılıyordu)
-        kayit["usd"] = pod.maliyet() if pod is not None else 0.0
+        kayit["usd"] = round(sum(x.maliyet() for x in acilan), 3)
+        kayit.setdefault("pod", ",".join(str(x.id) for x in acilan if x.id) or None)
         kayit["basarili"] = sum(s.basari for s in sonuclar)
         harcama_yaz(a.kok, kayit)
     gelen = {s.id for s in sonuclar}
