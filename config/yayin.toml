@@ -54,6 +54,8 @@ baslangic = "ilk_kabul"
 # Tunearo API (yanki/tunearo.py; anahtar .env → TUNEARO_API_KEY). Doküman: https://api.tunearo.com/
 # Bölge: mekanik lisans yok → RouteNote'taki kararla aynı bölgeler hariç (Scryne, 2026-10-07). ISO 3166-1 alpha-2.
 haric_bolgeler = ["US", "CA", "MX", "IN", "PK"]
-# Mağaza (Tunearo kodları, tam liste yanki/tunearo.py → MAGAZALAR): Amazon yapay zekâ içeriği almıyor; YouTube Content
-# ID cover'ı orijinal kayıtla eşleştirir (RouteNote'ta da kaldırılmıştı). Kore mağazaları Tunearo listesinde yok.
-haric_magazalar = ["amazon", "youtube_cid"]
+# Mağaza (Tunearo kodları, tam liste yanki/tunearo.py → MAGAZALAR). Hariç: parmak izi hak kayıtları (YouTube Content
+# ID, Facebook Rights Manager, Audible Magic). Cover sound-alike kayıt, "münhasır hak" sayılmıyor; dağıtımcıların
+# standardı cover'ı bunlardan çıkarmak (yanlış hak talebi riski; araştırma 2026-10-10, docs/arastirma/04).
+# Amazon açık (2026-10-10): RouteNote AI içeriği Amazon'a göndermiyordu, Tunearo hesabındaki canlı AI parça Amazon'da.
+haric_magazalar = ["youtube_cid", "facebook_rights", "audible_magic"]

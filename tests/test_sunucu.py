@@ -27,7 +27,8 @@ def ortam(tmp_path):
 def test_liste_ve_ayrinti(ortam):
     istemci, _ = ortam
     assert istemci.get("/api/sarkilar").json()[0] == {"kimlik": "a-b", "sanatci": "A", "ad": "B", "asama": "uretildi",
-                                                       "hata": None, "gecen_aday": 1, "bekleyen_onarim": 0}
+                                                       "hata": None, "gecen_aday": 1, "bekleyen_onarim": 0,
+                                                       "kapak": None}
     assert istemci.get("/api/sarki/a-b").json()["adaylar"][0]["tohum"] == 42
     assert istemci.get("/api/sarki/a-b").json()["kesitler"] == []  # söz zamanı yoksa kesit yok
 
@@ -183,3 +184,87 @@ def test_yayin_listesi(tmp_path):
     y = istemci.get("/api/yayin").json()
     assert [s["kimlik"] for s in y["sarkilar"]] == ["adele-x"] and y["sarkilar"][0]["yayin_tarihi"] == "2026-10-28"
     assert y["sarkilar"][0]["son"]["siralar"] == {"GB": 2} and y["profiller"] == ["orv"]
+
+
+# ── pano, kapak, kazanç (2026-10-10) ────────────────────────
+def _jpeg(yol, boyut=(900, 1200)):
+    from PIL import Image
+
+    Image.new("RGB", boyut, (40, 60, 80)).save(yol, "JPEG")
+
+
+def test_kapak_kucuk_kare_onbellekli_ve_listede(ortam):
+    istemci, c = ortam
+    assert istemci.get("/kapak/a-b").status_code == 404  # kapak yok
+    _jpeg(c / "a-b" / "kapak_pinterest.jpg")
+    url = istemci.get("/api/sarkilar").json()[0]["kapak"]
+    assert url.startswith("/kapak/a-b?v=")
+    from io import BytesIO
+
+    from PIL import Image
+
+    r = istemci.get("/kapak/a-b?boyut=96")
+    assert r.status_code == 200 and Image.open(BytesIO(r.content)).size == (96, 96)
+    assert istemci.get("/kapak/a-b?boyut=4000").status_code == 404  # yalnız tanımlı boyutlar
+    assert istemci.get("/kapak/..%2F..?boyut=96").status_code == 404
+    (c / "a-b" / "paket").mkdir()
+    _jpeg(c / "a-b" / "paket" / "Orvane_-_B.jpg", (3000, 3000))  # paketteki önce gelir
+    assert sunucu.kapak_kaynagi(c, "a-b").parent.name == "paket"
+
+
+def test_baska_kapak_pinterestten_ve_yuklenmiste_yasak(ortam, monkeypatch):
+    from yanki import pinterest
+
+    istemci, c = ortam
+
+    def sahte(calisma, d, yeni=False):
+        _jpeg(calisma / d.kimlik / "kapak_pinterest.jpg")
+        (calisma / d.kimlik / "kapak_kaynak.json").write_text(json.dumps({"pin_id": "1", "aciklama": "a lake",
+                                                                          "yeni": yeni}), "utf-8")
+        return calisma / d.kimlik / "kapak_pinterest.jpg"
+
+    monkeypatch.setattr(pinterest, "getir", sahte)
+    r = istemci.post("/api/sarki/a-b/kapak")
+    assert r.status_code == 200 and r.json()["kapak_bilgi"]["aciklama"] == "a lake" and r.json()["kapak"]
+    assert istemci.post("/api/sarki/a-b/kapak").json()["kapak_bilgi"]["yeni"] is True  # ikincisi başka pin
+    with durum.guncelle(c, "a-b") as d:
+        d.gec("yuklendi")
+    assert istemci.post("/api/sarki/a-b/kapak").status_code == 409
+
+
+def test_pano_hat_ve_kulak_bekleyen(ortam):
+    istemci, c = ortam
+    with durum.guncelle(c, "a-b") as d:
+        d.analiz = {"stil": "rap, hip hop song", "dil": "en"}
+    p = istemci.get("/api/pano").json()
+    assert [x["ad"] for x in p["hat"]] == ["Keşif", "Üretim", "Dinleme", "Paket", "İnceleme", "Yayında"]
+    assert next(x for x in p["hat"] if x["ad"] == "Dinleme")["sayi"] == 1
+    if p["ayarlar"].get("oto_onay"):  # gerçek config: otomatik onay açıksa rap şarkı kulak bekler
+        assert p["kulak"][0]["kimlik"] == "a-b" and "rap" in p["kulak"][0]["neden"]
+    assert "takvim" in p and "olaylar" in p
+
+
+def test_son_gece_gunlukten(tmp_path):
+    g = tmp_path / "gunluk"
+    g.mkdir()
+    satirlar = ["\ufeff=== 2026-10-10T03:00:01 başladı", "── keşif (03:00:01)", "── üretim (03:01:54)",
+                "── koşu bitti (05:00:00); sorunlu adım: keşif", "── dış servisler: x",
+                "=== 2026-10-10T05:00:02 bitti (kod 1)"]
+    (g / "2026-10-10.log").write_text("\n".join(satirlar) + "\n", encoding="utf-8")
+    s = sunucu._son_gece(tmp_path)
+    assert s == {"bas": "2026-10-10T03:00:01", "bit": "2026-10-10T05:00:02", "kod": 1, "suruyor": False,
+                 "adim": "üretim", "sorunlu": "keşif"}
+    (g / "2026-10-11.log").write_text("=== 2026-10-11T03:00:01 başladı\n── keşif (03:00:01)\n", encoding="utf-8")
+    assert sunucu._son_gece(tmp_path)["suruyor"] is True
+
+
+def test_kazanc_baglanti_yoksa_bagli_degil(ortam, monkeypatch):
+    from yanki import tunearo
+
+    istemci, _ = ortam
+
+    def yok(cls, kok):
+        raise tunearo.AyarYok(None, "anahtar yok")
+
+    monkeypatch.setattr(tunearo.Istemci, "kokten", classmethod(yok))
+    assert istemci.get("/api/kazanc").json() == {"bagli": False}

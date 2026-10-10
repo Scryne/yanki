@@ -1,7 +1,9 @@
 """Dinleme sayfası sunucusu (yalnız 127.0.0.1): Scryne adayları dinler, onaylar, aralık işaretler, stili değiştirir,
-reddeder; keşif adaylarını listeye ekler ya da eler; yüklenenlerin yayın durumunu görür.
+reddeder; keşif adaylarını listeye ekler ya da eler; yüklenenlerin yayın durumunu, hattın panosunu, kapakları ve
+Tunearo kazancını görür.
 
-Sunucu motoru çalıştırmaz ve Spotify'a istek atmaz (kota dar; ölçümleri gece koşusu yapar). Onarım ve yeniden üretim
+Sunucu motoru çalıştırmaz ve Spotify'a istek atmaz (kota dar; ölçümleri gece koşusu yapar). Dışarıya yalnız iki
+istek: kazanç (Tunearo, 6 saat önbellekli) ve Scryne "başka kapak" deyince Pinterest. Onarım ve yeniden üretim
 istekleri durum.json'a, keşif kararları calisma/kesif/adaylar.json'a ve girdi/liste.toml'a yazılır.
 """
 
@@ -92,10 +94,65 @@ def _takvim(kok: Path, calisma: Path) -> dict:
                       "yayin_tarihi": x.yayin_tarihi.isoformat(), "kesif": x.puan > 0} for x in p.sira]}
 
 
-def _ozet(d: durum.Durum) -> dict:
+KAPAK_BOYUTLARI = (96, 480)
+
+
+def kapak_kaynagi(calisma: Path, kimlik: str) -> Path | None:
+    """Şarkının görünen kapağı: paketteki (dağıtımcıya giden) > elle seçilen > Pinterest'ten seçilen."""
+    k = durum.klasor(calisma, kimlik)
+    for yol in (*sorted((k / "paket").glob("*.jpg")), k / "kapak_ozel.jpg", k / "kapak_pinterest.jpg"):
+        if yol.is_file():
+            return yol
+    return None
+
+
+def kapak_kucuk(kaynak: Path, boyut: int) -> Path:
+    """Kare küçük kapak, kaynağın değişme zamanına göre önbellekli (3000 px'lik JPG listede ağır)."""
+    from PIL import Image
+
+    hedef = kaynak.parent / f".kapak_{kaynak.parent.name}_{kaynak.stem}_{boyut}.jpg"
+    if hedef.exists() and hedef.stat().st_mtime >= kaynak.stat().st_mtime:
+        return hedef
+    with Image.open(kaynak) as img:
+        en, boy = img.size
+        kenar = min(en, boy)
+        kare = img.convert("RGB").crop(((en - kenar) // 2, (boy - kenar) // 2, (en + kenar) // 2, (boy + kenar) // 2))
+        kare.resize((boyut, boyut), Image.Resampling.LANCZOS).save(hedef, "JPEG", quality=86)
+    return hedef
+
+
+def _kapak_url(calisma: Path, kimlik: str) -> str | None:
+    yol = kapak_kaynagi(calisma, kimlik)
+    return f"/kapak/{kimlik}?v={int(yol.stat().st_mtime)}" if yol else None
+
+
+def _ozet(d: durum.Durum, calisma: Path | None = None) -> dict:
     return {"kimlik": d.kimlik, "sanatci": d.sanatci, "ad": d.ad, "asama": d.asama, "hata": d.hata,
             "gecen_aday": sum(a.gecti for a in d.adaylar),
-            "bekleyen_onarim": sum(o["durum"] == "bekliyor" for a in d.adaylar for o in a.onarimlar)}
+            "bekleyen_onarim": sum(o["durum"] == "bekliyor" for a in d.adaylar for o in a.onarimlar),
+            "kapak": _kapak_url(calisma, d.kimlik) if calisma else None}
+
+
+def _son_gece(calisma: Path) -> dict | None:
+    """En son gece koşusunun özeti, günlükten (başlangıç, bitiş, kod, sorunlu adımlar)."""
+    gunlukler = sorted((calisma / "gunluk").glob("????-??-??.log"))
+    if not gunlukler:
+        return None
+    try:
+        satirlar = gunlukler[-1].read_text(encoding="utf-8-sig", errors="replace").splitlines()
+    except OSError:
+        return None
+    bas = next((s for s in reversed(satirlar) if s.startswith("=== ") and "başladı" in s), None)
+    if bas is None:
+        return None
+    sonra = satirlar[satirlar.index(bas) + 1:]
+    bitti = next((s for s in sonra if s.startswith("=== ") and "bitti" in s), None)
+    adimlar = [s[3:].split(" (")[0] for s in sonra if s.startswith("── ") and not s.startswith("── koşu bitti")
+               and not s.startswith("── dış servisler")]
+    sorunlu = next((s.split("sorunlu adım: ")[1] for s in sonra if "sorunlu adım: " in s), None)
+    kod = re.search(r"kod (\d+)", bitti or "")
+    return {"bas": bas[4:23], "bit": bitti[4:23] if bitti else None, "kod": int(kod.group(1)) if kod else None,
+            "suruyor": bitti is None, "adim": adimlar[-1] if adimlar else None, "sorunlu": sorunlu}
 
 
 def dalga(yol: Path, nokta: int = DALGA_NOKTA) -> dict:
@@ -148,20 +205,61 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None) -> FastA
 
     @app.get("/api/sarkilar")
     def sarkilar():
-        return [_ozet(d) for d in durum.hepsi(calisma)]
+        return [_ozet(d, calisma) for d in durum.hepsi(calisma)]
+
+    @app.get("/kapak/{kimlik}")
+    def kapak(kimlik: str, boyut: int = 96):
+        if not _kimlik_gecerli(kimlik) or boyut not in KAPAK_BOYUTLARI:
+            raise HTTPException(404, "kapak yok")
+        yol = kapak_kaynagi(calisma, kimlik)
+        if yol is None:
+            raise HTTPException(404, "kapak yok")
+        return FileResponse(kapak_kucuk(yol, boyut), headers={"Cache-Control": "max-age=86400"})
+
+    @app.post("/api/sarki/{kimlik}/kapak")
+    def yeni_kapak(kimlik: str):
+        """Pinterest'ten başka kapak (öncekiler bir daha seçilmez); paketliyse paket yeni kapakla yenilenir."""
+        from yanki import paket, pinterest
+
+        d = oku(kimlik)
+        if d.asama not in ("uretildi", "onarim", "onaylandi", "paketlendi"):
+            raise HTTPException(409, "kapak yalnız yüklenmemiş şarkıda değişir (dağıtımcıdaki kapak sabit)")
+        if (durum.klasor(calisma, kimlik) / "kapak_ozel.jpg").exists():
+            raise HTTPException(409, "elle seçilmiş kapak_ozel.jpg var; o kullanılıyor")
+        with kilit.tek_kosu(calisma / ".yanki.kilit") as alindi:  # paket gece koşusuyla aynı anda yazılmasın
+            if not alindi:
+                raise HTTPException(409, "gece ya da gündüz koşusu sürüyor; bitince tekrar dene")
+            try:
+                pinterest.getir(calisma, d, yeni=(durum.klasor(calisma, kimlik) / "kapak_pinterest.jpg").exists())
+            except (OSError, LookupError, ValueError) as e:
+                raise HTTPException(502, f"Pinterest'ten kapak alınamadı: {e}") from e
+            if d.asama == "paketlendi":
+                hatalar: list = []
+                paket.paketle(calisma, a.kok / "config" / "yayin.toml", [kimlik], yeniden=True, hatalar=hatalar)
+                if hatalar:
+                    raise HTTPException(500, f"yeniden paketlenemedi: {hatalar[0][1]}")
+        kaynak = json.loads((durum.klasor(calisma, kimlik) / "kapak_kaynak.json").read_text(encoding="utf-8"))
+        return {**_ozet(durum.oku(calisma, kimlik), calisma), "kapak_bilgi": kaynak}
 
     @app.get("/api/sarki/{kimlik}")
     def sarki(kimlik: str):
         d = oku(kimlik)
         zaman = durum.klasor(calisma, kimlik) / "soz_zaman.json"
         satirlar = json.loads(zaman.read_text(encoding="utf-8")) if zaman.exists() else []
-        from yanki import onay
+        from yanki import onay, takip
 
-        oto = onay.onay_zamani(d, onay.ayar_oku(a.kok / "config" / "yayin.toml"))
+        ayar = onay.ayar_oku(a.kok / "config" / "yayin.toml")
+        oto = onay.onay_zamani(d, ayar)
         oneri = onay.oneri(d) if oto else None
-        return {**asdict(d), **_ozet(d), "kesitler": sozler.kesitler(satirlar, d.kaynak.get("sure_sn")),
+        k = durum.klasor(calisma, kimlik)
+        kaynak = k / "kapak_kaynak.json"
+        return {**asdict(d), **_ozet(d, calisma), "kesitler": sozler.kesitler(satirlar, d.kaynak.get("sure_sn")),
                 "otomatik_onay": {"zaman": oto.isoformat(timespec="minutes"), "aday": oneri.no}
-                if oto and oneri else None}
+                if oto and oneri else None,
+                "onay_engeli": onay.engel(d, ayar) if ayar.acik and d.asama == "uretildi" else None,
+                "kapak_bilgi": json.loads(kaynak.read_text(encoding="utf-8")) if kaynak.exists() else None,
+                "kapak_elle": (k / "kapak_ozel.jpg").exists(),
+                "yukleme": takip.yukleme_bilgisi(calisma, kimlik)}
 
     @app.get("/ses/{kimlik}/{yol:path}")
     def ses(kimlik: str, yol: str):
@@ -186,7 +284,7 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None) -> FastA
                 uretim.onarim_iste(a, d, istek.aday, istek.bas, istek.son)
             except ValueError as e:
                 raise HTTPException(422, str(e)) from e
-        return _ozet(d)
+        return _ozet(d, calisma)
 
     @app.post("/api/sarki/{kimlik}/onarim-kabul")
     def onarim_kabul(kimlik: str, istek: KabulIstegi):
@@ -197,7 +295,7 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None) -> FastA
                 uretim.onarim_kabul(d, istek.aday, istek.onarim)
             except (ValueError, StopIteration) as e:
                 raise HTTPException(409, f"kabul edilemedi: {e}") from e
-        return _ozet(d)
+        return _ozet(d, calisma)
 
     @app.post("/api/sarki/{kimlik}/onayla")
     def onayla(kimlik: str, istek: OnayIstegi):
@@ -212,7 +310,7 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None) -> FastA
                 raise HTTPException(409, "bu adayın bekleyen onarımı var; önce üretilmesini bekle")
             d.secilen = istek.aday
             d.gec("onaylandi")
-        return _ozet(d)
+        return _ozet(d, calisma)
 
     @app.post("/api/sarki/{kimlik}/stil")
     def stil(kimlik: str, istek: StilIstegi):
@@ -221,7 +319,7 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None) -> FastA
                 uretim.stil_degistir(d, istek.stil, istek.bpm, istek.ton.strip())
             except ValueError as e:
                 raise HTTPException(409, str(e)) from e
-        return _ozet(d)
+        return _ozet(d, calisma)
 
     @app.post("/api/sarki/{kimlik}/reddet")
     def reddet(kimlik: str, istek: RetIstegi):
@@ -230,7 +328,7 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None) -> FastA
                 raise HTTPException(409, f"bu aşamada reddedilemez: {d.asama}")
             d.notlar.append({"ret": istek.neden})
             d.gec("reddedildi", istek.neden or None)
-        return _ozet(d)
+        return _ozet(d, calisma)
 
     @app.post("/api/sarki/{kimlik}/geri-al")
     def geri_al(kimlik: str):
@@ -241,7 +339,7 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None) -> FastA
             onceki = next((g["asama"] for g in reversed(d.gecmis[:-1]) if g.get("asama") != "reddedildi"), "yeni")
             d.notlar.append({"ret_geri_alindi": onceki})
             d.gec(onceki)
-        return _ozet(d)
+        return _ozet(d, calisma)
 
     # ---- keşif ----
     @app.get("/api/kesif")
@@ -295,11 +393,71 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None) -> FastA
             y = takip.yukleme_bilgisi(calisma, d.kimlik) or {}
             sarkilar.append({"kimlik": d.kimlik, "sanatci": d.sanatci, "ad": d.ad, "asama": d.asama,
                              "yayin_tarihi": y.get("yayin_tarihi"), "dagitimci": y.get("dagitimci"),
+                             "dagitim_durumu": y.get("dagitim_durumu"), "upc": y.get("upc"),
                              "isrc": y.get("isrc"), "son": (d.yayin or {}).get("son"),
-                             "gecmis": (d.yayin or {}).get("gecmis", [])})
+                             "gecmis": (d.yayin or {}).get("gecmis", []), "kapak": _kapak_url(calisma, d.kimlik)})
         sarkilar.sort(key=lambda s: s["yayin_tarihi"] or "")
         return {"sarkilar": sarkilar, "kota": _kota(a.kok), "profiller": sorted(takip.profil_kimlikleri(calisma)),
                 "takvim": _takvim(a.kok, calisma), "olaylar": olay.oku(calisma, son=8)[::-1]}
+
+    # ---- pano ----
+    @app.get("/api/pano")
+    def pano():
+        """Hattın tek bakışta durumu (ağa çıkmaz): aşama sayıları, Scryne'dan beklenenler, dağıtım, sıra, bildirimler,
+        son gece koşusu, otomasyon ayarları."""
+        from yanki import dagitim, onay, paket, takip
+
+        yayin_yolu = a.kok / "config" / "yayin.toml"
+        hepsi = durum.hepsi(calisma)
+        say = lambda *asamalar: sum(d.asama in asamalar for d in hepsi)  # noqa: E731
+        ayar = onay.ayar_oku(yayin_yolu)
+        dagitimda = []
+        for d in hepsi:
+            if d.asama in ("yuklendi", "yayinda"):
+                y = takip.yukleme_bilgisi(calisma, d.kimlik) or {}
+                dagitimda.append({**_ozet(d, calisma), "dagitimci": y.get("dagitimci"),
+                                  "dagitim_durumu": y.get("dagitim_durumu"), "yayin_tarihi": y.get("yayin_tarihi"),
+                                  "canli": bool(((d.yayin or {}).get("son") or {}).get("canli"))})
+        dagitimda.sort(key=lambda x: x["yayin_tarihi"] or "")
+        try:
+            kesif_oneri = sum(x.puan > 0 and not x.elendi for x in kesif.oku(calisma).values())
+        except (OSError, ValueError):
+            kesif_oneri = 0
+        try:
+            y = paket.yayin_ayarlari(yayin_yolu)
+            t = dagitim.takvim_oku(yayin_yolu)
+            ayarlar = {"dagitimci": y.dagitimci, "kapak": y.kapak, "takvim_acik": t.acik, "haftada": t.haftada,
+                       "oto_onay": ayar.acik, "oto_onay_saat": ayar.sure_saat}
+        except (OSError, ValueError, KeyError):
+            ayarlar = {}
+        return {
+            "hat": [
+                {"ad": "Keşif", "sayi": kesif_oneri, "alt": "aday"},
+                {"ad": "Üretim", "sayi": say("yeni", "hazir", "analiz", "onarim"), "alt": "şarkı"},
+                {"ad": "Dinleme", "sayi": say("uretildi"), "alt": "şarkı"},
+                {"ad": "Paket", "sayi": say("onaylandi", "paketlendi"), "alt": "hazır"},
+                {"ad": "İnceleme", "sayi": say("yuklendi"), "alt": "dağıtımcıda"},
+                {"ad": "Yayında", "sayi": say("yayinda"), "alt": "Spotify"},
+            ],
+            "kulak": [{**_ozet(d, calisma), "neden": n} for d, n in onay.kulak_bekleyen(calisma, ayar)],
+            "yakinda": [{**_ozet(d, calisma), "zaman": z.isoformat(timespec="minutes")} for d in hepsi
+                        if (z := onay.onay_zamani(d, ayar))],
+            "hatada": [_ozet(d, calisma) for d in hepsi if d.asama == "hata"],
+            "dagitim": dagitimda, "takvim": _takvim(a.kok, calisma), "ayarlar": ayarlar,
+            "olaylar": olay.oku(calisma, son=12)[::-1], "gece": _son_gece(calisma), "kota": _kota(a.kok),
+        }
+
+    @app.get("/api/kazanc")
+    def kazanc(yenile: bool = False):
+        """Tunearo'daki bizim yayınların kazancı (önbellekli; anahtar yoksa bağlı değil)."""
+        from yanki import tunearo
+
+        try:
+            return {"bagli": True, **tunearo.kazanc(calisma, tunearo.Istemci.kokten(a.kok), zorla=yenile)}
+        except tunearo.AyarYok:
+            return {"bagli": False}
+        except (tunearo.TunearoHatasi, OSError) as e:
+            raise HTTPException(502, f"Tunearo'ya ulaşılamadı: {e}") from e
 
     app.mount("/", StaticFiles(directory=SAYFA, html=True), name="sayfa")
     return app

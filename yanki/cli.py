@@ -704,6 +704,12 @@ def _dagitim_durum(args: argparse.Namespace) -> int:
         print(f"{d.ad or 'dağıtımcı'}: API yok, durum dağıtımcı panelinde")
         return 0
     sonuc = d.yokla(a.kok / "calisma", _bildirici(a.kok / "calisma"))
+    from yanki import tunearo
+
+    if d.ad == "tunearo" and (profil := tunearo.profil_bagla(
+            a.kok / "calisma", d.api, paket.yayin_ayarlari(a.kok / "config" / "yayin.toml").sanatci_adi,
+            _bildirici(a.kok / "calisma"))):
+        print(f"Spotify profili bağlandı: {profil}")
     if not sonuc:
         print(f"{d.ad}: izlenen yükleme yok")
     for s, yeni, eski in sonuc:

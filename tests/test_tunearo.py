@@ -74,7 +74,10 @@ class SahteApi:
     def patch(self, yol, govde):
         self.cagrilar.append(("PATCH", yol, govde))
         p = yol.strip("/").split("/")
-        hedef = self.parcalar[p[3]] if len(p) == 4 else self.yayinlar[p[1]]
+        if p[0] == "artists":
+            hedef = next(x for x in self.sanatcilar if x["id"] == p[1])
+        else:
+            hedef = self.parcalar[p[3]] if len(p) == 4 else self.yayinlar[p[1]]
         hedef.update(govde)
         return {}
 
@@ -455,3 +458,43 @@ def test_yarim_kalan_taslak_kuyrugun_basina_gecer(tmp_path):
     _paket(c, kimlik="populer")
     p = dagitim.plan(c, dagitim.Takvim(), date(2026, 10, 20), {"populer": 9e9}, dagitimci="tunearo")
     assert [x.kimlik for x in p.sira] == ["taslak", "populer"]
+
+
+def test_spotify_profili_tunearo_sanatcisina_baglanir(tmp_path):
+    c = tmp_path / "calisma"
+    api = SahteApi()
+    assert tunearo.profil_bagla(c, api, "Orvane") is None  # henüz Spotify'da yok
+    for kimlik, profil in (("a", "sp-1"), ("b", "sp-1"), ("c", "sp-2")):
+        d = durum.Durum(kimlik, "X", kimlik, asama="yayinda", yayin={"son": {"canli": True, "sanatci_id": profil}})
+        durum.yaz(c, d)
+    bildirilen = []
+    assert tunearo.profil_bagla(c, api, "Orvane", lambda *a: bildirilen.append(a)) == "sp-1"
+    assert api.sanatcilar[0]["spotify_id"] == "sp-1"
+    assert [b[1] for b in bildirilen] == ["Spotify profili bölünmüş", "Spotify profili bağlandı"]
+    assert tunearo.profil_bagla(c, api, "Orvane") is None  # zaten bağlı: istek yok
+    api.sanatcilar[0]["spotify_id"] = "elle"
+    bildirilen.clear()
+    assert tunearo.profil_bagla(c, api, "Orvane", lambda *a: bildirilen.append(a)) is None
+    assert api.sanatcilar[0]["spotify_id"] == "elle" and "başka profile" in bildirilen[-1][1]
+
+
+def test_kazanc_yalniz_bizim_yayinlar_ve_onbellek(tmp_path):
+    c = tmp_path / "calisma"
+    _paket(c, kimlik="a", yukleme={"dagitimci": "tunearo", "release_id": "rel-a"},
+           yukleme_gecmisi=[{"dagitimci": "tunearo", "release_id": "rel-eski", "red": "x"}])
+    _paket(c, kimlik="b", yukleme={"dagitimci": "routenote", "isrc": "X"})
+
+    class Kazanc:
+        cagri = 0
+
+        def get(self, yol):
+            Kazanc.cagri += 1
+            rid = yol.split("/")[2]
+            return {"lifetime_earnings": {"rel-a": 1.5, "rel-eski": 0.25}[rid], "this_month_earnings": 0.5,
+                    "by_source": [{"source": "Spotify - Stream", "amount": 1.0}]}
+
+    v = tunearo.kazanc(c, Kazanc())
+    assert v["toplam"] == 1.75 and v["kaynaklar"] == [{"kaynak": "Spotify - Stream", "tutar": 2.0}]
+    assert sorted(v["yayinlar"]) == ["rel-a", "rel-eski"] and Kazanc.cagri == 2
+    tunearo.kazanc(c, Kazanc())
+    assert Kazanc.cagri == 2  # önbellekten

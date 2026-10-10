@@ -433,3 +433,85 @@ def ayar_oku(yayin_yolu: Path) -> dict:
         raise ValueError(f"tunearo.haric_magazalar bilinmeyen mağaza: {', '.join(sorted(bilinmeyen))}")
     return {"haric_bolgeler": [b.upper() for b in t.get("haric_bolgeler", [])],
             "haric_magazalar": list(t.get("haric_magazalar", []))}
+
+
+KAZANC_TAZELIK_SN = 6 * 3600  # Tunearo kazancı aylık rapordan geliyor; sayfa her açılışta sormasın
+
+
+def bizim_yayinlar(calisma: Path) -> dict[str, str]:
+    """Hattın Tunearo'ya gönderdiği yayınlar: release_id → şarkı adı (reddedilip geçmişe taşınanlar dahil). Hesap
+    paylaşımlı: hesap geneli toplam başkalarının kazancını da içerir, yalnız bunlar toplanır."""
+    sonuc = {}
+    for d in durum.hepsi(calisma):
+        yol = durum.klasor(calisma, d.kimlik) / "paket" / "metadata.json"
+        try:
+            meta = json.loads(yol.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        for y in [meta.get("yukleme") or {}, *(meta.get("yukleme_gecmisi") or [])]:
+            if y.get("dagitimci") == "tunearo" and y.get("release_id"):
+                sonuc[y["release_id"]] = d.ad
+    return sonuc
+
+
+def kazanc(calisma: Path, istemci: Istemci, zorla: bool = False) -> dict:
+    """Bizim yayınların kazancı (GBP), `calisma/.kazanc.json`'da önbellekli."""
+    import time
+
+    yol = calisma / ".kazanc.json"
+    try:
+        eski = json.loads(yol.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        eski = None
+    yayinlar = bizim_yayinlar(calisma)
+    if eski and not zorla and time.time() - eski.get("zaman", 0) < KAZANC_TAZELIK_SN \
+            and set(eski.get("yayinlar", [])) == set(yayinlar):
+        return eski
+    toplam, bu_ay, kaynak, sarkilar = 0.0, 0.0, {}, []
+    for rid, ad in yayinlar.items():
+        try:
+            r = istemci.get(f"/releases/{rid}/royalties")
+        except ag.Bulunamadi:
+            continue
+        toplam += r.get("lifetime_earnings") or 0
+        bu_ay += r.get("this_month_earnings") or 0
+        for x in r.get("by_source") or []:
+            kaynak[x["source"]] = kaynak.get(x["source"], 0) + (x.get("amount") or 0)
+        sarkilar.append({"ad": ad, "tutar": round(r.get("lifetime_earnings") or 0, 2)})
+    veri = {"zaman": time.time(), "para": "GBP", "toplam": round(toplam, 2), "bu_ay": round(bu_ay, 2),
+            "kaynaklar": sorted(({"kaynak": k, "tutar": round(v, 2)} for k, v in kaynak.items()),
+                                key=lambda x: -x["tutar"]),
+            "sarkilar": sorted(sarkilar, key=lambda x: -x["tutar"]), "yayinlar": list(yayinlar)}
+    dosya.json_yaz(yol, veri)
+    return veri
+
+
+def profil_bagla(calisma: Path, istemci: Istemci, sanatci_adi: str, bildir=None) -> str | None:
+    """Spotify'da görülen Orvane profilini Tunearo'daki sanatçıya bağlar (`spotify_id`): sonraki yayınlar aynı profile
+    düşer, yeni profil açılmaz (RouteNote'ta her yükleme "yeni profil" açmıştı). Profil `yanki takip`'in kaydından;
+    birden çok profil görüldüyse en çok parçalı olan seçilir ve bölünme bildirilir. Dönen: bağlanan kimlik."""
+    from collections import Counter
+
+    sayim = Counter(k for d in durum.hepsi(calisma) if (k := ((d.yayin or {}).get("son") or {}).get("sanatci_id")))
+    if not sayim:
+        return None
+    kimlik = sayim.most_common(1)[0][0]
+    if len(sayim) > 1 and bildir:
+        bildir("kayip", "Spotify profili bölünmüş", f"Orvane parçaları {len(sayim)} ayrı profilde: "
+               f"{', '.join(sayim)}. Spotify for Artists'ten birleştirme iste; yeni yayınlar {kimlik}'e bağlandı.",
+               f"profil_bolunme:{'-'.join(sorted(sayim))}")
+    sanatci = next((x for x in _liste(istemci.get("/artists"), "artists")
+                    if (x.get("artist_name") or "").casefold() == sanatci_adi.casefold()), None)
+    if sanatci is None or sanatci.get("spotify_id") == kimlik:
+        return None
+    if sanatci.get("spotify_id"):  # elle başka profile bağlanmış: ezme, bildir
+        if bildir:
+            bildir("kayip", "Tunearo sanatçısı başka profile bağlı",
+                   f"Tunearo'da {sanatci_adi} → {sanatci['spotify_id']}, Spotify'da parçalar {kimlik}'te",
+                   f"profil_fark:{sanatci['spotify_id']}:{kimlik}")
+        return None
+    istemci.patch(f"/artists/{sanatci['id']}", {"spotify_id": kimlik})
+    if bildir:
+        bildir("dagitim", "Spotify profili bağlandı", f"Tunearo'daki {sanatci_adi} artık Spotify profili {kimlik}'e "
+               "bağlı: yeni yayınlar aynı profile düşer.", f"profil_bag:{kimlik}")
+    return kimlik
