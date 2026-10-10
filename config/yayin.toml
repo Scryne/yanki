@@ -40,9 +40,10 @@ en_yuksek_wer = 0.15
 # Açık (Scryne, 2026-10-10: önce "şimdilik yayınlamayalım", sonra "devam et, her şey otomatik çalışsın"). ilk_kabul
 # kapısı When We Were Young kabul edilene kadar yeni gönderimi zaten bekletir; red gelirse durur.
 acik = true
-# Her gün bir yayın (Scryne, 2026-10-10: "sürekli olarak şarkı atalım"). Önceki haftada 1 Release Radar'a göreydi
-# (dinleyiciye sanatçı başına haftada bir parça); asıl trafik kaldırılmış şarkı araması, o yayın sayısıyla büyür.
-haftada = 7
+# 0 = sınır yok: sırası gelen (paketlenmiş) her şarkı aynı koşuda yüklenir (Scryne, 2026-10-10: "her gün 1 tane değil,
+# yükleyebildiği kadar yüklesin, hızlı hızlı hesabı kasalım"). Tunearo'nun hesap parça kotası dolarsa ("Track limit
+# reached") yükleme durur ve bildirilir. Önce 7 (her gün bir), daha önce 1 (Release Radar'a göre haftada bir).
+haftada = 0
 # Yüklemeden kaç gün sonrası yayın tarihi. 21 RouteNote içindi (ücretsiz inceleme, pitch ≥ 7 gün). Tunearo'da en erken
 # (Scryne, 2026-10-10): hesaptaki canlı yayınlar açılıştan 1–5 gün sonrasına tarihli ve 2–5 gün sonra canlıya çıkmış;
 # tarih incelemede geçerse parça onaylanınca çıkar. Orvane'de Spotify for Artists yok, pitch payının karşılığı yok.

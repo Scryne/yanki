@@ -604,3 +604,10 @@ sanatçılardı; keşfin puanlı 29 adayının 26'sı onlardan geliyordu ve bug�
 tarifi balad/pop, boşluk da sanatçının bilinçli kararı (tepki riski). Tohumlar boşaltıldı (`config/kesif.toml`), bu
 sanatçıların 44 keşif adayı "elendi" (odada Keşif → Geri al), Boy Soprano üretime girmeden reddedildi (Reddi geri al).
 Katalog farkı playlist sanatçıları, benzerleri ve tür listeleriyle sürer.
+
+**Sınırsız yükleme (Scryne, 2026-10-10 gece: "her gün 1 tane değil, yükleyebildiği kadar yüklesin, hızlı hızlı hesabı
+kasalım"):** `[takvim] haftada = 0`: sırası gelen her paket aynı koşuda Tunearo'ya gider (önce günde bir). Tunearo'nun
+hesap parça kotası dolarsa ("Track limit reached", 403) yükleme durur, bildirilir, kalanlar kuyrukta bekler; açılan
+taslak kota açılınca aynı yayınla tamamlanır. Toplu yüklemede tek bildirim. Red kapısı aynı (düzeltilmemiş red yeni
+yüklemeyi durdurur). Risk bir kez söylendi: ortak bir red nedeni (ör. "derivative work") o koşuda gönderilen her
+şarkıyı birlikte etkiler. 2 yeni test (eski kodda kırmızı).

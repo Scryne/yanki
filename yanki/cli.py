@@ -829,8 +829,12 @@ def _bildirici(calisma: Path):
 
 
 def _takvim_hatirlat(kok: Path) -> int:
-    """Sırası gelen paket: dağıtımcının API'si varsa (Faz 10) yüklenir, yoksa bildirilir (bir kez)."""
-    from yanki import dagitim, paket
+    """Sırası gelen paketler: dağıtımcının API'si varsa (Tunearo) hepsi yüklenir, yoksa ilki bildirilir (bir kez).
+    `[takvim] haftada = 0` iken sıradaki her paket bu koşuda gider. Tunearo'nun hesap parça kotası dolarsa ("Track
+    limit reached") durur ve bildirir; tek bir paketin hatası diğerlerini durdurmaz."""
+    from datetime import date
+
+    from yanki import dagitim, paket, tunearo
 
     calisma = kok / "calisma"
     ad = paket.yayin_ayarlari(kok / "config" / "yayin.toml").dagitimci
@@ -838,25 +842,53 @@ def _takvim_hatirlat(kok: Path) -> int:
     if p.beklemede:
         print(f"takvim: {p.beklemede}; kuyrukta {len(p.sira)} paket")
         return 0
-    s = p.bugun_yuklenecek
-    if s is None:
+    sirasi_gelen = p.bugun_yuklenecekler
+    if not sirasi_gelen:
         ilk = p.sira[0] if p.sira else None
         print(f"takvim: sıradaki yükleme {ilk.yukleme:%d.%m} ({ilk.ad})" if ilk else "takvim: kuyruk boş")
         return 0
+    bildir = _bildirici(calisma)
     d = dagitim.sec(ad, kok)
-    if d.otomatik:
-        bilgi = dagitim.otomatik_yukle(calisma, d, s.kimlik, s.yayin_tarihi)
-        print(f"takvim: {s.sanatci} — {s.ad} {d.ad}'ya yüklendi, incelemede (yayın {s.yayin_tarihi:%Y-%m-%d}, "
-              f"yayın kimliği {bilgi.get('release_id')})")
-        _bildirici(calisma)("dagitim", f"yüklendi: {s.ad}",
-                            f"{s.sanatci} — {s.ad} {paket.DAGITIMCI_ADI.get(d.ad, d.ad)} incelemesine gönderildi; "
-                            f"yayın tarihi {s.yayin_tarihi:%Y-%m-%d}", f"yukleme:{s.kimlik}:{bilgi.get('release_id')}")
+    if not d.otomatik:
+        s = sirasi_gelen[0]
+        bildir("takvim", f"yükleme sırası: {s.ad}",
+               f"{s.sanatci} — {s.ad}: calisma/{s.kimlik}/paket/YUKLE.md hazır; önerilen yayın tarihi "
+               f"{s.yayin_tarihi:%Y-%m-%d}. Yükleyince: yanki yuklendi {s.kimlik} --isrc …",
+               f"takvim:{s.kimlik}:{s.yukleme}")
         return 0
-    _bildirici(calisma)("takvim", f"yükleme sırası: {s.ad}",
-                        f"{s.sanatci} — {s.ad}: calisma/{s.kimlik}/paket/YUKLE.md hazır; önerilen yayın tarihi "
-                        f"{s.yayin_tarihi:%Y-%m-%d}. Yükleyince: yanki yuklendi {s.kimlik} --isrc …",
-                        f"takvim:{s.kimlik}:{s.yukleme}")
-    return 0
+    yuklenen, hatali = [], 0
+    for s in sirasi_gelen:
+        try:
+            bilgi = dagitim.otomatik_yukle(calisma, d, s.kimlik, s.yayin_tarihi)
+        except tunearo.TunearoHatasi as e:
+            if e.kod == 403 and "limit" in str(e).lower():
+                print(f"takvim: Tunearo parça kotası doldu ({e}); kalan {len(sirasi_gelen) - len(yuklenen)} paket "
+                      "kuyrukta bekliyor")
+                bildir("dagitim", "Tunearo parça kotası doldu",
+                       f"{len(yuklenen)} şarkı yüklendi, {len(sirasi_gelen) - len(yuklenen)} paket bekliyor: hesabın "
+                       "parça hakkı bitti (Tunearo panelinden artırılınca kendiliğinden sürer).",
+                       f"kota:{date.today()}")
+                break
+            print(f"✗ {s.sanatci} — {s.ad}: {e}")
+            hatali += 1
+            continue
+        except (ValueError, LookupError, RuntimeError, OSError) as e:  # bozuk paket, ağ: sıradaki pakete geç
+            print(f"✗ {s.sanatci} — {s.ad}: {type(e).__name__}: {e}")
+            hatali += 1
+            continue
+        yuklenen.append((s, bilgi))
+        print(f"takvim: {s.sanatci} — {s.ad} {d.ad}'ya yüklendi, incelemede (yayın {s.yayin_tarihi:%Y-%m-%d}, "
+              f"yayın kimliği {bilgi.get('release_id')})", flush=True)
+    adi = paket.DAGITIMCI_ADI.get(d.ad, d.ad)
+    if len(yuklenen) == 1:
+        s, bilgi = yuklenen[0]
+        bildir("dagitim", f"yüklendi: {s.ad}", f"{s.sanatci} — {s.ad} {adi} incelemesine gönderildi; yayın tarihi "
+               f"{s.yayin_tarihi:%Y-%m-%d}", f"yukleme:{s.kimlik}:{bilgi.get('release_id')}")
+    elif yuklenen:  # toplu yüklemede tek bildirim (her şarkıya ayrı bildirim yağmuru olmasın)
+        bildir("dagitim", f"{len(yuklenen)} şarkı yüklendi",
+               f"{adi} incelemesine gönderildi: " + ", ".join(s.ad for s, _ in yuklenen),
+               "yukleme:" + ",".join(str(b.get("release_id")) for _, b in yuklenen))
+    return 1 if hatali else 0
 
 
 def _takvim(args: argparse.Namespace) -> int:

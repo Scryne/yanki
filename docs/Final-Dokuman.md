@@ -34,7 +34,7 @@ Aşağıdaki tablo ve mimari ilk kararları tarihiyle korur; bunlar onların yer
 | Konu | İlk karar | Bugün | Neden |
 | --- | --- | --- | --- |
 | Üretim yeri | Evdeki RTX 4060 8 GB, XL INT8, parçalı | Kiralık GPU (RunPod A40 48 GB, saniye faturalı): nicelemesiz bf16, şarkı tek parça (~140 sn); evde üretim kapalı (`[uzak] yerel_yedek = false`), aylık bütçe 15 $ | Scryne: "güçlü GPU ile daha iyi", "benim bilgisayarımda üretmicez" (2026-10-10); S19 (`docs/arastirma/06`) |
-| Dağıtım | RouteNote, form insanda | Tunearo API: hat paketi kendisi yükler, durumu yoklar (kabulde UPC/ISRC, redde neden); takvim her gün bir yükleme, yayın tarihi +1 gün | Arkadaşın API'si geldi (2026-10-10, `docs/arastirma/04`) |
+| Dağıtım | RouteNote, form insanda | Tunearo API: hat paketi kendisi yükler, durumu yoklar (kabulde UPC/ISRC, redde neden); takvim sınırsız (paketlenen her şarkı ilk koşuda; parça kotası dolarsa durur), yayın tarihi +1 gün | Arkadaşın API'si geldi (2026-10-10, `docs/arastirma/04`) |
 | Onay | Her şarkıda Scryne | Veto penceresi 24 sa: denenmiş tür/dilde, sözü anlaşılır (WER ≤ 0,15) aday kendiliğinden onaylanır; diğerleri kulağa kalır | "Her şey otomatik çalışsın" (2026-10-10) |
 | Kapak | Dalga formundan tipografik | Şarkının moduna göre Pinterest görseli (insansız, yazısız); `kapak_ozel.jpg` önce | Scryne: "üretilen kapağı istemiyorum" (2026-10-10) |
 | Zamanlama | `\Yanki\Gece` 03:00 | `\Yanki\Surekli` bilgisayar açıkken her 30 dk (adımlar kendi aralığıyla), `\Yanki\Gece` 03:00'te uyandırır, `\Yanki\Oda` oturum açılışında | "Açıkken hep çalışsın" (2026-10-10) |

@@ -46,9 +46,9 @@ yüklenen parçanın Spotify'da çıkıp çıkmadığını ve adı arandığınd
    pazar pazar arama sırasını gösterir. Bildirim gelir: yayına çıktı, en iyi arama sırası değişti, Spotify'dan kalktı,
    yayın tarihinin üstünden 3 gün geçtiği halde yok (dağıtımcı reddi şüphesi). Reddedildiyse
    `yanki dagitim-red <kimlik> --neden "…"`: şarkı `paketlendi`ye döner, düzeltip `yanki paketle --yeniden`.
-8. **Takvim:** `yanki takvim` paketleri yükleme sırasıyla gösterir (keşif puanı önce, her gün bir, yayın tarihi
-   yüklemeden 1 gün sonra; `config/yayin.toml` → `[takvim]`). Kabul beklenmez; dağıtımcı bir parçayı reddederse neden
-   anlaşılıp düzeltilene kadar yeni yükleme yok. Sırası gelen paket Tunearo'ya gece yüklenir (elle dağıtımcıda
+8. **Takvim:** `yanki takvim` paketleri yükleme sırasıyla gösterir (keşif puanı önce, sınırsız: paketlenen her şarkı
+   ilk koşuda yüklenir, Tunearo parça kotası dolarsa durur; yayın tarihi yüklemeden 1 gün sonra; `config/yayin.toml` → `[takvim]`). Kabul beklenmez; dağıtımcı bir parçayı reddederse neden
+   anlaşılıp düzeltilene kadar yeni yükleme yok. Sırası gelen paketler Tunearo'ya koşuda yüklenir (elle dağıtımcıda
    bildirilir). Dinleme odası **Yayın**'da da görünür.
 9. **Geri çekme:** `yanki geri-cek [kimlik…]` yüklenmiş şarkıyı dağıtımcıdan kaldırır, şarkı `onaylandi`ya döner ve
    gece güncel ayarlarla yeniden paketlenip kuyruğa girer. Tunearo'da taslak silinir, canlı yayına takedown istenir;

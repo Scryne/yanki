@@ -605,3 +605,54 @@ def test_tunearo_incelemedeki_yayin_bastan_isaretiyle_bitince_uretime_doner(tmp_
     api.yayinlar[rid]["status"] = "rejected"
     ((d, s, _),) = t.yokla(c)
     assert s == "geri_cekildi" and d.asama == "analiz" and not (c / "keane-sowk" / "paket").exists()
+
+
+# ── sınırsız takvim (Scryne, 2026-10-10: "her gün 1 tane değil, yükleyebildiği kadar") ──
+def _sinirsiz_ayar(kok):
+    (kok / "config").mkdir()
+    (kok / "config" / "yayin.toml").write_text(
+        '[yayin]\nsanatci_adi = "Orvane"\ndagitimci = "tunearo"\n[master]\nlufs = -14.0\ngercek_tepe_dbtp = -1.2\n'
+        'ornekleme = 44100\n[takvim]\nacik = true\nhaftada = 0\nyayin_on_gun = 1\nbaslangic = "surekli"\n'
+        '[tunearo]\nharic_magazalar = ["audible_magic"]\n', encoding="utf-8")
+
+
+def test_sinirsiz_takvim_sirasi_gelen_her_paketi_ayni_kosuda_yukler(tmp_path, monkeypatch):
+    from yanki import cli
+
+    c = tmp_path / "calisma"
+    for k in ("a", "b", "c"):
+        _paket(c, kimlik=k)
+    _sinirsiz_ayar(tmp_path)
+    t = dagitim.takvim_oku(tmp_path / "config" / "yayin.toml")
+    p = dagitim.plan(c, t, date(2026, 10, 20), {}, dagitimci="tunearo")
+    assert t.sinirsiz and [x.yukleme for x in p.sira] == [date(2026, 10, 20)] * 3
+    assert len(p.bugun_yuklenecekler) == 3
+    api = SahteApi()
+    monkeypatch.setattr(tunearo.Istemci, "kokten", classmethod(lambda cls, kok: api))
+    assert cli._takvim_hatirlat(tmp_path) == 0
+    assert [durum.oku(c, k).asama for k in "abc"] == ["yuklendi"] * 3 and len(api.yayinlar) == 3
+    (o,) = olay.oku(c)  # toplu yüklemede tek bildirim
+    assert o["baslik"] == "3 şarkı yüklendi"
+
+
+def test_sinirsiz_takvim_parca_kotasi_dolunca_durur_ve_bildirir(tmp_path, monkeypatch):
+    from yanki import cli
+
+    c = tmp_path / "calisma"
+    for k in ("a", "b", "c"):
+        _paket(c, kimlik=k)
+    _sinirsiz_ayar(tmp_path)
+    api = SahteApi()
+    asil_post = api.post
+
+    def post(yol, govde=None):
+        if yol.endswith("/tracks") and sum(1 for t in api.parcalar.values()) >= 1:
+            raise tunearo.TunearoHatasi(403, f"POST {yol}: Track limit reached")
+        return asil_post(yol, govde)
+
+    api.post = post
+    monkeypatch.setattr(tunearo.Istemci, "kokten", classmethod(lambda cls, kok: api))
+    assert cli._takvim_hatirlat(tmp_path) == 0
+    assert [durum.oku(c, k).asama for k in "abc"] == ["yuklendi", "paketlendi", "paketlendi"]
+    assert any(o["baslik"] == "Tunearo parça kotası doldu" for o in olay.oku(c))
+    assert len(api.yayinlar) == 2  # ikinci denemenin taslağı kaldı: kota açılınca aynı yayın tamamlanır

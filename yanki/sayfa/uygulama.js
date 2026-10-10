@@ -587,7 +587,7 @@ async function panoGoster() {
   }));
 
   const ayar = p.ayarlar || {};
-  const ozet = [ayar.takvim_acik === false ? "yayın takvimi kapalı" : ayar.haftada ? `haftada ${ayar.haftada} yayın` : null,
+  const ozet = [ayar.takvim_acik === false ? "yayın takvimi kapalı" : ayar.haftada === 0 ? "sırası gelen her paket hemen yüklenir" : ayar.haftada ? `haftada ${ayar.haftada} yayın` : null,
     ayar.oto_onay ? `${ayar.oto_onay_saat} saatte karar yoksa kendiliğinden onay` : "onay sende"].filter(Boolean).join(" · ");
 
   ana.replaceChildren(
@@ -670,7 +670,7 @@ function ayarPaneli(a, kota) {
       ...satir("Üretim", a.uretim || "—"),
       ...(a.uzak_ay_usd != null ? satir("Bu ay GPU", `${a.uzak_ay_usd.toFixed(2)} $ / ${a.uzak_butce} $`) : []),
       ...satir("Dağıtımcı", DAGITIMCI[a.dagitimci] || a.dagitimci || "—"),
-      ...satir("Takvim", !a.takvim_acik ? "kapalı" : a.haftada >= 7 ? "açık · her gün" : `açık · haftada ${a.haftada}`),
+      ...satir("Takvim", !a.takvim_acik ? "kapalı" : a.haftada === 0 ? "açık · sınırsız" : a.haftada >= 7 ? "açık · her gün" : `açık · haftada ${a.haftada}`),
       ...satir("Otomatik onay", a.oto_onay ? `${a.oto_onay_saat} sa` : "kapalı"),
       ...satir("Kapak", a.kapak === "pinterest" ? "Pinterest" : "üretilen"),
       ...satir("Spotify", !kota?.bagli ? "bağlı değil" : kota.kilit_sn ? `kilitli · ${saatYazi(kota.kilit_sn)}` : `${kota.bugun}/${kota.tavan} istek`)));

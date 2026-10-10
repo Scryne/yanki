@@ -6,7 +6,8 @@ gece koşusu sırası gelen paketi kendisi yükler ve incelemeye gönderir, sonr
 olduğu `config/yayin.toml` → `dagitimci`; takvim, kuyruk ve bildirim ikisinde aynı.
 
 Takvim (`config/yayin.toml` → `[takvim]`): `paketlendi` şarkılar kuyruk; sıra keşif puanı (kaldırılmış ve aranan şarkı
-önce), sonra onay sırası. Haftada `haftada` yükleme; ilk boş gün son yüklemeden bir aralık sonra. Önerilen yayın
+önce), sonra onay sırası. Haftada `haftada` yükleme (0: sınır yok, sırası gelen her paket aynı koşuda); ilk boş
+gün son yüklemeden bir aralık sonra. Önerilen yayın
 tarihi yüklemeden `yayin_on_gun` gün sonra (Tunearo'da 1: en erken; RouteNote'ta 21 kullanılıyordu).
 `baslangic = "ilk_kabul"`: etkin dağıtımcıda ilk kabul gelene kadar incelemede en çok bir yükleme; o reddedilirse
 neden anlaşılana kadar yeni yükleme yok (Roadmap Faz 7: red gelirse nedeni kapak mı AI mı önce o anlaşılmalı; aynı
@@ -92,8 +93,15 @@ class Takvim:
     baslangic: str = "ilk_kabul"  # "ilk_kabul" | "surekli" | "hemen"
 
     @property
+    def sinirsiz(self) -> bool:
+        """`haftada = 0`: sıradaki her paket aynı koşuda yüklenir (Scryne, 2026-10-10: "yükleyebildiği kadar")."""
+        return self.haftada <= 0
+
+    @property
     def aralik(self) -> timedelta:
-        return timedelta(days=max(1, round(7 / max(1, self.haftada))))  # tam gün: haftada 2 → 4 günde bir
+        if self.sinirsiz:
+            return timedelta(0)
+        return timedelta(days=max(1, round(7 / self.haftada)))  # tam gün: haftada 2 → 4 günde bir
 
 
 def takvim_oku(yayin_yolu: Path) -> Takvim:
@@ -132,9 +140,14 @@ class Plan:
     bugun: date = date.min  # planın kurulduğu gün (verilmezse bugün)
 
     @property
-    def bugun_yuklenecek(self) -> Sira | None:
+    def bugun_yuklenecekler(self) -> list[Sira]:
+        """Yükleme günü gelmiş bütün paketler, sırayla (takvim beklemedeyse boş)."""
         gun = self.bugun if self.bugun != date.min else date.today()
-        return self.sira[0] if self.sira and not self.beklemede and self.sira[0].yukleme <= gun else None
+        return [] if self.beklemede else [x for x in self.sira if x.yukleme <= gun]
+
+    @property
+    def bugun_yuklenecek(self) -> Sira | None:
+        return next(iter(self.bugun_yuklenecekler), None)
 
 
 def _meta(calisma: Path, d: durum.Durum) -> dict:
