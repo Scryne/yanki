@@ -32,7 +32,9 @@ sure_saat = 72
 [takvim]
 # Yayın takvimi (yanki/dagitim.py): paketlenmiş şarkılar kuyruk, sıra keşif puanı sonra onay sırası. Sırası gelen paketi
 # Tunearo'ya gece koşusu kendisi yükler; elle dağıtımcıda (RouteNote) bildirilir.
-acik = true
+# Kapalı (Scryne, 2026-10-10): "şimdilik yayınlamayalım, yüklediğimiz şarkının durumuna göre bakalım".
+# Kapalıyken yükleme yok; When We Were Young'ın durum yoklaması, takip, üretim ve paketleme sürer.
+acik = false
 haftada = 1  # Roadmap Faz 8: kabul gelince düzenli yayın, haftada bir
 # Yüklemeden kaç gün sonrası yayın tarihi. 21 RouteNote içindi (ücretsiz inceleme, pitch ≥ 7 gün). Tunearo'da en erken
 # (Scryne, 2026-10-10): hesaptaki canlı yayınlar açılıştan 1–5 gün sonrasına tarihli ve 2–5 gün sonra canlıya çıkmış;
