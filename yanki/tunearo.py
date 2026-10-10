@@ -99,10 +99,12 @@ class Istemci:
                     raise ag.Bulunamadi(f"{yol}: {mesaj}") from e
                 if e.code < 500 or i == deneme - 1:
                     raise TunearoHatasi(e.code, f"{yontem} {yol}: {mesaj}") from e
-            except (urllib.error.URLError, TimeoutError) as e:
+            except (*ag.GECICI, ValueError) as e:
+                # bağlantı kurulduktan sonra kopan cevap (`IncompleteRead`, `RemoteDisconnected`, yarım JSON) da
+                # geçici: önce yakalanmıyor, tek bir kopuk cevap bütün dağıtım yoklamasını düşürüyordu
                 sayac.say(SERVIS, False)
                 if i == deneme - 1:
-                    raise TunearoHatasi(None, f"{yontem} {yol}: {e}") from e
+                    raise TunearoHatasi(None, f"{yontem} {yol}: {type(e).__name__}: {e}") from e
             time.sleep(2 * (i + 1))
         raise AssertionError("ulaşılmaz")
 
@@ -129,7 +131,7 @@ class Istemci:
         except urllib.error.HTTPError as e:
             sayac.say(SERVIS, False)
             raise TunearoHatasi(e.code, f"dosya yükleme ({yol.name}): {_hata_metni(e)}") from e
-        except (urllib.error.URLError, TimeoutError) as e:
+        except ag.GECICI as e:
             sayac.say(SERVIS, False)
             raise TunearoHatasi(None, f"dosya yükleme ({yol.name}): {e}") from e
 
@@ -445,7 +447,7 @@ class Tunearo:
                            f"tunearo:geri:{d.kimlik}:{rid}")
                 sonuc.append((d, "geri_cekildi" if sonuc_ == "tamam" else f"geri çekilecek ({yeni})", eski))
                 continue
-            guncel ={"dagitim_durumu": yeni, "dagitim_kontrol": datetime.now().isoformat(timespec="seconds")}
+            guncel = {"dagitim_durumu": yeni, "dagitim_kontrol": datetime.now().isoformat(timespec="seconds")}
             if st.get("upc"):
                 guncel["upc"] = st["upc"]
             if yeni in KABUL and not y.get("isrc") and y.get("track_id"):

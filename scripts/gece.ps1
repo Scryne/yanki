@@ -13,7 +13,9 @@ $log = Join-Path $gunluk ((Get-Date -Format "yyyy-MM-dd") + ".log")
 # Satır satır aç-yaz-kapa: Windows PowerShell 5.1'de boru hattındaki Add-Content dosyayı koşu boyunca kilitliyor
 $utf8 = New-Object System.Text.UTF8Encoding $false
 [Console]::OutputEncoding = $utf8  # Python UTF-8 yazar (PYTHONUTF8); 5.1 varsayılan OEM 857 ile okuyup bozuyordu
-& $uv run yanki calistir *>&1 | ForEach-Object { [IO.File]::AppendAllText($log, "$_`r`n", $utf8) }
+# --no-sync + python -m (surekli.ps1, oda.ps1 ile aynı): açık dinleme odası venv'i ve yanki.exe'yi tutarken `uv run`
+# senkronu düşüyor, gece koşusu hiç başlamıyordu
+& $uv run --no-sync python -m yanki calistir *>&1 | ForEach-Object { [IO.File]::AppendAllText($log, "$_`r`n", $utf8) }
 $kod = $LASTEXITCODE
 "=== $(Get-Date -Format s) bitti (kod $kod)" | Add-Content $log -Encoding utf8
 # Sonuç bildirimi (bilgisayar gece açıksa sabah bildirim merkezinde durur)

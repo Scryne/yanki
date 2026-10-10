@@ -592,6 +592,62 @@ BOS_CIKTI = ("üretilecek bir şey yok", "paketlenecek onaylı şarkı yok", "ta
              "liste boş", "tunearo: izlenen yükleme yok", "takip edilecek yüklenmiş şarkı yok", "toplam 0 MB")
 
 
+class _AdimCiktisi:
+    """Bir adımın çıktısı günlüğe canlı akar. Yalnız "yapılacak iş yok" satırlarından (`BOS_CIKTI`) ibaretse hiç
+    yazılmaz; ilk gerçek satırda başlık (adımın başlama saatiyle) ve o ana kadarki satırlar yazılır, sonrası anında.
+
+    Önce adımın bütün çıktısı bitince yazılıyordu: kiralık GPU'daki bir saatlik üretim günlükte ancak bittiğinde,
+    bitiş saatini başlama saati gibi göstererek görünüyor, koşu yarıda kesilirse (uyku, kapanma) hiç görünmüyordu
+    (2026-10-10 günlüğü: "── üretim (18:51:46)" altında 17:38'de başlamış üretim)."""
+
+    def __init__(self, baslik: str, hedef):
+        self.baslik, self.hedef = baslik, hedef
+        self.tampon: list[str] = []
+        self.yarim = ""
+        self.akiyor = False
+
+    def write(self, s: str) -> int:
+        self.yarim += s
+        *satirlar, self.yarim = self.yarim.split("\n")
+        for satir in satirlar:
+            self._satir(satir)
+        return len(s)
+
+    def flush(self) -> None:
+        if self.akiyor:
+            self.hedef.flush()
+
+    def _yaz(self, satir: str) -> None:
+        print(satir, file=self.hedef, flush=True)
+
+    def _satir(self, satir: str) -> None:
+        if self.akiyor:
+            self._yaz(satir)
+            return
+        if satir.strip() or self.tampon:  # baştaki boş satırlar atılır
+            self.tampon.append(satir)
+        if satir.strip() and not any(x in satir for x in BOS_CIKTI):
+            self.ac()
+
+    def ac(self) -> None:
+        if self.akiyor:
+            return
+        self.akiyor = True
+        self._yaz(self.baslik)
+        for satir in self.tampon:
+            self._yaz(satir)
+        self.tampon = []
+
+    def bitir(self, zorla: bool = False) -> bool:
+        """Yarım kalan son satırı işler; `zorla`: boş da olsa yazılır (hata, `--hepsi`). Dönen: adım yazıldı mı."""
+        if self.yarim:
+            self._satir(self.yarim)
+            self.yarim = ""
+        if zorla:
+            self.ac()
+        return self.akiyor
+
+
 def _adim_zamanlari(calisma: Path) -> dict:
     import json
 
@@ -630,7 +686,6 @@ def _calistir(args: argparse.Namespace) -> int:
     Adımlar birbirinden yalıtılmış: biri düşerse hatası günlüğe yazılır, koşu sürer ve 1 döner. Yapılacak işi olmayan
     adım yazmaz; hiçbir adım iş yapmadıysa koşu hiçbir şey yazmaz (günlük her 30 dk'da bir şişmesin)."""
     import contextlib
-    import io
     import time
     import traceback
     from datetime import datetime, timedelta
@@ -675,8 +730,8 @@ def _calistir(args: argparse.Namespace) -> int:
     sorunlu, yazilan = [], []
     for ad, fn in adimlar:
         bas = time.monotonic()
-        tampon = io.StringIO()
-        with contextlib.redirect_stdout(tampon):
+        cikti = _AdimCiktisi(f"── {ad} ({datetime.now():%H:%M:%S})", sys.stdout)
+        with contextlib.redirect_stdout(cikti):
             try:
                 kod = fn() or 0
             except Exception:  # noqa: BLE001 — adım yalıtımı: iz günlüğe, koşu sürer
@@ -684,17 +739,15 @@ def _calistir(args: argparse.Namespace) -> int:
                 kod = 1
         if ad in ADIM_ARALIGI_SAAT:
             zamanlar[ad] = simdi.isoformat(timespec="seconds")
-        cikti = tampon.getvalue().strip()
-        bos = not cikti or all(any(x in satir for x in BOS_CIKTI) for satir in cikti.splitlines())
         if kod:
             sorunlu.append(ad)
-        if kod or not bos or hepsi:
+        if cikti.bitir(zorla=bool(kod) or hepsi):
             yazilan.append(ad)
-            print(f"── {ad} ({datetime.now():%H:%M:%S})", flush=True)
-            if cikti:
-                print(cikti, flush=True)
+            gecen = time.monotonic() - bas
             if kod:
-                print(f"✗ {ad} adımı sorunlu bitti ({time.monotonic() - bas:.0f} sn)", flush=True)
+                print(f"✗ {ad} adımı sorunlu bitti ({gecen:.0f} sn)", flush=True)
+            elif gecen >= 60:  # uzun adımın süresi (başlık başlama saatini taşıyor)
+                print(f"  {ad} bitti ({gecen / 60:.0f} dk)", flush=True)
     dosya.json_yaz(calisma / ".adimlar.json", zamanlar)
     if yazilan:
         print(f"── koşu bitti ({datetime.now():%H:%M:%S})"

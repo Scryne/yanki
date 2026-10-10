@@ -7,6 +7,8 @@ from fastapi.testclient import TestClient
 
 from yanki import ayarlar, durum, sunucu
 
+ODA = "http://127.0.0.1:8765"  # oda yalnız yerel Host kabul ediyor
+
 
 @pytest.fixture
 def ortam(tmp_path):
@@ -21,7 +23,7 @@ def ortam(tmp_path):
     d.gec("uretildi")
     durum.yaz(c, d)
     (tmp_path / "gizli.txt").write_text("sır", encoding="utf-8")
-    return TestClient(sunucu.uygulama(ayarlar.yukle(), c)), c
+    return TestClient(sunucu.uygulama(ayarlar.yukle(), c), base_url=ODA), c
 
 
 def test_liste_ve_ayrinti(ortam):
@@ -138,7 +140,7 @@ def kesif_ortami(tmp_path):
                           sanatci_uyusuyor=True, soz_var=True, sure_sn=110, rakip_cover=0, youtube_id="HCHkoIfw8JA"),
                kesif.Aday("Del", "Put Me in a Movie", "playlist:p", youtube_izlenme=119125, sanatci_uyusuyor=False)]
     kesif.birlestir(c, adaylar)
-    return TestClient(sunucu.uygulama(ayarlar.yukle(), c, liste_yolu)), c, liste_yolu
+    return TestClient(sunucu.uygulama(ayarlar.yukle(), c, liste_yolu), base_url=ODA), c, liste_yolu
 
 
 def test_kesif_listesi_ekle_ele(kesif_ortami):
@@ -180,7 +182,7 @@ def test_yayin_listesi(tmp_path):
         json.dumps({"yukleme": {"yayin_tarihi": "2026-10-28", "isrc": "GX1", "dagitimci": "routenote"}}),
         encoding="utf-8")
     durum.yaz(c, durum.Durum("b-c", "B", "C", asama="uretildi"))
-    istemci = TestClient(sunucu.uygulama(ayarlar.yukle(), c, tmp_path / "liste.toml"))
+    istemci = TestClient(sunucu.uygulama(ayarlar.yukle(), c, tmp_path / "liste.toml"), base_url=ODA)
     y = istemci.get("/api/yayin").json()
     assert [s["kimlik"] for s in y["sarkilar"]] == ["adele-x"] and y["sarkilar"][0]["yayin_tarihi"] == "2026-10-28"
     assert y["sarkilar"][0]["son"]["siralar"] == {"GB": 2} and y["profiller"] == ["orv"]

@@ -45,12 +45,11 @@ tazeleme_gun = 7
 [katalog]
 # Kendi keşfimiz (STILLMORE'suz): Deezer'da çok dinlenen ama Spotify'da kapalı/olmayan şarkılar (yanki/katalog.py).
 acik = true
-# Elle tohumlar. Kataloğunu Spotify'dan çektiği haberlerde geçen sanatçılar (2025); doğru olup olmadığını hat ölçer,
-# yanlışsa yalnız birkaç istek boşa gider.
-tohumlar = [
-  "Massive Attack", "King Gizzard & The Lizard Wizard", "Godspeed You! Black Emperor", "Deerhoof", "Xiu Xiu",
-  "Hotline TNT",
-]
+# Elle tohumlar (rank eşiği yok, sorma sırasında önce). Boş (Denetim 3, 2026-10-10): önceki tohumlar kataloğunu
+# Spotify'dan 2025'te protestoyla çeken sanatçılardı (Massive Attack, King Gizzard, Godspeed You! Black Emperor,
+# Deerhoof, Xiu Xiu, Hotline TNT). Keşfin puanlı 29 adayının 26'sı onlardan geldi; hepsi deneysel/enstrümantal,
+# hattın balad/pop tarifinin dışında ve sanatçının bilinçli boşluğu (tepki riski). Adayları kayıtta "elendi".
+tohumlar = []
 # Playlist'lerde en sık geçen kaç sanatçı tohum olsun (Scryne'ın zevki)
 playlist_sanatcilari = 30
 # Deezer tür listeleri (0 hepsi, 132 pop, 152 rock, 165 R&B, 85 alternatif; 116 rap çıkarıldı: hattın türü değil).

@@ -60,9 +60,12 @@ def kapat() -> None:
 
 
 def ac(cdp: bool, port: int = PORT, bekle_sn: int = 60) -> None:
+    """`cdp`: hata ayıklama portuyla. Port yalnız 127.0.0.1'de; köprünün WebSocket'i `Origin` göndermediği için
+    `--remote-allow-origins` gerekmez. Önce `*` veriliyordu: tarama sürerken tarayıcıda açık herhangi bir sayfa
+    ws://127.0.0.1:9222'ye bağlanıp Spotify istemcisinde (oturum açık hesapla) kod çalıştırabilirdi."""
     if not SPOTIFY.exists():
         raise StillmoreYok(f"Spotify bulunamadı: {SPOTIFY}")
-    arg = [f"--remote-debugging-port={port}", "--remote-allow-origins=*", "--minimized"] if cdp else ["--minimized"]
+    arg = [f"--remote-debugging-port={port}", "--minimized"] if cdp else ["--minimized"]
     subprocess.Popen([str(SPOTIFY), *arg], creationflags=getattr(subprocess, "DETACHED_PROCESS", 0))
     if not cdp:
         return

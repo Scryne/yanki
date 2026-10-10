@@ -19,7 +19,18 @@ class Bulunamadi(LookupError):
     pass
 
 
-def json_al(url: str, parametre: dict | None = None, zaman_asimi: float = 30, deneme: int = 3) -> dict | list:
+def bekleme_sn(e: urllib.error.HTTPError | None, i: int, tavan: float = 30) -> float:
+    """Yeniden denemeden önce: sunucu `Retry-After` verdiyse o (en çok `tavan`), yoksa artan bekleme."""
+    try:
+        deger = float((e.headers or {}).get("Retry-After") or "") if e is not None else None
+    except (TypeError, ValueError):
+        deger = None
+    return min(tavan, deger) if deger is not None and deger >= 0 else 2.0 * (i + 1)
+
+
+def json_al(url: str, parametre: dict | None = None, zaman_asimi: float = 30, deneme: int = 4) -> dict | list:
+    """4 deneme: LRCLIB yükte sık sık 503 "ServerOverloaded" veriyor (2026-10-10 keşfinde isteklerin %39'u; aynı
+    istek birkaç saniye sonra 200), üç denemede ardışık üç 503 şarkıyı "söz yok"a düşürebiliyordu."""
     if parametre:
         url = f"{url}?{urllib.parse.urlencode(parametre)}"
     # Accept-Language: Deezer tür adlarını IP'nin diline çeviriyor (bu ağda Türkçe: "dans", "brezilya müziği"); stil
@@ -28,6 +39,7 @@ def json_al(url: str, parametre: dict | None = None, zaman_asimi: float = 30, de
                                                  "Accept-Language": "en"})
     servis = sayac.servis(url)
     for i in range(deneme):
+        http_hatasi = None
         try:
             with urllib.request.urlopen(istek, timeout=zaman_asimi) as r:
                 ham = r.read()
@@ -40,11 +52,12 @@ def json_al(url: str, parametre: dict | None = None, zaman_asimi: float = 30, de
                 raise Bulunamadi(url) from e
             if e.code not in (429, 500, 502, 503, 504) or i == deneme - 1:
                 raise
+            http_hatasi = e
         except (*GECICI, ValueError) as e:  # ValueError: yarıda kesilmiş gövde JSON olarak çözülemedi
             sayac.say(servis, False)
             if i == deneme - 1:
                 if isinstance(e, OSError):
                     raise
                 raise OSError(f"{servis}: bozuk ya da yarım cevap ({type(e).__name__}: {e})") from e
-        time.sleep(2 * (i + 1))
+        time.sleep(bekleme_sn(http_hatasi, i))
     raise AssertionError("ulaşılmaz")

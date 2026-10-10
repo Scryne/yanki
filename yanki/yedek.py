@@ -27,6 +27,7 @@ DESENLER = (
     "calisma/*/paket/YUKLE.md",
     "calisma/kesif/*.json",
     "calisma/olaylar.jsonl",  # bildirimlerin tekrar anahtarları: geri yüklemede eski olaylar yeniden bildirilmesin
+    "calisma/gunluk/runpod.json",  # kiralık GPU harcaması: aylık bütçe sınırı bundan hesaplanıyor
     "girdi/liste.toml",
     "girdi/sozler/*.txt",
     "config/*.toml",

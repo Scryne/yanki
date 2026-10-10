@@ -16,6 +16,8 @@ from fastapi.testclient import TestClient
 
 from yanki import ayarlar, durum, kilit, motor, sunucu, uretim
 
+ODA = "http://127.0.0.1:8765"  # oda yalnız yerel Host kabul ediyor
+
 # ── süreçler arası kilit ve taze oku-değiştir-yaz ───────────
 
 
@@ -178,7 +180,7 @@ def oda(tmp_path):
     durum.yaz(c, d)
     (tmp_path / ".env").write_text("SPOTIFY_CLIENT_SECRET=sir", encoding="utf-8")
     (k / "notlar.txt").write_text("ses değil", encoding="utf-8")
-    return TestClient(sunucu.uygulama(ayarlar.yukle(), c)), c
+    return TestClient(sunucu.uygulama(ayarlar.yukle(), c), base_url=ODA), c
 
 
 @pytest.mark.parametrize("yol", ["/ses/%2E%2E/.env", "/api/dalga/%2E%2E/.env", "/ses/a-b/notlar.txt",

@@ -17,7 +17,9 @@ $utf8 = New-Object System.Text.UTF8Encoding $false
 $script:basladi = $false
 # Başlık ilk çıktı satırında yazılır: hiçbir adım iş yapmadıysa günlükte iz kalmaz
 # --no-sync: dinleme odası venv'i tutarken senkron düşmesin (oda.ps1 ile aynı gerekçe)
+# Önceki koşu sürüyorsa (kiralık GPU'da üretim ~1 saat) her 30 dk'da "başka bir koşu sürüyor" yazılmasın: beklenen durum
 & $uv run --no-sync python -m yanki calistir *>&1 | ForEach-Object {
+    if (-not $script:basladi -and "$_" -like "başka bir yanki koşusu sürüyor*") { return }
     if (-not $script:basladi) {
         [IO.File]::AppendAllText($log, "=== $(Get-Date -Format s) başladı (sürekli)`r`n", $utf8)
         $script:basladi = $true

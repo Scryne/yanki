@@ -558,3 +558,46 @@ GB'ta paylaşımlı belleğe taştı → motor bekçisi: işçi 20 dk günlüğe
 işaretli (inceleme bitince baştan üretime; `geri_cek.bastan`). Kaynak, söz, künye, stil, kapak korundu. Yetim pod
 temizliği her uzak koşunun başında; `yanki durum` RunPod anahtarı; pano: üretim yeri, bu ay GPU harcaması, "Son koşu".
 İlk otomatik kiralık GPU koşusu `\Yanki\Surekli` ile başladı (8 şarkı). 7 yeni test, toplam 335.
+
+## Denetim 3 (2026-10-10 akşam, Scryne: "baştan sona incele, denetle, eksik ve hataların tamamını çöz, iyileştir, yeni şeyler ekle; her şey sende")
+
+Kod, betikler ve günün gerçek çalışma kanıtı (gece/sürekli günlüğü, `runpod.log`, `runpod.json`, servis sayaçları,
+zamanlanmış görevler) tarandı. Testler `tests/test_isletim.py` (13): hepsi düzeltmesiz kodda kırmızı (13/13 denendi),
+toplam 352 yeşil.
+
+**Hatalar (çözüldü):**
+- **Kiralık GPU'da işçi başlatma her koşuda 120 sn asılıydı** (`runpod.log`: beş koşunun beşi "zaman aşımı (120 sn)").
+  Kök neden kabuk önceliği: `cd … && export … && setsid nohup … &` satırında `&` bütün `&&` zincirini arka plana
+  atıyor, zinciri koşan alt kabuk SSH'ın çıktısını işçi bitene kadar açık tutuyordu; iş yalnız pid yoklaması yedeğiyle
+  sürüyordu (yedek yokken 17:14 koşusu bu yüzden düştü). Arka plana artık yalnız işçi gider (`uzak.baslatma_betigi`);
+  yerelde sahte işçiyle eski betik 6 sn, yenisi 0,03 sn.
+- **Sürekli koşunun günlüğü adım bitince yazılıyordu:** 17:38'de başlayan bir saatlik üretim günlükte "── üretim
+  (18:51:46)" diye, bitiş saatini başlama saati gibi göstererek çıktı; koşu yarıda kesilseydi (uyku, kapanma) hiç
+  görünmezdi. Adım çıktısı artık canlı akar (`cli._AdimCiktisi`), başlık adımın başlama saatini taşır, uzun adımın
+  süresi yazılır; "yapılacak iş yok" adımları yine yazılmaz. Kiralık GPU'da biten iş sayısı da akar ("8/24 iş bitti").
+- **Dinleme odası başka sitelere açıktı:** yalnız 127.0.0.1'de dinliyordu ama tarayıcıda açık herhangi bir sayfa
+  gövdesiz yazan uçları (Reddi geri al, Listeye ekle, Başka kapak) çağırabilir, DNS yeniden bağlamayla okuma uçlarını
+  okuyabilirdi. Host yerel olmalı, yazan istek başka kökenden gelemez; canlıda yabancı Origin ve Host 403, oda 200.
+- **Spotify hata ayıklama portu her kökene açıktı** (`--remote-allow-origins=*`): STILLMORE taraması sürerken bir web
+  sayfası oturum açık Spotify istemcisinde kod çalıştırabilirdi. Bayrak kaldırıldı (köprü Origin göndermiyor); canlı:
+  STILLMORE yüklendi, ülke TR, yabancı köken 403.
+- **Geçici ağ hataları:** RunPod GraphQL hiç yeniden denemiyordu (SSH beklenirken tek kopuk yoklama pod'u silip koşuyu
+  düşürürdü; pod açan istek yine tek), Tunearo istemcisi kopuk cevabı (`RemoteDisconnected`, `IncompleteRead`)
+  yakalamıyordu (tek kopukluk bütün dağıtım yoklamasını düşürürdü). LRCLIB yükte sık 503 "ServerOverloaded" veriyor
+  (keşifte isteklerin %39'u, canlı denendi): `Retry-After`'a uyulur, 4 deneme.
+- **Gece betiği** `uv run yanki` ile senkron yapıyordu: açık oda venv'i tutarken sürekli koşu ve oda gibi `--no-sync
+  python -m`. Önceki koşu sürerken her 30 dk'da günlüğe düşen "başka bir koşu sürüyor" satırları yazılmaz.
+
+**İyileştirmeler:**
+- **Keşifte sanatçı çeşitliliği:** kataloğunu Spotify'dan çeken sanatçının her şarkısı "Spotify'da yok" çıkıyor; 16:08
+  keşfinde ilk 10'un 6'sı Xiu Xiu'ydu. Sırada bekleyen şarkısı olan sanatçıdan gece yenisi eklenmez (yayına çıkınca ya
+  da reddedilince eklenir); odadaki elle "Listeye ekle" serbest.
+- **`yanki durum`:** kiralık GPU'nun bu ayki harcaması / bütçe ve devre dışıysa nedeni (yerel kayıttan, ağsız).
+- **Yedek** kiralık GPU harcama kaydını da alır (aylık bütçe sınırı ondan hesaplanıyor).
+
+**Keşif tohumları (uygulandı, geri alınabilir):** katalog farkının elle tohumları (Xiu Xiu, Deerhoof, Godspeed You!
+Black Emperor, King Gizzard, Massive Attack, Hotline TNT) kataloğunu Spotify'dan 2025'te protestoyla çeken, çoğu deneysel
+sanatçılardı; keşfin puanlı 29 adayının 26'sı onlardan geliyordu ve bugün Xiu Xiu "Boy Soprano" listeye girmişti. Hattın
+tarifi balad/pop, boşluk da sanatçının bilinçli kararı (tepki riski). Tohumlar boşaltıldı (`config/kesif.toml`), bu
+sanatçıların 44 keşif adayı "elendi" (odada Keşif → Geri al), Boy Soprano üretime girmeden reddedildi (Reddi geri al).
+Katalog farkı playlist sanatçıları, benzerleri ve tür listeleriyle sürer.

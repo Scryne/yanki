@@ -50,6 +50,8 @@ def kontroller(a: Ayarlar) -> list[Kontrol]:
         Kontrol("fpcalc", a.fpcalc.exists(), str(a.fpcalc)),
     ]
     sonuc += [*anahtar_kontrolleri(a), disk_kontrolu(a)]
+    if a.uzak.acik:
+        sonuc.append(uzak_kontrolu(a))
     kullanilan = gpu_kullanilan_mib()
     if kullanilan is None:
         sonuc.append(Kontrol("GPU", False, "nvidia-smi okunamadı"))
@@ -67,6 +69,21 @@ def disk_kontrolu(a: Ayarlar) -> Kontrol:
     return Kontrol("disk", bos >= DISK_EN_AZ_GB, f"{bos:,.0f} GB boş (en az {DISK_EN_AZ_GB})")
 
 
+def uzak_kontrolu(a: Ayarlar) -> Kontrol:
+    """Kiralık GPU'nun bu ayki harcaması (yerel kayıttan, ağa çıkmaz) ve devre dışı olup olmadığı. Sınır dolunca ya
+    da sunucu düşünce üretim durur; `yanki durum` bunu göstermiyordu."""
+    import time
+
+    from yanki import uzak
+
+    harcanan = uzak.bu_ay_harcama(a.kok)
+    durdu = uzak.durma_yolu(a.kok)
+    if durdu.exists() and time.time() - durdu.stat().st_mtime < uzak.DURMA_SAAT * 3600:
+        return Kontrol("kiralık GPU", False, f"devre dışı ({durdu.read_text(encoding='utf-8')[:120]})")
+    return Kontrol("kiralık GPU", harcanan < a.uzak.aylik_butce,
+                   f"bu ay {harcanan:.2f} $ / {a.uzak.aylik_butce:.2f} $ ({a.uzak.gpu.replace('NVIDIA ', '')})")
+
+
 def anahtar_kontrolleri(a: Ayarlar) -> list[Kontrol]:
     """Dış servis anahtarları yerinde mi (ağa çıkmaz; değer yazılmaz). Yoksa ilgili adım atlanır, hat yine çalışır."""
     import os
@@ -77,7 +94,7 @@ def anahtar_kontrolleri(a: Ayarlar) -> list[Kontrol]:
     # da olabilir)
     e = {**spotify.env_oku(a.kok),
          **{k: v for k, v in os.environ.items() if k.startswith(("TUNEARO_", "TYPESAFE_", "RUNPOD_"))}}
-    var =lambda *adlar: all(e.get(x) for x in adlar)  # noqa: E731
+    var = lambda *adlar: all(e.get(x) for x in adlar)  # noqa: E731
     return [
         Kontrol("Tunearo anahtarı", var("TUNEARO_API_KEY"), "yükleme ve durum yoklaması" if var("TUNEARO_API_KEY")
                 else ".env → TUNEARO_API_KEY yok: yükleme otomatik değil"),

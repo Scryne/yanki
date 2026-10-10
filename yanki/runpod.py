@@ -42,15 +42,27 @@ def anahtar(kok: Path) -> str:
     return k
 
 
-def gql(api_anahtari: str, sorgu: str, degiskenler: dict | None = None) -> dict:
+def gql(api_anahtari: str, sorgu: str, degiskenler: dict | None = None, deneme: int = 3) -> dict:
+    """GraphQL isteği. Geçici ağ hatası ve 5xx `deneme` kez denenir (SSH beklenirken tek bir kopuk yoklama pod'u
+    silip koşuyu düşürüyordu); pod açan mutasyon `deneme=1` ile çağrılır (ikinci pod açılmasın). Son hata
+    `RunPodHatasi`."""
+    from yanki import ag
+
     govde = json.dumps({"query": sorgu, "variables": degiskenler or {}}).encode()
     istek = urllib.request.Request(API, data=govde, headers={
         "Content-Type": "application/json", "Authorization": f"Bearer {api_anahtari}", "User-Agent": "Yanki/0.1"})
-    try:
-        with urllib.request.urlopen(istek, timeout=60) as r:
-            cevap = json.load(r)
-    except urllib.error.HTTPError as e:
-        raise RunPodHatasi(f"RunPod {e.code}: {e.read()[:300]!r}") from e
+    for i in range(deneme):
+        try:
+            with urllib.request.urlopen(istek, timeout=60) as r:
+                cevap = json.load(r)
+            break
+        except urllib.error.HTTPError as e:
+            if e.code < 500 or i == deneme - 1:
+                raise RunPodHatasi(f"RunPod {e.code}: {e.read()[:300]!r}") from e
+        except (*ag.GECICI, ValueError) as e:  # ValueError: yarım JSON
+            if i == deneme - 1:
+                raise RunPodHatasi(f"RunPod'a ulaşılamadı: {type(e).__name__}: {e}") from e
+        time.sleep(5 * (i + 1))
     if cevap.get("errors"):
         raise RunPodHatasi("; ".join(x.get("message", "?") for x in cevap["errors"]))
     return cevap["data"]
@@ -113,7 +125,7 @@ class Pod:
             "cloudType": self.bulut, "gpuCount": 1, "gpuTypeId": self.gpu, "name": self.ad, "imageName": IMAJ,
             "containerDiskInGb": self.disk_gb, "volumeInGb": 0, "ports": "22/tcp", "startSsh": True,
             "env": [{"key": "PUBLIC_KEY", "value": acik}],
-            "allowedCudaVersions": ["12.8", "12.9", "13.0"]}})["podFindAndDeployOnDemand"]
+            "allowedCudaVersions": ["12.8", "12.9", "13.0"]}}, deneme=1)["podFindAndDeployOnDemand"]
         if not d or not d.get("id"):
             raise RunPodHatasi(f"{self.gpu} açılamadı (stok yok olabilir)")
         self.id, self.saatlik = d["id"], float(d.get("costPerHr") or 0)

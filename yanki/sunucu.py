@@ -13,10 +13,11 @@ import re
 import threading
 from dataclasses import asdict
 from pathlib import Path
+from urllib.parse import urlparse
 
 import numpy as np
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -189,9 +190,28 @@ def dalga(yol: Path, nokta: int = DALGA_NOKTA) -> dict:
     return veri
 
 
+YEREL_HOSTLAR = ("127.0.0.1", "localhost", "::1")
+GUVENLI_YONTEMLER = ("GET", "HEAD", "OPTIONS")
+
+
 def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None) -> FastAPI:
     app = FastAPI(title="Yanki dinleme", docs_url=None, redoc_url=None)
     liste_yolu = liste_yolu or a.kok / "girdi" / "liste.toml"
+
+    @app.middleware("http")
+    async def yerel_koruma(istek: Request, devam):
+        """Oda yalnız 127.0.0.1'de dinliyor, ama tarayıcıda açık başka bir site iki yoldan ulaşabilirdi: yazan uçlara
+        form/`fetch` ile istek (gövdesiz "Reddi geri al", "Listeye ekle", "Başka kapak" doğrudan çalışıyordu) ve DNS
+        yeniden bağlama (kendi alan adını 127.0.0.1'e çevirip okuma uçlarını okumak). Host yerel olmalı; yazan istek
+        başka bir kökenden (`Origin`, `Sec-Fetch-Site`) gelemez. Origin'siz istek (curl, betik) geçer."""
+        if istek.url.hostname not in YEREL_HOSTLAR:
+            return JSONResponse({"detail": "dinleme odası yalnız 127.0.0.1 adresinden açılır"}, 403)
+        if istek.method not in GUVENLI_YONTEMLER:
+            koken = istek.headers.get("origin")
+            if (koken is not None and urlparse(koken).hostname not in YEREL_HOSTLAR) or \
+                    istek.headers.get("sec-fetch-site") == "cross-site":
+                return JSONResponse({"detail": "başka bir siteden gelen istek reddedildi"}, 403)
+        return await devam(istek)
 
     def oku(kimlik: str) -> durum.Durum:
         d = durum.oku(calisma, kimlik) if _kimlik_gecerli(kimlik) else None

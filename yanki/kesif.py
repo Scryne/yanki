@@ -439,9 +439,32 @@ def listeye_ekle(adaylar: list[Aday], liste_yolu: Path, calisma: Path, adet: int
     """Doğrulanmış (geri gelmemiş, talebi ölçülmüş) ilk `adet` adayı `liste.toml`'un sonuna ekler. Listede ya da
     çalışma alanında zaten olan şarkı atlanır. Dosyanın açıklamaları korunur (sona metin eklenir)."""
     mevcut = listedekiler(liste_yolu, calisma)
-    secilen = [a for a in adaylar if a.geri_geldi is False and a.puan > 0 and not a.elendi
-               and a.kimlik not in mevcut][:adet]
+    # Aynı sanatçıdan sırada bekleyen şarkı varken yenisi eklenmez: kataloğunu Spotify'dan çeken bir sanatçının her
+    # şarkısı "Spotify'da yok" ve aynı puan aralığında; 2026-10-10 keşfinde ilk 10'un 6'sı Xiu Xiu'ydu, gece eklemesi
+    # her gün aynı sanatçıyı listeye koyacaktı (profil tek bir sanatçının cover kanalına döner, kulak da aynı tarzı
+    # dinler). Sanatçının şarkısı yayına çıkınca ya da reddedilince sıradaki eklenebilir.
+    sanatcilar = bekleyen_sanatcilar(liste_yolu, calisma)
+    secilen: list[Aday] = []
+    for a in adaylar:
+        if len(secilen) >= adet:
+            break
+        if (a.geri_geldi is False and a.puan > 0 and not a.elendi and a.kimlik not in mevcut
+                and a.sanatci.casefold() not in sanatcilar):
+            secilen.append(a)
+            sanatcilar.add(a.sanatci.casefold())
     return listeye_yaz(secilen, liste_yolu)
+
+
+def bekleyen_sanatcilar(liste_yolu: Path, calisma: Path) -> set[str]:
+    """Listede olup henüz yayına çıkmamış ve reddedilmemiş şarkıların sanatçıları (küçük harf)."""
+    from yanki import durum
+
+    sonuc = set()
+    for s in liste.yukle(liste_yolu):
+        d = durum.oku(calisma, s.kimlik)
+        if d is None or d.asama not in ("yayinda", "reddedildi"):
+            sonuc.add(s.sanatci.casefold())
+    return sonuc
 
 
 def listedekiler(liste_yolu: Path, calisma: Path) -> set[str]:

@@ -66,23 +66,32 @@ def acestep_commit(a: Ayarlar) -> str:
                           text=True, check=True).stdout.strip()
 
 
-def isci_kos(p: runpod.Pod, hedef: str, zaman_asimi_sn: float, aralik_sn: float = 20) -> list[dict]:
+def baslatma_betigi(hedef: str, dizin: str = UZAK_DIZIN) -> str:
+    """İşçiyi arka planda başlatan kabuk betiği; SSH komutu hemen döner.
+
+    Arka plana yalnız işçi komutu gider (`;` ile ayrı). Önce `cd … && export … && setsid … &` idi: `&` bütün `&&`
+    zincirini arka plana atıyor, zinciri koşan alt kabuk SSH'ın stdout/stderr'ini işçi bitene kadar açık tutuyor, SSH
+    kanalı kapanmıyordu. Her uzak koşuda başlatma 120 sn'de zaman aşımına düşüyor, iş yalnız pid yoklamasıyla
+    sürüyordu (2026-10-10, runpod.log'da beş koşunun beşi). `setsid` yoksa (test kabuğu) yalnız `nohup`."""
+    return (f"cd {hedef} || exit 1; export PATH=$HOME/.local/bin:$PATH ACESTEP_GENERATION_TIMEOUT=3600 PYTHONUTF8=1; "
+            f"$(command -v setsid) nohup uv run python {dizin}/motor_isci.py {dizin}/motor_is.json "
+            f"{dizin}/motor_sonuc.json > {dizin}/motor.log 2>&1 < /dev/null & "
+            f"echo $! > {dizin}/motor.pid")
+
+
+def isci_kos(p: runpod.Pod, hedef: str, zaman_asimi_sn: float, aralik_sn: float = 20, toplam: int | None = None,
+             bildir: Callable[[str], None] = print) -> list[dict]:
     """İşçiyi arka planda başlatır (SSH kopsa da sürer), bitene kadar bekler; sonuç listesini döner. Süreç pid
-    dosyasından izlenir: `pgrep -f motor_isci.py` kendi `bash -lc` satırını eşleştirip hep "sürüyor" diyordu (S19)."""
-    # setsid + </dev/null: arka plandaki işçi SSH'ın girdi kanalını devralırsa Windows OpenSSH kanal kapanana kadar
-    # bekliyor (2026-10-10, zamanlanmış görevde başlatma komutu asılı kaldı; Git'in ssh'ı beklemiyordu)
-    baslat = (f"cd {hedef} && export PATH=$HOME/.local/bin:$PATH ACESTEP_GENERATION_TIMEOUT=3600 PYTHONUTF8=1 && "
-              f"setsid nohup uv run python {UZAK_DIZIN}/motor_isci.py {UZAK_DIZIN}/motor_is.json "
-              f"{UZAK_DIZIN}/motor_sonuc.json > {UZAK_DIZIN}/motor.log 2>&1 < /dev/null & "
-              f"echo $! > {UZAK_DIZIN}/motor.pid")
+    dosyasından izlenir: `pgrep -f motor_isci.py` kendi `bash -lc` satırını eşleştirip hep "sürüyor" diyordu (S19).
+    Biten iş sayısı değiştikçe bir satır yazılır (günlükte saatlik koşunun nerede olduğu görünsün)."""
     try:
-        p.komut(baslat, tekrar=False)
+        p.komut(baslatma_betigi(hedef), tekrar=False)
     except runpod.RunPodHatasi:
         # komut kanalı koptu ama işçi başlamış olabilir: başlamadıysa hata, başladıysa izlemeye devam (iki kez başlatma)
         if "VAR" not in p.komut(f"kill -0 $(cat {UZAK_DIZIN}/motor.pid 2>/dev/null) 2>/dev/null && echo VAR || "
                                 "echo YOK"):
             raise
-    bitis = time.monotonic() + zaman_asimi_sn
+    bitis, bas = time.monotonic() + zaman_asimi_sn, time.monotonic()
     sonuc: list[dict] = []
     while time.monotonic() < bitis:
         time.sleep(aralik_sn)
@@ -90,9 +99,14 @@ def isci_kos(p: runpod.Pod, hedef: str, zaman_asimi_sn: float, aralik_sn: float 
                         f"kill -0 $(cat {UZAK_DIZIN}/motor.pid) 2>/dev/null && echo SURUYOR || echo BITTI")
         govde, hal = cikti.split("#DURUM#")
         try:
-            sonuc = json.loads(govde.strip() or "[]")
+            yeni = json.loads(govde.strip() or "[]")
         except ValueError:  # işçi o an yazıyor
             continue
+        if toplam and len(yeni) != len(sonuc):
+            hatali = sum(not x.get("basari") for x in yeni)
+            bildir(f"  uzak motor: {len(yeni)}/{toplam} iş bitti ({(time.monotonic() - bas) / 60:.0f} dk"
+                   + (f", {hatali} hatalı" if hatali else "") + ")")
+        sonuc = yeni
         if hal.strip() == "BITTI":
             return sonuc
     p.komut(f"kill $(cat {UZAK_DIZIN}/motor.pid) 2>/dev/null || true")
@@ -174,7 +188,7 @@ def calistir(a: Ayarlar, isler: list[motor.Is], klasor: Path, zaman_asimi_sn: fl
                 "isler": uzak_isler})
             p.gonder(is_yolu, f"{UZAK_DIZIN}/motor_is.json")
             t = time.time()
-            ham = isci_kos(p, hedef, zaman_asimi_sn)
+            ham = isci_kos(p, hedef, zaman_asimi_sn, toplam=len(uzak_isler))
             kayit["uretim_sn"] = round(time.time() - t)
             try:
                 p.al(f"{UZAK_DIZIN}/motor.log", klasor / "motor.log")
