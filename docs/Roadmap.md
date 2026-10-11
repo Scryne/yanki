@@ -670,7 +670,14 @@ kayıtlar ezberlenmesin, tek bir sesin kopyası olmasın); kaynak seçimi albüm
 akustik sürüm ve fragman kurgusu elenir. Söz ve ses aynı yerden kesilir (zaman damgasıyla), söz biçimi üretimdeki
 `soz.txt`'nin aynısı. Yerel 2B turbo denemesi iki hatayı paraya kıymadan buldu (Side-Step onay sorusu, ACE-Step kökü
 dışındaki yol). Eğitim pod'u üretimin artık temizliğine yakalanmasın diye ayrı ad ve kayıtla açılır. Eğitimden sonra
-aynı pod'da karşılaştırmalı deneme (aynı şarkı, aynı tohum, LoRA 0 / 0,5 / 1). Sonuç: aşağıda.
+aynı pod'da karşılaştırmalı deneme (aynı şarkı, aynı tohum, LoRA 0 / 0,5 / 1).
+
+**Sonuç (2026-10-11, `calisma/egitim/lora/20261011-1554`):** A40'ta 60 epoch, 2 sa 38 dk, 1,88 $; loss 1,06 → 0,71.
+Dokuz denemenin dokuzu kapılardan geçti (parmak izi 0,56–0,63, değişmedi). Söz WER ortalaması LoRA 0: 0,076,
+LoRA 1: 0,068, LoRA 0,5: 0,140 (The Scientist'te tek kötü üretim). Orijinal kayda ton uzaklığı LoRA'yla yaklaşmadı:
+LoRA 1'de şarkı başına +0,2…+0,45 dB uzaklaştı. Ölçüde açık bir kazanç yok → **LoRA üretime bağlanmadı**; karar
+Scryne'ın kulağında (`calisma/dinleme/lora/20261011-1554/OKU.md`). Bağlamak: `config/motor.toml` →
+`[motor] lora = "calisma/egitim/lora/20261011-1554/final"` (`lora_olcek` 0–1).
 
 **Yapılmayan:** "AI tespitinde human çıksın" isteği uygulanmadı. Dedektörü atlatmaya yönelik iş, parçanın AI ile
 üretildiğini dağıtımcıdan, mağazalardan ve dinleyiciden gizlemek olur (Deezer/Tidal bu bilgiyle etiketliyor ya da
