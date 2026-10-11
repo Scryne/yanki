@@ -20,6 +20,9 @@ class Motor:
     analiz_yontemi: str
     # DiT'i aşamalar arasında CPU'ya al (nicelemesiz XL'de VAE çözme 8 GB'a sığmıyor, S18)
     dit_offload: bool = False
+    # eğitilmiş tür LoRA'sı (yanki/egitim.py; bağdaştırıcı klasörü) ve ölçeği; yalnız nicelemesiz motorda
+    lora: Path | None = None
+    lora_olcek: float = 1.0
 
     @property
     def python(self) -> Path:
@@ -87,12 +90,19 @@ def yukle(yol: Path | None = None, kok: Path = KOK) -> Ayarlar:
         raise ValueError(f"motor.analiz_yontemi musicbrainz ya da lm olmalı: {m['analiz_yontemi']}")
     if not 0.0 < c["guc"] <= 1.0:
         raise ValueError(f"cover.guc 0 ile 1 arasında olmalı: {c['guc']}")
+    lora = Path(m["lora"]) if m.get("lora") else None
+    if lora is not None and not lora.is_absolute():
+        lora = kok / lora
+    if lora is not None and not (lora / "adapter_config.json").is_file():
+        raise ValueError(f"motor.lora bir LoRA klasörü değil (adapter_config.json yok): {lora}")
+    if not 0.0 <= float(m.get("lora_olcek", 1.0)) <= 1.0:
+        raise ValueError(f"motor.lora_olcek 0 ile 1 arasında olmalı: {m['lora_olcek']}")
     return Ayarlar(
         kok=kok,
         motor=Motor(kok / m["klasor"], m["model"], m.get("niceleme") or None, bool(m["cpu_offload"]), m["lm_model"],
                     m.get("lm_backend", "pt"), m.get("analiz_model", m["model"]),
                     float(m.get("analiz_kesit_sn", 40)), m.get("analiz_yontemi", "musicbrainz"),
-                    bool(m.get("dit_offload", False))),
+                    bool(m.get("dit_offload", False)), lora, float(m.get("lora_olcek", 1.0))),
         cover=Cover(c["gorev"], float(c["guc"]), int(c["adim"]), int(c["aday_sayisi"]), tuple(c["tohumlar"])),
         onarim=Onarim(o["gorev"], int(o["adim"]), float(o["pay_sn"]), tuple(o["tohumlar"])),
         gpu=Gpu(int(g["bos_esik_mib"]), int(g["bekleme_sn"])),

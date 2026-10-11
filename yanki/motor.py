@@ -34,6 +34,8 @@ class Is:
     ton: str = ""
     bolge: tuple[float, float] | None = None
     referans: str | None = None  # tını referansı (parçalı üretimde ilk parçanın çıktısı)
+    # yüklü LoRA'nın bu işteki ölçeği (karşılaştırmalı dinleme: aynı işçide 0 / 0,5 / 1); None: motor ayarındaki ölçek
+    lora_olcek: float | None = None
     # ACE-Step GenerationParams'a olduğu gibi giden ek ayarlar (shift, guidance_scale, use_adg, sampler_mode …)
     ek: dict = field(default_factory=dict, hash=False)
 
@@ -121,6 +123,7 @@ def calistir(
                     "dit_offload": a.motor.dit_offload,
                     "lm_model": a.motor.lm_model,
                     "lm_backend": a.motor.lm_backend,
+                    **lora_ayari(a, model),
                 },
                 "isler": [asdict(i) for i in isler],
             },
@@ -173,6 +176,14 @@ def calistir(
     elif genel is None and cikis not in (0, 1):
         genel = f"işçi {cikis} koduyla çıktı, ayrıntı: {gunluk}"
     return [sonuclar.get(i.id) or Sonuc(i.id, False, genel or f"sonuç yazılmadı, ayrıntı: {gunluk}") for i in isler]
+
+
+def lora_ayari(a: Ayarlar, model: str | None = None, yol: str | None = None) -> dict:
+    """İşçinin motor ayarına LoRA: yalnız üretim modelinde (analiz modeli değil) ve nicelemesiz motorda (INT8'e PEFT
+    bağdaştırıcısı uygulanmıyor). `yol`: sunucudaki karşılığı (uzak motor)."""
+    if a.motor.lora is None or model or a.motor.niceleme:
+        return {}
+    return {"lora": yol or str(a.motor.lora), "lora_olcek": a.motor.lora_olcek}
 
 
 def _ortam(a: Ayarlar) -> dict[str, str]:

@@ -21,6 +21,9 @@ ISTENMEYEN = re.compile(
     re.I,
 )
 PARCA = 4 * 1024 * 1024
+# Önce Opus (YouTube 251, ~130 kbps, 20 kHz'e kadar tam bant), yoksa AAC (140, 128 kbps; 16 kHz'te kesiyor: kaynak
+# kayıtlarda 16–18 kHz bandı −85 dB ölçüldü, 2026-10-11). Kaynak ACE-Step'in anlamsal kodlarına ve eğitime gider.
+BICIM = "bestaudio[acodec=opus]/bestaudio[ext=m4a]/bestaudio"
 
 
 class KaynakYok(LookupError):
@@ -79,7 +82,7 @@ def youtube_adaylari(sorgu: str, adet: int = 8) -> list[Aday]:
             for g in girdiler if g]
 
 
-def youtube_indir(video_id: str, hedef: Path, deneme: int = 3, bekleme_sn: float = 10.0) -> Path:
+def youtube_indir(video_id: str, hedef: Path, deneme: int = 3, bekleme_sn: float = 10.0, bicim: str = BICIM) -> Path:
     """İlk parçada boş/403 dönen indirmeler (2026-10-08 gecesi 12 şarkının 2'si, 0 bayt) yeni imzalı adresle
     tekrar denenir."""
     import time
@@ -88,7 +91,7 @@ def youtube_indir(video_id: str, hedef: Path, deneme: int = 3, bekleme_sn: float
 
     for i in range(deneme):
         try:
-            sonuc = _indir_bir(video_id, hedef)
+            sonuc = _indir_bir(video_id, hedef, bicim)
             sayac.say("YouTube indirme", True)
             return sonuc
         except OSError:
@@ -99,11 +102,11 @@ def youtube_indir(video_id: str, hedef: Path, deneme: int = 3, bekleme_sn: float
     raise AssertionError("ulaşılmaz")
 
 
-def _indir_bir(video_id: str, hedef: Path) -> Path:
+def _indir_bir(video_id: str, hedef: Path, bicim: str = BICIM) -> Path:
     import yt_dlp
     from curl_cffi import CurlHttpVersion, requests
 
-    with yt_dlp.YoutubeDL(_ydl_ayar(format="bestaudio[ext=m4a]/bestaudio")) as ydl:
+    with yt_dlp.YoutubeDL(_ydl_ayar(format=bicim)) as ydl:
         bilgi = ydl.extract_info(f"https://www.youtube.com/watch?v={video_id}", download=False)
     url, boyut = bilgi["url"], bilgi.get("filesize") or bilgi.get("filesize_approx")
     hedef.parent.mkdir(parents=True, exist_ok=True)
@@ -142,7 +145,7 @@ def hazirla(kimlik: str, sanatci: str, ad: str, beklenen_sn: float | None, klaso
         adaylar = youtube_adaylari(youtube or f"{sanatci} {ad} official audio")
         # Scryne videoyu sabitlediyse süre kapısı uyarıya döner, seçim yine de onun videosu
         secilen = adaylar[0] if youtube else sec(adaylar, beklenen_sn)
-        ham = youtube_indir(secilen.id, calisma / "kaynak_ham.m4a")
+        ham = youtube_indir(secilen.id, calisma / "kaynak_ham.indirilen")  # Opus/WebM ya da AAC: ffmpeg içeriğe bakar
         ses.wav48(ham, hedef)
         ham.unlink(missing_ok=True)
         nereden, baslik = f"youtube:{secilen.id}", secilen.baslik

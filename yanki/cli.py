@@ -1320,6 +1320,53 @@ def _temizle(args: argparse.Namespace) -> int:
     return 0
 
 
+EGITIM_EN_AZ_ORNEK = 10  # daha azıyla tür LoRA'sı ezberler (Side-Step: 10–50 şarkı)
+
+
+def _egit(args: argparse.Namespace) -> int:
+    """Ses modeli eğitimi (`yanki/egitim.py`): veri yerelde hazırlanır, LoRA kiralık GPU'da eğitilir, karşılaştırmalı
+    deneme sesleri `calisma/dinleme/lora/`'ya iner. Saatler sürer; genel koşu kilidini tutmaz (durum dosyalarına
+    yazmaz), üretim ve yükleme sürer."""
+    import subprocess
+
+    from yanki import egitim, runpod
+
+    a = ayarlar.yukle()
+    calisma = a.kok / "calisma"
+    ayar, sarkilar = egitim.oku(a.kok / "config" / "egitim.toml")
+    print(f"veri: {len(sarkilar)} şarkı → {egitim.veri_klasoru(a.kok).relative_to(a.kok).as_posix()}", flush=True)
+    ornekler, dusen = egitim.veri_hazirla(a.kok, ayar, sarkilar, bildir=lambda m: print(m, flush=True))
+    print(f"veri hazır: {len(ornekler)} örnek, {sum(x['duration'] for x in ornekler) / 60:.0f} dk ses; "
+          f"{len(dusen)} düştü", flush=True)
+    if len(ornekler) < EGITIM_EN_AZ_ORNEK:
+        print(f"✗ en az {EGITIM_EN_AZ_ORNEK} örnek gerekli")
+        return 1
+    if args.yalniz_veri:
+        return 0
+    tar = egitim.paketle(a.kok, ornekler)
+    print(f"kiralık GPU'da eğitim ({ayar.gpu}, {ayar.model}, {ayar.epoch} epoch, rank {ayar.rank}); veri "
+          f"{tar.stat().st_size / 1e9:.2f} GB", flush=True)
+    bildir = _bildirici(calisma)
+    try:
+        sonuc = egitim.egit(a, ayar, tar, bildir=lambda m: print(m, flush=True))
+    except (runpod.RunPodHatasi, OSError, ValueError, subprocess.SubprocessError) as e:
+        print(f"✗ eğitim: {type(e).__name__}: {e}")
+        bildir("kayip", "LoRA eğitimi düştü", f"{type(e).__name__}: {str(e)[:300]}")
+        return 1
+    finally:
+        tar.unlink(missing_ok=True)
+    egitim.degerlendir(a, calisma, sonuc.deneme)
+    egitim.kaydet(sonuc, ayar, ornek=len(ornekler))
+    from yanki import dosya
+
+    dosya.yaz(sonuc.dinleme / "OKU.md", egitim.rapor(sonuc, len(ornekler), len(dusen)))
+    print(f"LoRA: {sonuc.lora}\ndinleme: {sonuc.dinleme}\nmaliyet: {sonuc.usd:.2f} $")
+    bildir("dinleme", "LoRA eğitimi bitti, karşılaştırma hazır",
+           f"{len(ornekler)} şarkıyla eğitildi ({sonuc.usd:.2f} $). LoRA'sız ve LoRA'lı aynı şarkılar: "
+           f"{sonuc.dinleme.relative_to(a.kok).as_posix()}/OKU.md")
+    return 0
+
+
 def _dinle(args: argparse.Namespace) -> int:
     import asyncio
     import threading
@@ -1455,6 +1502,9 @@ def main(argv: list[str] | None = None) -> int:
     oz = alt.add_parser("ozet", help="hattın tek satırlık durumu (oturum açılış bildirimi)")
     oz.add_argument("--json", action="store_true")
     oz.set_defaults(fn=_ozet)
+    eg = alt.add_parser("egit", help="ses modeline tür LoRA'sı eğit (kiralık GPU) ve karşılaştırmalı dinleme üret")
+    eg.add_argument("--yalniz-veri", action="store_true", help="yalnız eğitim verisini hazırla (ücretsiz, yerel)")
+    eg.set_defaults(fn=_egit)
     dn = alt.add_parser("dinle", help="dinleme sayfasını aç")
     dn.add_argument("--port", type=int, default=8765)
     dn.add_argument("--tarayicisiz", action="store_true")

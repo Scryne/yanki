@@ -1,0 +1,278 @@
+# Ses modeli eğitimi (yanki/egitim.py; Scryne 2026-10-11: "şarkı yapma modelini ve beat'ini eğit, orijinal şarkılar
+# kadar kaliteli olsun"). ACE-Step 1.5 XL-SFT'ye LoRA (Side-Step "fixed" eğitimi, motor klasöründeki train.py). Vokal
+# ve eşlik (beat) aynı modelde birlikte öğrenilir: ACE-Step şarkıyı tek parça üretiyor.
+#
+# Veri Orvane'in çizgisi: modern stüdyo kaydı piyano/akustik balad ve pop balad, İngilizce, tek solo vokal. Ses kopyası
+# değil tür ve prodüksiyon öğrensin diye her sanatçıdan bir şarkı (kadın/erkek dengeli) ve cover listesindeki
+# (girdi/liste.toml) sanatçıların hiçbiri yok: model kapak yaptığımız şarkıların kaydını ezberlemesin, tek bir
+# sanatçının sesine kaymasın. Stil metinleri liste.toml'daki stil tanımlarıyla aynı kalıpta: çıkarımda verilen metinle
+# eğitimdeki metin aynı dili konuşsun.
+
+[egitim]
+model = "acestep-v15-xl-sft"
+gpu = "NVIDIA A40"
+# Side-Step (motor/ACE-Step-1.5/docs/sidestep/Training Guide.md): 10–50 şarkı → 100–200 epoch; rank 64 varsayılan
+rank = 64
+alpha = 128
+lr = 1e-4
+epoch = 60
+kaydet_her = 20
+# Eğitim kesiti (sn): ses ve söz aynı yerden kesilir (söz zaman damgasıyla), söz-ses kayması öğretilmesin
+en_uzun_sn = 240
+# Bu kadar sonra eğitim düşmüş sayılır, pod silinir
+zaman_asimi_saat = 6
+# Eğitimden sonra karşılaştırmalı dinleme: bu şarkılar LoRA'sız ve LoRA'lı, aynı tohumla
+deneme_sarkilari = ["adele-someone-like-you", "coldplay-the-scientist", "james-arthur-say-you-won-t-let-go"]
+deneme_olcekleri = [0.0, 0.5, 1.0]
+
+# ── veri: kadın vokal ──
+[[sarki]]
+sanatci = "Billie Eilish"
+ad = "What Was I Made For?"
+stil = "intimate piano ballad, female lead vocal, soft and breathy, sparse piano with gentle strings, slow, clean modern studio recording"
+
+[[sarki]]
+sanatci = "Selena Gomez"
+ad = "Lose You to Love Me"
+stil = "emotional piano pop ballad, female lead vocal, soft and vulnerable, piano with layered choir vocals building in the chorus, clean modern studio recording"
+
+[[sarki]]
+sanatci = "Lady Gaga"
+ad = "Always Remember Us This Way"
+stil = "powerful piano ballad, female lead vocal, soulful and soaring, grand piano building to full band with drums, clean modern studio recording"
+
+[[sarki]]
+sanatci = "Demi Lovato"
+ad = "Skyscraper"
+stil = "emotional pop ballad, female lead vocal, vulnerable to powerful, piano and strings with soft drums, building, clean modern studio recording"
+
+[[sarki]]
+sanatci = "Kelly Clarkson"
+ad = "Because of You"
+stil = "piano rock ballad, female lead vocal, emotional and powerful, piano with strings, drums and guitars in the chorus, clean modern studio recording"
+
+[[sarki]]
+sanatci = "Alicia Keys"
+ad = "If I Ain't Got You"
+stil = "soulful piano ballad, female lead vocal, warm and powerful, grand piano with soft drums and strings, clean modern studio recording"
+
+[[sarki]]
+sanatci = "Ellie Goulding"
+ad = "How Long Will I Love You"
+stil = "romantic piano and strings ballad, female lead vocal, soft and airy, piano with string orchestra, gentle, clean modern studio recording"
+
+[[sarki]]
+sanatci = "Sara Bareilles"
+ad = "Gravity"
+stil = "intimate piano ballad, female lead vocal, clear and emotional, solo piano accompaniment, slow, clean modern studio recording"
+
+[[sarki]]
+sanatci = "Vanessa Carlton"
+ad = "A Thousand Miles"
+stil = "upbeat piano pop, female lead vocal, bright and youthful, driving piano riff with strings, bass and drums, clean modern studio recording"
+
+[[sarki]]
+sanatci = "Lorde"
+ad = "Liability"
+stil = "minimal piano ballad, female lead vocal, intimate and melancholic, solo piano with subtle reverb, slow, clean modern studio recording"
+
+[[sarki]]
+sanatci = "Beyoncé"
+ad = "Listen"
+stil = "powerful orchestral pop ballad, female lead vocal, soaring and dramatic, piano and lush strings building to a big climax, clean modern studio recording"
+
+[[sarki]]
+sanatci = "Leona Lewis"
+ad = "Run"
+stil = "cinematic piano ballad, female lead vocal, delicate to powerful, piano and strings building with choir and drums, clean modern studio recording"
+
+[[sarki]]
+sanatci = "Kesha"
+ad = "Praying"
+stil = "emotional piano ballad, female lead vocal, raw and powerful, piano with strings and gospel choir, building, clean modern studio recording"
+
+[[sarki]]
+sanatci = "Camila Cabello"
+ad = "Consequences"
+stil = "intimate piano ballad, female lead vocal, soft and tender, solo piano accompaniment, slow, clean modern studio recording"
+
+[[sarki]]
+sanatci = "Birdy"
+ad = "People Help the People"
+stil = "melancholic piano ballad, female lead vocal, clear and haunting, piano with strings and soft drums, building, clean modern studio recording"
+
+[[sarki]]
+sanatci = "Sia"
+ad = "Breathe Me"
+stil = "emotional piano ballad, female lead vocal, fragile and expressive, piano with strings and electronic textures building, clean modern studio recording"
+
+[[sarki]]
+sanatci = "Jessie J"
+ad = "Who You Are"
+stil = "empowering piano ballad, female lead vocal, strong and emotional, piano with soft strings, clean modern studio recording"
+
+[[sarki]]
+sanatci = "Katy Perry"
+ad = "The One That Got Away"
+stil = "melancholic pop ballad, female lead vocal, wistful, piano and synths with steady drums, mid-tempo, clean modern studio recording"
+
+[[sarki]]
+sanatci = "Miley Cyrus"
+ad = "Wrecking Ball"
+stil = "power pop ballad, female lead vocal, vulnerable verses to powerful chorus, piano and synths with big drums, clean modern studio recording"
+
+[[sarki]]
+sanatci = "Dido"
+ad = "White Flag"
+stil = "mellow pop ballad, female lead vocal, soft and warm, acoustic guitar, piano and strings with steady drums, clean modern studio recording"
+
+[[sarki]]
+sanatci = "Gracie Abrams"
+ad = "I miss you, I'm sorry"
+stil = "soft indie pop ballad, female lead vocal, hushed and intimate, piano and synth pads with light drums, clean modern studio recording"
+
+[[sarki]]
+sanatci = "Norah Jones"
+ad = "Don't Know Why"
+stil = "mellow piano pop, female lead vocal, smooth and warm, soft piano with acoustic guitar, brushed drums and upright bass, clean modern studio recording"
+
+[[sarki]]
+sanatci = "Gabrielle Aplin"
+ad = "Home"
+stil = "gentle acoustic pop, female lead vocal, soft and sweet, acoustic guitar and piano with light percussion, clean modern studio recording"
+
+[[sarki]]
+sanatci = "Rihanna"
+ad = "Stay"
+stil = "stripped piano ballad, female lead vocal with male harmony vocal, emotional and raw, solo piano accompaniment, slow, clean modern studio recording"
+
+# ── veri: erkek vokal ──
+[[sarki]]
+sanatci = "Sam Smith"
+ad = "Stay With Me"
+stil = "soulful gospel piano ballad, male lead vocal, emotional with falsetto, piano with gospel choir and soft drums, clean modern studio recording"
+
+[[sarki]]
+sanatci = "James Bay"
+ad = "Let It Go"
+stil = "acoustic guitar ballad, male lead vocal, raspy and emotional with falsetto, fingerpicked electric guitar with soft drums, clean modern studio recording"
+
+[[sarki]]
+sanatci = "Harry Styles"
+ad = "Sign of the Times"
+stil = "epic piano rock ballad, male lead vocal, soaring falsetto, piano with drums, guitars and choir building, clean modern studio recording"
+
+[[sarki]]
+sanatci = "Dermot Kennedy"
+ad = "Outnumbered"
+stil = "emotional piano pop, male lead vocal, raspy and powerful, piano with atmospheric synths and drums, building, clean modern studio recording"
+
+[[sarki]]
+sanatci = "Jason Mraz"
+ad = "I Won't Give Up"
+stil = "romantic acoustic ballad, male lead vocal, warm and gentle, acoustic guitar with soft strings, clean modern studio recording"
+
+[[sarki]]
+sanatci = "Damien Rice"
+ad = "The Blower's Daughter"
+stil = "intimate acoustic folk ballad, male lead vocal with female harmony, fragile and raw, fingerpicked acoustic guitar and cello, clean studio recording"
+
+[[sarki]]
+sanatci = "Niall Horan"
+ad = "This Town"
+stil = "acoustic guitar ballad, male lead vocal, warm and tender, fingerpicked acoustic guitar with soft strings, clean modern studio recording"
+
+[[sarki]]
+sanatci = "John Mayer"
+ad = "Daughters"
+stil = "mellow acoustic pop, male lead vocal, smooth and warm, acoustic guitar with soft drums and bass, clean modern studio recording"
+
+[[sarki]]
+sanatci = "Bon Iver"
+ad = "Skinny Love"
+stil = "raw acoustic folk ballad, male lead vocal, falsetto and strained, strummed acoustic guitar with sparse percussion, intimate home studio recording"
+
+[[sarki]]
+sanatci = "Rag'n'Bone Man"
+ad = "Skin"
+stil = "soulful pop ballad, male lead vocal, deep and powerful, piano with gospel backing vocals and drums building, clean modern studio recording"
+
+[[sarki]]
+sanatci = "Kodaline"
+ad = "All I Want"
+stil = "melancholic piano ballad, male lead vocal, tender with falsetto, piano building to full band with drums and guitars, clean modern studio recording"
+
+[[sarki]]
+sanatci = "The Script"
+ad = "Breakeven"
+stil = "emotional pop rock ballad, male lead vocal, heartfelt, piano and acoustic guitar with steady drums, clean modern studio recording"
+
+[[sarki]]
+sanatci = "OneRepublic"
+ad = "Apologize"
+stil = "piano pop ballad, male lead vocal, emotional and soaring, piano with strings and steady drums, clean modern studio recording"
+
+[[sarki]]
+sanatci = "Gavin James"
+ad = "Nervous"
+stil = "acoustic guitar ballad, male lead vocal, tender and soulful, acoustic guitar with soft piano and strings, clean modern studio recording"
+
+[[sarki]]
+sanatci = "Lukas Graham"
+ad = "7 Years"
+stil = "piano pop, male lead vocal, nostalgic and soulful, piano with drums and gospel choir building, clean modern studio recording"
+
+[[sarki]]
+sanatci = "Labrinth"
+ad = "Jealous"
+stil = "emotional piano ballad, male lead vocal, soulful with falsetto, solo piano accompaniment with subtle strings, slow, clean modern studio recording"
+
+[[sarki]]
+sanatci = "James Morrison"
+ad = "You Give Me Something"
+stil = "soulful pop, male lead vocal, raspy and warm, piano and acoustic guitar with drums, mid-tempo, clean modern studio recording"
+
+[[sarki]]
+sanatci = "Alec Benjamin"
+ad = "Let Me Down Slowly"
+stil = "acoustic pop ballad, male lead vocal, soft and earnest, acoustic guitar with piano and light drums, clean modern studio recording"
+
+[[sarki]]
+sanatci = "Benson Boone"
+ad = "In the Stars"
+stil = "emotional piano ballad, male lead vocal, raw and powerful with falsetto, piano with strings building, clean modern studio recording"
+
+[[sarki]]
+sanatci = "Teddy Swims"
+ad = "Lose Control"
+stil = "soulful pop ballad, male lead vocal, raspy and powerful, organ and piano with drums and backing vocals, clean modern studio recording"
+
+[[sarki]]
+sanatci = "Noah Kahan"
+ad = "Stick Season"
+stil = "folk pop, male lead vocal, warm and wistful, strummed acoustic guitar with banjo and drums, clean modern studio recording"
+
+[[sarki]]
+sanatci = "Mark Ambor"
+ad = "Belong Together"
+stil = "acoustic folk pop love song, male lead vocal, warm and heartfelt, strummed acoustic guitar with handclaps and light drums, clean modern studio recording"
+
+[[sarki]]
+sanatci = "Sleeping At Last"
+ad = "Turning Page"
+stil = "romantic piano and strings ballad, male lead vocal, soft and gentle, piano with string quartet, slow, clean modern studio recording"
+
+[[sarki]]
+sanatci = "Hozier"
+ad = "Take Me to Church"
+stil = "soulful gospel rock ballad, male lead vocal, deep and powerful, piano and organ with drums and choir, clean modern studio recording"
+
+[[sarki]]
+sanatci = "Shawn Mendes"
+ad = "In My Blood"
+stil = "pop rock ballad, male lead vocal, emotional and strained, acoustic guitar building to full band with drums, clean modern studio recording"
+
+[[sarki]]
+sanatci = "Conan Gray"
+ad = "Heather"
+stil = "soft pop ballad, male lead vocal, gentle and melancholic, acoustic guitar and piano with soft synth pads, clean modern studio recording"

@@ -4,10 +4,10 @@
 
 is.json:
   {"motor": {"klasor": ..., "model": ..., "niceleme": "int8_weight_only" | null, "cpu_offload": true,
-              "lm_model": ..., "lm_backend": "pt"},
+              "lm_model": ..., "lm_backend": "pt", "lora": yol | null, "lora_olcek": 1.0},
    "isler": [{"id", "gorev": "cover" | "repaint" | "anla", "kaynak", "cikti_klasor", "stil", "soz", "dil", "bpm", "ton",
               "guc", "adim", "tohum", "bolge": [bas, son] | null, "referans": yol | null,
-              "ek": {GenerationParams alanı: değer}}]}
+              "lora_olcek": 0–1 | null (işe özel; karşılaştırmalı dinleme), "ek": {GenerationParams alanı: değer}}]}
 
 Model bir kez yüklenir, işler sırayla yapılır; her işin sonucu (başarı, hata, süre, VRAM tepe, çıktı dosyası)
 sonuc.json'a yazılır. Bir işin hatası diğerlerini durdurmaz.
@@ -65,6 +65,16 @@ def main() -> int:
         sonuclar.append({"id": None, "basari": False, "hata": f"model yüklenemedi: {durum[:500]}"})
         yaz()
         return 2
+    # eğitilmiş tür LoRA'sı (yanki/egitim.py): bir kez yüklenir, ölçeği işe göre değişebilir
+    lora_olcek = None
+    if m.get("lora"):
+        mesaj = dit.load_lora(str(m["lora"]))
+        if not str(mesaj).startswith("✅"):
+            sonuclar.append({"id": None, "basari": False, "hata": f"LoRA yüklenemedi: {str(mesaj)[:500]}"})
+            yaz()
+            return 2
+        lora_olcek = float(m.get("lora_olcek", 1.0))
+        dit.set_lora_scale(lora_olcek)
 
     llm = LLMHandler()  # cover/repaint LM'yi atlar; yalnız "anla" için yüklenir
     for i in is_["isler"]:
@@ -95,6 +105,13 @@ def main() -> int:
                 continue
             if gorev not in ("cover", "repaint"):
                 raise ValueError(f"desteklenmeyen görev: {gorev}")
+            if i.get("lora_olcek") is not None:
+                if lora_olcek is None:
+                    raise ValueError("işe LoRA ölçeği verildi ama LoRA yüklü değil")
+                dit.set_lora_scale(float(i["lora_olcek"]))
+                kayit["lora_olcek"] = float(i["lora_olcek"])
+            elif lora_olcek is not None:
+                dit.set_lora_scale(lora_olcek)
             bolge = {}
             if gorev == "repaint":
                 bas, son = i["bolge"]

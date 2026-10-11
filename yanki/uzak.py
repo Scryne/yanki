@@ -42,12 +42,17 @@ def bu_ay_harcama(kok: Path, simdi: datetime | None = None) -> float:
 
 
 def harcama_yaz(kok: Path, kayit: dict) -> None:
+    """Kilitli oku-ekle-yaz: eğitim pod'u ile üretim pod'u aynı anda bitip birbirinin kaydını ezmesin."""
+    from yanki import kilit
+
     yol = harcama_yolu(kok)
-    try:
-        liste = json.loads(yol.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        liste = []
-    dosya.json_yaz(yol, [*liste, kayit][-500:], indent=1)
+    yol.parent.mkdir(parents=True, exist_ok=True)
+    with kilit.bekleyerek(yol.with_name(".runpod.kilit")):
+        try:
+            liste = json.loads(yol.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            liste = []
+        dosya.json_yaz(yol, [*liste, kayit][-500:], indent=1)
 
 
 def butce_kontrol(a: Ayarlar, api_anahtari: str, bakiye: Callable[[str], float] = runpod.bakiye) -> float:
@@ -120,13 +125,14 @@ class PodAcici:
     """Hazır (SSH'a açık) bir pod; açılamazsa silinip `POD_DENEME` kez yeniden (başka makine). Açılan her pod
     `acilan`'a eklenir: hazır olmayanın süresi de ödendi."""
 
-    def __init__(self, a: Ayarlar, pod_sinifi, acilan: list):
+    def __init__(self, a: Ayarlar, pod_sinifi, acilan: list, gpu: str | None = None, **pod_ayar):
         self.a, self.pod_sinifi, self.acilan, self.pod = a, pod_sinifi, acilan, None
+        self.gpu, self.pod_ayar = gpu or a.uzak.gpu, pod_ayar or {"ad": "yanki-motor"}
 
     def __enter__(self):
         son: Exception | None = None
         for _ in range(POD_DENEME):
-            aday = self.pod_sinifi(self.a.kok, gpu=self.a.uzak.gpu, ad="yanki-motor")
+            aday = self.pod_sinifi(self.a.kok, gpu=self.gpu, **self.pod_ayar)
             self.acilan.append(aday)
             try:
                 self.pod = aday.__enter__()  # hazır olmazsa kendi __exit__'iyle silinir
@@ -176,6 +182,10 @@ def calistir(a: Ayarlar, isler: list[motor.Is], klasor: Path, zaman_asimi_sn: fl
             for yerel, uzak in girdiler.items():
                 p.gonder(Path(yerel), uzak)
             p.gonder(motor.ISCI, f"{UZAK_DIZIN}/motor_isci.py")
+            if a.motor.lora is not None:  # eğitilmiş LoRA (yanki/egitim.py): bağdaştırıcı dosyaları
+                p.komut(f"mkdir -p {UZAK_DIZIN}/lora")
+                for f in ("adapter_config.json", "adapter_model.safetensors"):
+                    p.gonder(a.motor.lora / f, f"{UZAK_DIZIN}/lora/{f}")
             uzak_isler = []
             for n, i in enumerate(isler):
                 d = {**i.__dict__, "kaynak": girdiler[i.kaynak], "referans": girdiler.get(i.referans or ""),
@@ -184,7 +194,8 @@ def calistir(a: Ayarlar, isler: list[motor.Is], klasor: Path, zaman_asimi_sn: fl
             is_yolu = klasor / "motor_is.json"
             dosya.json_yaz(is_yolu, {"motor": {
                 "klasor": hedef, "model": a.motor.model, "niceleme": None, "cpu_offload": False,
-                "dit_offload": False, "lm_model": a.motor.lm_model, "lm_backend": a.motor.lm_backend},
+                "dit_offload": False, "lm_model": a.motor.lm_model, "lm_backend": a.motor.lm_backend,
+                **({"lora": f"{UZAK_DIZIN}/lora", "lora_olcek": a.motor.lora_olcek} if a.motor.lora else {})},
                 "isler": uzak_isler})
             p.gonder(is_yolu, f"{UZAK_DIZIN}/motor_is.json")
             t = time.time()

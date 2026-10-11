@@ -27,6 +27,7 @@ API = "https://api.runpod.io/graphql"
 # (2026-10-10, iki koşu düştü).
 IMAJ = "runpod/base:1.4.0-ubuntu2204"
 ACESTEP_DEPO = "https://github.com/ace-step/ACE-Step-1.5"
+ACESTEP_DIZIN = "/root/ACE-Step-1.5"
 
 
 class RunPodHatasi(RuntimeError):
@@ -88,14 +89,16 @@ def ssh_anahtari(klasor: Path) -> tuple[Path, str]:
     return gizli, (klasor / "id_ed25519.pub").read_text(encoding="utf-8").strip()
 
 
-def kapat_artiklari(api_anahtari: str, klasor: Path) -> list[str]:
-    """Önceki koşudan açık kalmış pod'ları siler (kayıttaki kimlik + adı yanki- ile başlayanlar)."""
+def kapat_artiklari(api_anahtari: str, klasor: Path, kayit_adi: str = "acik_pod", on_ek: str = "yanki-") -> list[str]:
+    """Önceki koşudan açık kalmış pod'ları siler (kayıttaki kimlik + adı `on_ek` ile başlayanlar). Eğitim pod'u ayrı
+    önek ve kayıtla açılır (`egitim-`, `acik_pod_egitim`): saatler süren eğitim sürerken başlayan üretim koşusu onu
+    "artık" sanıp silmesin."""
     silinen = []
     pods = gql(api_anahtari, "query { myself { pods { id name } } }")["myself"]["pods"] or []
-    kayit = klasor / "acik_pod"
+    kayit = klasor / kayit_adi
     kayitli = kayit.read_text(encoding="utf-8").strip() if kayit.exists() else ""
     for p in pods:
-        if p["id"] == kayitli or (p.get("name") or "").startswith("yanki-"):
+        if p["id"] == kayitli or (p.get("name") or "").startswith(on_ek):
             gql(api_anahtari, "mutation($id: String!) { podTerminate(input: {podId: $id}) }", {"id": p["id"]})
             silinen.append(p["id"])
     kayit.unlink(missing_ok=True)
@@ -106,8 +109,8 @@ class Pod:
     """`with Pod(...) as p:` pod açılır, SSH hazır olunca döner; çıkışta (hata olsa da) silinir."""
 
     def __init__(self, kok: Path, gpu: str = "NVIDIA A40", ad: str = "yanki-motor", disk_gb: int = 120,
-                 bulut: str = "SECURE", bekleme_sn: int = 900):
-        self.kok, self.gpu, self.ad, self.disk_gb = kok, gpu, ad, disk_gb
+                 bulut: str = "SECURE", bekleme_sn: int = 900, kayit_adi: str = "acik_pod"):
+        self.kok, self.gpu, self.ad, self.disk_gb, self.kayit_adi = kok, gpu, ad, disk_gb, kayit_adi
         self.bulut, self.bekleme_sn = bulut, bekleme_sn
         self.klasor = kok / "calisma" / ".runpod"
         self.api = anahtar(kok)
@@ -130,7 +133,7 @@ class Pod:
             raise RunPodHatasi(f"{self.gpu} açılamadı (stok yok olabilir)")
         self.id, self.saatlik = d["id"], float(d.get("costPerHr") or 0)
         self.acilis = time.time()
-        (self.klasor / "acik_pod").write_text(self.id, encoding="utf-8")
+        (self.klasor / self.kayit_adi).write_text(self.id, encoding="utf-8")
         try:
             self._ssh_bekle()
         except BaseException:
@@ -229,7 +232,7 @@ class Pod:
             for _deneme in range(3):
                 try:
                     gql(self.api, "mutation($id: String!) { podTerminate(input: {podId: $id}) }", {"id": self.id})
-                    (self.klasor / "acik_pod").unlink(missing_ok=True)
+                    (self.klasor / self.kayit_adi).unlink(missing_ok=True)
                     break
                 except (RunPodHatasi, OSError):
                     time.sleep(5)
@@ -237,7 +240,7 @@ class Pod:
 
 def acestep_kur(p: Pod, commit: str, modeller: tuple[str, ...] = ("acestep-v15-xl-sft",)) -> str:
     """ACE-Step'i yereldeki commit'le kurar, modelleri indirir. Döner: kurulum dizini."""
-    hedef = "/root/ACE-Step-1.5"
+    hedef = ACESTEP_DIZIN
     indir = " && ".join(f"uv run acestep-download --model {m}" for m in modeller)
     p.komut(f"""set -e
         command -v uv >/dev/null || (curl -LsSf https://astral.sh/uv/install.sh | sh)

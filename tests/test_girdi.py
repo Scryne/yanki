@@ -198,7 +198,7 @@ def test_aralik_sozu_bolum_etiketli():
 def test_youtube_indir_bos_parcada_yeniden_dener(tmp_path, monkeypatch):
     cagri = []
 
-    def bir(video_id, hedef):
+    def bir(video_id, hedef, bicim=kaynak.BICIM):
         cagri.append(video_id)
         if len(cagri) < 3:
             raise OSError("eksik indirme: 0/100 bayt, HTTP 403")
@@ -208,7 +208,7 @@ def test_youtube_indir_bos_parcada_yeniden_dener(tmp_path, monkeypatch):
     assert kaynak.youtube_indir("v", tmp_path / "a.m4a", bekleme_sn=0) == tmp_path / "a.m4a"
     assert len(cagri) == 3
     cagri.clear()
-    monkeypatch.setattr(kaynak, "_indir_bir", lambda v, h: (_ for _ in ()).throw(OSError("eksik")))
+    monkeypatch.setattr(kaynak, "_indir_bir", lambda v, h, b=None: (_ for _ in ()).throw(OSError("eksik")))
     with pytest.raises(OSError):
         kaynak.youtube_indir("v", tmp_path / "a.m4a", deneme=2, bekleme_sn=0)
 
