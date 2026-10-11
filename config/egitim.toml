@@ -2,11 +2,12 @@
 # kadar kaliteli olsun"). ACE-Step 1.5 XL-SFT'ye LoRA (Side-Step "fixed" eğitimi, motor klasöründeki train.py). Vokal
 # ve eşlik (beat) aynı modelde birlikte öğrenilir: ACE-Step şarkıyı tek parça üretiyor.
 #
-# Veri Orvane'in çizgisi: modern stüdyo kaydı piyano/akustik balad ve pop balad, İngilizce, tek solo vokal. Ses kopyası
-# değil tür ve prodüksiyon öğrensin diye her sanatçıdan bir şarkı (kadın/erkek dengeli) ve cover listesindeki
-# (girdi/liste.toml) sanatçıların hiçbiri yok: model kapak yaptığımız şarkıların kaydını ezberlemesin, tek bir
-# sanatçının sesine kaymasın. Stil metinleri liste.toml'daki stil tanımlarıyla aynı kalıpta: çıkarımda verilen metinle
-# eğitimdeki metin aynı dili konuşsun.
+# Veri: modern stüdyo kayıtları. İlk eğitim (2026-10-11) yalnız balad/pop'tu ve elle yazılmış genel stil + tek blok
+# [verse] sözle yapıldı; ölçüde kazanç vermedi. 2026-10-12: şarkılar tek türde olmayacak (Scryne) → rap/hip-hop, R&B,
+# EDM/dans, rock, Latin, country/folk, uptempo pop eklendi; stil pod'da ACE-Step betimleyicisiyle yazılır (betim =
+# true; üretimle aynı dil), sözler bölüm yapısıyla (yanki/yapi.py). Ses kopyası değil tür ve prodüksiyon öğrensin diye
+# her sanatçıdan bir şarkı; cover listesindeki (girdi/liste.toml) ve tür denemesindeki (spikes/s21) sanatçılar yok:
+# model kapak yaptığımız ya da sınadığımız kayıtları ezberlemesin. Listedeki stil, betim düşerse yedektir.
 
 [egitim]
 model = "acestep-v15-xl-sft"
@@ -15,8 +16,9 @@ gpu = "NVIDIA A40"
 rank = 64
 alpha = 128
 lr = 1e-4
-epoch = 60
-kaydet_her = 20
+# ~95 şarkı: epoch başı ~5 dk (48 şarkıda 158 sn); 40 epoch ~3,5 saat
+epoch = 40
+kaydet_her = 10
 # Eğitim kesiti (sn): ses ve söz aynı yerden kesilir (söz zaman damgasıyla), söz-ses kayması öğretilmesin
 en_uzun_sn = 240
 # Bu kadar sonra eğitim düşmüş sayılır, pod silinir
@@ -276,3 +278,196 @@ stil = "pop rock ballad, male lead vocal, emotional and strained, acoustic guita
 sanatci = "Conan Gray"
 ad = "Heather"
 stil = "soft pop ballad, male lead vocal, gentle and melancholic, acoustic guitar and piano with soft synth pads, clean modern studio recording"
+
+# ── veri: rap / hip-hop (stil betimden) ──
+[[sarki]]
+sanatci = "Eminem"
+ad = "Lose Yourself"
+
+[[sarki]]
+sanatci = "Travis Scott"
+ad = "goosebumps"
+
+[[sarki]]
+sanatci = "J. Cole"
+ad = "No Role Modelz"
+
+[[sarki]]
+sanatci = "Juice WRLD"
+ad = "Lucid Dreams"
+
+[[sarki]]
+sanatci = "Post Malone"
+ad = "Circles"
+
+[[sarki]]
+sanatci = "50 Cent"
+ad = "In Da Club"
+
+[[sarki]]
+sanatci = "Mac Miller"
+ad = "Good News"
+
+[[sarki]]
+sanatci = "Lil Nas X"
+ad = "Old Town Road"
+
+
+# ── veri: R&B / soul (stil betimden) ──
+[[sarki]]
+sanatci = "SZA"
+ad = "Kill Bill"
+
+[[sarki]]
+sanatci = "Frank Ocean"
+ad = "Thinkin Bout You"
+
+[[sarki]]
+sanatci = "Daniel Caesar"
+ad = "Best Part"
+
+[[sarki]]
+sanatci = "Usher"
+ad = "Yeah!"
+
+[[sarki]]
+sanatci = "Childish Gambino"
+ad = "Redbone"
+
+[[sarki]]
+sanatci = "Khalid"
+ad = "Location"
+
+
+# ── veri: EDM / dans (stil betimden) ──
+[[sarki]]
+sanatci = "Calvin Harris"
+ad = "Summer"
+
+[[sarki]]
+sanatci = "David Guetta"
+ad = "Titanium"
+
+[[sarki]]
+sanatci = "Zedd"
+ad = "Clarity"
+
+[[sarki]]
+sanatci = "The Chainsmokers"
+ad = "Closer"
+
+[[sarki]]
+sanatci = "Swedish House Mafia"
+ad = "Don't You Worry Child"
+
+[[sarki]]
+sanatci = "Dua Lipa"
+ad = "Levitating"
+
+[[sarki]]
+sanatci = "Daft Punk"
+ad = "Get Lucky"
+
+[[sarki]]
+sanatci = "Kygo"
+ad = "Firestone"
+
+
+# ── veri: rock / alternatif (stil betimden) ──
+[[sarki]]
+sanatci = "Arctic Monkeys"
+ad = "Do I Wanna Know?"
+
+[[sarki]]
+sanatci = "The Killers"
+ad = "Mr. Brightside"
+
+[[sarki]]
+sanatci = "Foo Fighters"
+ad = "Everlong"
+
+[[sarki]]
+sanatci = "Linkin Park"
+ad = "In the End"
+
+[[sarki]]
+sanatci = "Green Day"
+ad = "Boulevard of Broken Dreams"
+
+[[sarki]]
+sanatci = "Paramore"
+ad = "Misery Business"
+
+[[sarki]]
+sanatci = "Kings of Leon"
+ad = "Use Somebody"
+
+[[sarki]]
+sanatci = "Red Hot Chili Peppers"
+ad = "Californication"
+
+
+# ── veri: Latin (stil betimden) ──
+[[sarki]]
+sanatci = "Shakira"
+ad = "Hips Don't Lie"
+
+[[sarki]]
+sanatci = "Bad Bunny"
+ad = "Tití Me Preguntó"
+
+[[sarki]]
+sanatci = "J Balvin"
+ad = "Mi Gente"
+
+[[sarki]]
+sanatci = "Enrique Iglesias"
+ad = "Bailando"
+
+[[sarki]]
+sanatci = "Rosalía"
+ad = "DESPECHÁ"
+
+
+# ── veri: country / folk (stil betimden) ──
+[[sarki]]
+sanatci = "Luke Combs"
+ad = "Fast Car"
+
+[[sarki]]
+sanatci = "Zach Bryan"
+ad = "Something in the Orange"
+
+[[sarki]]
+sanatci = "Mumford & Sons"
+ad = "Little Lion Man"
+
+[[sarki]]
+sanatci = "The Lumineers"
+ad = "Ho Hey"
+
+
+# ── veri: uptempo pop / funk (stil betimden) ──
+[[sarki]]
+sanatci = "Taylor Swift"
+ad = "Blank Space"
+
+[[sarki]]
+sanatci = "Ariana Grande"
+ad = "7 rings"
+
+[[sarki]]
+sanatci = "Justin Bieber"
+ad = "Sorry"
+
+[[sarki]]
+sanatci = "Mark Ronson"
+ad = "Uptown Funk"
+
+[[sarki]]
+sanatci = "Pharrell Williams"
+ad = "Happy"
+
+[[sarki]]
+sanatci = "BTS"
+ad = "Dynamite"
