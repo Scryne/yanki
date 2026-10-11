@@ -9,7 +9,7 @@ Seçilmiş aday ile orijinal kayıt, vurmalı/armonik ayrıştırma (HPSS, medya
 birbirine ortalama kosinüs benzerliği, orijinallerin birbirine benzerliğiyle karşılaştırılır.
 
 Motorun venv'iyle (scipy):  motor/ACE-Step-1.5/.venv/Scripts/python.exe spikes/s22_beat.py [klasör ...]
-Klasör verilirse (ör. calisma/dinleme/s20) oradaki <kimlik>/<kol>.flac dosyaları kol kol ölçülür.
+Klasör verilirse (ör. calisma/dinleme/s20) oradaki <kimlik>/…/<kol>.flac dosyaları kol kol ölçülür.
 """
 
 import json
@@ -114,8 +114,8 @@ def main(klasorler: list[str]) -> int:
     else:
         ciftler = {}
         for k in klasorler:
-            for f in sorted(Path(k).glob("*/*.flac")):
-                kimlik = f.parent.name
+            for f in sorted(Path(k).rglob("*.flac")):  # <kimlik>/<kol>.flac ya da <kimlik>/<kol>/<kol>.flac
+                kimlik = f.relative_to(k).parts[0]
                 kaynak = next(p for p in [KOK / "calisma" / kimlik / "kaynak.wav",
                                            KOK / "calisma" / "_spike" / "s21" / kimlik / "kaynak.wav"] if p.exists())
                 ciftler.setdefault(f.stem, []).append((kimlik, f, kaynak))

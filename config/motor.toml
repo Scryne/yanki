@@ -19,6 +19,11 @@ analiz_yontemi = "musicbrainz"
 # 5Hz anlamsal kodlar DiT sürümlerinde ortak (LM'nin kodları her DiT'e gidiyor).
 analiz_model = "acestep-v15-turbo"
 analiz_kesit_sn = 40
+# Stil şarkıya özel betimden: kiralık GPU'da üretimden önce ACE-Step'in betimleyicisi (acestep-captioner) şarkıyı
+# dinler; stilini Scryne yazmamış şarkılara. S20 (2026-10-12, 6 şarkı, aynı tohum): groove (orijinal ritmi izleme)
+# 0,18 → 0,24, fazladan döngüsellik +0,13 → +0,04, bölümler arası değişim 0,67 → 0,80 (1 = orijinal), kapılar aynı.
+# Eski stil sanatçının genel türüydü ("pop, funk song" bir piyano baladına).
+betim = true
 
 [cover]
 gorev = "cover"
