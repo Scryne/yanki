@@ -272,6 +272,21 @@ def test_denenmemis_kalibi_otomatik_onayda_da_gecerli():
     assert not onay.DENENMEMIS.search("pop, soul song, female lead vocal, clean modern studio recording")
 
 
+def test_tur_listesi_configten_bos_liste_hepsini_acar(tmp_path, monkeypatch):
+    # Scryne (2026-10-12): şarkılar tek türde olmayacak; tür dinlenip doğrulandıkça config'ten açılır
+    from yanki import durum
+
+    d = durum.Durum("a-b", "A", "B", analiz={"stil": "hip hop song, male lead vocal", "dil": "en"})
+    assert "hip hop" in onay.engel(d, onay.Ayar(acik=True))
+    assert onay.engel(d, onay.Ayar(acik=True, denenmemis_turler=())) is None
+    assert onay.engel(d, onay.Ayar(acik=True, denenmemis_turler=("metal",))) is None
+    yol = tmp_path / "kesif.toml"
+    yol.write_text('[kesif]\nharic_turler = ["metal"]\n', encoding="utf-8")
+    oku = kesif.haric_kalip.__wrapped__
+    monkeypatch.setattr(kesif, "haric_kalip", lambda: oku(yol))
+    assert _aday(turler=["rap", "hip hop"]).uygun is True and _aday(turler=["heavy metal"]).uygun is False
+
+
 # ── takvim: plan kendi gününe göre ──
 def test_bugun_yuklenecek_planin_gunune_gore(tmp_path):
     c = tmp_path / "c"

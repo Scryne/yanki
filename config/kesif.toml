@@ -18,6 +18,15 @@ playlistler = [
 # Gece koşusu her gece en iyi kaç doğrulanmış adayı listeye eklesin (0 = eklemesin; elle: `yanki kesif --ekle N`).
 # Şarkı başı ~30 dk GPU; dinleme yükü de Scryne'da.
 gece_ekle = 2
+# Keşfin kendiliğinden listeye almadığı türler (Deezer sanatçı türlerinde aranır; düzenli ifade parçaları). Scryne
+# (2026-10-12): şarkılar tek türde olmayacak → tür, yeni tarifle (bölüm yapısı + betim) dinlenip doğrulandıkça buradan
+# çıkar (spikes/s21_turler.py). [] = bütün türler.
+haric_turler = [
+  "rap", "hip[ -]?hop", "trap", "drill", "metal", "punk", "grunge", "hardcore", "edm", "techno", "house", "dubstep",
+  "trance", "electro", "dance", "reggae", "reggaeton", "latin", "salsa", "mexicano", "brazilian", "sertanejo",
+  "forr[oó]", "african", "afrobeats?", "asian", "indian", "bollywood", "country", "jazz", "blues", "gospel", "opera",
+  "classical", "kids", "films", "games", "k-?pop", "j-?pop", "anime",
+]
 
 [stillmore]
 # Spotify istemcisinin içindeki STILLMORE ile playlist taraması (yanki/stillmore.py): başkasının ve editoryal

@@ -12,13 +12,14 @@ aramada ilk sıraya çıkar. Fikrin kaynağı STILLMORE FINDER'ın playlist "kal
 3. **Talep:** YouTube'daki en çok izlenen orijinal yüklemenin izlenme sayısı (anahtarsız, hat zaten yt-dlp kullanıyor).
    STILLMORE CSV'sinde Spotify dinlenme sayısı varsa o da tutulur.
 
-Sıra: izlenme / (1 + rakip cover sayısı); hattın yapamadığı türdeki aday (rap, metal, Brezilya müziği…; Deezer
-sanatçı türlerinden, `onay.DENENMEMIS`) puan almaz, dinleme odasından elle eklenebilir. Formül kasıtlı olarak
+Sıra: izlenme / (1 + rakip cover sayısı); hattın yapamadığı türdeki aday (Deezer sanatçı türlerinden; liste
+`config/kesif.toml` → `[kesif] haric_turler`) puan almaz, dinleme odasından elle eklenebilir. Formül kasıtlı olarak
 basit; ilk yayınların arama sırası ölçüldükçe (`yanki takip`) düzeltilir. Sonuç `calisma/kesif/adaylar.json`;
 listeye ekleme açık bir adım (`--ekle N`).
 """
 
 import csv
+import functools
 import io
 import json
 import re
@@ -93,9 +94,8 @@ class Aday:
         """Tür hattın tarifi dinlenmiş türlerinden mi (balad, pop, piyano rock…). None: tür bilinmiyor."""
         if self.turler is None:
             return None
-        from yanki.onay import DENENMEMIS
-
-        return not DENENMEMIS.search(" ".join(self.turler))
+        kalip = haric_kalip()
+        return not (kalip and kalip.search(" ".join(self.turler)))
 
     @property
     def puan(self) -> float:
@@ -111,6 +111,21 @@ class Aday:
         """YouTube izlenmesi ya da (varsa) kaldırılmadan önceki Spotify dinlenmesi, büyüğü: Spotify'da arayan
         dinleyicinin doğrudan ölçüsü STILLMORE'dan geliyor (sızıntılarda 0, gerçek boşlukta milyonlar)."""
         return max(self.youtube_izlenme or 0, self.spotify_dinlenme or 0)
+
+
+@functools.cache
+def haric_kalip(yol: Path | None = None):
+    """Keşfin kendiliğinden almadığı türler (`config/kesif.toml` → `[kesif] haric_turler`; yoksa onay varsayılanı)."""
+    import tomllib
+
+    from yanki import ayarlar, onay
+
+    try:
+        with open(yol or ayarlar.KOK / "config" / "kesif.toml", "rb") as f:
+            turler = tomllib.load(f).get("kesif", {}).get("haric_turler", onay.DENENMEMIS_VARSAYILAN)
+    except OSError:
+        turler = onay.DENENMEMIS_VARSAYILAN
+    return onay.tur_kalibi(turler)
 
 
 def spotifya_sorulur(a: Aday) -> bool:

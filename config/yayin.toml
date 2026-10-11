@@ -39,6 +39,13 @@ sure_saat = 24
 # dışı Scryne'ın kulağına kalır (bildirilir). Ölçü: Scryne'ın onayladığı baladların en iyi söz WER'i çoğunlukla ≤ 0,1.
 diller = ["en"]
 en_yuksek_wer = 0.15
+# Kulaktan geçmeden onaylanmayan türler (stilde aranır). Tür, tarifi dinlenip doğrulandıkça çıkar (2026-10-12).
+denenmemis_turler = [
+  "rap", "hip[ -]?hop", "trap", "drill", "metal", "punk", "grunge", "hardcore", "edm", "techno", "house", "dubstep",
+  "trance", "electro", "dance", "reggae", "reggaeton", "latin", "salsa", "mexicano", "brazilian", "sertanejo",
+  "forr[oó]", "african", "afrobeats?", "asian", "indian", "bollywood", "country", "jazz", "blues", "gospel", "opera",
+  "classical", "kids", "films", "games", "k-?pop", "j-?pop", "anime",
+]
 
 [takvim]
 # Yayın takvimi (yanki/dagitim.py): paketlenmiş şarkılar kuyruk, sıra keşif puanı sonra onay sırası. Sırası gelen paketi

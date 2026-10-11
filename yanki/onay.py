@@ -26,10 +26,22 @@ from yanki import durum
 # Keşif de aynı kalıpla süzer (`kesif.Aday.uygun`), Deezer'ın tür adları ("Brazilian Music", "Electro", "Films/Games")
 # dahil: hattın yapamadığı türdeki aday kendiliğinden listeye girmez, GPU ve kulak boşa gitmez (2026-10-10: üç rap
 # şarkısının dokuz adayı da söz kapısında kaldı).
-DENENMEMIS = re.compile(r"\b(rap|hip[ -]?hop|trap|drill|metal|punk|grunge|hardcore|edm|techno|house|dubstep|trance|"
-                        r"electro|dance|reggae|reggaeton|latin|salsa|mexicano|brazilian|sertanejo|forr[oó]|african|"
-                        r"afrobeats?|asian|indian|bollywood|country|jazz|blues|gospel|opera|classical|kids|films|games|"
-                        r"k-?pop|j-?pop|anime)\b", re.I)
+# Varsayılan; asıl liste config'te (yayin.toml [otomatik_onay] denenmemis_turler, kesif.toml [kesif] haric_turler):
+# bir tür dinlenip tarifi doğrulandıkça listeden çıkar (Scryne, 2026-10-12: "şarkılar tek türde olmayacak").
+DENENMEMIS_VARSAYILAN = (
+    "rap", "hip[ -]?hop", "trap", "drill", "metal", "punk", "grunge", "hardcore", "edm", "techno", "house", "dubstep",
+    "trance", "electro", "dance", "reggae", "reggaeton", "latin", "salsa", "mexicano", "brazilian", "sertanejo",
+    "forr[oó]", "african", "afrobeats?", "asian", "indian", "bollywood", "country", "jazz", "blues", "gospel", "opera",
+    "classical", "kids", "films", "games", "k-?pop", "j-?pop", "anime")
+
+
+def tur_kalibi(turler) -> re.Pattern | None:
+    """Tür adları (düzenli ifade parçaları) → kelime sınırlı kalıp; liste boşsa None (hiçbir tür engelli değil)."""
+    turler = tuple(turler)
+    return re.compile(r"\b(" + "|".join(turler) + r")\b", re.I) if turler else None
+
+
+DENENMEMIS = tur_kalibi(DENENMEMIS_VARSAYILAN)
 
 
 @dataclass(frozen=True)
@@ -38,13 +50,15 @@ class Ayar:
     sure_saat: float = 72.0
     diller: tuple[str, ...] = ("en",)
     en_yuksek_wer: float = 0.15
+    denenmemis_turler: tuple[str, ...] = DENENMEMIS_VARSAYILAN
 
 
 def ayar_oku(yayin_yolu: Path) -> Ayar:
     with open(yayin_yolu, "rb") as f:
         d = tomllib.load(f).get("otomatik_onay", {})
     return Ayar(bool(d.get("acik", False)), float(d.get("sure_saat", 72)), tuple(d.get("diller", ["en"])),
-                float(d.get("en_yuksek_wer", 0.15)))
+                float(d.get("en_yuksek_wer", 0.15)),
+                tuple(d.get("denenmemis_turler", DENENMEMIS_VARSAYILAN)))
 
 
 def _wer(a: durum.Aday) -> float | None:
@@ -54,7 +68,7 @@ def _wer(a: durum.Aday) -> float | None:
 def engel(d: durum.Durum, ayar: Ayar) -> str | None:
     """Kendiliğinden onaylanamama nedeni (None: onaylanabilir). Engelli şarkı Scryne'ın kararını bekler."""
     stil = d.analiz.get("stil") or ""
-    if m := DENENMEMIS.search(stil):
+    if (kalip := tur_kalibi(ayar.denenmemis_turler)) and (m := kalip.search(stil)):
         return f"{m.group(1)}: bu türde tarif dinlenmedi"
     if (dil := d.analiz.get("dil", "en")) not in ayar.diller:
         return f"dil {dil}: bu dilde tarif dinlenmedi"
