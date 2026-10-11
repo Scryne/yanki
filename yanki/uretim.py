@@ -170,7 +170,8 @@ def _cover_isleri(a: Ayarlar, calisma: Path, d: durum.Durum, tek_parca_sn: float
     ilk = k / "parcalar" / "kaynak_1.wav" if len(plan) > 1 else kaynak
     isler = [motor.Is(id=f"{d.kimlik}|cover|{n}|1", gorev="cover", kaynak=str(ilk),
                       cikti_klasor=str(k / "adaylar" / str(n) / "p1"), soz=sozler_[0],
-                      adim=a.cover.adim, tohum=tohum, guc=a.cover.guc, **_ortak(d))
+                      adim=a.cover.adim, tohum=tohum, guc=a.cover.guc,
+                      referans=str(ilk) if a.cover.referans else None, ek=dict(a.cover.ek), **_ortak(d))
              for n, tohum in numaralar]
     return (plan, sozler_, numaralar), isler
 
@@ -370,7 +371,7 @@ def uret(a: Ayarlar, calisma: Path, kimlikler: list[str] | None = None,
                                      kaynak=str(k / "parcalar" / f"kaynak_{p.no}.wav"),
                                      cikti_klasor=str(k / "adaylar" / str(n) / f"p{p.no}"), soz=sozler_[p.no - 1],
                                      adim=a.cover.adim, tohum=tohum, guc=a.cover.guc,
-                                     referans=ilk.cikti, **_ortak(d)))
+                                     referans=ilk.cikti, ek=dict(a.cover.ek), **_ortak(d)))
     s2 = motor_turu(tur2, "tur2")
     sonuclar = {**s1, **s2}
 

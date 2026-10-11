@@ -42,6 +42,10 @@ class Cover:
     adim: int
     aday_sayisi: int
     tohumlar: tuple[int, ...]
+    # orijinal kayıt tını/miks referansı (ACE-Step reference_audio: zamanı ortalanır, melodi/ritim taşımaz)
+    referans: bool = False
+    # GenerationParams'a olduğu gibi giden ek ayarlar (shift, guidance_scale …)
+    ek: tuple[tuple[str, object], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -106,7 +110,8 @@ def yukle(yol: Path | None = None, kok: Path = KOK) -> Ayarlar:
                     float(m.get("analiz_kesit_sn", 40)), m.get("analiz_yontemi", "musicbrainz"),
                     bool(m.get("dit_offload", False)), lora, float(m.get("lora_olcek", 1.0)),
                     bool(m.get("betim", False))),
-        cover=Cover(c["gorev"], float(c["guc"]), int(c["adim"]), int(c["aday_sayisi"]), tuple(c["tohumlar"])),
+        cover=Cover(c["gorev"], float(c["guc"]), int(c["adim"]), int(c["aday_sayisi"]), tuple(c["tohumlar"]),
+                    bool(c.get("referans", False)), tuple(sorted((c.get("ek") or {}).items()))),
         onarim=Onarim(o["gorev"], int(o["adim"]), float(o["pay_sn"]), tuple(o["tohumlar"])),
         gpu=Gpu(int(g["bos_esik_mib"]), int(g["bekleme_sn"])),
         fpcalc=kok / d["araclar"]["fpcalc"],

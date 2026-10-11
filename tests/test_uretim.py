@@ -399,3 +399,19 @@ def test_betim_duserse_eski_stille_uretilir_elle_stile_dokunulmaz(tmp_path):
     m = BetimliMotor("x")
     uretim.uret(_ayar(), c, ["kapali"], calistir=m, degerlendir=GECER)
     assert all(i.gorev == "cover" for i in m.turlar[0])
+
+
+def test_cover_referansi_ve_ek_ayarlar_configten(tmp_path):
+    # S23 beat kolları: orijinal kayıt tını referansı ve shift gibi ayarlar config'ten işe gider
+    c = tmp_path / "c"
+    _sarki(c, "kisa", 60)
+    a = _ayar()
+    a = replace(a, cover=replace(a.cover, referans=True, ek=(("shift", 3.0),)))
+    m = SahteMotor()
+    uretim.uret(a, c, calistir=m, degerlendir=GECER)
+    i = m.turlar[0][0]
+    assert i.referans == str(c / "kisa" / "kaynak.wav") and i.ek == {"shift": 3.0}
+    m = SahteMotor()
+    _sarki(c, "varsayilan", 60)
+    uretim.uret(_ayar(), c, ["varsayilan"], calistir=m, degerlendir=GECER)
+    assert m.turlar[0][0].referans is None and m.turlar[0][0].ek == {}
