@@ -330,7 +330,7 @@ def _kesif(args: argparse.Namespace) -> int:
             adaylar += katalog.tara(sp, calisma, pazarlar, katalog.Ayar.oku(kat), ek)
         except spotify.Sinirli as e:
             print(f"✗ katalog farkı: {e}")
-        except (OSError, katalog.DeezerHatasi) as e:
+        except (OSError, katalog.DeezerHatasi, spotify.SpotifyHatasi) as e:
             print(f"✗ katalog farkı: {e}")
     if args.yeniden_olc:  # kayıttaki adaylar da (kaynak o gece taranamasa bile) yeniden ölçülür
         adaylar += [x for x in kesif.oku(calisma).values() if not any(y.kimlik == x.kimlik for y in adaylar)]
@@ -585,7 +585,11 @@ def ozet(kok: Path) -> dict:
         yakin = len(onay.yaklasan(calisma, onay.ayar_oku(kok / "config" / "yayin.toml")))
     except (OSError, ValueError):
         yakin = 0
-    return {"otomatik_onay_24sa": yakin, "dinlemede": say("uretildi"), "onarim": say("onarim"),
+    from yanki import tunearo
+
+    erisim = tunearo.erisim_durumu(calisma)
+    return {"tunearo_erisim_yok": bool(erisim), "otomatik_onay_24sa": yakin, "dinlemede": say("uretildi"),
+            "onarim": say("onarim"),
             "uretimde": say("yeni", "hazir", "analiz"), "paket_bekliyor": say("paketlendi"),
             "yuklendi": say("yuklendi"), "yayinda": say("yayinda"),
             "hata": say("hata"), "kesif_onerisi": oneri, "yuklenecek": f"{sira.sanatci} — {sira.ad}" if sira else None,
@@ -606,7 +610,9 @@ def _ozet(args: argparse.Namespace) -> int:
                                          (o["kesif_onerisi"], "keşif önerisi"), (o["hata"], "hatada"),
                                          (o["otomatik_onay_24sa"], "şarkı 24 saat içinde kendiliğinden onaylanacak"))
               if n]
-    if o.get("yuklenecek"):
+    if o.get("tunearo_erisim_yok"):
+        satir.append("Tunearo API erişimi kapalı: yükleme ve yoklama bekliyor")
+    elif o.get("yuklenecek"):
         satir.append(f"yükleme sırası geldi: {o['yuklenecek']}")
     if o["spotify_kilit_sn"]:
         satir.append(f"Spotify kilitli (~{max(1, round(o['spotify_kilit_sn'] / 3600))} sa)")
@@ -859,6 +865,21 @@ def _bildirici(calisma: Path):
     return lambda tur, baslik, metin, anahtar=None: olay.bildir(calisma, tur, baslik, metin, anahtar)
 
 
+def _erisim_yok(calisma: Path, e) -> None:
+    """Tunearo hesap düzeyinde erişimi kapattı (`tunearo.ErisimYok`): kayda geçer (özet ve oda gösterir), günde bir
+    bildirilir. Yüklemeler ve yoklama erişim açılınca kendiliğinden sürer; yerel kayıtlara dokunulmaz."""
+    from datetime import date
+
+    from yanki import tunearo
+
+    tunearo.erisim_kaydet(calisma, e)
+    print(f"Tunearo API erişimi kapalı ({e}); yükleme ve durum yoklaması erişim açılana kadar bekliyor")
+    _bildirici(calisma)("kayip", "Tunearo API erişimi kapalı",
+                        f"Tunearo her isteğe \"{e}\" diyor: yükleme ve durum yoklaması durdu. Hesap sahibinden "
+                        "(arkadaşın) API erişimini yeniden açmasını iste; açılınca hat kendiliğinden sürer.",
+                        f"tunearo:erisim:{date.today()}")
+
+
 def _takvim_hatirlat(kok: Path) -> int:
     """Sırası gelen paketler: dağıtımcının API'si varsa (Tunearo) hepsi yüklenir, yoksa ilki bildirilir (bir kez).
     `[takvim] haftada = 0` iken sıradaki her paket bu koşuda gider. Tunearo'nun hesap parça kotası dolarsa ("Track
@@ -870,6 +891,14 @@ def _takvim_hatirlat(kok: Path) -> int:
     calisma = kok / "calisma"
     ad = paket.yayin_ayarlari(kok / "config" / "yayin.toml").dagitimci
     p = dagitim.plan(calisma, dagitim.takvim_oku(kok / "config" / "yayin.toml"), dagitimci=ad)
+    bildir = _bildirici(calisma)
+    for kimlik in p.yazarsiz:  # kaynakta yazar yok (MusicBrainz'de kaydı olmayan şarkı): Scryne'a bir kez
+        s = durum.oku(calisma, kimlik)
+        print(f"takvim: {s.sanatci} — {s.ad} yazarsız, bekliyor (girdi/liste.toml → yazarlar)")
+        bildir("onay", f"yazarlar gerekli: {s.ad}",
+               f"{s.sanatci} — {s.ad} için orijinal söz yazarı/besteci bulunamadı; dağıtımcı yazarsız cover "
+               "almıyor. girdi/liste.toml'da şarkıya yazarlar = [\"Ad Soyad\"] ekle (sonraki koşu paketleyip "
+               "yükler) ya da dinleme odasında reddet.", f"yazar_yok:{kimlik}")
     if p.beklemede:
         print(f"takvim: {p.beklemede}; kuyrukta {len(p.sira)} paket")
         return 0
@@ -878,7 +907,6 @@ def _takvim_hatirlat(kok: Path) -> int:
         ilk = p.sira[0] if p.sira else None
         print(f"takvim: sıradaki yükleme {ilk.yukleme:%d.%m} ({ilk.ad})" if ilk else "takvim: kuyruk boş")
         return 0
-    bildir = _bildirici(calisma)
     d = dagitim.sec(ad, kok)
     if not d.otomatik:
         s = sirasi_gelen[0]
@@ -891,6 +919,10 @@ def _takvim_hatirlat(kok: Path) -> int:
     for s in sirasi_gelen:
         try:
             bilgi = dagitim.otomatik_yukle(calisma, d, s.kimlik, s.yayin_tarihi)
+        except tunearo.ErisimYok as e:
+            _erisim_yok(calisma, e)
+            print(f"takvim: {len(sirasi_gelen) - len(yuklenen)} paket kuyrukta bekliyor")
+            break
         except tunearo.TunearoHatasi as e:
             if e.kod == 403 and "limit" in str(e).lower():
                 print(f"takvim: Tunearo parça kotası doldu ({e}); kalan {len(sirasi_gelen) - len(yuklenen)} paket "
@@ -1026,10 +1058,15 @@ def _dagitim_durum(args: argparse.Namespace) -> int:
     if not d.otomatik:
         print(f"{d.ad or 'dağıtımcı'}: API yok, durum dağıtımcı panelinde")
         return 0
-    sonuc = d.yokla(a.kok / "calisma", _bildirici(a.kok / "calisma"))
     from yanki import tunearo
 
+    try:
+        sonuc = d.yokla(a.kok / "calisma", _bildirici(a.kok / "calisma"))
+    except tunearo.ErisimYok as e:  # hesap düzeyi: koşu hatası değil, Scryne'ın dağıtımcıyla çözeceği durum
+        _erisim_yok(a.kok / "calisma", e)
+        return 0
     if d.ad == "tunearo":
+        tunearo.erisim_kaydet(a.kok / "calisma", None)
         sanatci_adi = paket.yayin_ayarlari(a.kok / "config" / "yayin.toml").sanatci_adi
         bildir = _bildirici(a.kok / "calisma")
         if profil := tunearo.profil_bagla(a.kok / "calisma", d.api, sanatci_adi, bildir):
@@ -1169,8 +1206,13 @@ def _seyrek_yokla(kok: Path, simdi=None) -> None:
         return
     isaret.parent.mkdir(parents=True, exist_ok=True)
     isaret.touch()
+    from yanki import tunearo
+
     try:
         sonuc = d.yokla(calisma, _bildirici(calisma))
+    except tunearo.ErisimYok as e:
+        _erisim_yok(calisma, e)
+        return
     except Exception as e:  # noqa: BLE001 — anahtar yok, ağ: gündüz üretimini etkilemez
         print(f"dağıtım yoklaması yapılamadı: {type(e).__name__}: {e}")
         return
@@ -1279,6 +1321,7 @@ def _temizle(args: argparse.Namespace) -> int:
 
 
 def _dinle(args: argparse.Namespace) -> int:
+    import asyncio
     import threading
     import webbrowser
 
@@ -1291,8 +1334,27 @@ def _dinle(args: argparse.Namespace) -> int:
     if not args.tarayicisiz:
         threading.Timer(1.0, lambda: webbrowser.open(adres)).start()
     print(f"dinleme odası: {adres}  (durdurmak için Ctrl+C)")
-    uvicorn.run(sunucu.uygulama(a, a.kok / "calisma"), host="127.0.0.1", port=args.port, log_level="warning")
+    sunucu_ = uvicorn.Server(uvicorn.Config(sunucu.uygulama(a, a.kok / "calisma"), host="127.0.0.1", port=args.port,
+                                            log_level="warning"))
+    asyncio.run(_sessiz_sun(sunucu_))
     return 0
+
+
+async def _sessiz_sun(sunucu_) -> None:
+    """Tarayıcı ses akışını yarıda kesince (iz değiştirme, sekme kapama) Windows'un Proactor döngüsü bağlantıyı
+    kapatırken `ConnectionResetError` izini günlüğe döküyor: zararsız, ama oda.log'u dolduruyordu (2026-10-11).
+    Yalnız o hata susturulur, diğer her şey varsayılan işleyiciye gider."""
+    import asyncio
+
+    dongu = asyncio.get_running_loop()
+
+    def isleyici(loop, baglam):
+        if isinstance(baglam.get("exception"), ConnectionResetError):
+            return
+        loop.default_exception_handler(baglam)
+
+    dongu.set_exception_handler(isleyici)
+    await sunucu_.serve()
 
 
 def main(argv: list[str] | None = None) -> int:

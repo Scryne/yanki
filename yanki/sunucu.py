@@ -100,6 +100,17 @@ def _takvim(kok: Path, calisma: Path) -> dict:
 KAPAK_BOYUTLARI = (96, 480)
 
 
+def _yarim_yukleme(calisma: Path, kimlik: str) -> bool:
+    """Paketin dağıtımcıda açılmış ama kaydı tamamlanmamış yayını var mı (taslak ya da gönderiliyor)."""
+    import json
+
+    try:
+        meta = json.loads((durum.klasor(calisma, kimlik) / "paket" / "metadata.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    return bool((meta.get("tunearo") or {}).get("release_id"))
+
+
 def kapak_kaynagi(calisma: Path, kimlik: str) -> Path | None:
     """Şarkının görünen kapağı: paketteki (dağıtımcıya giden) > elle seçilen > Pinterest'ten seçilen. Noktalı
     dosyalar sayılmaz."""
@@ -364,6 +375,9 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None) -> FastA
         with guncelle(kimlik) as d:
             if d.asama in ("yuklendi", "yayinda", "reddedildi"):
                 raise HTTPException(409, f"bu aşamada reddedilemez: {d.asama}")
+            if d.asama == "paketlendi" and _yarim_yukleme(calisma, kimlik):
+                raise HTTPException(409, "bu paketin Tunearo'da açılmış bir yayını var (yarım yükleme); önce "
+                                         f"`yanki geri-cek {kimlik}` ya da yüklemenin bitmesini bekle")
             d.notlar.append({"ret": istek.neden})
             d.gec("reddedildi", istek.neden or None)
         return _ozet(d, calisma)
@@ -479,7 +493,15 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None) -> FastA
                        "uzak_butce": a.uzak.aylik_butce if a.uzak.acik else None}
         except (OSError, ValueError, KeyError):
             ayarlar = {}
+        from yanki import tunearo
+
+        uyarilar = []
+        if (e := tunearo.erisim_durumu(calisma)):
+            uyarilar.append({"baslik": "Tunearo API erişimi kapalı",
+                             "metin": f"{e.get('ilk', '')[:16].replace('T', ' ')}'dan beri her istek reddediliyor; "
+                                      "yükleme ve durum yoklaması bekliyor. Hesap sahibi erişimi açınca hat sürer."})
         return {
+            "uyarilar": uyarilar,
             "hat": [
                 {"ad": "Keşif", "sayi": kesif_oneri, "alt": "aday"},
                 {"ad": "Üretim", "sayi": say("yeni", "hazir", "analiz", "onarim"), "alt": "şarkı"},

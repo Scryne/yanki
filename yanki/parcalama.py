@@ -16,6 +16,7 @@ from yanki import sozler
 
 KESIM_ONCESI = 0.8
 BINDIRME = 1.0  # kesimin iki yanına
+KISA_PARCA_PAYI_SN = 1.0  # motor çıktısı planlanandan bu kadar kısa olabilir (kare yuvarlaması)
 
 
 @dataclass(frozen=True)
@@ -67,6 +68,11 @@ def birlestir(sesler: list[np.ndarray], parcalar: list[Parca], sr: int) -> np.nd
     kanal = sesler[0].shape[1]
     cikti = np.zeros((toplam, kanal), dtype=np.float32)
     for i, (s, p) in enumerate(zip(sesler, parcalar, strict=True)):
+        # kısa çıkan parça şarkının ortasında sessizlik bırakırdı; toplam süre doğru kaldığı için süre kapısı
+        # görmüyordu. Aday birleştirme hatasıyla düşer (son parçanın kuyruğu kısa olabilir: yalnız ara parçalar)
+        eksik = (p.son - p.bas) - len(s) / sr
+        if i < len(parcalar) - 1 and eksik > KISA_PARCA_PAYI_SN:
+            raise ValueError(f"parça {p.no} beklenenden {eksik:.1f} sn kısa")
         bas = int(round(p.bas * sr))
         s = s[: toplam - bas].astype(np.float32)
         kazanc = np.ones(len(s), dtype=np.float32)

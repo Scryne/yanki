@@ -1,7 +1,10 @@
 """Dış servis istekleri. Kişisel bilgi taşımaz (User-Agent'ta e-posta yok)."""
 
 import http.client
+import ipaddress
 import json
+import socket
+import threading
 import time
 import urllib.error
 import urllib.parse
@@ -10,6 +13,60 @@ import urllib.request
 from yanki import sayac
 
 KIMLIK = "Yanki/0.1 (+https://github.com/Scryne/yanki)"
+
+# ── ad çözümleme ────────────────────────────────────────────
+# Bu ağda IPv6 kaydı olmayan bazı adlarda AAAA sorgusu zaman aşımına düşüyor ve her çözümleme ~12 sn sürüyor
+# (2026-10-11: dashboard.tunearo.com, ölçüm AF_INET 0,11 sn / AF_UNSPEC 12,06 sn; 21 yayının yoklaması 4 dk). Python
+# her bağlantıda yeniden çözüyor. Çözümleme IPv4 ve IPv6 için ayrı ayrı ve aynı anda yapılır: IPv4 gelince IPv6 en çok
+# `IPV6_PAYI_SN` beklenir, gelmezse IPv4 adresleriyle devam edilir. Sonuç süreç içinde `DNS_ONBELLEK_SN` saklanır.
+DNS_ONBELLEK_SN = 300.0
+IPV6_PAYI_SN = 0.3
+_gercek_getaddrinfo = socket.getaddrinfo
+_dns_onbellek: dict[tuple, tuple[float, list]] = {}
+_dns_kilit = threading.Lock()
+
+
+def _adres_mi(host) -> bool:
+    try:
+        ipaddress.ip_address(host)
+        return True
+    except ValueError:
+        return False
+
+
+def _cozumle(host, port, family=0, type=0, proto=0, flags=0):  # noqa: A002 — socket.getaddrinfo imzası
+    if family != socket.AF_UNSPEC or not isinstance(host, str) or not host or _adres_mi(host) or host == "localhost":
+        return _gercek_getaddrinfo(host, port, family, type, proto, flags)
+    anahtar = (host.lower(), port, type, proto, flags)
+    with _dns_kilit:
+        kayit = _dns_onbellek.get(anahtar)
+    if kayit and kayit[0] > time.monotonic():
+        return list(kayit[1])
+    sonuc: dict[int, list | BaseException] = {}
+    hazir = {aile: threading.Event() for aile in (socket.AF_INET, socket.AF_INET6)}
+
+    def coz(aile: int) -> None:
+        try:
+            sonuc[aile] = _gercek_getaddrinfo(host, port, aile, type, proto, flags)
+        except BaseException as e:  # noqa: BLE001 — çağıran ipliğe taşınır
+            sonuc[aile] = e
+        hazir[aile].set()
+
+    for aile in hazir:
+        threading.Thread(target=coz, args=(aile,), daemon=True).start()
+    hazir[socket.AF_INET].wait()
+    hazir[socket.AF_INET6].wait(IPV6_PAYI_SN if not isinstance(sonuc[socket.AF_INET], BaseException) else None)
+    adresler = [x for aile in (socket.AF_INET, socket.AF_INET6)
+                if isinstance(r := sonuc.get(aile), list) for x in r]
+    if not adresler:
+        hata = sonuc.get(socket.AF_INET)
+        raise hata if isinstance(hata, BaseException) else socket.gaierror(socket.EAI_NONAME, "ad çözülemedi")
+    with _dns_kilit:
+        _dns_onbellek[anahtar] = (time.monotonic() + DNS_ONBELLEK_SN, adresler)
+    return list(adresler)
+
+
+socket.getaddrinfo = _cozumle
 # Bağlantı kurulduktan sonra kopan cevaplar (`IncompleteRead`, `RemoteDisconnected`, bağlantı sıfırlandı) da geçici:
 # `URLError` değiller, önce yakalanmıyor ve gece koşusunun adımını düşürüyorlardı (2026-10-10, Pinterest ve LRCLIB).
 GECICI = (urllib.error.URLError, TimeoutError, ConnectionError, http.client.HTTPException)

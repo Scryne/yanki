@@ -44,8 +44,9 @@ function bildir(mesaj, hata = false) {
   clearTimeout(bildir.t); bildir.t = setTimeout(() => b.classList.remove("acik"), 4000);
 }
 
+// gövde verilen her çağrı POST (boş gövde de: `{}`); verilmeyen GET
 async function api(yol, govde) {
-  const r = await fetch(yol, govde ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(govde) } : {});
+  const r = await fetch(yol, govde !== undefined && govde !== null ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(govde) } : {});
   if (!r.ok) {
     const d = await r.json().catch(() => ({}));
     // 422: alan doğrulaması liste döner
@@ -487,7 +488,7 @@ function kesifSatiri(x, guncelle) {
       x.listede ? el("span", { class: "rozet ok" }, "listede")
         : x.geri_geldi || x.hal === "düzenleme" ? null
         : el("button", { class: iyi ? "dugme ikincil" : "dugme", type: "button",
-          onclick: () => islem("ekle", null, `"${x.ad}" listeye eklendi; adaylar sonraki gece koşusunda üretilir.`) },
+          onclick: () => islem("ekle", {}, `"${x.ad}" listeye eklendi; adaylar sonraki gece koşusunda üretilir.`) },
           iyi ? "Listeye ekle" : "Yine de ekle"),
       x.listede ? null : el("button", { class: "dugme tehlike", type: "button",
         onclick: () => islem("ele", { elendi: !x.elendi }, x.elendi ? `"${x.ad}" yeniden aday.` : `"${x.ad}" elendi; gece koşusu onu listeye eklemez.`) },
@@ -609,9 +610,13 @@ function beklenenBolumu(p) {
     ...p.hatada.map((s) => ({ s, rozet: ["hata", "no"], metin: s.hata })),
     ...p.yakinda.map((s) => ({ s, rozet: ["kendiliğinden onaylanacak", "gumus"], metin: saatDakika(s.zaman) })),
   ];
+  const uyarilar = (p.uyarilar || []).map((u) => el("li", { class: "kayit" },
+    el("div", { class: "kayit-ad" }, el("span", { class: "ad" }, u.baslik)),
+    el("div", { class: "olculer" }, el("span", { class: "rozet amber" }, "dağıtım"), el("span", {}, u.metin))));
+  const sayi = satirlar.length + uyarilar.length;
   return el("section", { class: "bolum", "aria-label": "Senden beklenen" },
-    el("h2", { class: "bolum-baslik" }, "Senden beklenen", satirlar.length ? el("span", { class: "g-sayi dikkat" }, String(satirlar.length)) : null),
-    satirlar.length ? el("ul", { class: "kayitlar" }, ...satirlar.map(({ s, rozet, metin }) => el("li", { class: "kayit kapakli" },
+    el("h2", { class: "bolum-baslik" }, "Senden beklenen", sayi ? el("span", { class: "g-sayi dikkat" }, String(sayi)) : null),
+    sayi ? el("ul", { class: "kayitlar" }, ...uyarilar, ...satirlar.map(({ s, rozet, metin }) => el("li", { class: "kayit kapakli" },
       kapakImg(s.kapak, "kapak-kucuk kapak-orta"),
       el("div", { class: "kayit-ad" }, el("a", { class: "ad", href: `#${s.kimlik}` }, s.ad), el("span", { class: "sanatci" }, s.sanatci)),
       el("div", { class: "olculer" }, el("span", { class: `rozet ${rozet[1]}` }, rozet[0]), el("span", {}, metin || "")),

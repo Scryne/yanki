@@ -43,9 +43,19 @@ class Sarki:
 
 def kimlik(sanatci: str, ad: str) -> str:
     """Dosya sistemi dostu, kararlı şarkı kimliği: 'adele-someone-like-you'."""
-    duz = unicodedata.normalize("NFKD", f"{sanatci} {ad}".replace("ı", "i").replace("İ", "I"))
-    duz = duz.encode("ascii", "ignore").decode().lower()
-    return re.sub(r"[^a-z0-9]+", "-", duz).strip("-")
+    def slug(s: str) -> str:
+        duz = unicodedata.normalize("NFKD", s.replace("ı", "i").replace("İ", "I"))
+        return re.sub(r"[^a-z0-9]+", "-", duz.encode("ascii", "ignore").decode().lower()).strip("-")
+
+    s, a = slug(sanatci), slug(ad)
+    if s and a:
+        return f"{s}-{a}"
+    # Latin dışı yazılan ad (Kiril, Arap, CJK) ASCII'ye boş düşüyor: "Ёлка — Прованс" kimliksiz kalıp çalışma alanının
+    # köküne yazılırdı, "米津玄師 — Lemon" ile "… — Lemon" çakışırdı. Ham addan kısa, kararlı bir özet eklenir.
+    import hashlib
+
+    ozet = hashlib.sha1(f"{sanatci}\x1f{ad}".casefold().encode()).hexdigest()[:8]
+    return "-".join(x for x in (s, a, ozet) if x)
 
 
 def yukle(yol: Path) -> list[Sarki]:

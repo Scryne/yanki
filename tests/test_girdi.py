@@ -47,10 +47,15 @@ def test_lrclib_get_bulamazsa_arama(monkeypatch):
     def sahte(url, parametre=None, **_):
         if url.endswith("/get"):
             raise ag.Bulunamadi(url)
-        return [{"instrumental": True, "plainLyrics": ""}, {"plainLyrics": "x\ny", "duration": 200}]
+        # başka sanatçının (karaoke, cover) kaydı ilk sırada gelebilir: alınmaz (Denetim 4)
+        return [{"instrumental": True, "plainLyrics": "", "artistName": "A"},
+                {"plainLyrics": "karaoke", "duration": 190, "artistName": "Karaoke Hits Band"},
+                {"plainLyrics": "x\ny", "duration": 200, "artistName": "A feat. C"}]
 
     s = sozler.lrclib("A", "B", json_al=sahte)
     assert s.metin == "[verse]\nx\ny" and s.sure_sn == 200 and s.kaynak == "lrclib"
+    with pytest.raises(ag.Bulunamadi):
+        sozler.lrclib("Z", "B", json_al=sahte)
 
 
 def test_lrclib_sozsuz_kayit_hata():

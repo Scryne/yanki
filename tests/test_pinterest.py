@@ -86,7 +86,7 @@ def test_getir_kaydeder_tekrar_kullanmaz_yeni_ile_degistirir(tmp_path):
     sonuclar.append(_pin(3, "a quiet snowy road"))
     pinterest.getir(c, a, yeni=True, arayici=arayici, indirici=lambda url: _jpeg_bayt())
     k = json.loads((c / "a" / "kapak_kaynak.json").read_text(encoding="utf-8"))
-    assert k["pin_id"] == "3" and k["onceki"] == ["1"]
+    assert k["pin_id"] == "3" and k["onceki"] == ["1", "imza1"]  # görsel imzası da: aynı görsel başka pinle dönmesin
 
 
 def test_paketleme_pinterest_kapagi_kullanir_elle_secilen_once_gelir(tmp_path, monkeypatch):

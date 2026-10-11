@@ -491,7 +491,8 @@ def listeye_yaz(secilen: list[Aday], liste_yolu: Path, not_: str = "yanki kesif"
     bloklar = [f"\n# kesif {datetime.now():%Y-%m-%d}: Spotify'da kaldırılmış şarkılar ({not_})"]
     for a in secilen:
         ek = f", rakip cover {a.rakip_cover}" if a.rakip_cover else ""
-        bloklar.append(f"\n[[sarki]]  # YouTube {a.youtube_izlenme:,} izlenme{ek}; {a.kaynak}\n"
+        izlenme = f"YouTube {a.youtube_izlenme:,} izlenme" if a.youtube_izlenme is not None else "YouTube ölçülmedi"
+        bloklar.append(f"\n[[sarki]]  # {izlenme}{ek}; {a.kaynak}\n"
                        f"sanatci = {json.dumps(a.sanatci, ensure_ascii=False)}\n"
                        f"ad = {json.dumps(sade_ad_gorunur(a.ad), ensure_ascii=False)}\n")
     with liste_kilidi(liste_yolu):

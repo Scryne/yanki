@@ -72,7 +72,9 @@ def bul(sanatci: str, ad: str, json_al=ag.json_al, uyku=time.sleep) -> Kunye:
     if not kayitlar:
         raise ag.Bulunamadi(f"MusicBrainz'de kayıt yok: {sanatci} — {ad}")
     ilk_yayin = min((k["first-release-date"] for k in kayitlar if k.get("first-release-date")), default=None)
-    # eser bağlantısı olan ilk kaydı bul (canlı/remix kayıtlarında çoğu zaman yok)
+    # eser bağlantısı olan ilk kaydı bul (canlı/remix kayıtlarında çoğu zaman yok). Eserinde yazar ilişkisi olmayan
+    # kayıtta durulmaz: sonraki kayıtların eseri yazarlıdır çoğu zaman (yazarsız paket dağıtımcıya yüklenemiyor)
+    yedek: Kunye | None = None
     for kayit in kayitlar[:5]:
         uyku(1.1)
         ayrinti = json_al(f"{MB}/recording/{kayit['id']}", {"inc": "work-rels+isrcs", "fmt": "json"})
@@ -96,8 +98,13 @@ def bul(sanatci: str, ad: str, json_al=ag.json_al, uyku=time.sleep) -> Kunye:
             sn = json_al(f"{MB}/artist/{kredi['id']}", {"inc": "genres", "fmt": "json"})
             turler = tuple(g["name"] for g in sorted(sn.get("genres", []), key=lambda g: -g.get("count", 0)))
             tip, cinsiyet = sn.get("type"), sn.get("gender")
-        return Kunye(kayit["id"], eser["id"], eser.get("title"), tuple(yazarlar), yazar_adlari,
-                     tuple(ayrinti.get("isrcs", [])), ilk_yayin, turler, tip, cinsiyet)
+        sonuc = Kunye(kayit["id"], eser["id"], eser.get("title"), tuple(yazarlar), yazar_adlari,
+                      tuple(ayrinti.get("isrcs", [])), ilk_yayin, turler, tip, cinsiyet)
+        if yazarlar:
+            return sonuc
+        yedek = yedek or sonuc
+    if yedek is not None:
+        return yedek
     raise ag.Bulunamadi(f"MusicBrainz kaydında eser bağlantısı yok: {sanatci} — {ad}")
 
 

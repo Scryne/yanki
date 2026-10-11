@@ -147,8 +147,18 @@ class Kopru:
 
     def degerlendir(self, ifade: str, zaman_asimi: float = 120):
         """JS ifadesini çalıştırır (Promise beklenir), JSON'a çevrilebilir değeri döndürür."""
+        from websockets.exceptions import WebSocketException
         from websockets.sync.client import connect
 
+        try:
+            return self._degerlendir(connect, ifade, zaman_asimi)
+        except StillmoreYok:
+            raise
+        except (OSError, TimeoutError, WebSocketException, ValueError) as e:
+            # Spotify kapandı/yeniden başladı, CDP gecikti: çağıran (takip) bu çağrıyı Web API'yle yapar
+            raise StillmoreYok(f"CDP bağlantısı: {type(e).__name__}: {e}") from e
+
+    def _degerlendir(self, connect, ifade: str, zaman_asimi: float):
         with connect(self.ws_adres, max_size=64 * 1024 * 1024, open_timeout=10) as ws:
             self._id += 1
             ws.send(json.dumps({"id": self._id, "method": "Runtime.evaluate", "params": {

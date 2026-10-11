@@ -120,12 +120,29 @@ def senkron(lrc: str | None) -> tuple[tuple[float, str], ...]:
     return tuple(satirlar)
 
 
+def _sozcukler(s: str) -> tuple[str, ...]:
+    """Büyük/küçük harf, aksan ve noktalama yok sayılmış sözcükler ("Beyoncé" = "BEYONCE")."""
+    import unicodedata
+
+    s = unicodedata.normalize("NFKD", s.casefold())
+    return tuple(re.findall(r"[^\W_]+", "".join(c for c in s if not unicodedata.combining(c))))
+
+
+def ayni_sanatci(aranan: str, bulunan: str) -> bool:
+    """`bulunan` sanatçı alanı aranan sanatçıyı bütün sözcükleriyle, art arda içeriyor mu ("Adele" ⊂ "Adele feat. X";
+    "A" ⊄ "Karaoke Hits Band")."""
+    a, b = _sozcukler(aranan), _sozcukler(bulunan)
+    return bool(a) and any(b[i: i + len(a)] == a for i in range(len(b) - len(a) + 1))
+
+
 def lrclib(sanatci: str, ad: str, json_al=ag.json_al) -> Soz:
     try:
         d = json_al(f"{LRCLIB}/get", {"artist_name": sanatci, "track_name": ad})
     except ag.Bulunamadi:
         bulunan = json_al(f"{LRCLIB}/search", {"artist_name": sanatci, "track_name": ad})
-        bulunan = [b for b in bulunan if b.get("plainLyrics") and not b.get("instrumental")]
+        # arama başka sanatçının (karaoke, cover) kaydını da döndürüyor: ilk sonuç doğrulanmadan alınmaz
+        bulunan = [b for b in bulunan if b.get("plainLyrics") and not b.get("instrumental")
+                   and ayni_sanatci(sanatci, b.get("artistName") or "")]
         if not bulunan:
             raise ag.Bulunamadi(f"LRCLIB'de söz yok: {sanatci} — {ad}") from None
         d = bulunan[0]

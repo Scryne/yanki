@@ -216,6 +216,7 @@ def getir(calisma: Path, d: durum.Durum, yeni: bool = False, arayici=ara, indiri
         "pin": f"https://www.pinterest.com/pin/{secilen['id']}/", "aciklama": secilen.get("seo_alt_text"),
         "boyut": [g["width"], g["height"]], "sorgu": q, "zaman": datetime.now().isoformat(timespec="seconds"),
         # beğenilmeyenler bir daha seçilmesin
-        "onceki": [*onceki.get("onceki", []), *([onceki["pin_id"]] if yeni and onceki.get("pin_id") else [])],
+        "onceki": [*onceki.get("onceki", []),
+                   *([x for x in (onceki.get("pin_id"), onceki.get("imza")) if x] if yeni else [])],
     })
     return hedef

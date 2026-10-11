@@ -57,6 +57,36 @@ class AyarYok(TunearoHatasi):
     pass
 
 
+class ErisimYok(TunearoHatasi):
+    """Hesap düzeyinde erişim kapalı (401, ya da 403 "API access not enabled"): tek bir yayının değil bütün API'nin
+    sorunu. 2026-10-11 12:47'den itibaren her istek bunu döndü; yoklama 21 yayının her birinde ayrı hata yazıp koşuyu
+    "hata verdi" diye bitiriyordu. Çağıran ilk istekte durur, bir kez bildirir."""
+
+
+# 403'ün hesap düzeyi olanı; "Track limit reached" (parça kotası) ayrı ele alınıyor
+ERISIM_METNI = re.compile(r"api access|not enabled|disabled|revoked|invalid (api )?key|unauthori[sz]ed", re.I)
+ERISIM_DOSYASI = ".tunearo_erisim.json"
+
+
+def erisim_kaydet(calisma: Path, hata: "ErisimYok | None") -> None:
+    """Erişim kapalıysa nedeni `calisma/.tunearo_erisim.json`'a (oturum özeti ve dinleme odası gösterir), açıldıysa
+    siler."""
+    yol = calisma / ERISIM_DOSYASI
+    if hata is None:
+        yol.unlink(missing_ok=True)
+        return
+    eski = erisim_durumu(calisma) or {}
+    dosya.json_yaz(yol, {"ilk": eski.get("ilk") or datetime.now().isoformat(timespec="seconds"),
+                         "son": datetime.now().isoformat(timespec="seconds"), "mesaj": str(hata)})
+
+
+def erisim_durumu(calisma: Path) -> dict | None:
+    try:
+        return json.loads((calisma / ERISIM_DOSYASI).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
 def env_oku(kok: Path) -> dict[str, str]:
     from yanki.spotify import env_oku as oku
 
@@ -97,6 +127,8 @@ class Istemci:
                 mesaj = _hata_metni(e)
                 if e.code == 404:
                     raise ag.Bulunamadi(f"{yol}: {mesaj}") from e
+                if e.code == 401 or (e.code == 403 and ERISIM_METNI.search(mesaj)):
+                    raise ErisimYok(e.code, f"{yontem} {yol}: {mesaj}") from e
                 if e.code < 500 or i == deneme - 1:
                     raise TunearoHatasi(e.code, f"{yontem} {yol}: {mesaj}") from e
             except (*ag.GECICI, ValueError) as e:
@@ -419,8 +451,10 @@ class Tunearo:
             if d.asama not in ("yuklendi", "yayinda") or y.get("dagitimci") != self.ad or not y.get("release_id"):
                 continue
             rid = y["release_id"]
-            try:  # bir yayının hatası diğerlerinin yoklamasını durdurmaz
+            try:  # bir yayının hatası diğerlerinin yoklamasını durdurmaz (hesap düzeyi erişim hatası durdurur)
                 st = self.api.get(f"/releases/{rid}/status")
+            except ErisimYok:
+                raise
             except ag.Bulunamadi:
                 if bildir:
                     bildir("kayip", f"Tunearo'da yok: {d.ad}", f"yayın {rid} bulunamadı (panelden silinmiş olabilir)",
@@ -435,6 +469,8 @@ class Tunearo:
             if y.get("geri_cek"):  # geri çekilmesi istenmiş yayın: incelemeden çıktıysa bitir
                 try:
                     sonuc_ = self._geri_cek_ilerlet(calisma, d, rid, st)
+                except ErisimYok:
+                    raise
                 except TunearoHatasi as e:
                     print(f"  {d.ad}: geri çekilemedi: {e}")
                     sonuc.append((d, "hata", eski))

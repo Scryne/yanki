@@ -138,6 +138,8 @@ class Plan:
     son_yukleme: date | None
     duzeltme: list[str]  # dağıtımcının reddettiği, yeniden paketlenmeyi bekleyen şarkılar
     bugun: date = date.min  # planın kurulduğu gün (verilmezse bugün)
+    # orijinal yazarı bilinmeyen paketler: hiçbir dağıtımcı yazarsız cover almıyor; `liste.toml` → `yazarlar` bekler
+    yazarsiz: tuple[str, ...] = ()
 
     @property
     def bugun_yuklenecekler(self) -> list[Sira]:
@@ -202,12 +204,19 @@ def plan(calisma: Path, t: Takvim, bugun: date | None = None, puanlar: dict[str,
         from yanki import kesif
 
         puanlar = {k: a.puan for k, a in kesif.oku(calisma).items()}
+    from yanki.tunearo import yazarlar
+
     hepsi = durum.hepsi(calisma)
     yuklemeler = [z.date() for d in hepsi if d.asama in ("yuklendi", "yayinda") and (z := _gecis(d, "yuklendi"))]
     son = max(yuklemeler, default=None)
     reddedilen = [d.kimlik for d in hepsi if d.asama == "paketlendi" and (d.hata or "").startswith(RED_ONEKI)]
+    # yazarsız paket sıraya girmez: her koşuda yüklenmeye çalışılıp düşüyor, özette "yükleme sırası geldi" diye
+    # görünüyordu (2026-10-11, Heaven Knows); yazarlar listeye yazılınca paket yenilenir ve sıraya girer
+    yazarsiz = tuple(d.kimlik for d in hepsi if d.asama == "paketlendi" and d.kimlik not in reddedilen
+                     and (meta := _meta(calisma, d)) and not yazarlar(meta))
     # yarım kalan API yüklemesi önce: aynı yayın tamamlanır, açılmış taslak ve parça sahipsiz kalmaz
-    kuyruk = sorted((d for d in hepsi if d.asama == "paketlendi" and d.kimlik not in reddedilen),
+    kuyruk = sorted((d for d in hepsi if d.asama == "paketlendi" and d.kimlik not in reddedilen
+                     and d.kimlik not in yazarsiz),
                     key=lambda d: (_yarim(calisma, d) is None, -puanlar.get(d.kimlik, 0.0),
                                    _gecis(d, "onaylandi") or datetime.max, d.kimlik))
     ilk = max(bugun, son + t.aralik) if son else bugun
@@ -222,7 +231,30 @@ def plan(calisma: Path, t: Takvim, bugun: date | None = None, puanlar: dict[str,
         adlar = ", ".join(d.ad for d in hepsi if d.kimlik in reddedilen)
         beklemede = (f"dağıtımcı reddetti ({adlar}); neden anlaşılıp düzeltilmeden yeni yükleme yok "
                      "(düzeltilen şarkı: yanki paketle --yeniden, sonra yanki yukle <kimlik>)")
-    return Plan(sira, beklemede, son, reddedilen, bugun)
+    if beklemede is None and dagitimci == "tunearo" and (e := erisim_kapali(calisma)):
+        beklemede = f"Tunearo API erişimi kapalı ({e}); erişim açılınca yüklemeler kendiliğinden sürer"
+    return Plan(sira, beklemede, son, reddedilen, bugun, yazarsiz)
+
+
+ERISIM_DENEME_SAAT = 6  # erişim kapalı görüldükten bu kadar sonra takvim bir yüklemeyi yeniden dener
+
+
+def erisim_kapali(calisma: Path, simdi: datetime | None = None) -> str | None:
+    """Tunearo erişimi yakın zamanda kapalı görüldüyse kısa açıklama. Takvim her 30 dk'da yüklemeyi denemesin; durum
+    yoklaması (3 saatte bir) erişim açılınca kaydı siler. Kayıt `ERISIM_DENEME_SAAT`'ten eskiyse takvim yeniden dener
+    (yüklenmiş şarkı yoksa yoklama da yok: kayıt başka türlü kalkmazdı)."""
+    from yanki import tunearo
+
+    e = tunearo.erisim_durumu(calisma)
+    if not e:
+        return None
+    try:
+        son = datetime.fromisoformat(e["son"])
+    except (KeyError, ValueError):
+        return None
+    if (simdi or datetime.now()) - son > timedelta(hours=ERISIM_DENEME_SAAT):
+        return None
+    return f"{e['ilk'][:16].replace('T', ' ')}'dan beri"
 
 
 RED_ONEKI = "dağıtımcı reddi: "

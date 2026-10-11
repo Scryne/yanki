@@ -235,7 +235,7 @@ def tara(sp, calisma: Path, pazarlar, ayar: Ayar, ek_adlar: list[str] | None = N
                                                                                     ayar.tazeleme_gun, simdi))]
     bildir(f"katalog: {len(liste)} sanatçı, {len(sirali)} parça (rank ≥ {ayar.min_rank:,}), "
            f"{len(sorulacak)} sorulacak, bütçe {ayar.butce} Spotify isteği")
-    from yanki.spotify import Sinirli
+    from yanki.spotify import Sinirli, SpotifyHatasi
 
     baslangic = sp.istek_sayisi
     try:
@@ -248,6 +248,8 @@ def tara(sp, calisma: Path, pazarlar, ayar: Ayar, ek_adlar: list[str] | None = N
                                               kapali)
     except Sinirli as e:
         bildir(f"✗ {e}; o ana kadarki sonuçlar kaydedildi")
+    except SpotifyHatasi as e:  # tek parçanın 404'ü / art arda 5xx: o ana kadarki istekler boşa gitmesin
+        bildir(f"✗ Spotify: {e}; o ana kadarki sonuçlar kaydedildi")
     onbellek_yaz(calisma, kayit)
     from yanki.kesif import neden_sec
 
