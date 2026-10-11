@@ -167,6 +167,8 @@ def main() -> int:
             offload_to_cpu=bool(m.get("cpu_offload", True)),
             offload_dit_to_cpu=bool(m.get("dit_offload", False)),
             quantization=m.get("niceleme") or None,
+            # ses çözücü: "official" | "scragvae" (topluluk ince ayarı; tepe/transient ve yüksek frekans) | yol
+            **({"vae_checkpoint": m["vae"]} if m.get("vae") else {}),
         )
         yukleme_sn = round(time.perf_counter() - t0, 1)
         if not ok:

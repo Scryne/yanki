@@ -25,6 +25,8 @@ class Motor:
     lora_olcek: float = 1.0
     # stil şarkıya özel betimden (ACE-Step captioner, yalnız kiralık GPU'da; motor_isci "betimle"); Scryne'ın stili esas
     betim: bool = False
+    # ses çözücü (ACE-Step docs/en/ALT_VAE.md): None = resmî; "scragvae" topluluk ince ayarı
+    vae: str | None = None
 
     @property
     def python(self) -> Path:
@@ -109,7 +111,7 @@ def yukle(yol: Path | None = None, kok: Path = KOK) -> Ayarlar:
                     m.get("lm_backend", "pt"), m.get("analiz_model", m["model"]),
                     float(m.get("analiz_kesit_sn", 40)), m.get("analiz_yontemi", "musicbrainz"),
                     bool(m.get("dit_offload", False)), lora, float(m.get("lora_olcek", 1.0)),
-                    bool(m.get("betim", False))),
+                    bool(m.get("betim", False)), m.get("vae") or None),
         cover=Cover(c["gorev"], float(c["guc"]), int(c["adim"]), int(c["aday_sayisi"]), tuple(c["tohumlar"]),
                     bool(c.get("referans", False)), tuple(sorted((c.get("ek") or {}).items()))),
         onarim=Onarim(o["gorev"], int(o["adim"]), float(o["pay_sn"]), tuple(o["tohumlar"])),

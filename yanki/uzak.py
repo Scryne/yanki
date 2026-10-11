@@ -195,6 +195,7 @@ def calistir(a: Ayarlar, isler: list[motor.Is], klasor: Path, zaman_asimi_sn: fl
             dosya.json_yaz(is_yolu, {"motor": {
                 "klasor": hedef, "model": a.motor.model, "niceleme": None, "cpu_offload": False,
                 "dit_offload": False, "lm_model": a.motor.lm_model, "lm_backend": a.motor.lm_backend,
+                **({"vae": a.motor.vae} if a.motor.vae else {}),
                 **({"lora": f"{UZAK_DIZIN}/lora", "lora_olcek": a.motor.lora_olcek} if a.motor.lora else {})},
                 "isler": uzak_isler})
             p.gonder(is_yolu, f"{UZAK_DIZIN}/motor_is.json")
