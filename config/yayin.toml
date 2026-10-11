@@ -17,10 +17,16 @@ etiket = ""
 kaynak = "pinterest"
 
 [master]
+# Zincir (yanki/paket.py → master): 28 Hz alçak kesim (DC, uğultu) → ton eşleme → sabit kazanç → 4× aşırı örneklenmiş
+# tepe sınırlayıcı → 44,1 kHz 16 bit. Önce loudnorm vardı; ACE-Step çıktısının tepe/ses oranı (~16 dB) −14 LUFS'a
+# doğrusal sığmadığı için sessizce dinamik moda düşüp kıta/nakarat farkını eziyordu (2026-10-11, Denetim 4).
 lufs = -14.0
-# Spotify sınırı −1 dBTP; doğrusal loudnorm bazı şarkılarda 0,06 dB aşıyordu (2026-10-07) → pay
+# Spotify sınırı −1 dBTP; pay bırakılır
 gercek_tepe_dbtp = -1.2
 ornekleme = 44100
+# Cover'ın frekans dengesini orijinal kayda yaklaştır (yanki/ton.py): ölçümde 40–63 Hz uğultu fazlası ve 3–8 kHz vokal
+# varlığı eksikliği vardı; farkın %70'i, kesme ≤ 8 dB, yükseltme ≤ 3 dB. Kapatmak: false
+ton_eslesme = true
 
 [otomatik_onay]
 # Veto penceresi (yanki/onay.py): dinlemeye çıkan şarkıya `sure_saat` içinde onay/onarım/ret gelmezse kapılardan geçmiş,

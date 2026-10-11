@@ -52,6 +52,8 @@ class Yayin:
     gercek_tepe: float
     ornekleme: int
     kapak: str = "uretilen"  # "pinterest" (şarkının moduna göre görsel) | "uretilen" (dalga formundan tipografik)
+    # cover'ın frekans dengesi orijinal kayda yaklaştırılır (yanki/ton.py; referans mastering)
+    ton_eslesme: bool = True
 
 
 def yayin_ayarlari(yol: Path) -> Yayin:
@@ -64,29 +66,69 @@ def yayin_ayarlari(yol: Path) -> Yayin:
     if kapak_kaynagi not in ("pinterest", "uretilen"):
         raise ValueError(f"kapak.kaynak pinterest ya da uretilen olmalı: {kapak_kaynagi}")
     return Yayin(y["sanatci_adi"].strip(), y["dagitimci"], y.get("etiket", "").strip(), float(m["lufs"]),
-                 float(m["gercek_tepe_dbtp"]), int(m["ornekleme"]), kapak_kaynagi)
+                 float(m["gercek_tepe_dbtp"]), int(m["ornekleme"]), kapak_kaynagi, bool(m.get("ton_eslesme", True)))
 
 
-def _loudnorm_olc(girdi: Path, y: Yayin) -> dict:
+def _loudnorm_olc(girdi: Path, y: Yayin, on_filtre: str = "") -> dict:
     cikti = subprocess.run(
         [ses.arac("ffmpeg"), "-hide_banner", "-nostats", "-i", str(girdi), "-af",
-         f"loudnorm=I={y.lufs}:TP={y.gercek_tepe}:LRA=11:print_format=json", "-f", "null", "-"],
+         (f"{on_filtre}," if on_filtre else "") + f"loudnorm=I={y.lufs}:TP={y.gercek_tepe}:LRA=11:print_format=json",
+         "-f", "null", "-"],
         capture_output=True, text=True, encoding="utf-8", errors="replace", check=True).stderr
     return json.loads(cikti[cikti.rindex("{"): cikti.rindex("}") + 1])
 
 
-def master(girdi: Path, hedef: Path, y: Yayin) -> dict:
-    """İki geçişli EBU R128 loudnorm (doğrusal mod) → 44,1 kHz 16 bit WAV ya da FLAC (hedefin uzantısına göre).
-    Ölçülen son değerleri döner."""
-    o = _loudnorm_olc(girdi, y)
-    filtre = (f"loudnorm=I={y.lufs}:TP={y.gercek_tepe}:LRA=11:measured_I={o['input_i']}:measured_TP={o['input_tp']}"
-              f":measured_LRA={o['input_lra']}:measured_thresh={o['input_thresh']}:offset={o['target_offset']}"
-              ":linear=true")
+# Alçak geçiren temizlik: ACE-Step çıktısında DC kayması (+0,001…+0,0035) ve orijinal kayda göre 30–60 Hz'te 10–20 dB
+# fazla uğultu var (2026-10-11, Someone Like You / Fix You / Perfect ölçümü); boşa tepe payı yiyor, hoparlörde boğuk.
+# İki kat 2 kutuplu = 24 dB/oktav, 28 Hz: baladın en alt bas notası (E1 41 Hz) etkilenmez.
+ALT_KESIM_HZ = 28.0
+SINIRLAYICI_ORNEKLEME = 176400  # 4× aşırı örnekleme: örnekler arası (gerçek) tepeler de yakalanır
+TAVAN_PAYI_DB = 0.3  # sınırlayıcı tavanı gerçek tepe hedefinin altında (son yeniden örnekleme ara tepeleri)
+
+
+def master(girdi: Path, hedef: Path, y: Yayin, deneme: int = 3, referans: Path | None = None) -> dict:
+    """Alçak kesim → kazanç → 4× aşırı örneklenmiş tepe sınırlayıcı → 44,1 kHz 16 bit (üçgen dither), WAV ya da FLAC.
+
+    Önce iki geçişli `loudnorm` doğrusal istenirdi ama tepe/ses yüksekliği oranı (PLR) −14 LUFS ve −1,2 dBTP'ye
+    sığmayınca (ACE-Step çıktısında PLR 15–16 dB, sığan en çok 12,8) ffmpeg sessizce dinamik moda düşüyordu
+    (2026-10-11: yüklenen paketlerin hepsi `normalization_type: dynamic`): zamanla değişen kazanç, nakaratta pompalama.
+    Şimdi tepeler kontrollü sınırlanır, kazanç tüm şarkıda sabit kalır; sonuç ölçülür, hedeften sapma kazanca
+    yansıtılıp yeniden çıkarılır. `referans` (orijinal kayıt) verilirse ve `ton_eslesme` açıksa frekans dengesi ona
+    yaklaştırılır (`yanki/ton.py`). Dönen: son ölçüm + uygulanan sınırlama ve ton eğrisi."""
+    from yanki import ton
+
+    temiz = f"highpass=f={ALT_KESIM_HZ:g}:poles=2,highpass=f={ALT_KESIM_HZ:g}:poles=2"
+    ton_bilgi: dict = {}
+    if referans is not None and y.ton_eslesme:
+        orijinal, cover = ton.bant_spektrumu(referans), ton.bant_spektrumu(girdi)
+        noktalar = ton.egri(cover, orijinal)
+        temiz += "," + ton.ffmpeg_filtresi(noktalar)
+        ton_bilgi = {"ton_egrisi": noktalar, "ton_sapma_once_db": round(ton.sapma(cover, orijinal), 2),
+                     "_orijinal": orijinal}
+    o = _loudnorm_olc(girdi, y, temiz)
+    kazanc = y.lufs - float(o["input_i"])
+    tavan_db = y.gercek_tepe - TAVAN_PAYI_DB
     hedef.parent.mkdir(parents=True, exist_ok=True)
-    subprocess.run([ses.arac("ffmpeg"), "-hide_banner", "-loglevel", "error", "-y", "-i", str(girdi), "-af", filtre,
-                    "-ar", str(y.ornekleme), "-ac", "2", *_kodlayici(hedef), str(hedef)], check=True)
-    son = _loudnorm_olc(hedef, y)
-    return {"lufs": float(son["input_i"]), "gercek_tepe_dbtp": float(son["input_tp"])}
+    for _ in range(deneme):
+        zincir = (f"{temiz},volume={kazanc:.2f}dB,aresample={SINIRLAYICI_ORNEKLEME},"
+                  f"alimiter=limit={10 ** (tavan_db / 20):.5f}:attack=1:release=80:level=0:latency=1,"
+                  f"aresample={y.ornekleme}:osf=s16:dither_method=triangular")
+        subprocess.run([ses.arac("ffmpeg"), "-hide_banner", "-loglevel", "error", "-y", "-i", str(girdi), "-af",
+                        zincir, "-ac", "2", *_kodlayici(hedef), str(hedef)], check=True)
+        son = _loudnorm_olc(hedef, y)
+        lufs, tepe = float(son["input_i"]), float(son["input_tp"])
+        if abs(y.lufs - lufs) <= 0.2 and tepe <= y.gercek_tepe + 0.05:
+            break
+        kazanc += y.lufs - lufs
+        if tepe > y.gercek_tepe:
+            tavan_db -= tepe - y.gercek_tepe + 0.1
+    orijinal = ton_bilgi.pop("_orijinal", None)
+    if orijinal is not None:  # eşleme ölçülür: master'ın orijinale uzaklığı (önce/sonra)
+        ton_bilgi["ton_sapma_sonra_db"] = round(ton.sapma(ton.bant_spektrumu(hedef), orijinal), 2)
+    sonuc = {"lufs": lufs, "gercek_tepe_dbtp": tepe, "alt_kesim_hz": ALT_KESIM_HZ,
+             "sinirlama_db": round(max(0.0, float(o["input_tp"]) + kazanc - tavan_db), 1),
+             "giris_plr_db": round(float(o["input_tp"]) - float(o["input_i"]), 1), **ton_bilgi}
+    return sonuc
 
 
 def kapak(baslik: str, tepe: list[float], hedef: Path, sanatci: str = "", boyut: int = 3000) -> Path:
@@ -418,7 +460,8 @@ def _paketle_bir(calisma: Path, d: durum.Durum, y: Yayin) -> durum.Durum:
     p = k / "paket"
     ad = guvenli_ad(f"{y.sanatci_adi or 'SANATCI'} - {d.ad}")
     ses_yolu, kapak_yolu = p / f"{ad}.{SES_BICIMI[y.dagitimci]}", p / f"{ad}.jpg"
-    olcum = master(kaynak, ses_yolu, y)
+    orijinal = k / d.kaynak["dosya"] if d.kaynak.get("dosya") else None
+    olcum = master(kaynak, ses_yolu, y, referans=orijinal if orijinal and orijinal.exists() else None)
     # Scryne'ın elle koyduğu kapak her zaman önce; yoksa ayara göre Pinterest (şarkının modu) ya da dalga formundan
     # üretilen. Görsel 3000×3000 kareye getirilir. Pinterest bulamazsa hata: şarkı onaylı kalır, sonraki koşu dener.
     if (ozel := k / "kapak_ozel.jpg").exists():

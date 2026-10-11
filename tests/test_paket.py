@@ -44,6 +44,59 @@ def test_master_hedefe_iner(tmp_path):
     assert (bilgi.samplerate, bilgi.channels, bilgi.subtype) == (44100, 2, "PCM_16")
 
 
+@ffmpeg_gerekli
+def test_master_dinamigi_korur_tepeyi_sinirlar(tmp_path):
+    """Tepe/ses oranı yüksek kayıtta (ACE-Step çıktısı ~16 dB) loudnorm sessizce dinamik moda düşüp kıtayı yükseltip
+    nakaratı bastırıyordu (yüklenen paketlerde 3 sn pencerede 4,7–8,2 dB kazanç oynaması). Kazanç sabit kalmalı;
+    alt kesim DC'yi ve 28 Hz altını atar."""
+    sr = 48000
+    t = np.arange(20 * sr) / sr
+    x = 0.03 * np.sin(2 * np.pi * 220 * t)
+    x[10 * sr:] *= 4  # sessiz kıta → yüksek nakarat (12 dB)
+    x[::sr // 2] = 0.95  # vuruş tepeleri: PLR > 13 dB, doğrusal loudnorm sığmaz
+    x += 0.01 + 0.05 * np.sin(2 * np.pi * 12 * t)  # DC ve 12 Hz uğultu
+    sf.write(str(tmp_path / "g.wav"), np.stack([x, x], 1).astype("float32"), sr)
+    o = paket.master(tmp_path / "g.wav", tmp_path / "m.wav", paket.yayin_ayarlari(_yayin(tmp_path)))
+    m, msr = sf.read(str(tmp_path / "m.wav"), always_2d=True)
+    m = m.mean(1)
+    rms = lambda a, b: 20 * np.log10(np.sqrt((m[int(a * msr):int(b * msr)] ** 2).mean()))  # noqa: E731
+    assert rms(12, 19) - rms(2, 9) == pytest.approx(12.0, abs=1.0)  # kıta/nakarat farkı korunur
+    assert abs(m.mean()) < 1e-3 and o["gercek_tepe_dbtp"] <= -1.0 and o["lufs"] == pytest.approx(-14.0, abs=0.3)
+    assert o["sinirlama_db"] > 0 and o["alt_kesim_hz"] == paket.ALT_KESIM_HZ
+
+
+def test_ton_egrisi_sinirli_kismi_ve_bant_ici():
+    from yanki import ton
+
+    c = np.asarray(ton.MERKEZLER)
+    cover = np.zeros(len(c))
+    orijinal = np.where(c < 70, -20.0, 0.0) + np.where(c > 3000, 6.0, 0.0) + 5.0  # +5: seviye farkı taşınmaz
+    e = dict(ton.egri(cover, orijinal))
+    assert e[50.0] == -ton.EN_COK_KESME and e[31.5] == 0.0  # uğultu kesilir; 40 Hz altına dokunulmaz
+    assert e[6400.4] == ton.EN_COK_YUKSELTME  # varlık eksikliği yükseltilir, sınırla
+    assert all(abs(v) < 0.5 for hz, v in e.items() if 300 <= hz <= 2000)
+    f = ton.ffmpeg_filtresi(list(e.items()))
+    assert f.startswith("firequalizer=gain_entry='entry(20,0);") and f.endswith("entry(24000,0)'")
+
+
+@ffmpeg_gerekli
+def test_master_ton_eslemesi_orijinale_yaklastirir(tmp_path):
+    sr = 48000
+    t = np.arange(20 * sr) / sr
+    rng = np.random.default_rng(0)
+    gurultu = rng.standard_normal(len(t)) * 0.05
+    _orijinal = gurultu + 0.1 * np.sin(2 * np.pi * 440 * t)
+    # cover: aynı içerik, 50 Hz uğultu fazlası, tizler eksik (basit tek kutuplu alçak geçiren)
+    tiz_eksik = np.convolve(gurultu, np.ones(4) / 4, mode="same")
+    cover = tiz_eksik + 0.1 * np.sin(2 * np.pi * 440 * t) + 0.2 * np.sin(2 * np.pi * 50 * t)
+    for ad, x in (("o.wav", _orijinal), ("c.wav", cover)):
+        sf.write(str(tmp_path / ad), np.stack([x, x], 1).astype("float32"), sr)
+    o = paket.master(tmp_path / "c.wav", tmp_path / "m.wav", paket.yayin_ayarlari(_yayin(tmp_path)),
+                     referans=tmp_path / "o.wav")
+    assert o["ton_sapma_sonra_db"] < o["ton_sapma_once_db"] and dict(o["ton_egrisi"])[50.0] < -3
+    assert o["lufs"] == pytest.approx(-14.0, abs=0.3) and o["gercek_tepe_dbtp"] <= -1.0
+
+
 def test_kapak_boyut_ve_bicim(tmp_path):
     from PIL import Image
 
