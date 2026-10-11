@@ -66,6 +66,15 @@ class Sonuc:
     yukleme_sn: float | None = None
     analiz: dict | None = None
     iz: str | None = field(default=None, repr=False)
+    stil: str | None = None  # işin gerçekten kullandığı stil (betimden kurulduysa)
+    lora_olcek: float | None = None
+    # ACE-Step'in söz hizalama puanı (çapraz dikkat; yüksek = söz sese daha iyi oturmuş): {"lm", "dit"}
+    hizalama: dict | None = None
+
+    @classmethod
+    def okunan(cls, r: dict) -> "Sonuc":
+        """İşçinin yazdığı kayıt; bilinmeyen alan (yeni işçi, eski hat) atlanır."""
+        return cls(**{k: v for k, v in r.items() if k in cls.__dataclass_fields__})
 
 
 class GpuMesgul(TimeoutError):
@@ -169,7 +178,7 @@ def calistir(
         okunan = json.loads(sonuc_yolu.read_text(encoding="utf-8")) if sonuc_yolu.exists() else []
     except (OSError, ValueError):  # işçi yazarken öldürüldü (zaman aşımı): yarım JSON
         okunan = []
-    sonuclar = {r["id"]: Sonuc(**r) for r in okunan if r.get("id") is not None}
+    sonuclar = {r["id"]: Sonuc.okunan(r) for r in okunan if r.get("id") is not None}
     genel = next((r["hata"] for r in okunan if r.get("id") is None), None)
     if takildi:
         genel = f"işçi {hareketsiz_sn / 60:.0f} dk ilerlemedi, durduruldu (ayrıntı: {gunluk})"

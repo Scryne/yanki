@@ -215,7 +215,7 @@ def calistir(a: Ayarlar, isler: list[motor.Is], klasor: Path, zaman_asimi_sn: fl
                         r["cikti"] = str(p.al(r["cikti"], hedef_yol))
                     except (runpod.RunPodHatasi, subprocess.SubprocessError, OSError) as e:
                         r.update(basari=False, hata=f"çıktı indirilemedi: {e}", cikti=None)
-                sonuclar.append(motor.Sonuc(**{k: r.get(k) for k in motor.Sonuc.__dataclass_fields__}))
+                sonuclar.append(motor.Sonuc.okunan(r))
     except Exception as e:
         kayit["hata"] = f"{type(e).__name__}: {str(e)[:300]}"
         raise

@@ -87,6 +87,24 @@ def _betimle(model, islemci, kaynak: str) -> str:
     return islemci.batch_decode(cikti[:, girdi["input_ids"].shape[1]:], skip_special_tokens=True)[0].strip()
 
 
+HIZALAMA_GEREKLI = ("pred_latents", "encoder_hidden_states", "encoder_attention_mask", "context_latents",
+                    "lyric_token_idss")
+
+
+def _hizalama(dit, eo: dict, dil: str, adim: int) -> dict | None:
+    """ACE-Step'in söz hizalama puanı (docs/en/Tutorial.md "DiT Lyrics Alignment Score", cover'da da çalışır):
+    üretimin kendi gizli durumlarından çapraz dikkat; tek ileri geçiş. Yüksek = söz sese daha iyi oturmuş."""
+    if any(eo.get(k) is None for k in HIZALAMA_GEREKLI):
+        return None
+    r = dit.get_lyric_score(pred_latent=eo["pred_latents"][0:1], encoder_hidden_states=eo["encoder_hidden_states"][0:1],
+                            encoder_attention_mask=eo["encoder_attention_mask"][0:1],
+                            context_latents=eo["context_latents"][0:1], lyric_token_ids=eo["lyric_token_idss"][0:1],
+                            vocal_language=dil, inference_steps=adim, seed=42)
+    if not r.get("success"):
+        return {"hata": str(r.get("error"))[:300]}
+    return {"lm": round(float(r["lm_score"]), 4), "dit": round(float(r["dit_score"]), 4)}
+
+
 class ModelYok(RuntimeError):
     pass
 
@@ -258,6 +276,11 @@ def main() -> int:
                 raise RuntimeError(sonuc.error or "çıktı yok")
             cikti = sonuc.audios[0]["path"]
             kayit.update(basari=True, cikti=str(Path(cikti).resolve()), cikti_sure_sn=round(sf.info(cikti).duration, 2))
+            try:  # puan düşerse aday yine geçerli
+                kayit["hizalama"] = _hizalama(dit, getattr(sonuc, "extra_outputs", None) or {},
+                                              i.get("dil", "en"), int(i["adim"]))
+            except Exception as e:  # noqa: BLE001
+                kayit["hizalama"] = {"hata": f"{type(e).__name__}: {e}"[:300]}
         except Exception as e:  # bir işin hatası diğerlerini durdurmaz
             kayit["hata"] = f"{type(e).__name__}: {e}"
             kayit["iz"] = traceback.format_exc()[-2000:]
