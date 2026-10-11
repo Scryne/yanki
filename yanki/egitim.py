@@ -39,6 +39,7 @@ UZAK = f"{runpod.ACESTEP_DIZIN}/yanki_egitim"
 POD_AD, POD_KAYIT = "egitim-yanki", "acik_pod_egitim"
 SOZ_SONU_PAYI = 3.0  # kesitin son saniyelerinde başlayan satır yarım kalır: söze girmez
 SONUS_SN = 2.0  # kesilen şarkının sonu yumuşak biter (ani kesik öğretilmesin)
+SOZ_BICIMI = "yapi-1"  # sözler yanki/yapi.py bölüm etiketleriyle (2026-10-12)
 
 
 @dataclass(frozen=True)
@@ -54,13 +55,16 @@ class Ayar:
     zaman_asimi_saat: float = 6.0
     deneme_sarkilari: tuple[str, ...] = ()
     deneme_olcekleri: tuple[float, ...] = (0.0, 0.5, 1.0)
+    # örneklerin stili, eğitimden önce pod'da ACE-Step betimleyicisiyle (acestep-captioner) yazılır: üretim de betimden
+    # stil kullandığı için (config/motor.toml [motor] betim) eğitim ile üretim aynı dili konuşur; listedeki stil yedek
+    betim: bool = True
 
 
 @dataclass(frozen=True)
 class VeriSarki:
     sanatci: str
     ad: str
-    stil: str
+    stil: str = ""  # betim düşerse kullanılır
 
     @property
     def kimlik(self) -> str:
@@ -78,9 +82,10 @@ def oku(yol: Path) -> tuple[Ayar, list[VeriSarki]]:
         raise ValueError("egitim: epoch ≥ 1, kaydet_her ≥ 1, 30 ≤ en_uzun_sn ≤ 480 olmalı")
     sarkilar, gorulen = [], set()
     for i, s in enumerate(d.get("sarki", []), 1):
-        if not all(str(s.get(k, "")).strip() for k in ("sanatci", "ad", "stil")):
-            raise ValueError(f"egitim: {i}. şarkıda sanatci, ad ve stil gerekli")
-        v = VeriSarki(s["sanatci"].strip(), s["ad"].strip(), " ".join(s["stil"].split()))
+        gerekli = ("sanatci", "ad") if ayar.betim else ("sanatci", "ad", "stil")  # betimle stil pod'da yazılır
+        if not all(str(s.get(k, "")).strip() for k in gerekli):
+            raise ValueError(f"egitim: {i}. şarkıda {', '.join(gerekli)} gerekli")
+        v = VeriSarki(s["sanatci"].strip(), s["ad"].strip(), " ".join(str(s.get("stil", "")).split()))
         if v.kimlik in gorulen:
             raise ValueError(f"egitim: aynı şarkı iki kez: {v.sanatci} — {v.ad}")
         gorulen.add(v.kimlik)
@@ -127,8 +132,14 @@ def ornek_hazirla(s: VeriSarki, ayar: Ayar, klasor: Path, lrclib=sozler.lrclib,
     ses_yolu, meta_yolu = klasor / f"{s.kimlik}.flac", klasor / f"{s.kimlik}.json"
     if ses_yolu.exists() and meta_yolu.exists():
         meta = json.loads(meta_yolu.read_text(encoding="utf-8"))
-        if meta.get("caption") != s.stil:  # stil metni düzeltildiyse ses yeniden inmez
-            meta["caption"] = s.stil
+        degisti = meta.get("caption") != s.stil  # stil metni düzeltildiyse ses yeniden inmez
+        meta["caption"] = s.stil
+        if meta.get("soz_bicimi") != SOZ_BICIMI:  # eski biçimli söz (bölüm yapısından önce): yeniden kurulur
+            soz = lrclib(s.sanatci, s.ad)
+            tam = meta.get("tam_sn") or (soz.sure_sn if meta["duration"] >= ayar.en_uzun_sn - 1 else meta["duration"])
+            meta.update(lyrics=kesit_sozu(soz, meta["duration"], tam or meta["duration"], s.ad), soz_bicimi=SOZ_BICIMI)
+            degisti = True
+        if degisti:
             dosya.json_yaz(meta_yolu, meta)
         return meta
     soz = lrclib(s.sanatci, s.ad)
@@ -153,6 +164,7 @@ def ornek_hazirla(s: VeriSarki, ayar: Ayar, klasor: Path, lrclib=sozler.lrclib,
     meta = {"audio_path": ses_yolu.name, "filename": ses_yolu.name, "caption": s.stil, "lyrics": metin,
             "language": "en", "is_instrumental": False, "duration": round(kesit, 2),
             "sanatci": s.sanatci, "ad": s.ad, "kaynak": f"youtube:{secilen.id}", "baslik": secilen.baslik,
+            "tam_sn": round(tam, 2), "soz_bicimi": SOZ_BICIMI,
             "hazirlandi": datetime.now().isoformat(timespec="seconds")}
     dosya.json_yaz(meta_yolu, meta)
     return meta
@@ -301,12 +313,16 @@ def deneme_isleri(a: Ayarlar, calisma: Path, ayar: Ayar, ses_yolu) -> list[tuple
         if d is None or not d.analiz.get("stil") or not d.kaynak.get("dosya"):
             continue
         k = durum.klasor(calisma, kimlik)
+        betim = None
+        if ayar.betim:  # üretim tarifi: stil şarkıyı dinleyen betimden (ölçek None: betim işi)
+            betim = f"{kimlik}|betim"
+            isler.append((motor.Is(id=betim, gorev="betimle", kaynak=ses_yolu(k / d.kaynak["dosya"])), d, None))
         for olcek in ayar.deneme_olcekleri:
             isler.append((motor.Is(id=f"{kimlik}|{olcek:g}", gorev="cover", kaynak=ses_yolu(k / d.kaynak["dosya"]),
                                    cikti_klasor=f"{UZAK}/deneme/{kimlik}/{olcek:g}",
                                    soz=(k / d.soz["dosya"]).read_text(encoding="utf-8"), adim=a.cover.adim,
                                    tohum=a.cover.tohumlar[0], guc=a.cover.guc, lora_olcek=olcek,
-                                   **uretim._ortak(d)), d, olcek))
+                                   stil_betimden=betim, **uretim._ortak(d)), d, olcek))
     return isler
 
 
@@ -336,6 +352,10 @@ def egit(a: Ayarlar, ayar: Ayar, veri_tar: Path, bildir=print, pod_sinifi=runpod
             p.gonder(veri_tar, f"{UZAK}/veri.tar", zaman_asimi=3600)
             p.komut(f"tar xf {UZAK}/veri.tar -C {UZAK}/veri && rm {UZAK}/veri.tar")
             sonuc.sureler["yukleme"] = round(time.time() - t)
+            if ayar.betim:
+                t = time.time()
+                veri_betimle(a, ayar, p, hedef, kok, yerel, zaman_asimi, bildir)
+                sonuc.sureler["betim"] = round(time.time() - t)
             for ad, komut in (("on_isleme", on_isleme_komutu(ayar)), ("egitim", egitim_komutu(ayar))):
                 t = time.time()
                 p.komut(arka_plan_betigi(hedef, komut, ad), tekrar=False)
@@ -373,6 +393,38 @@ def egit(a: Ayarlar, ayar: Ayar, veri_tar: Path, bildir=print, pod_sinifi=runpod
         uzak.harcama_yaz(kok, kayit)
     kaydet(sonuc, ayar, commit)
     return sonuc
+
+
+def veri_betimle(a: Ayarlar, ayar: Ayar, p, hedef: str, kok: Path, yerel: Path, zaman_asimi: float,
+                 bildir=print) -> dict[str, str]:
+    """Eğitim örneklerinin stili pod'da betimleyiciyle (üretimle aynı dil: `motor_isci.betim_stili`). Betimi düşen
+    örnek listedeki stilini korur. `dataset.json` pod'da ve yerelde güncellenir; betimler `yerel/betimler.json`."""
+    from yanki.motor_isci import betim_stili
+
+    veri = veri_klasoru(kok)
+    dataset = json.loads((veri / "dataset.json").read_text(encoding="utf-8"))
+    is_yolu = yerel / "betim_is.json"
+    dosya.json_yaz(is_yolu, {"motor": {"klasor": hedef, "model": ayar.model},
+                             "isler": [{"id": o["audio_path"], "gorev": "betimle",
+                                        "kaynak": f"{UZAK}/veri/{o['audio_path']}"} for o in dataset["samples"]]})
+    p.gonder(motor.ISCI, f"{UZAK}/motor_isci.py")
+    p.gonder(is_yolu, f"{UZAK}/betim_is.json")
+    p.komut(arka_plan_betigi(hedef, f"uv run python {UZAK}/motor_isci.py {UZAK}/betim_is.json {UZAK}/betim_sonuc.json",
+                             "betim"), tekrar=False)
+    bekle(p, "betim", zaman_asimi, aralik_sn=30, bildir=bildir)
+    ham = json.loads(p.komut(f"cat {UZAK}/betim_sonuc.json 2>/dev/null || echo '[]'") or "[]")
+    betimler = {r["id"]: r["analiz"]["betim"] for r in ham
+                if r.get("basari") and r.get("id") and (r.get("analiz") or {}).get("betim")}
+    for o in dataset["samples"]:
+        if o["audio_path"] in betimler:
+            o["caption"] = betim_stili(betimler[o["audio_path"]])
+    dosya.json_yaz(veri / "dataset.json", dataset)
+    dosya.json_yaz(yerel / "betimler.json", betimler)
+    p.gonder(veri / "dataset.json", f"{UZAK}/veri/dataset.json")
+    bildir(f"betim: {len(betimler)}/{len(dataset['samples'])} örnek")
+    if not betimler:
+        raise runpod.RunPodHatasi("betimleyici hiçbir örneği betimleyemedi (eğitim listedeki stillerle yapılmasın)")
+    return betimler
 
 
 def kaydet(sonuc: Sonuc, ayar: Ayar, commit: str | None = None, ornek: int | None = None) -> None:
@@ -438,12 +490,14 @@ def _deneme(a: Ayarlar, ayar: Ayar, p, hedef: str, calisma: Path, dinleme: Path,
         if eslesen is None:
             continue
         i, d, olcek = eslesen
+        if olcek is None:  # betim işi
+            continue
         satir = {"kimlik": d.kimlik, "ad": d.ad, "olcek": olcek, "basari": bool(r.get("basari")),
                  "hata": r.get("hata"), "sure_sn": r.get("sure_sn")}
         if r.get("basari") and r.get("cikti"):
             satir["dosya"] = str(p.al(r["cikti"], dinleme / d.kimlik / f"lora_{olcek:g}.flac"))
         sonuclar.append(satir)
-    bildir(f"deneme: {sum(x['basari'] for x in sonuclar)}/{len(isler)} iş")
+    bildir(f"deneme: {sum(x['basari'] for x in sonuclar)}/{sum(o is not None for _, _, o in isler)} iş")
     return sonuclar
 
 

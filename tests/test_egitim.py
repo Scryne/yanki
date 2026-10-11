@@ -30,7 +30,7 @@ def egitim_en_az():
 
 @pytest.mark.parametrize("metin, hata", [
     ('[egitim]\nbilinmeyen = 1\n', "bilinmeyen"),
-    ('[[sarki]]\nsanatci = "A"\nad = "B"\n', "stil"),
+    ('[egitim]\nbetim = false\n[[sarki]]\nsanatci = "A"\nad = "B"\n', "stil"),  # betimsiz eğitimde stil şart
     ('[[sarki]]\nsanatci = "A"\nad = "B"\nstil = "x"\n[[sarki]]\nsanatci = "a"\nad = "b"\nstil = "y"\n', "iki kez"),
     ('[egitim]\nen_uzun_sn = 10\n', "en_uzun_sn"),
 ])
@@ -145,6 +145,9 @@ class _EgitimPodu:
             return ("./checkpoints/epoch_20_loss_1.1/adapter_config.json\n"
                     "./checkpoints/epoch_20_loss_1.1/adapter_model.safetensors\n"
                     "./final/adapter_config.json\n./final/adapter_model.safetensors\n")
+        if "betim_sonuc.json" in betik and betik.startswith("cat "):  # biri düşer: listedeki stil kalır
+            return json.dumps([{"id": "a.flac", "basari": True, "analiz": {"betim": "A punchy trap beat with 808s."}},
+                               {"id": "b.flac", "basari": False, "hata": "x"}])
         if "motor_sonuc.json" in betik and betik.startswith("cat "):
             return json.dumps([{"id": i["id"], "basari": True, "cikti": f"{i['cikti_klasor']}/x.flac", "sure_sn": 140}
                                for i in json.loads(self.is_json)["isler"]])
@@ -183,6 +186,11 @@ def test_egitim_orkestrasyonu(tmp_path, monkeypatch):
     ayar = egitim.Ayar(deneme_sarkilari=("s1", "s2", "yok"), deneme_olcekleri=(0.0, 1.0))
     tar = tmp_path / "veri.tar"
     tar.write_bytes(b"tar")
+    veri = egitim.veri_klasoru(tmp_path)
+    veri.mkdir(parents=True)
+    (veri / "dataset.json").write_text(json.dumps({"samples": [{"audio_path": "a.flac", "caption": "eski a"},
+                                                               {"audio_path": "b.flac", "caption": "eski b"}]}),
+                                       encoding="utf-8")
     kapatilan = []
     s = egitim.egit(a, ayar, tar, bildir=lambda *_: None, pod_sinifi=_EgitimPodu,
                     kur=lambda p, cm, m: runpod.ACESTEP_DIZIN, bakiye=lambda _k: 10.0,
@@ -192,16 +200,24 @@ def test_egitim_orkestrasyonu(tmp_path, monkeypatch):
     assert p.ad == egitim.POD_AD and not p.ad.startswith("yanki-") and p.kayit_adi == egitim.POD_KAYIT
     assert kapatilan == [(egitim.POD_KAYIT, "egitim-")] and p.kapandi
     baslat = [k for k in p.komutlar if "nohup" in k]
-    assert ["--preprocess" in k for k in baslat[:2]] == [True, False] and "motor_isci.py" in baslat[2]
+    # önce eğitim verisi betimlenir (üretimle aynı stil dili), sonra ön işleme, eğitim, deneme
+    assert "betim_is.json" in baslat[0] and ["--preprocess" in k for k in baslat[1:3]] == [True, False]
+    assert "motor_isci.py" in baslat[3]
+    ornekler = json.loads((veri / "dataset.json").read_text(encoding="utf-8"))["samples"]
+    assert [o["caption"] for o in ornekler] == ["A punchy trap beat with 808s.", "eski b"]
+    assert p.gonderilen[str(veri / "dataset.json")] == f"{egitim.UZAK}/veri/dataset.json"
     # yalnız bağdaştırıcılar iner (iyileyici durumu değil); son sürüm LoRA olur
     assert not any("training_state" in x for x in p.alinan) and s.lora == s.klasor / "final"
     assert (s.klasor / "checkpoints" / "epoch_20_loss_1.1" / "adapter_model.safetensors").exists()
     is_ = json.loads(p.is_json)
     assert is_["motor"]["lora"] == f"{egitim.UZAK}/cikti/final" and is_["motor"]["niceleme"] is None
-    assert sorted((i["id"], i["lora_olcek"]) for i in is_["isler"]) == [("s1|0", 0.0), ("s1|1", 1.0), ("s2|0", 0.0),
-                                                                       ("s2|1", 1.0)]
-    assert {i["tohum"] for i in is_["isler"]} == {a.cover.tohumlar[0]} and all(i["guc"] == a.cover.guc
-                                                                               for i in is_["isler"])
+    kapak = [i for i in is_["isler"] if i["gorev"] == "cover"]
+    assert sorted((i["id"], i["lora_olcek"]) for i in kapak) == [("s1|0", 0.0), ("s1|1", 1.0), ("s2|0", 0.0),
+                                                                 ("s2|1", 1.0)]
+    # deneme üretim tarifiyle: stil şarkının betiminden
+    assert sorted(i["id"] for i in is_["isler"] if i["gorev"] == "betimle") == ["s1|betim", "s2|betim"]
+    assert all(i["stil_betimden"] == i["id"].split("|")[0] + "|betim" for i in kapak)
+    assert {i["tohum"] for i in kapak} == {a.cover.tohumlar[0]} and all(i["guc"] == a.cover.guc for i in kapak)
     assert [x["dosya"].endswith(f"lora_{x['olcek']:g}.flac") for x in s.deneme] == [True] * 4
     kayit = json.loads(uzak.harcama_yolu(tmp_path).read_text(encoding="utf-8"))[-1]
     assert kayit["not"] == "egitim" and kayit["usd"] == 1.25 and uzak.bu_ay_harcama(tmp_path) == 1.25
@@ -223,7 +239,7 @@ def test_egitim_duserse_gunluk_iner_maliyet_yazilir(tmp_path, monkeypatch):
     tar = tmp_path / "veri.tar"
     tar.write_bytes(b"tar")
     with pytest.raises(runpod.RunPodHatasi, match="egitim 1 koduyla"):
-        egitim.egit(a, egitim.Ayar(), tar, bildir=lambda *_: None, pod_sinifi=Dusen,
+        egitim.egit(a, egitim.Ayar(betim=False), tar, bildir=lambda *_: None, pod_sinifi=Dusen,
                     kur=lambda p, cm, m: runpod.ACESTEP_DIZIN, bakiye=lambda _k: 10.0, kapat=lambda *x: [],
                     commit="x")
     p = _EgitimPodu.acilan[-1]
@@ -260,3 +276,19 @@ def test_lora_uretime_baglanir_yalniz_nicelemesiz_motorda(tmp_path):
     (tmp_path / "motor.toml").write_text(toml, encoding="utf-8")
     with pytest.raises(ValueError, match="LoRA klasörü değil"):
         ayarlar.yukle(tmp_path / "motor.toml")
+
+
+def test_onbellekteki_eski_bicimli_soz_yenilenir(tmp_path):
+    # ilk eğitim tek blok [verse] sözlerle yapılmıştı; ses yeniden inmez, söz bölüm yapısıyla kurulur
+    zamanli = tuple((float(t), m) for t, m in zip((5, 10, 50, 55, 100, 105), "a1 a2 n1 n2 b1 b2".split(), strict=True))
+    s = egitim.VeriSarki("A", "B", "piano ballad")
+    (tmp_path / f"{s.kimlik}.flac").write_bytes(b"fLaC")
+    (tmp_path / f"{s.kimlik}.json").write_text(json.dumps({"audio_path": "x", "caption": "piano ballad",
+                                                           "lyrics": "[verse]\na1", "duration": 120.0}),
+                                               encoding="utf-8")
+    yapili = sozler.yapi.metin(sozler.yapi.coz(zamanli, 120.0, "B"))  # LRCLIB sözü zaman damgasından yapılı gelir
+    m = egitim.ornek_hazirla(s, egitim.Ayar(), tmp_path, adaylar=None, indir=None,
+                             lrclib=lambda *_: sozler.Soz(yapili, "lrclib", 120.0, zamanli))
+    assert m["soz_bicimi"] == egitim.SOZ_BICIMI and m["lyrics"].startswith("[Intro]\n\n[Verse 1]\na1")
+    again = egitim.ornek_hazirla(s, egitim.Ayar(), tmp_path, lrclib=None, adaylar=None, indir=None)
+    assert again["lyrics"] == m["lyrics"]  # yenilenmiş söz bir daha sorulmaz
