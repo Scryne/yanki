@@ -52,6 +52,20 @@ Rastgele isabet ≈ 7,2/21. groove 7, az döngü 8, eğri 8, vurmalı 7, bölüm
 ortalama sırası 1,52). Aynı tarifin adayları beat'te birbirine benziyor: beat tariften düzelir, aday seçiminden
 değil. Seçim ölçüsü söz WER olarak kalır.
 
-## S23 — beat kolları
+## S23 — beat kolları (C tarifi üstüne, aynı 6 şarkı)
 
-(sürüyor: cover gücü 0,85 / 1,0, orijinal kayıt tını referansı)
+| Kol | groove | döngüsellik farkı | vurmalı | bölüm | aynılık | kapı |
+|---|---|---|---|---|---|---|
+| C (güç 0,7) | 0,235 | +0,043 | ×1,34 | 0,80 | 0,956 | 6/6 |
+| G85 (güç 0,85) | 0,232 | +0,040 | ×1,36 | 0,83 | 0,956 | 6/6 |
+| G100 (güç 1,0) | 0,232 | +0,018 | ×1,40 | 0,76 | 0,955 | 6/6 |
+| R70 (orijinal tını referansı) | 0,400 | +0,081 | ×1,28 | 0,77 | 0,952 | 5/6 |
+| R85 (referans + güç 0,85) | 0,423 | +0,055 | ×1,21 | 0,77 | 0,936 | 5/6 |
+
+- Cover gücü beat'i değiştirmiyor: "son %30 adım kaynaksız → vurmalı uyduruluyor" varsayımı tutmadı. 0,7 kalır.
+- Orijinal kaydı tını referansı vermek groove'u yükseltiyor ama orijinal kaydı sızdırıyor: parmak izi 0,53 → 0,58–0,67,
+  dalga 0,01–0,04 → 0,06–0,12, Anise.K'da dalga 0,35 (kapı 0,25) düştü. Yayın yolu olamaz (spike S1'deki
+  `cover-nofsq` gibi). Reddedildi.
+- Şarkılar arası aynılık stil metniyle ve cover gücüyle kıpırdamıyor; yalnız tını referansı biraz düşürdü → S25:
+  aynı sanatçının **başka** bir şarkısı referans (prodüksiyon imzası o sanatçıya, cover'ı yapılan kayıt sızmaz) ve
+  ScragVAE çözücüsü.
