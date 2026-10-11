@@ -26,7 +26,7 @@ LM yalnız ilk "anla" işinde, bir kez yüklenir.
 tabanlı 11B, bf16 ~22 GB) kaynak sesi dinleyip tür, enstrümanlar, ritim, vokal, yapı ve tını betimi yazar. Model
 ilk "betimle" işinde indirilip yüklenir, betimle işleri bitince bellekten atılır. Cover/repaint işi
 `"stil_betimden": <betimle işinin id'si>` taşırsa stil o betimden kurulur (`betim_stili`): aynı pod'da önce dinlenir,
-sonra üretilir. DiT yalnız cover/repaint/anla işi varsa yüklenir.
+sonra üretilir; betim düştüyse işin kendi "stil"i kullanılır. DiT yalnız cover/repaint/anla işi varsa yüklenir.
 """
 
 import json
@@ -225,9 +225,10 @@ def main() -> int:
                 bolge = dict(repainting_start=float(bas), repainting_end=float(son), chunk_mask_mode="explicit")
             stil = i["stil"]
             if i.get("stil_betimden"):
-                if i["stil_betimden"] not in betimler:
+                if i["stil_betimden"] in betimler:
+                    stil = betim_stili(betimler[i["stil_betimden"]])
+                elif not stil:  # betim düştüyse işin kendi stili (varsa) yedek
                     raise RuntimeError(f"dayandığı betim yok: {i['stil_betimden']}")
-                stil = betim_stili(betimler[i["stil_betimden"]])
                 kayit["stil"] = stil
             params = GenerationParams(
                 task_type=gorev,

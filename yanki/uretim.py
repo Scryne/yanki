@@ -11,8 +11,13 @@ Scryne iyi sürümü kabul eder → adayın dosyası o sürüm olur (dinleme tes
 
 Stil değişince (dinleme sayfası) şarkı yeniden `analiz`e döner; yeni adaylar mevcutların ardından numaralanır, eskiler
 dinlenebilir ve onaylanabilir kalır.
+
+Betim (`betimle=True`, kiralık GPU'da): stili Scryne yazmamış ve betimi olmayan şarkıya aynı işçide önce "betimle"
+işi gider (ACE-Step captioner şarkıyı dinler), adaylar o betimden kurulan stille üretilir; betim ve stil şarkının
+analizine yazılır (sonraki üretimler aynı stili kullanır). Betim düşerse adaylar eski stille üretilir.
 """
 
+import dataclasses
 import json
 from collections.abc import Callable
 from pathlib import Path
@@ -20,8 +25,9 @@ from pathlib import Path
 import numpy as np
 import soundfile as sf
 
-from yanki import ag, durum, kapilar, motor, parcalama, sozler
+from yanki import ag, durum, kapilar, liste, motor, parcalama, sozler
 from yanki.ayarlar import Ayarlar
+from yanki.motor_isci import betim_stili
 
 SR = 48000
 TEK_PARCA_SN = 110  # bundan kısa şarkı bölünmez
@@ -240,12 +246,13 @@ def _onarim_sonucu(k: Path, o: dict, r: motor.Sonuc, pencere_bas: float, degerle
 
 
 def _sonuclari_isle(calisma: Path, baslangic: str, yeni_adaylar: list[durum.Aday], onarimlar: dict[str, dict],
-                    kimlik: str, notlar: list | None = None) -> durum.Durum:
+                    kimlik: str, notlar: list | None = None, analiz: dict | None = None) -> durum.Durum:
     """Üretim sonuçlarını diskteki taze duruma işler (kilit altında, birkaç milisaniye). Üretim sürerken Scryne
     dinleme odasında karar verdiyse (ret, başka adaya onay) onun aşaması korunur; yeni onarım istediyse şarkı
     `onarim`da kalır, sonraki koşu onları üretir."""
     with durum.guncelle(calisma, kimlik) as d:
         d.notlar += notlar or []
+        d.analiz.update(analiz or {})  # betimden gelen stil (sonraki üretimler de kullanır)
         for aday in yeni_adaylar:
             d.adaylar = [x for x in d.adaylar if x.no != aday.no] + [aday]
         for x in d.adaylar:
@@ -280,10 +287,24 @@ def _yalniz_motor_dustu(adaylar: list[durum.Aday]) -> bool:
     return all(set(x.kapilar) == {"motor"} for x in adaylar)
 
 
+def betim_gerekli(d: durum.Durum, elle_stil: set[str]) -> bool:
+    """Betimi yok ve stilini Scryne yazmamış (listede `stil`, dinleme odasında stil değişikliği)."""
+    return (not d.analiz.get("betim") and d.analiz.get("stil_kaynak") != "elle" and d.kimlik not in elle_stil)
+
+
+def _elle_stil(kok: Path) -> set[str]:
+    try:
+        return {s.kimlik for s in liste.yukle(kok / "girdi" / "liste.toml") if s.stil}
+    except (OSError, ValueError):
+        return set()
+
+
 def uret(a: Ayarlar, calisma: Path, kimlikler: list[str] | None = None,
          calistir: Callable[..., list[motor.Sonuc]] = motor.calistir,
-         degerlendir: Callable[..., dict] | None = None, tek_parca_sn: float = TEK_PARCA_SN) -> list[durum.Durum]:
-    """`tek_parca_sn`: bundan kısa şarkı tek parça üretilir (evde 110 sn; kiralık GPU'da 480, `uzak.motor_sec`)."""
+         degerlendir: Callable[..., dict] | None = None, tek_parca_sn: float = TEK_PARCA_SN,
+         betimle: bool = False) -> list[durum.Durum]:
+    """`tek_parca_sn`: bundan kısa şarkı tek parça üretilir (evde 110 sn; kiralık GPU'da 480, `uzak.motor_sec`).
+    `betimle`: betimi olmayan şarkının stili önce dinlenip betimden kurulur (yalnız kiralık GPU'da)."""
     degerlendir = degerlendir or (lambda aday, kaynak, soz, dil="en":
                                   kapilar.degerlendir(aday, kaynak, soz, a.fpcalc, dil=dil))
     hedef = [d for d in durum.hepsi(calisma) if d.asama in ("analiz", "onarim")
@@ -297,11 +318,17 @@ def uret(a: Ayarlar, calisma: Path, kimlikler: list[str] | None = None,
         return {r.id: r for r in calistir(a, isler, calisma / "_motor" / ad, ZAMAN_ASIMI_SN_IS_BASI * len(isler))}
 
     planlar, tur1, pencere_bas, islenen, notlar = {}, [], {}, [], {}
+    elle_stil = _elle_stil(a.kok) if betimle else set()
     for d in hedef:
         n0 = len(d.notlar)
         try:  # bir şarkının hazırlığı (eksik dosya, bozuk söz zamanı) diğerlerini durdurmaz
             if d.asama == "analiz":
                 planlar[d.kimlik], isler = _cover_isleri(a, calisma, d, tek_parca_sn)
+                if betimle and betim_gerekli(d, elle_stil):
+                    betim = f"{d.kimlik}|betim"
+                    kaynak = durum.klasor(calisma, d.kimlik) / d.kaynak["dosya"]
+                    isler = [motor.Is(id=betim, gorev="betimle", kaynak=str(kaynak)),
+                             *(dataclasses.replace(i, stil_betimden=betim) for i in isler)]
             else:
                 isler = _onarim_isleri(a, calisma, d, pencere_bas)
         except Exception as e:  # noqa: BLE001
@@ -315,6 +342,18 @@ def uret(a: Ayarlar, calisma: Path, kimlikler: list[str] | None = None,
         notlar[d.kimlik] = d.notlar[n0:]  # planlamanın uyarıları (ör. söz zaman damgası yok)
         islenen.append(d)
     s1 = motor_turu(tur1, "tur1")
+    analizler: dict[str, dict] = {}
+    for d in islenen:
+        r = s1.get(f"{d.kimlik}|betim")
+        if r is None:
+            continue
+        if r.basari and (betim := (r.analiz or {}).get("betim")):
+            analizler[d.kimlik] = {"betim": betim, "stil": betim_stili(betim), "stil_kaynak": "betim"}
+            notlar.setdefault(d.kimlik, []).append({"stil_betimden": {"eski": d.analiz.get("stil"),
+                                                                      "yeni": analizler[d.kimlik]["stil"]}})
+            d.analiz.update(analizler[d.kimlik])  # ikinci tur ve adayların kaydı yeni stille
+        else:
+            notlar.setdefault(d.kimlik, []).append({"uyari": f"betim alınamadı ({r.hata}); eski stille üretildi"})
 
     tur2 = []
     for d in islenen:
@@ -354,7 +393,8 @@ def uret(a: Ayarlar, calisma: Path, kimlikler: list[str] | None = None,
                     if o["durum"] == "bekliyor" and r is not None:
                         onarimlar[o["id"]] = _onarim_sonucu(k, o, r, pencere_bas[o["id"]], degerlendir, kaynak, soz,
                                                             dil)
-        sonuc.append(_sonuclari_isle(calisma, d.asama, yeni_adaylar, onarimlar, d.kimlik, notlar.get(d.kimlik)))
+        sonuc.append(_sonuclari_isle(calisma, d.asama, yeni_adaylar, onarimlar, d.kimlik, notlar.get(d.kimlik),
+                                     analizler.get(d.kimlik)))
     return sonuc
 
 

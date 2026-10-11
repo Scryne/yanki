@@ -340,3 +340,62 @@ def test_temizlik_yalniz_yuklenmis_ve_eski(tmp_path):
     assert not (k / "parcalar").exists() and d.adaylar[0].dosya == "" and d.adaylar[1].dosya == "adaylar/2/tam.flac"
     d.asama = "paketlendi"
     assert temizlik.plan(tmp_path, d, 0, datetime(2026, 10, 20)) is None  # yüklenmemiş şarkıya dokunmaz
+
+
+class BetimliMotor(SahteMotor):
+    """Betimle işine betim döner (ya da düşer); cover işleri SahteMotor gibi."""
+
+    def __init__(self, betim: str | None):
+        super().__init__()
+        self.betim = betim
+
+    def __call__(self, a, isler, klasor, zaman_asimi_sn):
+        betimler = [i for i in isler if i.gorev == "betimle"]
+        sonuc = super().__call__(a, [i for i in isler if i.gorev != "betimle"], klasor, zaman_asimi_sn)
+        self.turlar[-1] = isler
+        return [motor.Sonuc(i.id, self.betim is not None, None if self.betim else "betimleyici yüklenemedi",
+                            analiz={"betim": self.betim} if self.betim else None) for i in betimler] + sonuc
+
+
+def test_betim_ayni_iscide_once_dinlenir_stil_kaydedilir(tmp_path):
+    # Scryne (2026-10-12): "beat çok kötü, sürekli aynı"; stil sanatçının genel türüydü ("pop, funk song")
+    from yanki.motor_isci import betim_stili
+
+    c = tmp_path / "c"
+    _sarki(c, "kisa", 60)
+    betim = "A soulful piano ballad with gentle strings. " * 30  # uzun: 256 jetonluk sınıra kısaltılır
+    m = BetimliMotor(betim)
+    uretim.uret(_ayar(), c, calistir=m, degerlendir=GECER, betimle=True)
+    isler = m.turlar[0]
+    assert isler[0].gorev == "betimle" and all(i.stil_betimden == "kisa|betim" for i in isler[1:])
+    d = durum.oku(c, "kisa")
+    assert d.analiz["betim"] == betim and d.analiz["stil"] == betim_stili(betim)
+    assert len(d.analiz["stil"].split()) <= 120
+    assert d.analiz["stil_kaynak"] == "betim" and all(x.stil == d.analiz["stil"] for x in d.adaylar)
+    assert any("stil_betimden" in n for n in d.notlar)
+    # yeniden üretimde betim tekrar istenmez
+    uretim.yeniden_uretime_al(d)
+    durum.yaz(c, d)
+    m2 = BetimliMotor(betim)
+    uretim.uret(_ayar(), c, calistir=m2, degerlendir=GECER, betimle=True)
+    assert all(i.gorev == "cover" and i.stil_betimden is None for i in m2.turlar[0])
+
+
+def test_betim_duserse_eski_stille_uretilir_elle_stile_dokunulmaz(tmp_path):
+    c = tmp_path / "c"
+    _sarki(c, "kisa", 60)
+    uretim.uret(_ayar(), c, calistir=BetimliMotor(None), degerlendir=GECER, betimle=True)
+    d = durum.oku(c, "kisa")
+    assert d.asama == "uretildi" and d.analiz["stil"] == "s" and "betim" not in d.analiz
+    assert any("betim alınamadı" in str(n) for n in d.notlar)
+    # Scryne'ın stili esas: betim istenmez; betimle kapalıyken de istenmez
+    _sarki(c, "elle", 60)
+    with durum.guncelle(c, "elle") as e:
+        e.analiz["stil_kaynak"] = "elle"
+    m = BetimliMotor("x")
+    uretim.uret(_ayar(), c, ["elle"], calistir=m, degerlendir=GECER, betimle=True)
+    assert all(i.gorev == "cover" for i in m.turlar[0])
+    _sarki(c, "kapali", 60)
+    m = BetimliMotor("x")
+    uretim.uret(_ayar(), c, ["kapali"], calistir=m, degerlendir=GECER)
+    assert all(i.gorev == "cover" for i in m.turlar[0])

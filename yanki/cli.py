@@ -90,7 +90,8 @@ def _uret(_: argparse.Namespace) -> int:
         print("üretim yok: kiralık GPU kullanılamıyor, evde üretim kapalı (config/motor.toml → [uzak] yerel_yedek)")
         return 0
     print(f"üretim: {'kiralık GPU' if uzak_mi else 'evdeki GPU'}")
-    islenen = uretim.uret(a, a.kok / "calisma", calistir=calistir, tek_parca_sn=tek_parca_sn)
+    islenen = uretim.uret(a, a.kok / "calisma", calistir=calistir, tek_parca_sn=tek_parca_sn,
+                          betimle=uzak_mi and a.motor.betim)
     if not islenen:
         print("üretilecek bir şey yok (analiz ya da onarım bekleyen şarkı yok)")
     for d in islenen:
@@ -864,7 +865,8 @@ def _uret_ve_bildir(a, secilen: list, sirada: int, calistir, tek_parca_sn: float
           flush=True)
     bildir = _bildirici(calisma)
     try:
-        uretilen = uretim.uret(a, calisma, [d.kimlik for d in secilen], calistir=calistir, tek_parca_sn=tek_parca_sn)
+        uretilen = uretim.uret(a, calisma, [d.kimlik for d in secilen], calistir=calistir, tek_parca_sn=tek_parca_sn,
+                               betimle=nerede == "kiralık GPU" and a.motor.betim)
     except motor.GpuMesgul as e:
         print(f"üretim bekliyor: {e}")
         return 0

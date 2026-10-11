@@ -23,6 +23,8 @@ class Motor:
     # eğitilmiş tür LoRA'sı (yanki/egitim.py; bağdaştırıcı klasörü) ve ölçeği; yalnız nicelemesiz motorda
     lora: Path | None = None
     lora_olcek: float = 1.0
+    # stil şarkıya özel betimden (ACE-Step captioner, yalnız kiralık GPU'da; motor_isci "betimle"); Scryne'ın stili esas
+    betim: bool = False
 
     @property
     def python(self) -> Path:
@@ -102,7 +104,8 @@ def yukle(yol: Path | None = None, kok: Path = KOK) -> Ayarlar:
         motor=Motor(kok / m["klasor"], m["model"], m.get("niceleme") or None, bool(m["cpu_offload"]), m["lm_model"],
                     m.get("lm_backend", "pt"), m.get("analiz_model", m["model"]),
                     float(m.get("analiz_kesit_sn", 40)), m.get("analiz_yontemi", "musicbrainz"),
-                    bool(m.get("dit_offload", False)), lora, float(m.get("lora_olcek", 1.0))),
+                    bool(m.get("dit_offload", False)), lora, float(m.get("lora_olcek", 1.0)),
+                    bool(m.get("betim", False))),
         cover=Cover(c["gorev"], float(c["guc"]), int(c["adim"]), int(c["aday_sayisi"]), tuple(c["tohumlar"])),
         onarim=Onarim(o["gorev"], int(o["adim"]), float(o["pay_sn"]), tuple(o["tohumlar"])),
         gpu=Gpu(int(g["bos_esik_mib"]), int(g["bekleme_sn"])),
