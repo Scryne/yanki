@@ -125,8 +125,23 @@ def veri_klasoru(kok: Path) -> Path:
     return kok / KLASOR / "veri"
 
 
+def ornek_dili(ses_yolu: Path, metin: str, tespit=None) -> str:
+    """Söz dili: sesten (Whisper); ses emin değilse söz İngilizce değilse sesin dili (hazirlik.dil_bul ile aynı kural).
+    Önce hep "en" yazılıyordu; çok türlü veride İspanyolca/Korece şarkı yanlış etiketlenirdi."""
+    from yanki import hazirlik, kapilar
+
+    try:
+        dil, olasilik = (tespit or kapilar.dil_tespit)(ses_yolu)
+    except Exception:  # noqa: BLE001 — dil tespiti örneği düşürmez
+        return "en"
+    if olasilik >= hazirlik.DIL_ESIGI:
+        return dil if dil != "unknown" else "en"
+    oran = kapilar.ingilizce_orani(metin)
+    return dil if oran is not None and oran < hazirlik.INGILIZCE_ESIGI and dil not in ("en", "unknown") else "en"
+
+
 def ornek_hazirla(s: VeriSarki, ayar: Ayar, klasor: Path, lrclib=sozler.lrclib,
-                  adaylar=kaynak.youtube_adaylari, indir=kaynak.youtube_indir) -> dict:
+                  adaylar=kaynak.youtube_adaylari, indir=kaynak.youtube_indir, dil_tespit=None) -> dict:
     """Bir eğitim örneği: `<kimlik>.flac` + `<kimlik>.json` (Side-Step örnek alanları + kaynak). Varsa yeniden
     indirilmez."""
     ses_yolu, meta_yolu = klasor / f"{s.kimlik}.flac", klasor / f"{s.kimlik}.json"
@@ -162,7 +177,7 @@ def ornek_hazirla(s: VeriSarki, ayar: Ayar, klasor: Path, lrclib=sozler.lrclib,
         ses_yolu.unlink(missing_ok=True)
         raise LookupError("kesitte söz yok")
     meta = {"audio_path": ses_yolu.name, "filename": ses_yolu.name, "caption": s.stil, "lyrics": metin,
-            "language": "en", "is_instrumental": False, "duration": round(kesit, 2),
+            "language": ornek_dili(ses_yolu, metin, dil_tespit), "is_instrumental": False, "duration": round(kesit, 2),
             "sanatci": s.sanatci, "ad": s.ad, "kaynak": f"youtube:{secilen.id}", "baslik": secilen.baslik,
             "tam_sn": round(tam, 2), "soz_bicimi": SOZ_BICIMI,
             "hazirlandi": datetime.now().isoformat(timespec="seconds")}
@@ -418,6 +433,11 @@ def veri_betimle(a: Ayarlar, ayar: Ayar, p, hedef: str, kok: Path, yerel: Path, 
     for o in dataset["samples"]:
         if o["audio_path"] in betimler:
             o["caption"] = betim_stili(betimler[o["audio_path"]])
+    # betimi düşen ve listede stili olmayan örnek boş stille öğretilmesin
+    if bos := [o["audio_path"] for o in dataset["samples"] if not o.get("caption", "").strip()]:
+        bildir(f"betimsiz ve stilsiz {len(bos)} örnek çıkarıldı: {', '.join(bos[:5])}")
+        dataset["samples"] = [o for o in dataset["samples"] if o.get("caption", "").strip()]
+        dataset.get("metadata", {})["num_samples"] = len(dataset["samples"])
     dosya.json_yaz(veri / "dataset.json", dataset)
     dosya.json_yaz(yerel / "betimler.json", betimler)
     p.gonder(veri / "dataset.json", f"{UZAK}/veri/dataset.json")

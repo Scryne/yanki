@@ -292,3 +292,17 @@ def test_onbellekteki_eski_bicimli_soz_yenilenir(tmp_path):
     assert m["soz_bicimi"] == egitim.SOZ_BICIMI and m["lyrics"].startswith("[Intro]\n\n[Verse 1]\na1")
     again = egitim.ornek_hazirla(s, egitim.Ayar(), tmp_path, lrclib=None, adaylar=None, indir=None)
     assert again["lyrics"] == m["lyrics"]  # yenilenmiş söz bir daha sorulmaz
+
+
+def test_ornek_dili_sesten_belirsizse_sozden(tmp_path):
+    # önce hep "en" yazılıyordu: çok türlü veride İspanyolca şarkı yanlış etiketlenirdi
+    ses = tmp_path / "x.flac"
+    assert egitim.ornek_dili(ses, "x", lambda _: ("es", 0.97)) == "es"
+    assert egitim.ornek_dili(ses, "Des-pa-cito quiero respirar tu cuello despacito", lambda _: ("es", 0.3)) == "es"
+    ingilizce = "I heard that you're settled down and you are married now"
+    assert egitim.ornek_dili(ses, ingilizce, lambda _: ("es", 0.3)) == "en"
+
+    def bozuk(_):
+        raise RuntimeError("ses okunamadı")
+
+    assert egitim.ornek_dili(ses, "x", bozuk) == "en"
