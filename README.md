@@ -78,6 +78,13 @@ kapanan bilgisayarın açık bıraktığı sunucu bir sonraki koşuda silinir. H
 "Bu ay GPU". Ölçümler: `docs/arastirma/06`. `yanki bastan [--uygula]`: şarkıları baştan üretime alır (adaylar ve paket
 `calisma/_arsiv/<tarih>/`'e; yüklenmişler geri çekilir, inceleme bitince üretime döner).
 
+**Ses modeli eğitimi (`yanki egit`):** ACE-Step XL-SFT'ye tür LoRA'sı (vokal ve eşlik birlikte; `yanki/egitim.py`,
+`config/egitim.toml`). Veri yerelde hazırlanır (`--yalniz-veri`, ücretsiz): her sanatçıdan bir şarkı, modern stüdyo
+balad/pop, cover listesindeki sanatçılar hariç; YouTube'dan tam bant Opus, en çok 240 sn, LRCLIB sözü aynı yerden
+kesilir. Eğitim kiralık GPU'da (A40, ~2,5 saat, ~1,5 $), ardından karşılaştırmalı deneme: aynı şarkılar aynı tohumla
+LoRA'sız / yarım / tam → `calisma/dinleme/lora/<zaman>/OKU.md` (kapı ölçüleriyle). Beğenilirse `config/motor.toml` →
+`[motor] lora = "…/final"` (isteğe bağlı `lora_olcek`): kiralık GPU'daki üretim LoRA'yla yapılır.
+
 **Tür çizgisi:** keşif hattın tarifi dinlenmiş türlerinde kalır (balad, pop, piyano/akustik, rock). Rap, metal,
 elektronik, Latin/Brezilya vb. aday Deezer türünden tanınır, puan almaz, kendiliğinden listeye girmez (dinleme
 odasında "Yine de ekle"). Aynı kalıp otomatik onayı da sınırlar (`yanki/onay.py` → `DENENMEMIS`).
@@ -111,7 +118,8 @@ uv run yanki spotify-baglan                                # yalnız kendi playl
 - `config/motor.toml` — model, niceleme, cover gücü, adım, aday/onarım tohumları, GPU eşiği. Tarifin kaynağı dinleme
   testleri (`docs/arastirma/01-spike-bulgulari.md`).
 - `config/yayin.toml` — sanatçı adı, dağıtımcı (`tunearo` | `routenote` | `distrokid`), mastering hedefi (−14 LUFS,
-  −1 dBTP), yayın takvimi, Tunearo'da hariç bölgeler ve mağazalar (`[tunearo]`).
+  −1,2 dBTP, ton eşleme), yayın takvimi, Tunearo'da hariç bölgeler ve mağazalar (`[tunearo]`).
+- `config/egitim.toml` — LoRA eğitiminin verisi (şarkı + stil metni) ve ayarları (rank, epoch, deneme şarkıları).
 - `config/kesif.toml` — keşif pazarları, taranacak playlist'ler, gece listeye kaç aday eklensin, arama derinliği.
 - `config/operasyon.toml` — yedek klasörü (varsayılan `calisma/yedek`; başka diske almak daha güvenli), sıklığı,
   kaç yedek saklanacağı; disk temizliğinin gün eşiği; gündüz üretiminin saatleri, boşta kalma eşiği.
@@ -131,6 +139,9 @@ uv run yanki spotify-baglan                                # yalnız kendi playl
   yüklenmiş sızıntılar YouTube başlığındaki sanatçıyla, düzenlemeler (sped up, remix) adla elenir. Ayrıntı:
   `docs/arastirma/03`.
 - **Dil:** kaynak sesten tespit edilir (Whisper); ACE-Step'e ve söz kapısına o dil gider.
+- **Mastering:** 28 Hz alçak kesim (ACE-Step çıktısındaki DC ve uğultu), orijinal kayda ton eşleme (40–63 Hz fazlası
+  kesilir, 3–8 kHz vokal varlığı en çok 3 dB; `yanki/ton.py`), sabit kazanç, 4× aşırı örneklenmiş tepe sınırlayıcı:
+  −14 LUFS, ≤ −1,2 dBTP, şarkının dinamiği (kıta/nakarat farkı) korunur.
 - **Motor ayrı süreç:** hat torch yüklemez; ACE-Step işçisi (`yanki/motor_isci.py`) motorun kendi ortamında çalışır.
 
 Kararlar ve gerekçeler: `docs/Final-Dokuman.md`, yol haritası: `docs/Roadmap.md`.

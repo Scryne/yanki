@@ -1,7 +1,7 @@
 ---
 proje: Yanki
 created: 2026-10-06
-modified: 2026-10-10
+modified: 2026-10-11
 type: roadmap
 status: aktif
 ---
@@ -22,7 +22,7 @@ Durum sütunu session-start hook'u tarafından otomatik okunur — format bozulm
 | 7 | Gerçek kullanım | 🔄 Devam Ediyor | Scryne listeden bir şarkıyı yükledi, dağıtımcı kabul etti, parça Spotify'da dinlenebilir; bulgular roadmap'e işlendi |
 | 8 | Kalite ve düzenli yayın | 🔄 Devam Ediyor | En az 3 parça Spotify'da; yükleme takvimi işliyor; vokal son işlemi ve LoRA dinleme testiyle karara bağlandı; ≥ 10 onarım etiketiyle otomatik kusur işaretleme denendi (sonuç kayıtlı) |
 | 9 | Kaldırılmış şarkı keşfi ve yayın takibi | 🔄 Devam Ediyor | Spotify anahtarı bağlı; `yanki kesif` (STILLMORE CSV'si, kendi playlist ya da Deezer katalog farkı) ≥ 5 doğrulanmış (geri gelmemiş) aday buldu; en az biri üretilip yüklendi; `yanki takip` yüklenen parçaların canlılığını ve ad aramasındaki sırasını pazar pazar kaydetti |
-| 10 | Tam otomatik yayın (dağıtım API'si) | 🔄 Devam Ediyor | Arkadaşın API'siyle onaylı bir paket elle dokunmadan yüklendi; inceleme → kabul/red → canlı durumu kendiliğinden izlendi ve kayda düştü; yayın takvimi en az 2 hafta kesintisiz işledi; veto penceresi (otomatik onay) bir şarkıda uçtan uca çalıştı |
+| 10 | Tam otomatik yayın (dağıtım API'si) | ⛔ Engelli | Arkadaşın API'siyle onaylı bir paket elle dokunmadan yüklendi; inceleme → kabul/red → canlı durumu kendiliğinden izlendi ve kayda düştü; yayın takvimi en az 2 hafta kesintisiz işledi; veto penceresi (otomatik onay) bir şarkıda uçtan uca çalıştı |
 | 11 | Öğrenen şarkı seçimi | ⏳ Bekliyor | Puan formülü en az 10 yayının ölçülen arama sırası/dinlenmesiyle karşılaştırılıp güncellendi; tür/dil başına üretilebilirlik çarpanı Scryne'ın onay/ret verisinden; en az bir yeni keşif kaynağı (YouTube'da olup Spotify'da olmayan) canlı aday üretti |
 | 12 | Kalite otomasyonu | ⏳ Bekliyor | Otomatik aday seçimi Scryne'ın geçmiş seçimleriyle ölçüldü (isabet kayıtlı) ve ≥ %70 ise veto penceresinde varsayılan; rap ve İngilizce dışı en az bir dil için tarif dinleme testiyle karara bağlandı |
 | 13 | Operasyon ve dayanıklılık | 🔄 Devam Ediyor | Disk temizliği ve yedek işliyor; gece koşusu/Spotify kilidi/dağıtımcı reddi bildirim olarak geliyor; GPU boştayken gündüz üretimi kuyruğu eritiyor; bir haftalık kesintisiz otomatik koşu günlükte hatasız |
@@ -263,7 +263,8 @@ Durum sütunu session-start hook'u tarafından otomatik okunur — format bozulm
   (127.0.0.1:8765) ve özeti Windows bildirimiyle gösterir (`yanki ozet`); elle tetiklenip doğrulandı. Oda `python -m`
   ile çalışır: `yanki.exe` açıkken kilitleniyor, bağımlılık değişince `uv` senkronu düşüyordu (bulundu, düzeltildi).
 
-### Faz 10: Tam otomatik yayın (dağıtım API'si) 🔄
+### Faz 10: Tam otomatik yayın (dağıtım API'si) ⛔
+- **Engel (2026-10-11 12:47):** Tunearo API erişimi hesap sahibince kapatıldı (`403 API access not enabled for this user`); 21 yayın incelemede, durum okunamıyor, yükleme yok. Hat bekliyor, erişim açılınca kendiliğinden sürer (Denetim 4).
 Hedef (Scryne, 2026-10-09): "arkadaşımın API'si gelince her şeyin otomatik olması". Uçtan uca: keşif → üretim →
 onay (insan ya da veto penceresi) → paket → API ile yükleme → durum izleme → takip. İnsan yalnız dinler ve isterse
 veto eder.
@@ -617,3 +618,61 @@ aramasında da yazar bilgisi yok); paketi yazarsız çıktı, Tunearo yüklemesi
 bitiriyordu (22:11, kod 1). Artık yazarsız paket bekler ve Scryne'a bir kez bildirilir, koşu hatasız biter; diğer
 paketler yüklenir. `liste.toml`'da şarkıya `yazarlar = ["Ad Soyad"]` yazılınca sonraki koşu künyeyi günceller, paketi
 yeniden çıkarır ve yükler (hazırlıkta da listedeki yazarlar MusicBrainz'in yerine geçer). Yazar uydurulmaz. 2 yeni test.
+
+## Denetim 4 (2026-10-11, Scryne: "baştan sona incele, eksik ve hataların tamamını çöz, iyileştir; ardından şarkı modelini ve beat'ini eğit, orijinal şarkılar gibi kaliteli olsun, AI tespitinde human çıksın")
+
+Kod, günlükler (sürekli koşu, oda, runpod) ve yayına giden seslerin kendisi ölçülerek tarandı; modüllerin ikinci
+taraması bir alt ajanla. Testler `tests/test_denetim4.py`, `tests/test_egitim.py`, `tests/test_paket.py`: düzeltmelerin
+testleri düzeltmesiz kodda kırmızı (denetim testlerinin 18/18'i, mastering testi), toplam 390 yeşil.
+
+**Dışarıdan gelen engel:** Tunearo 2026-10-11 12:47'den beri her isteğe `403 API access not enabled for this user`
+diyor (hesap sahibi API erişimini kapattı). 21 yayın incelemede, durumları okunamıyor, yeni yükleme yapılamaz. Koddan
+çözülmez: arkadaşla konuşulacak. Hat artık bunu hesap düzeyi hata sayıyor (aşağıda).
+
+**Hatalar (çözüldü):**
+- **Tunearo erişimi kapanınca:** yoklama 21 yayının her birinde ayrı 403 yazıp (her biri 12 sn) adımı "sorunlu"
+  bitiriyor, koşu her 3 saatte "hata verdi" bildiriyordu. `tunearo.ErisimYok`: ilk istekte durur, günde bir bildirilir,
+  `calisma/.tunearo_erisim.json` kaydı özet satırında, panoda "Senden beklenen"de ve takvimde görünür; takvim 6 saat
+  yüklemeyi denemez, erişim açılınca yoklama kaydı siler, hat kendiliğinden sürer.
+- **DNS:** `dashboard.tunearo.com`'un AAAA sorgusu bu ağda zaman aşımına düşüyor, her istek 12 sn (Python her
+  bağlantıda yeniden çözüyor). `ag._cozumle`: IPv4/IPv6 aynı anda, IPv4 gelince IPv6 en çok 0,3 sn beklenir, 5 dk
+  önbellek; paket içe aktarılınca bütün istemcilere (Spotify, TypeSafe, RunPod) uygulanır. 12,8 sn → 0,7 sn.
+- **Mastering (yayına giden her pakette):** iki geçişli loudnorm "doğrusal" isteniyordu ama ACE-Step çıktısının
+  tepe/ses oranı (15–16 dB) −14 LUFS / −1,2 dBTP'ye doğrusal sığmıyor (en çok 12,8): ffmpeg sessizce dinamik moda
+  düşmüş, 21 paketin hepsi `normalization_type: dynamic`. Ölçüm: 3 sn pencerede kazanç 4,7–8,2 dB oynuyor, sentetik
+  testte 12 dB'lik kıta/nakarat farkı ~0'a iniyor (pompalama, cansız ses). Yeni zincir: 28 Hz alçak kesim (çıktıda DC
+  +0,001…+0,0035 ve uğultu) → ton eşleme → sabit kazanç → 4× aşırı örneklenmiş tepe sınırlayıcı (3,5–4 dB) → üçgen
+  dither; kazanç oynaması std 0,04–0,12 dB, −14,0 LUFS, −1,4…−1,5 dBTP.
+- **Dinleme odası "Listeye ekle" hiç çalışmamıştı:** gövdesiz çağrı GET atıyordu, uç POST (404); testler doğrudan POST
+  attığı için yeşildi. YouTube izlenmesi ölçülmemiş aday eklenirken de 500 (TypeError) verirdi.
+- **Yazarsız paket** (Heaven Knows) her oturum özetinde "yükleme sırası geldi" diye görünüyordu: sıraya girmez,
+  `liste.toml`'a yazar eklenince girer.
+- **LRCLIB yedek araması** ilk sonucu doğrulamadan alıyordu (başka sanatçının karaoke/cover kaydı): sanatçı sözcük
+  sözcük eşleşmeli. **Künye** ilk eserde yazar yoksa diğer kayıtlara bakmıyordu (gereksiz "yazarlar gerekli").
+- **Latin dışı ad** (Kiril, CJK) boş ya da çakışan şarkı kimliği üretiyordu (kök klasöre yazım): kısa özet eklenir;
+  mevcut kimlikler değişmedi.
+- **Katalog farkında** tek Spotify 404/5xx keşif adımını ve önbelleği düşürüyordu; **takipte** Spotify istemcisi
+  kapanırsa (CDP kopması) Web API'ye düşmüyordu; **odada** yarım Tunearo yüklemesi olan paket reddedilince taslak
+  sahipsiz kalıyordu (409); **parçalı üretimde** kısa çıkan ara parça şarkının ortasında sessizlik bırakıyordu;
+  beğenilmeyen Pinterest görseli başka pin kimliğiyle geri gelebiliyordu; oda günlüğü zararsız `ConnectionResetError`
+  izleriyle doluyordu.
+
+**İyileştirmeler:**
+- **Ton eşleme (referans mastering, `yanki/ton.py`):** 22 şarkıda üretilen − orijinal: 40–63 Hz +5…+8 dB (±11),
+  3–8 kHz −2…−4 dB (vokal varlığı). Her şarkı kendi orijinaline göre: farkın %70'i, kesme ≤ 8, yükseltme ≤ 3 dB,
+  40 Hz–12 kHz. Orijinale uzaklık 6 şarkıda %10–35 azaldı. `config/yayin.toml` → `[master] ton_eslesme`.
+- **YouTube kaynağı tam bant Opus** (önce AAC 128 kbps, 16 kHz'te kesik: 16–18 kHz −85 dB).
+
+**Ses modeli eğitimi (`yanki egit`, `yanki/egitim.py`, `config/egitim.toml`):** ACE-Step'in kendi Side-Step eğitimiyle
+XL-SFT'ye tür LoRA'sı; vokal ve eşlik (beat) tek modelde birlikte öğreniliyor. Veri: 50 şarkı (48'i hazırlandı, 175 dk),
+modern stüdyo balad/pop, kadın/erkek dengeli, her sanatçıdan bir, cover listesindeki sanatçılar yok (kapak yaptığımız
+kayıtlar ezberlenmesin, tek bir sesin kopyası olmasın); kaynak seçimi albüm sesini tercih eder ("- Topic", "Audio"),
+akustik sürüm ve fragman kurgusu elenir. Söz ve ses aynı yerden kesilir (zaman damgasıyla), söz biçimi üretimdeki
+`soz.txt`'nin aynısı. Yerel 2B turbo denemesi iki hatayı paraya kıymadan buldu (Side-Step onay sorusu, ACE-Step kökü
+dışındaki yol). Eğitim pod'u üretimin artık temizliğine yakalanmasın diye ayrı ad ve kayıtla açılır. Eğitimden sonra
+aynı pod'da karşılaştırmalı deneme (aynı şarkı, aynı tohum, LoRA 0 / 0,5 / 1). Sonuç: aşağıda.
+
+**Yapılmayan:** "AI tespitinde human çıksın" isteği uygulanmadı. Dedektörü atlatmaya yönelik iş, parçanın AI ile
+üretildiğini dağıtımcıdan, mağazalardan ve dinleyiciden gizlemek olur (Deezer/Tidal bu bilgiyle etiketliyor ya da
+ödüyor). Operasyonel gereği de yok: Tunearo'da AI tespiti tek başına red değil, Orvane biyografisi "AI-assisted".
+Kalite işleri (mastering, eğitim) dedektör skoru hedeflenmeden yapıldı.
