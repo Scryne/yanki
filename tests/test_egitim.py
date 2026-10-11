@@ -42,17 +42,17 @@ def test_ayar_dogrulama(tmp_path, metin, hata):
 
 
 def test_kesit_sozu_uretimdeki_bicimde_ve_kesitle_ayni_yerden():
-    duz = sozler.etiketle("a1\na2\n\nn1\nn2\n\nb1\nb2\n\nn1\nn2")
     zamanli = tuple((t, m) for t, m in zip((5, 10, 50, 55, 100, 105, 150, 155), "a1 a2 n1 n2 b1 b2 n1 n2".split(),
                                            strict=True))
-    soz = sozler.Soz(duz, "lrclib", 160.0, zamanli)
-    assert egitim.kesit_sozu(soz, 160, 160) == duz  # kesilmeyen şarkı: üretimdeki soz.txt'nin aynısı
-    # 104 sn'de kesildi: 101'den sonra başlayan satır yok; 60'ta içi boşalan kıtanın etiketi de yok
-    assert egitim.kesit_sozu(soz, 104, 160) == "[verse]\na1\na2\n\n[chorus]\nn1\nn2\n\n[verse]\nb1"
-    assert egitim.kesit_sozu(soz, 60, 160) == "[verse]\na1\na2\n\n[chorus]\nn1\nn2"
-    # düz söz zaman damgalı sözle satır satır tutmuyorsa zaman damgalı sözün kıtaları
-    tutmayan = sozler.Soz("[verse]\ntek satır", "lrclib", 160.0, zamanli)
-    assert egitim.kesit_sozu(tutmayan, 60, 160).startswith("[verse]\na1\na2\nn1")
+    soz = sozler.Soz(sozler.yapi.metin(sozler.yapi.coz(zamanli, 160.0)), "lrclib", 160.0, zamanli)
+    assert egitim.kesit_sozu(soz, 160, 160) == soz.metin  # kesilmeyen şarkı: üretimdeki soz.txt'nin aynısı
+    # 104 sn'de kesildi: 101'den sonra başlayan satır yok; yapı bütün şarkıdan (nakarat iki kez geçiyor)
+    assert egitim.kesit_sozu(soz, 104, 160) == ("[Intro]\n\n[Verse 1]\na1\na2\n\n[Instrumental]\n\n[Chorus]\nn1\nn2"
+                                               "\n\n[Instrumental]\n\n[Verse 2]\nb1")
+    assert egitim.kesit_sozu(soz, 60, 160) == "[Intro]\n\n[Verse 1]\na1\na2\n\n[Instrumental]\n\n[Chorus]\nn1\nn2"
+    # zaman damgası yoksa düz sözden kesitin oranı kadar satır
+    duz = sozler.Soz("[Verse 1]\na\nb\n\n[Chorus]\nc\nd", "dosya", 100.0)
+    assert egitim.kesit_sozu(duz, 60, 100) == "[Verse 1]\na\nb"
 
 
 def test_kaynak_secimi_album_sesini_tercih_eder_akustik_ve_kurguyu_eler():
@@ -90,7 +90,8 @@ def test_ornek_hazirlama_kesit_ve_onbellek(tmp_path, monkeypatch):
     s = egitim.VeriSarki("A", "B", "piano ballad")
     bag = dict(lrclib=lambda *_: soz, adaylar=lambda _q: [kaynak.Aday("v1", "A - B (Audio)", 299.0)], indir=indir)
     m = egitim.ornek_hazirla(s, egitim.Ayar(en_uzun_sn=240), tmp_path, **bag)
-    assert m["lyrics"] == "[verse]\nbir\niki" and m["duration"] == 240 and m["caption"] == "piano ballad"
+    assert m["lyrics"] == "[Intro]\n\n[Verse 1]\nbir\n\n[Instrumental]\n\n[Verse 2]\niki\n\n[Instrumental]"
+    assert m["duration"] == 240 and m["caption"] == "piano ballad"
     assert "-t" in calistirilan[0] and any("afade" in x for x in calistirilan[0])  # kesilen şarkı yumuşak biter
     assert not (tmp_path / "a-b.indirilen").exists()
     # ikinci kez inmez; stil düzeltilince yalnız metin güncellenir

@@ -4,70 +4,43 @@ ACE-Step söz olmadan anlamsız vokal üretiyor (spike S1); söz bulunamayan şa
 
 LRCLIB enstrümantal araları `♪` satırıyla yazıyor, düz sözde kıtalar arasında boş satır yok. `♪` modele söz olarak
 gidip şarkı tek `[verse]` olunca söz WER'i 0,099; `♪`'ta kıta bölüp nakaratı etiketleyince 0,042 (S12; Scryne
-dinledi: "gayet güzel").
+dinledi: "gayet güzel"). Bölüm yapısı (giriş, kıta, ön nakarat, nakarat, köprü, ara, çıkış) `yapi.coz`'dan.
 """
 
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from yanki import ag
+from yanki import ag, yapi
 
 LRCLIB = "https://lrclib.net/api"
-NOTA = frozenset("♪♫♬♩")
 
 
 @dataclass(frozen=True)
 class Soz:
-    metin: str  # ACE-Step biçimi: [verse]/[chorus] etiketli kıtalar
+    metin: str  # ACE-Step biçimi: [Verse 1]/[Chorus]/[Bridge]… etiketli bölümler (`yapi`)
     kaynak: str  # "dosya" | "lrclib"
     sure_sn: float | None  # LRCLIB'deki kaydın süresi; kaynak sesi doğrulamak için
     # zaman damgalı satırlar [(sn, metin)]; parçalı üretimde sözleri parçalara dağıtmak için (LRCLIB syncedLyrics)
     satirlar: tuple[tuple[float, str], ...] = field(default=())
 
 
-def _ara_mi(satir: str) -> bool:
-    """Boş ya da yalnız nota işaretlerinden oluşan satır: kıta sınırı, söz değil."""
-    s = "".join(satir.split())
-    return not s or set(s) <= NOTA
+_ara_mi = yapi.ara_mi
 
 
-def etiketle(duz: str) -> str:
-    """Kıtaları etiketler: birden çok geçen kıta [chorus], diğerleri [verse]. `♪` satırları kıta sınırıdır.
-    Var olan etiketlere dokunmaz (yalnız `♪` satırlarını çıkarır)."""
+def etiketle(duz: str, ad: str = "") -> str:
+    """Etiketsiz söze bölüm etiketleri (`yapi.coz`: nakarat, ön nakarat, köprü…). `♪`/boş satırlar bölüm sınırıdır.
+    Var olan etiketlere dokunmaz (yalnız `♪` satırlarını çıkarır): Scryne'ın elle etiketlediği söz esastır."""
     satirlar = duz.replace("\r", "").split("\n")
     if "[" in duz and "]" in duz.split("\n", 1)[0]:
         return "\n".join(x for x in satirlar if not x.strip() or not _ara_mi(x)).strip()
-    duz = "\n".join("" if _ara_mi(x) else x for x in satirlar)
-    kitalar = [k.strip() for k in duz.split("\n\n") if k.strip()]
-    tekrar = {k for k in kitalar if kitalar.count(k) > 1}
-    return "\n\n".join(("[chorus]" if k in tekrar else "[verse]") + "\n" + k for k in kitalar)
+    return yapi.metin(yapi.coz([(None, x) for x in satirlar], ad=ad))
 
 
-def bolumler(satirlar: list[tuple[float, str]]) -> list[tuple[str, list[tuple[float, str]]]]:
-    """Zaman damgalı satırları `♪`/boş satırda kıtalara böler; birden çok geçen kıta [chorus], diğerleri [verse]."""
-    kitalar, kita = [], []
-    for t, m in satirlar:
-        if _ara_mi(m):
-            if kita:
-                kitalar.append(kita)
-            kita = []
-        else:
-            kita.append((t, m.strip()))
-    if kita:
-        kitalar.append(kita)
-    metinler = [tuple(m for _, m in k) for k in kitalar]
-    tekrar = {k for k in metinler if metinler.count(k) > 1}
-    return [("[chorus]" if mt in tekrar else "[verse]", k) for k, mt in zip(kitalar, metinler, strict=True)]
-
-
-def aralik_sozu(satirlar: list[tuple[float, str]], bas: float, son: float) -> str:
-    """[bas, son) aralığında başlayan satırlar, bölüm etiketleriyle; aralıkta söz yoksa boş."""
-    bloklar = []
-    for etiket, kita in bolumler(satirlar):
-        if icinde := [m for t, m in kita if bas <= t < son]:
-            bloklar.append(etiket + "\n" + "\n".join(icinde))
-    return "\n\n".join(bloklar)
+def aralik_sozu(satirlar: list[tuple[float, str]], bas: float, son: float, sure_sn: float | None = None,
+                ad: str = "") -> str:
+    """[bas, son) aralığında başlayan satırlar ve enstrümantal bölümler, bölüm etiketleriyle; aralıkta söz yoksa boş."""
+    return yapi.aralik(yapi.coz(satirlar, sure_sn, ad), bas, son)
 
 
 def nakarat_gecisleri(satirlar) -> list[float]:
@@ -148,8 +121,11 @@ def lrclib(sanatci: str, ad: str, json_al=ag.json_al) -> Soz:
         d = bulunan[0]
     if d.get("instrumental") or not (d.get("plainLyrics") or "").strip():
         raise ag.Bulunamadi(f"LRCLIB kaydı sözsüz: {sanatci} — {ad}")
-    return Soz(etiketle(d["plainLyrics"]), "lrclib", float(d["duration"]) if d.get("duration") else None,
-               senkron(d.get("syncedLyrics")))
+    sure = float(d["duration"]) if d.get("duration") else None
+    satirlar = senkron(d.get("syncedLyrics"))
+    # zaman damgası varsa yapı ondan (boşluklar bölüm sınırı, giriş/ara/çıkış); yoksa düz sözün tekrarlarından
+    metin = yapi.metin(yapi.coz(satirlar, sure, ad)) if satirlar else etiketle(d["plainLyrics"], ad)
+    return Soz(metin, "lrclib", sure, satirlar)
 
 
 def bul(sanatci: str, ad: str, dosya: Path, json_al=ag.json_al) -> Soz:
@@ -157,7 +133,7 @@ def bul(sanatci: str, ad: str, dosya: Path, json_al=ag.json_al) -> Soz:
     if dosya.exists() and dosya.read_text(encoding="utf-8").strip():
         # Scryne'ın sözü esastır; LRCLIB yalnız süre ve zaman damgaları için. Damgalar ancak satırlar büyük ölçüde
         # aynıysa kullanılır (farklı bir söz metnini LRCLIB zamanlarına dağıtmak yanlış parçaya söz koyar).
-        metin = etiketle(dosya.read_text(encoding="utf-8"))
+        metin = etiketle(dosya.read_text(encoding="utf-8"), ad)
         sure, satirlar = None, ()
         try:
             uzak = lrclib(sanatci, ad, json_al)

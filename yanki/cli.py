@@ -150,6 +150,35 @@ def _kunye(args: argparse.Namespace) -> int:
     return kod
 
 
+def _yapi(args: argparse.Namespace) -> int:
+    """LRCLIB sözlü şarkıların `soz.txt`'sini zaman damgalarından bölüm etiketleriyle yeniden yazar (`yapi.coz`) ve
+    yapıyı gösterir. Scryne'ın söz dosyası (kaynak "dosya") olduğu gibi kalır. Seçilmiş adaylara dokunmaz: yeni yapı
+    sonraki üretimde (`yanki yeniden`, `yanki bastan`) kullanılır."""
+    import json
+
+    from yanki import yapi
+
+    calisma = ayarlar.yukle().kok / "calisma"
+    for d in durum.hepsi(calisma):
+        if args.kimlik and d.kimlik not in args.kimlik:
+            continue
+        k = durum.klasor(calisma, d.kimlik)
+        zaman = k / "soz_zaman.json"
+        if d.soz.get("kaynak") != "lrclib" or not (k / d.soz.get("dosya", "soz.txt")).exists():
+            print(f"– {d.sanatci} — {d.ad}: söz Scryne'ın dosyasından ya da yok, dokunulmadı")
+            continue
+        satirlar = [tuple(x) for x in json.loads(zaman.read_text(encoding="utf-8"))] if zaman.exists() else []
+        if satirlar:
+            bolumler = yapi.coz(satirlar, d.kaynak.get("sure_sn") or d.soz.get("sure_sn"), d.ad)
+        else:  # zaman damgasız LRCLIB sözü: eski [verse]/[chorus] etiketleri atılıp düz sözün tekrarlarından
+            eski = (k / d.soz["dosya"]).read_text(encoding="utf-8").splitlines()
+            bolumler = yapi.coz([(None, "" if x.strip().lower() in ("[verse]", "[chorus]") else x) for x in eski],
+                                ad=d.ad)
+        (k / d.soz["dosya"]).write_text(yapi.metin(bolumler), encoding="utf-8")
+        print(f"✓ {d.sanatci} — {d.ad}: " + " · ".join(b.ad for b in bolumler))
+    return 0
+
+
 def _elle_yazarlari_uygula(kok: Path) -> list[str]:
     """`liste.toml`'da `yazarlar` yazılmış ama künyesi yazarsız onaylı/paketli şarkılar: künye güncellenir, paketliyse
     paket yeniden çıkar (yazarsız paket dağıtımcıya yüklenemiyor; Scryne yalnız listeye yazarları ekler). Dönen:
@@ -1426,6 +1455,9 @@ def main(argv: list[str] | None = None) -> int:
     kn = alt.add_parser("kunye", help="hazır şarkıların künyesini (yazarlar, orijinal yıl) yeniden çek")
     kn.add_argument("kimlik", nargs="*", help="boşsa hepsi")
     kn.set_defaults(fn=_kunye)
+    ya = alt.add_parser("yapi", help="sözleri zaman damgalarından bölüm etiketleriyle yeniden yaz (giriş, nakarat…)")
+    ya.add_argument("kimlik", nargs="*")
+    ya.set_defaults(fn=_yapi)
     p = alt.add_parser("paketle", help="onaylı şarkılardan yükleme paketi (mastering, kapak, YUKLE.md)")
     p.add_argument("--yeniden", action="store_true", help="paketlenmişleri de yeniden paketle")
     p.set_defaults(fn=_paketle)
@@ -1524,7 +1556,7 @@ def main(argv: list[str] | None = None) -> int:
 
 YAZAN_KOMUTLAR = {"hazirla", "uret", "calistir", "yeniden", "kunye", "paketle", "yuklendi", "kesif", "takip",
                   "temizle", "yedekle", "dagitim-red", "geri-cek", "bastan", "gunduz", "yukle", "dagitim-durum",
-                  "kapak"}
+                  "kapak", "yapi"}
 
 
 if __name__ == "__main__":

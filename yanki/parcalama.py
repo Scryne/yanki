@@ -57,9 +57,11 @@ def plan(sure: float, satir_baslari: list[float], **k) -> list[Parca]:
                   sinirlar[i], sinirlar[i + 1]) for i in range(len(sinirlar) - 1)]
 
 
-def soz_dagit(parcalar: list[Parca], satirlar: list[tuple[float, str]]) -> list[str]:
+def soz_dagit(parcalar: list[Parca], satirlar: list[tuple[float, str]], sure_sn: float | None = None,
+              ad: str = "") -> list[str]:
     """Her parçaya çekirdek aralığında başlayan satırlar, bölüm etiketleriyle. Boş parça: enstrümantal etiketi."""
-    return [sozler.aralik_sozu(satirlar, p.cekirdek_bas, p.cekirdek_son) or "[instrumental]" for p in parcalar]
+    return [sozler.aralik_sozu(satirlar, p.cekirdek_bas, p.cekirdek_son, sure_sn, ad) or "[Instrumental]"
+            for p in parcalar]
 
 
 def birlestir(sesler: list[np.ndarray], parcalar: list[Parca], sr: int) -> np.ndarray:

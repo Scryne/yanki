@@ -36,7 +36,8 @@ def test_liste_hatalari(tmp_path, metin, hata):
 
 def test_etiketle_tekrar_eden_kita_nakarat():
     duz = "a\nb\n\nnakarat\nla\n\nc\nd\n\nnakarat\nla"
-    assert sozler.etiketle(duz) == "[verse]\na\nb\n\n[chorus]\nnakarat\nla\n\n[verse]\nc\nd\n\n[chorus]\nnakarat\nla"
+    assert sozler.etiketle(duz) == ("[Verse 1]\na\nb\n\n[Chorus]\nnakarat\nla\n\n[Verse 2]\nc\nd\n\n"
+                                   "[Chorus]\nnakarat\nla")
 
 
 def test_etiketli_soz_dokunulmaz():
@@ -53,7 +54,7 @@ def test_lrclib_get_bulamazsa_arama(monkeypatch):
                 {"plainLyrics": "x\ny", "duration": 200, "artistName": "A feat. C"}]
 
     s = sozler.lrclib("A", "B", json_al=sahte)
-    assert s.metin == "[verse]\nx\ny" and s.sure_sn == 200 and s.kaynak == "lrclib"
+    assert s.metin == "[Verse 1]\nx\ny" and s.sure_sn == 200 and s.kaynak == "lrclib"
     with pytest.raises(ag.Bulunamadi):
         sozler.lrclib("Z", "B", json_al=sahte)
 
@@ -184,14 +185,16 @@ def test_dosya_sozu_lrclib_damgalarini_yalniz_uyusursa_alir(tmp_path):
 def test_etiketle_nota_satiri_kita_siniri():
     # LRCLIB düz sözü: kıtalar arasında boş satır yok, enstrümantal ara "♪"
     duz = "a\nb\n♪\nnakarat\nla\n♪\nc\n♪\nnakarat\nla\n"
-    assert sozler.etiketle(duz) == "[verse]\na\nb\n\n[chorus]\nnakarat\nla\n\n[verse]\nc\n\n[chorus]\nnakarat\nla"
+    assert sozler.etiketle(duz) == ("[Verse 1]\na\nb\n\n[Chorus]\nnakarat\nla\n\n[Verse 2]\nc\n\n"
+                                   "[Chorus]\nnakarat\nla")
     assert sozler.etiketle("[verse]\nx\n♪\n\n[bridge]\ny") == "[verse]\nx\n\n[bridge]\ny"
 
 
 def test_aralik_sozu_bolum_etiketli():
     satirlar = [(1, "a"), (2, "b"), (3, "♪"), (4, "n1"), (5, "n2"), (6, ""), (7, "c"), (8, "♪"), (9, "n1"), (10, "n2")]
-    assert sozler.aralik_sozu(satirlar, 0, 20) == "[verse]\na\nb\n\n[chorus]\nn1\nn2\n\n[verse]\nc\n\n[chorus]\nn1\nn2"
-    assert sozler.aralik_sozu(satirlar, 2, 5) == "[verse]\nb\n\n[chorus]\nn1"  # ♪ söz olarak gitmez
+    assert sozler.aralik_sozu(satirlar, 0, 20) == ("[Verse 1]\na\nb\n\n[Chorus]\nn1\nn2\n\n[Verse 2]\nc\n\n"
+                                                  "[Chorus]\nn1\nn2")
+    assert sozler.aralik_sozu(satirlar, 2, 5) == "[Verse 1]\nb\n\n[Chorus]\nn1"  # ♪ söz olarak gitmez
     assert sozler.aralik_sozu(satirlar, 11, 20) == ""
 
 

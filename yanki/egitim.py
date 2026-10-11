@@ -146,7 +146,7 @@ def ornek_hazirla(s: VeriSarki, ayar: Ayar, klasor: Path, lrclib=sozler.lrclib,
                         str(ses_yolu)], check=True)
     finally:
         ham.unlink(missing_ok=True)
-    metin = kesit_sozu(soz, kesit, tam)
+    metin = kesit_sozu(soz, kesit, tam, s.ad)
     if not metin.strip():
         ses_yolu.unlink(missing_ok=True)
         raise LookupError("kesitte söz yok")
@@ -176,17 +176,16 @@ def kirp(metin: str, satir_sayisi: int) -> str:
     return "\n".join(cikti).strip()
 
 
-def kesit_sozu(soz: sozler.Soz, kesit: float, tam: float) -> str:
-    """Eğitim kesitinin sözü. Üretimdeki `soz.txt` ile aynı biçim (düz sözün paragraflarından [verse]/[chorus]);
-    şarkı kesildiyse zaman damgasıyla kesitte başlayan satır kadarı. Düz söz ile zaman damgalı söz satır satır
-    eşleşmiyorsa (farklı sayı) zaman damgalı sözün kendi kıtaları kullanılır."""
+def kesit_sozu(soz: sozler.Soz, kesit: float, tam: float, ad: str = "") -> str:
+    """Eğitim kesitinin sözü, üretimdeki `soz.txt` ile aynı biçimde (`yapi` bölüm etiketleri). Şarkı kesildiyse
+    zaman damgasıyla kesitte başlayan satırlar; zaman damgası yoksa düz sözden kesitin oranı kadar satır."""
     if kesit >= tam - 1:
         return soz.metin
     sinir = kesit - SOZ_SONU_PAYI
-    zamanli = [(t, m) for t, m in soz.satirlar if not sozler._ara_mi(m)]
-    if sum(_soz_satiri(x) for x in soz.metin.split("\n")) == len(zamanli):
-        return kirp(soz.metin, sum(t < sinir for t, _ in zamanli))
-    return sozler.aralik_sozu(list(soz.satirlar), 0.0, sinir)
+    if soz.satirlar:
+        return sozler.aralik_sozu(list(soz.satirlar), 0.0, sinir, tam, ad)
+    toplam = sum(_soz_satiri(x) for x in soz.metin.split("\n"))
+    return kirp(soz.metin, int(toplam * sinir / tam))
 
 
 ORNEK_ALANLARI = ("audio_path", "filename", "caption", "lyrics", "language", "is_instrumental", "duration")

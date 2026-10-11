@@ -39,8 +39,9 @@ def test_bindirme_ve_cekirdek():
 def test_soz_dagitimi():
     p = parcalama.plan(250, [])
     satirlar = [(10.0, "bir"), (89.9, "iki"), (90.0, "üç"), (200.0, "dört"), (210.0, "")]
-    assert parcalama.soz_dagit(p, satirlar) == ["[verse]\nbir\niki", "[verse]\nüç", "[verse]\ndört"]
-    assert parcalama.soz_dagit(parcalama.plan(250, []), []) == ["[instrumental]"] * 3
+    assert parcalama.soz_dagit(p, satirlar) == ["[Intro]\n\n[Verse 1]\nbir\n\n[Instrumental]\n\n[Verse 2]\niki",
+                                                "[Verse 2]\nüç\n\n[Instrumental]", "[Verse 3]\ndört"]
+    assert parcalama.soz_dagit(parcalama.plan(250, []), []) == ["[Instrumental]"] * 3
 
 
 def test_birlestirme_sabit_sinyali_korur():
@@ -65,7 +66,9 @@ def test_birlestirme_konumlari_dogru():
 
 def test_soz_dagitimi_nota_ve_nakarat():
     p = parcalama.plan(250, [10, 50, 90, 95, 130, 170, 210])
-    satirlar = [(10, "bir"), (50, "♪"), (90, "n"), (95, "♪"), (130, "iki"), (170, "♪"), (210, "n")]
-    sonuc = parcalama.soz_dagit(p, satirlar)
+    satirlar = [(10, "bir"), (12, "bir b"), (50, "♪"), (90, "n"), (92, "n2"), (95, "♪"), (130, "iki"),
+                (132, "iki b"), (170, "♪"), (210, "n"), (212, "n2"), (214, "")]
+    sonuc = parcalama.soz_dagit(p, satirlar, 250)
     assert all("♪" not in s for s in sonuc)
-    assert "[chorus]\nn" in "\n".join(sonuc) and "[verse]\nbir" in sonuc[0]
+    assert "[Chorus]\nn\nn2" in "\n".join(sonuc) and "[Verse 1]\nbir" in sonuc[0]
+    assert "[Instrumental]" in "\n".join(sonuc) and sonuc[-1].endswith("[Outro]")

@@ -62,7 +62,7 @@ def parca_plani(calisma: Path, d: durum.Durum, lrclib: Callable | None = None, t
             d.notlar.append({"uyari": f"söz zaman damgası yok: {sure:.0f} sn tek parça üretildi (yavaş yol)"})
         return [parcalama.Parca(1, 0.0, sure, 0.0, sure)], [_soz(calisma, d)]
     plan = parcalama.plan(sure, [t for t, _ in satirlar])
-    return plan, parcalama.soz_dagit(plan, satirlar)
+    return plan, parcalama.soz_dagit(plan, satirlar, sure, d.ad)
 
 
 def _kes(kaynak: Path, bas: float, son: float, hedef: Path) -> Path:
@@ -183,7 +183,7 @@ def _onarim_isleri(a: Ayarlar, calisma: Path, d: durum.Durum, pencere_bas: dict[
             bas, son = o["bolge"]
             pb, ps = max(0.0, bas - PENCERE_PAYI), min(sure, son + PENCERE_PAYI)
             pencere = _kes(temel, pb, ps, k / "onarimlar" / o["id"] / "pencere_temel.wav")
-            soz = sozler.aralik_sozu(satirlar, pb, ps) or _soz(calisma, d)
+            soz = sozler.aralik_sozu(satirlar, pb, ps, d.kaynak.get("sure_sn"), d.ad) or _soz(calisma, d)
             pencere_bas[o["id"]] = pb
             isler.append(motor.Is(
                 id=f"{d.kimlik}|onarim|{aday.no}|{o['id']}", gorev="repaint", kaynak=str(pencere),
