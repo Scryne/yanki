@@ -21,7 +21,7 @@ ISCI = Path(__file__).with_name("motor_isci.py")
 @dataclass(frozen=True)
 class Is:
     id: str
-    gorev: str  # "cover" | "repaint" | "anla"
+    gorev: str  # "cover" | "repaint" | "anla" | "betimle"
     kaynak: str
     cikti_klasor: str = ""
     stil: str = ""
@@ -36,13 +36,15 @@ class Is:
     referans: str | None = None  # tını referansı (parçalı üretimde ilk parçanın çıktısı)
     # yüklü LoRA'nın bu işteki ölçeği (karşılaştırmalı dinleme: aynı işçide 0 / 0,5 / 1); None: motor ayarındaki ölçek
     lora_olcek: float | None = None
+    # aynı işçideki bir "betimle" işinin id'si: stil o betimden kurulur (motor_isci.betim_stili; önce dinle, sonra üret)
+    stil_betimden: str | None = None
     # ACE-Step GenerationParams'a olduğu gibi giden ek ayarlar (shift, guidance_scale, use_adg, sampler_mode …)
     ek: dict = field(default_factory=dict, hash=False)
 
     def __post_init__(self):
-        if self.gorev not in ("cover", "repaint", "anla"):
-            raise ValueError(f"görev cover, repaint ya da anla olmalı: {self.gorev}")
-        if self.gorev == "anla":
+        if self.gorev not in ("cover", "repaint", "anla", "betimle"):
+            raise ValueError(f"görev cover, repaint, anla ya da betimle olmalı: {self.gorev}")
+        if self.gorev in ("anla", "betimle"):
             return
         if self.adim <= 0 or not self.cikti_klasor:
             raise ValueError("cover/repaint için adim ve cikti_klasor gerekli")

@@ -5,7 +5,8 @@
 is.json:
   {"motor": {"klasor": ..., "model": ..., "niceleme": "int8_weight_only" | null, "cpu_offload": true,
               "lm_model": ..., "lm_backend": "pt", "lora": yol | null, "lora_olcek": 1.0},
-   "isler": [{"id", "gorev": "cover" | "repaint" | "anla", "kaynak", "cikti_klasor", "stil", "soz", "dil", "bpm", "ton",
+   "isler": [{"id", "gorev": "cover" | "repaint" | "anla" | "betimle", "kaynak", "cikti_klasor", "stil",
+              "stil_betimden": betimle işinin id'si | null, "soz", "dil", "bpm", "ton",
               "guc", "adim", "tohum", "bolge": [bas, son] | null, "referans": yol | null,
               "lora_olcek": 0–1 | null (işe özel; karşılaştırmalı dinleme), "ek": {GenerationParams alanı: değer}}]}
 
@@ -20,13 +21,74 @@ ACE-Step Python API tuzakları (docs/arastirma/01) burada düzeltilir:
 "anla": kaynak ses anlamsal kodlara çevrilir, 5Hz LM stil tanımı/BPM/ton/dil çıkarır
 (REST full_analysis_only ile aynı yol).
 LM yalnız ilk "anla" işinde, bir kez yüklenir.
+
+"betimle": ACE-Step'in eğitim verisini etiketlediği müzik betimleyicisi (`ACE-Step/acestep-captioner`, Qwen2.5-Omni
+tabanlı 11B, bf16 ~22 GB) kaynak sesi dinleyip tür, enstrümanlar, ritim, vokal, yapı ve tını betimi yazar. Model
+ilk "betimle" işinde indirilip yüklenir, betimle işleri bitince bellekten atılır. Cover/repaint işi
+`"stil_betimden": <betimle işinin id'si>` taşırsa stil o betimden kurulur (`betim_stili`): aynı pod'da önce dinlenir,
+sonra üretilir. DiT yalnız cover/repaint/anla işi varsa yüklenir.
 """
 
 import json
+import re
 import sys
 import time
 import traceback
 from pathlib import Path
+
+BETIMLEYICI = "ACE-Step/acestep-captioner"
+BETIM_ISTEMI = "*Task* Describe this audio in detail\n"
+BETIM_ORNEKLEME = 16000
+BETIM_EN_UZUN_SN = 300  # betimleyicinin ses penceresi (preprocessor_config: chunk_length 300)
+# DiT metin kodlayıcısı talimat + stil + üst veriyi 256 jetonda keser (acestep/core/generation/handler/
+# conditioning_text.py); üst veri (BPM, ton, süre) stilden sonra geldiği için uzun stil onu sessizce düşürür.
+# Talimat ve üst veri ~70 jeton → stil en çok ~170 jeton; İngilizcede kelime başı ~1,3 jeton.
+STIL_EN_COK_KELIME = 120
+
+
+def betim_stili(betim: str, en_cok: int = STIL_EN_COK_KELIME) -> str:
+    """Betimleyici metni → cover stili: tek paragraf, en çok `en_cok` kelime, cümle sınırında kesilir."""
+    metin = " ".join(betim.split())
+    if len(metin.split()) <= en_cok:
+        return metin
+    cumleler, secilen = re.split(r"(?<=[.!?])\s+", metin), []
+    for c in cumleler:
+        if len(" ".join([*secilen, c]).split()) > en_cok:
+            break
+        secilen.append(c)
+    return " ".join(secilen) if secilen else " ".join(metin.split()[:en_cok])
+
+
+def _betimleyici(klasor: Path):
+    import torch
+    from huggingface_hub import snapshot_download
+    from transformers import Qwen2_5OmniForConditionalGeneration, Qwen2_5OmniProcessor
+
+    yol = snapshot_download(BETIMLEYICI, local_dir=str(klasor / "checkpoints" / "acestep-captioner"))
+    model = Qwen2_5OmniForConditionalGeneration.from_pretrained(yol, torch_dtype=torch.bfloat16, device_map="cuda")
+    model.disable_talker()
+    return model, Qwen2_5OmniProcessor.from_pretrained(yol)
+
+
+def _betimle(model, islemci, kaynak: str) -> str:
+    import soundfile as sf
+    import torch
+    import torchaudio
+
+    ses, sr = sf.read(kaynak, dtype="float32", always_2d=True)
+    dalga = torchaudio.functional.resample(torch.from_numpy(ses.mean(1)), sr, BETIM_ORNEKLEME).numpy()
+    dalga = dalga[: BETIM_EN_UZUN_SN * BETIM_ORNEKLEME]
+    mesaj = [{"role": "user", "content": [{"type": "text", "text": BETIM_ISTEMI}, {"type": "audio", "audio": dalga}]}]
+    metin = islemci.apply_chat_template(mesaj, add_generation_prompt=True, tokenize=False)
+    girdi = islemci(text=metin, audio=[dalga], sampling_rate=BETIM_ORNEKLEME, return_tensors="pt", padding=True)
+    girdi = girdi.to(model.device).to(model.dtype)
+    with torch.inference_mode():
+        cikti = model.generate(**girdi, return_audio=False, max_new_tokens=512, do_sample=False)
+    return islemci.batch_decode(cikti[:, girdi["input_ids"].shape[1]:], skip_special_tokens=True)[0].strip()
+
+
+class ModelYok(RuntimeError):
+    pass
 
 
 def main() -> int:
@@ -50,37 +112,82 @@ def main() -> int:
         gecici.write_text(json.dumps(sonuclar, ensure_ascii=False, indent=2), encoding="utf-8")
         gecici.replace(sonuc_yolu)
 
-    t0 = time.perf_counter()
-    dit = AceStepHandler()
-    durum, ok = dit.initialize_service(
-        project_root=str(klasor),
-        config_path=m["model"],
-        device="cuda",
-        offload_to_cpu=bool(m.get("cpu_offload", True)),
-        offload_dit_to_cpu=bool(m.get("dit_offload", False)),
-        quantization=m.get("niceleme") or None,
-    )
-    yukleme_sn = round(time.perf_counter() - t0, 1)
-    if not ok:
-        sonuclar.append({"id": None, "basari": False, "hata": f"model yüklenemedi: {durum[:500]}"})
-        yaz()
-        return 2
-    # eğitilmiş tür LoRA'sı (yanki/egitim.py): bir kez yüklenir, ölçeği işe göre değişebilir
-    lora_olcek = None
-    if m.get("lora"):
-        mesaj = dit.load_lora(str(m["lora"]))
-        if not str(mesaj).startswith("✅"):
-            sonuclar.append({"id": None, "basari": False, "hata": f"LoRA yüklenemedi: {str(mesaj)[:500]}"})
+    # betimle işleri önce (cover işi betime dayanabilir); diğerlerinin sırası korunur
+    isler = sorted(is_["isler"], key=lambda i: i["gorev"] != "betimle")
+    betimler: dict[str, str] = {}
+    betimleyici = None
+    if any(i["gorev"] == "betimle" for i in isler):
+        t0 = time.perf_counter()
+        try:
+            betimleyici = _betimleyici(klasor)
+        except Exception as e:  # betimleyici yüklenemezse betimle işleri (ve ona dayanan işler) düşer, diğerleri sürer
+            sonuclar.append({"id": None, "basari": False, "hata": f"betimleyici yüklenemedi: {type(e).__name__}: {e}",
+                             "iz": traceback.format_exc()[-2000:]})
             yaz()
-            return 2
-        lora_olcek = float(m.get("lora_olcek", 1.0))
-        dit.set_lora_scale(lora_olcek)
+        betim_yukleme_sn = round(time.perf_counter() - t0, 1)
+
+    dit = None
+    yukleme_sn = None
+    lora_olcek = None
+
+    def dit_hazirla():
+        nonlocal dit, yukleme_sn, lora_olcek, betimleyici
+        if dit is not None:
+            return dit
+        if betimleyici is not None:  # VRAM: betimleyici (~22 GB) DiT'ten önce bırakılır
+            import gc
+
+            betimleyici = None
+            gc.collect()
+            torch.cuda.empty_cache()
+        t0 = time.perf_counter()
+        h = AceStepHandler()
+        durum, ok = h.initialize_service(
+            project_root=str(klasor),
+            config_path=m["model"],
+            device="cuda",
+            offload_to_cpu=bool(m.get("cpu_offload", True)),
+            offload_dit_to_cpu=bool(m.get("dit_offload", False)),
+            quantization=m.get("niceleme") or None,
+        )
+        yukleme_sn = round(time.perf_counter() - t0, 1)
+        if not ok:
+            raise ModelYok(f"model yüklenemedi: {durum[:500]}")
+        # eğitilmiş tür LoRA'sı (yanki/egitim.py): bir kez yüklenir, ölçeği işe göre değişebilir
+        if m.get("lora"):
+            mesaj = h.load_lora(str(m["lora"]))
+            if not str(mesaj).startswith("✅"):
+                raise ModelYok(f"LoRA yüklenemedi: {str(mesaj)[:500]}")
+            lora_olcek = float(m.get("lora_olcek", 1.0))
+            h.set_lora_scale(lora_olcek)
+        dit = h
+        return dit
 
     llm = LLMHandler()  # cover/repaint LM'yi atlar; yalnız "anla" için yüklenir
-    for i in is_["isler"]:
-        kayit = {"id": i["id"], "basari": False, "hata": None, "yukleme_sn": yukleme_sn}
+    for i in isler:
+        kayit = {"id": i["id"], "basari": False, "hata": None}
         try:
             gorev = i["gorev"]
+            if gorev == "betimle":
+                if betimleyici is None:
+                    raise RuntimeError("betimleyici yüklü değil")
+                kayit["yukleme_sn"] = betim_yukleme_sn
+                t1 = time.perf_counter()
+                betim = _betimle(*betimleyici, i["kaynak"])
+                if not betim:
+                    raise RuntimeError("betimleyici boş döndü")
+                betimler[i["id"]] = betim
+                kayit.update(basari=True, sure_sn=round(time.perf_counter() - t1, 1), analiz={"betim": betim})
+                sonuclar.append(kayit)
+                yaz()
+                continue
+            try:
+                dit_hazirla()
+            except ModelYok as e:  # model yoksa kalan işlerin hiçbiri yapılamaz
+                sonuclar.append({"id": None, "basari": False, "hata": str(e)})
+                yaz()
+                return 2
+            kayit["yukleme_sn"] = yukleme_sn
             if gorev == "anla":
                 if not llm.llm_initialized:
                     lm_durum, lm_ok = llm.initialize(
@@ -116,12 +223,18 @@ def main() -> int:
             if gorev == "repaint":
                 bas, son = i["bolge"]
                 bolge = dict(repainting_start=float(bas), repainting_end=float(son), chunk_mask_mode="explicit")
+            stil = i["stil"]
+            if i.get("stil_betimden"):
+                if i["stil_betimden"] not in betimler:
+                    raise RuntimeError(f"dayandığı betim yok: {i['stil_betimden']}")
+                stil = betim_stili(betimler[i["stil_betimden"]])
+                kayit["stil"] = stil
             params = GenerationParams(
                 task_type=gorev,
                 instruction=TASK_INSTRUCTIONS[gorev],
                 src_audio=i["kaynak"],
                 reference_audio=i.get("referans") or None,
-                caption=i["stil"],
+                caption=stil,
                 lyrics=i["soz"],
                 vocal_language=i.get("dil", "en"),
                 bpm=i.get("bpm"),

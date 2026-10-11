@@ -169,6 +169,19 @@ def test_dil_bul_esik_ve_hata(tmp_path):
     assert hazirlik.dil_bul(d, tmp_path, bozuk) == {"dil": "en", "dil_tespit": "başarısız: ses okunamadı"}
 
 
+def test_dil_bul_ses_belirsizse_soz_karar_verir(tmp_path):
+    # Nyoy Volante: ses "tl 0,25" → "en" sayılıyordu, Tagalog söz İngilizce söylenip ölçülüyordu (WER ~1,0)
+    from yanki import durum, hazirlik
+
+    d = durum.Durum("a-b", "A", "B", kaynak={"dosya": "kaynak.wav"}, soz={"dosya": "soz.txt"})
+    (tmp_path / "soz.txt").write_text("[Verse 1]\nIpagpatawad mo, aking kapangahasan\nalam kong kailan lang tayo "
+                                      "nagkatagpo", encoding="utf-8")
+    assert hazirlik.dil_bul(d, tmp_path, lambda _: ("tl", 0.25))["dil"] == "tl"
+    (tmp_path / "soz.txt").write_text("[Verse 1]\nI heard that you're settled down\nThat you found a girl and you're "
+                                      "married now", encoding="utf-8")
+    assert hazirlik.dil_bul(d, tmp_path, lambda _: ("tl", 0.25))["dil"] == "en"
+
+
 def test_stil_deezer_yedegi_yalniz_musicbrainz_bossa():
     from yanki import hazirlik, liste
 

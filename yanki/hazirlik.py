@@ -118,6 +118,7 @@ def _analizi_yaz(calisma: Path, kimlik: str, analiz: dict) -> None:
 
 
 DIL_ESIGI = 0.5
+INGILIZCE_ESIGI = 0.15  # İngilizce şarkı sözünde sık kelimelerin payı ~0,3–0,5; başka dilde ~0
 
 
 def _yedek_turler(s: Sarki, d: durum.Durum) -> list[str]:
@@ -140,6 +141,13 @@ def dil_bul(d: durum.Durum, k: Path, tespit=None) -> dict:
     except Exception as e:  # noqa: BLE001 — dil tespiti üretimi durdurmaz
         return {"dil": "en", "dil_tespit": f"başarısız: {e}"}
     if olasilik < DIL_ESIGI:
+        # Ses emin değilse söz metni karar verir: İngilizce değilse sesin en olası dili. Nyoy Volante (Tagalogca, ses
+        # "tl 0,25") "en" sayılmış, model Tagalog sözü İngilizce diye söylemiş, İngilizce Whisper'la ölçülen söz WER'i
+        # üç adayda da ~1,0 çıkmıştı (2026-10-11).
+        soz = k / (d.soz or {}).get("dosya", "soz.txt")
+        oran = kapilar.ingilizce_orani(soz.read_text(encoding="utf-8")) if soz.exists() else None
+        if oran is not None and oran < INGILIZCE_ESIGI and dil not in ("en", "unknown"):
+            return {"dil": dil, "dil_tespit": f"ses belirsiz ({dil} {olasilik:.2f}), söz İngilizce değil ({oran:.2f})"}
         return {"dil": "en", "dil_tespit": f"belirsiz ({dil} {olasilik:.2f})"}
     return {"dil": dil, "dil_tespit": f"{dil} {olasilik:.2f}"}
 

@@ -117,6 +117,18 @@ def dil_tespit(yol: Path, bas_orani: float = 0.4, sure_sn: float = 30.0) -> tupl
     return (dil if dil in ACESTEP_DILLERI else "unknown"), float(olasilik)
 
 
+_INGILIZCE_SIK = frozenset("the a an and or but i you me my your we our it is are was be to of in on at for with "
+                           "that this what when all so no not do don't can i'm just like love oh".split())
+
+
+def ingilizce_orani(soz: str) -> float | None:
+    """Söz kelimelerinin İngilizcenin en sık kelimelerinden olanlarının payı (etiket satırları hariç). Kelime yoksa
+    None."""
+    kelimeler = [w for satir in soz.splitlines() if not satir.strip().startswith("[")
+                 for w in re.findall(r"[a-z']+", satir.casefold())]
+    return sum(w in _INGILIZCE_SIK for w in kelimeler) / len(kelimeler) if kelimeler else None
+
+
 def soz_wer(soz: str, dokum_metni: str) -> float:
     import jiwer
 
