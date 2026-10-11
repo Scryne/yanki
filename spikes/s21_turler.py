@@ -6,7 +6,8 @@ bir şarkı, aynı tohum ve tarif, iki kol (A bugünkü üretim, N yeni tarif; i
 yalnız deney: listeye ve yayına girmez. Kapılar ve dinamik ölçüleri S20 ile aynı.
 Çıktı: calisma/dinleme/s21/.
 
-  uv run --no-sync python spikes/s21_turler.py [--shift3]
+  uv run --no-sync python spikes/s21_turler.py [--guc 0.85] [--referans]
+  (--guc/--referans: üçüncü kol E = N + S23'ün kazanan beat ayarı)
 """
 
 import sys
@@ -60,7 +61,7 @@ def hazirla(a, s: Sarki, k: Path) -> dict:
     return b
 
 
-def main(shift3: bool) -> int:
+def main(e_guc: float | None, e_referans: bool) -> int:
     a = ayarlar.yukle()
     hedef = a.kok / "calisma" / "dinleme" / "s21"
     isler, bilgi = [], {}
@@ -79,9 +80,11 @@ def main(shift3: bool) -> int:
                            stil=b["eski_stil"], soz=b["eski_soz"], **ortak),
                   motor.Is(id=f"{s.kimlik}|N", gorev="cover", cikti_klasor=str(hedef / s.kimlik / "N"),
                            stil_betimden=betim, soz=b["yeni_soz"], **ortak)]
-        if shift3:
-            isler.append(motor.Is(id=f"{s.kimlik}|N3", gorev="cover", cikti_klasor=str(hedef / s.kimlik / "N3"),
-                                  stil_betimden=betim, soz=b["yeni_soz"], ek={"shift": 3.0}, **ortak))
+        if e_guc is not None or e_referans:
+            isler.append(motor.Is(id=f"{s.kimlik}|E", gorev="cover", cikti_klasor=str(hedef / s.kimlik / "E"),
+                                  stil_betimden=betim, soz=b["yeni_soz"],
+                                  referans=b["kaynak"] if e_referans else None,
+                                  **{**ortak, "guc": e_guc if e_guc is not None else a.cover.guc}))
         print(f"✓ hazır: {sanatci} — {ad} (dil {b['dil']}, stil: {b['eski_stil']})")
     sonuclar = uzak.calistir(a, isler, a.kok / "calisma" / "_motor" / "s21", zaman_asimi_sn=3 * 3600)
     tablo = []
@@ -110,7 +113,9 @@ def main(shift3: bool) -> int:
     dosya.json_yaz(hedef / "sonuc.json", {"bilgi": bilgi, "tablo": tablo})
     s = ["# S21: yeni tarif balad dışı türlerde", "",
          "Aynı şarkı, aynı tohum. **A** bugünkü üretim · **N** yeni tarif (bölüm yapısı + şarkıya özel betim)"
-         + (" · **N3** N + shift 3" if shift3 else "") + ". Yalnız deney: yayına girmez.", "",
+         + (f" · **E** N + güç {e_guc if e_guc is not None else a.cover.guc}"
+            + (" + tını referansı" if e_referans else "") if e_guc is not None or e_referans else "")
+         + ". Yalnız deney: yayına girmez.", "",
          "| şarkı | tür | kol | söz WER | parmak izi | eğri | değişim | kapı |", "|---|---|---|---|---|---|---|---|"]
     for x in tablo:
         k = x.get("kapilar") or {}
@@ -146,4 +151,5 @@ if __name__ == "__main__":
         if not alindi:
             print("başka bir yanki koşusu sürüyor; bitince tekrar dene")
             raise SystemExit(3)
-        raise SystemExit(main("--shift3" in sys.argv))
+        guc = float(sys.argv[sys.argv.index("--guc") + 1]) if "--guc" in sys.argv else None
+        raise SystemExit(main(guc, "--referans" in sys.argv))
