@@ -19,7 +19,8 @@ sys.path.insert(0, str(KOK / "spikes"))
 from s20_yapi_betim import dinamik  # noqa: E402
 from s21_turler import hazirla  # noqa: E402
 
-from yanki import ayarlar, dosya, kapilar, kilit, motor, uzak  # noqa: E402
+from yanki import ayarlar, dosya, durum, kapilar, kilit, motor, uzak  # noqa: E402
+from yanki import hazirlik as hazirlik_  # noqa: E402
 from yanki.liste import Sarki  # noqa: E402
 
 SARKILAR = [  # (sanatçı, ad, tür)
@@ -49,6 +50,15 @@ def hazirlik_hepsi(a) -> dict:
         except Exception as e:  # noqa: BLE001
             print(f"✗ {sanatci} — {ad}: {type(e).__name__}: {e}", flush=True)
             continue
+        if "soz_dili" not in b:  # üretimdeki kontrol: İngilizce dışı seste çeviri sürümünün sözü (YOASOBI)
+            d = durum.Durum(s.kimlik, sanatci, ad, kaynak={"dosya": "kaynak.wav", "sure_sn": b["sure_sn"]},
+                            soz={"dosya": "soz.txt", "kaynak": "lrclib"})
+            if hata := hazirlik_.soz_dili_uyumu(d, k, b["dil"]):
+                print(f"✗ {sanatci} — {ad}: {hata}", flush=True)
+                continue
+            b["yeni_soz"] = (k / "soz.txt").read_text(encoding="utf-8")
+            b["soz_dili"] = "dogrulandi"
+            b.pop("orijinal_wer", None)
         if "orijinal_wer" not in b:  # göreli söz kapısı: orijinal kaydın WER'i (CPU Whisper)
             b["orijinal_wer"] = kapilar.orijinal_wer(Path(b["kaynak"]), b["yeni_soz"], b["dil"])
             dosya.json_yaz(k / "bilgi.json", b)

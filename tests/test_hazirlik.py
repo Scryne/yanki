@@ -220,3 +220,14 @@ def test_ses_ingilizce_disi_soz_ingilizceyse_dili_tutan_surum_alinir(tmp_path):
     (tmp_path / "soz.txt").write_text("[Verse 1]\nyou are the one and I love you so", encoding="utf-8")
     assert "çeviri" in hazirlik.soz_dili_uyumu(d, tmp_path, "ja", surumler=lambda *_: [ingilizce])
     assert hazirlik.soz_dili_uyumu(d, tmp_path, "en", surumler=lambda *_: []) is None  # İngilizce şarkı: dokunulmaz
+
+
+def test_karisik_dilli_kpop_sozu_ceviri_sayilmaz(tmp_path):
+    # BLACKPINK: Korece söz İngilizce nakaratlarla (İngilizce payı 0,42) — çeviri değil, dokunulmaz
+    from yanki import durum, hazirlik
+
+    d = durum.Durum("b-h", "BLACKPINK", "How You Like That", kaynak={"dosya": "kaynak.wav", "sure_sn": 181.0},
+                    soz={"dosya": "soz.txt", "kaynak": "lrclib"})
+    (tmp_path / "soz.txt").write_text("[Verse 1]\nBLACKPINK in your area\n보란 듯이 무너졌어\n바닥을 뚫고 저 지하까지\n"
+                                      "[Chorus]\nHow you like that\nYou gon' like that that that", encoding="utf-8")
+    assert hazirlik.soz_dili_uyumu(d, tmp_path, "ko", surumler=lambda *_: []) is None

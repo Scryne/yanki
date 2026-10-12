@@ -159,6 +159,17 @@ def ingilizce_orani(soz: str) -> float | None:
 KARAKTER_DILLERI = frozenset({"ja", "zh", "yue", "th"})
 
 
+# Latin alfabesi dışında yazılan diller (Whisper kodları): söz bu yazıyı hiç taşımıyorsa çeviri/romaji sürümüdür
+LATIN_DISI_DILLER = frozenset({"ja", "ko", "zh", "yue", "th", "ru", "uk", "bg", "sr", "el", "ar", "fa", "he", "hi",
+                               "bn", "ta", "te", "pa", "ne", "ur", "sa"})
+
+
+def yerli_yazi_payi(soz: str) -> float | None:
+    """Söz harflerinin Latin alfabesi (genişletilmişleri dahil) dışında kalan payı; harf yoksa None."""
+    harfler = [c for satir in soz.splitlines() if not satir.strip().startswith("[") for c in satir if c.isalpha()]
+    return sum(ord(c) > 0x24F for c in harfler) / len(harfler) if harfler else None
+
+
 def soz_wer(soz: str, dokum_metni: str, dil: str = "en") -> float:
     import jiwer
 

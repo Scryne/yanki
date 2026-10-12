@@ -125,18 +125,19 @@ def soz_dili_uyumu(d: durum.Durum, k: Path, dil: str, surumler=None) -> str | No
     soz_yolu = k / (d.soz or {}).get("dosya", "soz.txt")
     if dil in ("en", "unknown") or (d.soz or {}).get("kaynak") != "lrclib" or not soz_yolu.exists():
         return None
-    oran = kapilar.ingilizce_orani(soz_yolu.read_text(encoding="utf-8"))
-    if oran is None or oran < INGILIZCE_UYUMSUZ:
+    metin = soz_yolu.read_text(encoding="utf-8")
+    uyumlu = _soz_dile_uyar(metin, dil)
+    if uyumlu is not False:
         return None
+    oran = kapilar.ingilizce_orani(metin) or 0.0
     sure = (d.kaynak or {}).get("sure_sn")
     try:
         adaylar = (surumler or sozler.lrclib_surumleri)(d.sanatci, d.ad)
     except Exception:  # noqa: BLE001 — arama düşerse hata metni kalır
         adaylar = []
     for alt in adaylar:
-        o = kapilar.ingilizce_orani(alt.metin)
-        if o is not None and o < INGILIZCE_ESIGI and (sure is None or alt.sure_sn is None
-                                                     or abs(alt.sure_sn - sure) <= SURUM_SURE_PAYI_SN):
+        if _soz_dile_uyar(alt.metin, dil) and (sure is None or alt.sure_sn is None
+                                               or abs(alt.sure_sn - sure) <= SURUM_SURE_PAYI_SN):
             soz_yolu.write_text(alt.metin, encoding="utf-8")
             (k / "soz_zaman.json").write_text(json.dumps(alt.satirlar, ensure_ascii=False), encoding="utf-8")
             return None
@@ -145,6 +146,17 @@ def soz_dili_uyumu(d: durum.Durum, k: Path, dil: str, surumler=None) -> str | No
 
 
 SURUM_SURE_PAYI_SN = 5.0
+YERLI_YAZI_ESIGI = 0.10  # Latin dışı dilde sözün en az bu kadarı o yazıda olmalı (K-pop: İngilizce nakaratlar olağan)
+
+
+def _soz_dile_uyar(metin: str, dil: str) -> bool | None:
+    """Söz sesin diline uyuyor mu. Latin dışı yazılı dilde (ko, ja, zh…) o yazının harfleri olmalı (K-pop gibi karışık
+    sözde İngilizce payı yüksek olabilir); Latin yazılı dilde söz ağırlıkla İngilizce olmamalı. Ölçülemezse None."""
+    if dil in kapilar.LATIN_DISI_DILLER:
+        pay = kapilar.yerli_yazi_payi(metin)
+        return None if pay is None else pay >= YERLI_YAZI_ESIGI
+    oran = kapilar.ingilizce_orani(metin)
+    return None if oran is None else oran < INGILIZCE_UYUMSUZ
 
 
 def _hataya(calisma: Path, kimlik: str, hata: str) -> None:

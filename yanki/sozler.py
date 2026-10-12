@@ -89,10 +89,11 @@ CEVIRI_AYRACI = "^"  # bazı LRCLIB kayıtlarında satır sonuna çeviri: "보�
 
 
 def ceviri_at(satirlar: list[str]) -> list[str]:
-    """Satırların çoğu `özgün^çeviri` biçimindeyse çeviri atılır (BLACKPINK "How You Like That", 2026-10-12): model
-    çeviriyi de söylemeye çalışırdı. Tek tük `^` olan söze dokunulmaz."""
+    """Satırların en az dörtte biri `özgün^çeviri` biçimindeyse çeviri atılır (BLACKPINK "How You Like That",
+    2026-10-12: 49 satırın 22'si; İngilizce ve ad-lib satırları çevirisiz): model çeviriyi de söylemeye çalışırdı.
+    Tek tük `^` olan söze dokunulmaz."""
     dolu = [x for x in satirlar if x.strip()]
-    if not dolu or sum(CEVIRI_AYRACI in x for x in dolu) < len(dolu) / 2:
+    if not dolu or sum(CEVIRI_AYRACI in x for x in dolu) < len(dolu) / 4:
         return satirlar
     return [x.split(CEVIRI_AYRACI, 1)[0].rstrip() for x in satirlar]
 
