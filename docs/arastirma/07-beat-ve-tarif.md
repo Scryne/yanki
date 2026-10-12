@@ -69,3 +69,9 @@ değil. Seçim ölçüsü söz WER olarak kalır.
 - Şarkılar arası aynılık stil metniyle ve cover gücüyle kıpırdamıyor; yalnız tını referansı biraz düşürdü → S25:
   aynı sanatçının **başka** bir şarkısı referans (prodüksiyon imzası o sanatçıya, cover'ı yapılan kayıt sızmaz) ve
   ScragVAE çözücüsü.
+
+## S26 — yeni mastering aynılığı düşürüyor mu (22 yüklenen şarkı, seçilmiş aday, yeni zincir + ton eşleme)
+
+Orijinale tonal uzaklık her şarkıda düştü (ör. Bruno Mars 6,98 → 4,29 dB, Lana Del Rey 2,50 → 1,37 dB); şarkılar
+arası aynılık 0,941 → 0,934 (orijinaller 0,891). Ton eşleme yardımcı ama "hepsi aynı" hissi spektral dengeden değil
+üretimden geliyor: çözüm üretim tarafında (S25, eğitim).

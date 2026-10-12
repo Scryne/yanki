@@ -114,7 +114,7 @@ def main(klasorler: list[str]) -> int:
     else:
         ciftler = {}
         for k in klasorler:
-            for f in sorted(Path(k).rglob("*.flac")):  # <kimlik>/<kol>.flac ya da <kimlik>/<kol>/<kol>.flac
+            for f in sorted([*Path(k).rglob("*.flac"), *Path(k).rglob("master.wav")]):  # <kimlik>/…/<kol>.flac
                 kimlik = f.relative_to(k).parts[0]
                 kaynak = next(p for p in [KOK / "calisma" / kimlik / "kaynak.wav",
                                            KOK / "calisma" / "_spike" / "s21" / kimlik / "kaynak.wav"] if p.exists())
