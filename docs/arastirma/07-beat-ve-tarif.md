@@ -225,3 +225,23 @@ Cover görevinde eğitilen LoRA her şarkıda eskisini yeniyor ve tam ölçek ya
 Ama 17 şarkıdan 4'ü yayınlanabilir. Sonuç: dördüncü eğitim daha uzun (15 → 30 epoch, 20. epoch ara kayıt) ve kötü
 çıkan türlerden veriyle (95 → 123 şarkı: caz, blues, afrobeats, İngiliz rap/drill, reggae, metal, folk); aynı 17
 şarkıda kör testle karşılaştırılır (set `egitim-4`). Üretim bu sırada duraklatıldı (Scryne: "boş yere üretmesin").
+
+### S31: dördüncü eğitim (2026-10-12/13, 30 epoch, 123 şarkı, A40 6,7 saat, 4,54 $ + yeniden deneme 0,49 $)
+
+Kayıp ilk epoch'ta 1,07 → 0,86, 20. epoch'ta 0,738, 30. epoch'ta 0,731: 20'den sonra yatay. Ara kayıt denemesi ilk
+koşuda düştü: Side-Step'in klasör adı (`epoch_20_loss_0.7381`) PEFT'e bağdaştırıcı adı olarak gitti, nokta reddedildi.
+Düzeltme `motor_isci.lora_adi`; kayıt yerelde olduğu için `yanki egit --deneme-yeniden` ile eğitimsiz yeniden üretildi.
+
+Aynı 17 şarkı, aynı tohum ve tarif (v3 = üretimdeki üçüncü eğitim, 15 epoch, 95 şarkı):
+
+| Kol | groove balad (6) | groove tür (11) | söz WER balad | söz WER tür | döngüsellik balad / tür |
+|---|---|---|---|---|---|
+| v3 (15 ep) | 0,569 | 0,583 | 0,120 | 0,374 | −0,164 / −0,046 |
+| ep20 | 0,627 | 0,598 | 0,109 | **0,372** | −0,141 / −0,052 |
+| ep30 | **0,635** | 0,597 | **0,080** | 0,405 | −0,127 / −0,051 |
+
+Beat'te ep20 ile ep30 neredeyse aynı (şarkı şarkı fark çoğunlukla < 0,02); ikisi de v3'ten balad ve pop'ta belirgin,
+türlerde az iyi. Söz şarkıdan şarkıya oynuyor (tek tohum): ep30 Walking on Air 0,41 → 0,17, B.B. King 0,70 → 0,29,
+ama Last Last 0,64 → 0,94, Gasolina 0,22 → 0,48. Parmak izi aynı bantta (en çok 0,689, eşik 0,72). Ölçü kararı
+vermiyor; seçim kör testte (set `egitim-4`, kollar v3 / ep20 / ep30). Dinleme:
+`calisma/dinleme/lora/20261012-1702/` (`lora_1` = ep30, `lora_ep20`).
