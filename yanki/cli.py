@@ -325,7 +325,10 @@ def _kesif(args: argparse.Namespace) -> int:
     k = ayar["kesif"]
     pazarlar = tuple(args.pazar or k["pazarlar"])
     sp = spotify.Spotify(a.kok)
-    dogrula = bool(sp.client_id and sp.client_secret)
+    # `spotifysiz`: yalnız Spotify gerektirmeyen kaynaklar (popüler şarkılar); Web API kilitliyken ya da uygulama
+    # meşgulken gece koşusu keşfin bu yarısını yine yapar
+    spotifysiz = bool(getattr(args, "spotifysiz", False))
+    dogrula = bool(sp.client_id and sp.client_secret) and not spotifysiz
     adaylar: list = []
     csvler = [Path(x) for x in args.csv] or sorted((a.kok / "girdi" / "kesif").glob("*.csv"))
     for yol in csvler:
@@ -362,6 +365,13 @@ def _kesif(args: argparse.Namespace) -> int:
             print(f"✗ katalog farkı: {e}")
         except (OSError, katalog.DeezerHatasi, spotify.SpotifyHatasi) as e:
             print(f"✗ katalog farkı: {e}")
+    pop = ayar.get("populer", {})
+    if pop.get("acik") and not getattr(args, "populersiz", False):  # Spotify gerektirmez (Deezer + ücretsiz ölçüm)
+        try:
+            adaylar += katalog.populer(katalog.PopulerAyar.oku(pop), pazarlar,
+                                       set(kesif.oku(calisma)) | {x.kimlik for x in adaylar})
+        except (OSError, katalog.DeezerHatasi) as e:
+            print(f"✗ popüler şarkılar: {e}")
     if args.yeniden_olc:  # kayıttaki adaylar da (kaynak o gece taranamasa bile) yeniden ölçülür
         adaylar += [x for x in kesif.oku(calisma).values() if not any(y.kimlik == x.kimlik for y in adaylar)]
     # aynı şarkı birden çok kaynaktan gelebilir: doğrulama tek kez; düzenlemeler (sped up, remix…) hiç sorulmaz
@@ -381,7 +391,7 @@ def _kesif(args: argparse.Namespace) -> int:
         for x in tekil:
             x.olcum = x.kontrol = None
     yayin = paket.yayin_ayarlari(a.kok / "config" / "yayin.toml")
-    if tekil and not dogrula:
+    if tekil and not dogrula and not spotifysiz:
         print("Spotify anahtarı yok (.env): boşluk doğrulanmıyor, yalnız talep ölçülüyor; doğrulanmamış aday listeye"
               " eklenmez")
     # Önce ücretsiz elemeler (YouTube talebi + sanatçı eşleşmesi, LRCLIB sözü), Spotify en son ve yalnız bunları
@@ -653,7 +663,7 @@ def _ozet(args: argparse.Namespace) -> int:
 # Adımların en sık ne zaman koşacağı (saat). Listede olmayan adım her koşuda (sürekli koşu her 30 dk): hazırlık,
 # üretim, veto penceresi, paketleme, yükleme sırası, yedek (kendi haftalık eşiği var). Keşif ve takip Spotify kotası
 # ve Spotify uygulamasını yeniden başlatma yüzünden günde bir; dağıtım yoklaması dağıtımcıyı yormamak için.
-ADIM_ARALIGI_SAAT = {"keşif": 24, "takip": 24, "dağıtım durumu": 3, "temizlik": 24}
+ADIM_ARALIGI_SAAT = {"keşif": 24, "popüler keşif": 12, "takip": 24, "dağıtım durumu": 3, "temizlik": 24}
 # Bu çıktılar "yapılacak iş yoktu" demek: sürekli koşuda yalnız bunları üreten adım günlüğe yazılmaz
 BOS_CIKTI = ("üretilecek bir şey yok", "paketlenecek onaylı şarkı yok", "takvim: ", "yedek güncel",
              "liste boş", "tunearo: izlenen yükleme yok", "takip edilecek yüklenmiş şarkı yok", "toplam 0 MB")
@@ -783,6 +793,10 @@ def _calistir(args: argparse.Namespace) -> int:
         adimlar.append(("keşif", lambda: _kesif(argparse.Namespace(
             csv=[], playlist=[], pazar=None, ekle=gece_ekle, goster=10, katalogsuz=False, yeniden_olc=False,
             stillmoresuz=False, spotify_yeniden_baslat=True))))
+    elif gece_ekle and zamani("popüler keşif"):  # Spotify'sız yarı: Deezer listelerinden popüler şarkılar
+        adimlar.append(("popüler keşif", lambda: _kesif(argparse.Namespace(
+            csv=[], playlist=[], pazar=None, ekle=gece_ekle, goster=10, katalogsuz=True, yeniden_olc=False,
+            stillmoresuz=True, spotify_yeniden_baslat=False, spotifysiz=True))))
     adimlar += [("hazırlık", lambda: _hazirla(args)), ("üretim", lambda: _uret_surekli(kok, op)),
                 ("veto penceresi", lambda: _otomatik_onay(kok)), ("paketleme", lambda: _paketle(args))]
     if zamani("dağıtım durumu"):  # takipten önce: kabul gelince Tunearo'nun atadığı ISRC takibe girsin
@@ -806,6 +820,8 @@ def _calistir(args: argparse.Namespace) -> int:
                 kod = 1
         if ad in ADIM_ARALIGI_SAAT:
             zamanlar[ad] = simdi.isoformat(timespec="seconds")
+        if ad == "keşif":  # tam keşif popüler şarkıları da içerir
+            zamanlar["popüler keşif"] = simdi.isoformat(timespec="seconds")
         if kod:
             sorunlu.append(ad)
         if cikti.bitir(zorla=bool(kod) or hepsi):
@@ -1510,6 +1526,7 @@ def main(argv: list[str] | None = None) -> int:
     ks.add_argument("--pazar", nargs="*", help="pazarlar, ilki ana (varsayılan config/kesif.toml)")
     ks.add_argument("--katalogsuz", action="store_true", help="Deezer katalog farkını atla")
     ks.add_argument("--stillmoresuz", action="store_true", help="STILLMORE playlist taramasını atla")
+    ks.add_argument("--populersiz", action="store_true", help="popüler şarkıları (Deezer tür listeleri) atla")
     ks.add_argument("--spotify-yeniden-baslat", action="store_true",
                     help="Spotify CDP'siz açıksa (çalmıyorsa) STILLMORE için yeniden başlat (gece koşusu bunu yapar)")
     ks.add_argument("--yeniden-olc", action="store_true", help="kayıtta ölçülmüş adayları da yeniden ölç")

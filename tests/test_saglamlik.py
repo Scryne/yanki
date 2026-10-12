@@ -556,7 +556,8 @@ def surekli(tmp_path, monkeypatch):
                       ("_dagitim_durum", "tunearo: izlenen yükleme yok"), ("_takip", ""),
                       ("_takvim_hatirlat", "takvim: kuyruk boş"), ("_temizle", ""),
                       ("_yedekle", "yedek güncel (son: …)")):
-        monkeypatch.setattr(cli, ad, lambda *_a, ad=ad, cikti=cikti: kosan.append(ad) or print(cikti) or 0)
+        monkeypatch.setattr(cli, ad, lambda *_a, ad=ad, cikti=cikti: kosan.append(
+            ad + ("_populer" if _a and getattr(_a[0], "spotifysiz", False) else "")) or print(cikti) or 0)
     (tmp_path / "calisma").mkdir()
     return cli, kosan, tmp_path
 
@@ -581,6 +582,7 @@ def test_surekli_kosu_spotify_serbest_degilse_kesif_ve_takip_bekler(surekli, mon
     monkeypatch.setattr(cli, "_spotify_serbest", lambda _op: False)
     cli._calistir(cli.argparse.Namespace(liste=None, analizsiz=False))
     assert "_kesif" not in kosan and "_takip" not in kosan and "_dagitim_durum" in kosan
+    assert "_kesif_populer" in kosan  # Spotify'sız yarı (Deezer'dan popüler şarkılar) yine koşar
 
 
 @pytest.fixture
@@ -655,7 +657,7 @@ def test_surekli_kosu_spotify_kilitliyken_kesfi_ertelir(surekli, monkeypatch):
     cli, kosan, kok = surekli
     monkeypatch.setattr(sp.Spotify, "kota", lambda self: {"kilit": time.time() + 3600})
     cli._calistir(cli.argparse.Namespace(liste=None, analizsiz=False))
-    assert "_kesif" not in kosan
+    assert "_kesif" not in kosan and "_kesif_populer" in kosan
     monkeypatch.setattr(sp.Spotify, "kota", lambda self: {"kilit": 0})
     kosan.clear()
     cli._calistir(cli.argparse.Namespace(liste=None, analizsiz=False))

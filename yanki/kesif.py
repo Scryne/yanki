@@ -56,7 +56,9 @@ class Aday:
     isrc: str | None = None
     album: str | None = None
     cikis: str | None = None
-    # "kaldirildi": bakılan her pazarda kapalı | "kismi": bazılarında | "spotify_yok": katalogda hiç yok
+    # "kaldirildi": bakılan her pazarda kapalı | "kismi": bazılarında | "spotify_yok": katalogda hiç yok |
+    # "populer": Spotify'da duruyor, hattın iyi yaptığı türde çok dinlenen şarkı (katalog.populer; Scryne 2026-10-13:
+    # "kaldırılmamış bile olsa ... en iyi sonuç verdiği tarzda popüler şarkılar üret")
     neden: str = "kaldirildi"
     bakilan_pazarlar: list = field(default_factory=list)
     kapali_pazarlar: list = field(default_factory=list)
@@ -70,6 +72,7 @@ class Aday:
     # ya da taklit olabilir (2026-10-09: "Lizzy Rey", "Del" adıyla Lana Del Rey sızıntıları) → listeye eklenmez
     sanatci_uyusuyor: bool | None = None
     soz_var: bool | None = None  # LRCLIB'de sözlü kayıt
+    ingilizce: bool | None = None  # LRCLIB sözü ağırlıkla İngilizce mi (popüler adaylar yalnız İngilizce)
     sure_sn: float | None = None
     geri_geldi: bool | None = None  # None: doğrulanmadı
     geri_gelen: list = field(default_factory=list)  # [{"id", "sanatci", "ad", "neden": "isrc"|"ad"}]
@@ -100,11 +103,18 @@ class Aday:
     @property
     def puan(self) -> float:
         if (self.geri_geldi or not self.youtube_izlenme or self.sanatci_uyusuyor is not True or self.duzenleme
-                or self.soz_var is False or (self.sure_sn or 0) > SURE_SINIRI_SN or self.uygun is False):
+                or self.soz_var is False or (self.sure_sn or 0) > SURE_SINIRI_SN or self.uygun is False
+                or (self.populer and self.ingilizce is False)):
             return 0.0
-        # global çalışılıyor (Scryne, 2026-10-09): boşluk ne kadar çok pazarda açıksa o kadar değerli
-        kapsam = len(self.kapali_pazarlar) / len(self.bakilan_pazarlar) if self.bakilan_pazarlar else 1.0
+        if self.populer:  # boşluk yok: aynı talepte kaldırılmış şarkı önce gelir
+            kapsam = POPULER_KAPSAM
+        else:  # global çalışılıyor (Scryne, 2026-10-09): boşluk ne kadar çok pazarda açıksa o kadar değerli
+            kapsam = len(self.kapali_pazarlar) / len(self.bakilan_pazarlar) if self.bakilan_pazarlar else 1.0
         return self.talep * kapsam / (1 + (self.rakip_cover or 0))
+
+    @property
+    def populer(self) -> bool:
+        return self.neden == "populer"
 
     @property
     def talep(self) -> int:
@@ -131,9 +141,10 @@ haric_kalip = functools.cache(haric_kalip_oku)
 
 
 def spotifya_sorulur(a: Aday) -> bool:
-    """Ücretsiz elemeleri geçti mi: talep ölçüldü, sanatçı eşleşti, sözlü ve süresi uygun."""
-    return (not a.duzenleme and bool(a.youtube_izlenme) and a.sanatci_uyusuyor is True and a.soz_var is True
-            and (a.sure_sn or 0) <= SURE_SINIRI_SN and a.uygun is not False)
+    """Ücretsiz elemeleri geçti mi: talep ölçüldü, sanatçı eşleşti, sözlü ve süresi uygun. Popüler aday sorulmaz:
+    boşluk aranmıyor, Spotify kotası (günlük ~1.000 istek) kaldırılmış şarkılara kalsın."""
+    return (not a.populer and not a.duzenleme and bool(a.youtube_izlenme) and a.sanatci_uyusuyor is True
+            and a.soz_var is True and (a.sure_sn or 0) <= SURE_SINIRI_SN and a.uygun is not False)
 
 
 def hal(a: Aday) -> str:
@@ -156,9 +167,12 @@ def hal(a: Aday) -> str:
         return "çok uzun"
     if a.uygun is False:
         return "tür uymuyor"
+    if a.populer and a.ingilizce is False:
+        return "İngilizce değil"
     if a.geri_geldi is None:
         return "doğrulanmadı"
-    return {"kaldirildi": "kaldırılmış", "kismi": "kısmen kapalı", "spotify_yok": "Spotify'da yok"}.get(a.neden,
+    return {"kaldirildi": "kaldırılmış", "kismi": "kısmen kapalı", "spotify_yok": "Spotify'da yok",
+            "populer": "popüler"}.get(a.neden,
                                                                                                          a.neden)
 
 
@@ -340,6 +354,10 @@ BASLIK_AYRAC = re.compile(r"\s+[-–—]+\s*|\s*[-–—]+\s+|\s*\|+\s*")
 
 
 SURE_SINIRI_SN = 420  # hattın parçalı üretimi ölçüldüğü aralığın üstü (285–290 sn şarkılar); uzun parça atlanır
+# Popüler (Spotify'da duran) adayın puanı talebin bu kadarı: aynı talepte boşluğu her pazarda açık kaldırılmış şarkı
+# 5 kat önde. Popüler hitlerin talebi (YouTube'da yüz milyonlar) yine de çoğu kaldırılmış şarkının üstünde kalır.
+POPULER_KAPSAM = 0.2
+INGILIZCE_ESIGI = 0.15  # yanki/hazirlik.py ile aynı: İngilizce sözde sık kelimelerin payı ~0,3–0,5, başka dilde ~0
 
 
 def soz_kontrol(a: Aday, json_al=None) -> Aday:
@@ -350,6 +368,10 @@ def soz_kontrol(a: Aday, json_al=None) -> Aday:
     try:
         s = sozler.lrclib(a.sanatci, sade_ad_gorunur(a.ad), **({"json_al": json_al} if json_al else {}))
         a.soz_var, a.sure_sn = True, s.sure_sn
+        from yanki.kapilar import ingilizce_orani
+
+        oran = ingilizce_orani(s.metin)
+        a.ingilizce = None if oran is None else oran >= INGILIZCE_ESIGI
     except ag.Bulunamadi:
         a.soz_var = False
     return a
@@ -412,7 +434,7 @@ KIMLIK_ALANLARI = ("spotify_dinlenme", "isrc", "spotify_id", "album", "cikis")
 # Aynı adımda birlikte ölçülen alanlar grup olarak taşınır: taze ölçümde None da geçerli bir sonuçtur ("belirsiz"),
 # eski kaydın değeriyle doldurulmaz (2026-10-09: Jev "belirsiz" dediği aday eski regex "uymuyor"uyla eziliyordu).
 UCRETSIZ_ALANLAR = ("youtube_izlenme", "youtube_baslik", "youtube_id", "youtube_kanit", "sanatci_uyusuyor", "soz_var",
-                    "sure_sn", "ozgunluk", "olcum", "turler")
+                    "ingilizce", "sure_sn", "ozgunluk", "olcum", "turler")
 SPOTIFY_ALANLARI = ("geri_geldi", "geri_gelen", "rakip_cover", "kontrol", "bakilan_pazarlar", "kapali_pazarlar")
 
 
@@ -505,7 +527,9 @@ def listeye_yaz(secilen: list[Aday], liste_yolu: Path, not_: str = "yanki kesif"
 
     if not secilen:
         return []
-    bloklar = [f"\n# kesif {datetime.now():%Y-%m-%d}: Spotify'da kaldırılmış şarkılar ({not_})"]
+    ne = ("popüler şarkılar" if all(a.populer for a in secilen) else "Spotify'da kaldırılmış şarkılar"
+          if not any(a.populer for a in secilen) else "kaldırılmış ve popüler şarkılar")
+    bloklar = [f"\n# kesif {datetime.now():%Y-%m-%d}: {ne} ({not_})"]
     for a in secilen:
         ek = f", rakip cover {a.rakip_cover}" if a.rakip_cover else ""
         izlenme = f"YouTube {a.youtube_izlenme:,} izlenme" if a.youtube_izlenme is not None else "YouTube ölçülmedi"

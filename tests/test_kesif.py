@@ -605,3 +605,59 @@ def test_stillmore_oturum_caliyorsa_dokunmaz(monkeypatch):
         with stillmore.Oturum(yeniden_baslat=False):
             pass
     assert kapatildi == []
+
+
+# ── Popüler şarkılar (Scryne 2026-10-13: kaldırılmamış bile olsa, iyi yaptığımız türde) ──
+def test_populer_deezer_listelerinden_editor_once_ve_bilinen_atlanir():
+    from yanki import katalog
+
+    j = _deezer({
+        "/search/playlist": {"data": [{"id": 7, "title": "Rastgele", "user": {"name": "biri"}},
+                                      {"id": 8, "title": "10s Ballads", "user": {"name": "Deezer Pop Editor"}}]},
+        "/playlist/8/tracks": {"data": [
+            {"id": 1, "title": "Someone Like You", "rank": 900000, "artist": {"name": "Adele"}},
+            {"id": 2, "title": "Perfect (Sped Up)", "rank": 950000, "artist": {"name": "Ed Sheeran"}},
+            {"id": 3, "title": "Az Dinlenen", "rank": 1000, "artist": {"name": "X"}},
+            {"id": 4, "title": "All of Me", "rank": 800000, "artist": {"name": "John Legend"}}]},
+    })
+    ayar = katalog.PopulerAyar(sorgular=("ballads",), liste_basina=1, min_rank=400_000, yeni_aday=5)
+    bilinen = {liste.kimlik("John Legend", "All of Me")}
+    adaylar = katalog.populer(ayar, ("GB",), bilinen, j, bildir=lambda *_: None)
+    assert [(a.sanatci, a.ad) for a in adaylar] == [("Adele", "Someone Like You")]  # düzenleme, düşük rank, bilinen yok
+    assert "/playlist/7/tracks" not in j.istekler  # yalnız editörün listesi (liste_basina 1)
+    a = adaylar[0]
+    assert a.populer and a.geri_geldi is False and kesif.hal(a) == "talep yok"
+    a.youtube_izlenme, a.sanatci_uyusuyor, a.soz_var, a.ingilizce = 10**8, True, True, True
+    assert kesif.hal(a) == "popüler" and a.puan > 0
+    assert not kesif.spotifya_sorulur(a)  # Spotify kotası kaldırılmış şarkılara
+
+
+def test_populer_puani_kaldirilmistan_dusuk_ve_yalniz_ingilizce():
+    ortak = dict(youtube_izlenme=10**6, sanatci_uyusuyor=True, soz_var=True, geri_geldi=False)
+    kaldirilmis = kesif.Aday("A", "B", "k", bakilan_pazarlar=["GB"], kapali_pazarlar=["GB"], **ortak)
+    pop = kesif.Aday("C", "D", "k", neden="populer", ingilizce=True, **ortak)
+    assert kaldirilmis.puan == 10**6 and pop.puan == 10**6 * kesif.POPULER_KAPSAM
+    pop.ingilizce = False
+    assert pop.puan == 0 and kesif.hal(pop) == "İngilizce değil"
+    # kaldırılmış şarkıda dil şartı yok (İngilizce dışı kulağa kalır)
+    kaldirilmis.ingilizce = False
+    assert kaldirilmis.puan > 0
+
+
+def test_soz_kontrol_sozun_dilini_olcer():
+    def ingilizce(url, p):
+        return {"plainLyrics": "I love you and you know that I will be there for you\nyou are the one", "duration": 200}
+
+    def ispanyolca(url, p):
+        return {"plainLyrics": "Me gusta la gasolina\ndame mas gasolina como le encanta", "duration": 200}
+
+    assert kesif.soz_kontrol(kesif.Aday("A", "B", "k"), ingilizce).ingilizce is True
+    assert kesif.soz_kontrol(kesif.Aday("A", "B", "k"), ispanyolca).ingilizce is False
+
+
+def test_populer_listeye_ekleme_basligi(tmp_path):
+    yol = tmp_path / "liste.toml"
+    yol.write_text("", encoding="utf-8")
+    a = kesif.Aday("Adele", "Someone Like You", "deezer-populer:1", neden="populer", youtube_izlenme=5)
+    kesif.listeye_yaz([a], yol)
+    assert "popüler şarkılar" in yol.read_text(encoding="utf-8")

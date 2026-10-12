@@ -263,3 +263,55 @@ def tara(sp, calisma: Path, pazarlar, ayar: Ayar, ek_adlar: list[str] | None = N
     bildir(f"katalog: bu koşuda {sp.istek_sayisi - baslangic} Spotify isteği; önbellekte {len(kayit)} parça, "
            f"{len(adaylar)} aday (Spotify'da kapalı/yok)")
     return adaylar
+
+
+# ── Popüler şarkılar ────────────────────────────────────────
+# Scryne (2026-10-13): "kaldırılmamış bile olsa elimizdeki şarkı üretmenin en iyi sonuç verdiği tarzda popüler
+# şarkılar üret; üretim kapsamını olabildiğince genişlet". Kaynak Deezer'ın tür listeleri (editörlerin seçtiği,
+# anahtarsız, her parçada `rank`); sorgular kulaktan geçen türlerden (S31: balad/pop, rock, metal, pop-punk, country).
+@dataclass
+class PopulerAyar:
+    sorgular: tuple[str, ...] = ()
+    liste_basina: int = 2
+    min_rank: int = 400_000
+    yeni_aday: int = 60
+
+    @classmethod
+    def oku(cls, d: dict) -> "PopulerAyar":
+        return cls(tuple(d.get("sorgular", ())), int(d.get("liste_basina", 2)), int(d.get("min_rank", 400_000)),
+                   int(d.get("yeni_aday", 60)))
+
+
+def _editor_once(liste: dict) -> bool:
+    """Deezer editörünün listesi mi ("Rod - Deezer Rock Editor"): seçilmiş ve güncel; kullanıcı listeleri karışık."""
+    return "deezer" not in ((liste.get("user") or {}).get("name") or "").casefold()
+
+
+def populer(ayar: PopulerAyar, pazarlar, bilinen: set[str], json_al=ag.json_al, bildir=print) -> list[Aday]:
+    """Sorgulardaki Deezer listelerinin parçaları → popüler aday (`neden="populer"`). Kayıtta olan (`bilinen`
+    kimlikler) atlanır; en çok `yeni_aday` yeni aday, `rank` sırasıyla (ücretsiz ölçümler aday başına saniyeler)."""
+    havuz: dict[str, tuple[int, Aday]] = {}
+    for sorgu in ayar.sorgular:
+        try:
+            listeler = deezer("/search/playlist", {"q": sorgu, "limit": 10}, json_al).get("data") or []
+        except (ag.Bulunamadi, DeezerHatasi) as e:
+            bildir(f"  Deezer listesi aranamadı ({sorgu}): {e}")
+            continue
+        for liste_ in sorted(listeler, key=_editor_once)[: ayar.liste_basina]:
+            try:
+                parcalar = deezer(f"/playlist/{liste_['id']}/tracks", {"limit": 100}, json_al).get("data") or []
+            except (ag.Bulunamadi, DeezerHatasi):
+                continue
+            for t in parcalar:
+                sanatci, ad = (t.get("artist") or {}).get("name"), t.get("title_short") or t.get("title")
+                rank = int(t.get("rank") or 0)
+                if not (t.get("id") and sanatci and ad) or rank < ayar.min_rank or DUZENLEME.search(ad):
+                    continue
+                a = Aday(sanatci, ad, f"deezer-populer:{t['id']}", neden="populer", bakilan_pazarlar=list(pazarlar),
+                         kapali_pazarlar=[], geri_geldi=False)
+                if a.kimlik not in bilinen and (a.kimlik not in havuz or havuz[a.kimlik][0] < rank):
+                    havuz[a.kimlik] = (rank, a)
+    secilen = [a for _, a in sorted(havuz.values(), key=lambda x: -x[0])][: ayar.yeni_aday]
+    bildir(f"popüler: {len(ayar.sorgular)} sorgu, {len(havuz)} yeni parça (rank ≥ {ayar.min_rank:,}); "
+           f"bu koşuda {len(secilen)} ölçülecek")
+    return secilen

@@ -17,7 +17,9 @@ playlistler = [
 ]
 # Gece koşusu her gece en iyi kaç doğrulanmış adayı listeye eklesin (0 = eklemesin; elle: `yanki kesif --ekle N`).
 # Şarkı başı ~30 dk GPU; dinleme yükü de Scryne'da.
-gece_ekle = 0  # 2 → 0 (2026-10-12): üretim duraklatıldı (config/operasyon.toml → [surekli] uretim)
+# 0 → 10 (2026-10-13, Scryne: "üretimi yeniden aç ve çok kapsamlı olsun"; S31'de model yayınlanabilir 9/17). Keşif
+# günde bir (Spotify'lı), popüler keşif 12 saatte bir (Spotify'sız); ikisi de bu kadar ekler.
+gece_ekle = 10
 # Keşfin kendiliğinden listeye almadığı türler (Deezer sanatçı türlerinde aranır; düzenli ifade parçaları). Scryne
 # (2026-10-12): şarkılar tek türde olmayacak → tür, yeni tarifle (bölüm yapısı + betim) dinlenip doğrulandıkça buradan
 # çıkar (spikes/s21_turler.py). [] = bütün türler.
@@ -34,6 +36,26 @@ haric_turler = [
   "rap", "hip[ -]?hop", "trap", "drill", "hardcore", "techno", "dubstep", "trance", "brazilian", "sertanejo", "forr[oó]", "mexicano", "salsa", "asian",
   "indian", "bollywood", "j-?pop", "anime", "gospel", "opera", "classical", "kids", "films", "games",
 ]
+
+[populer]
+# Kaldırılmamış popüler şarkılar (yanki/katalog.py → populer; Scryne 2026-10-13: "kaldırılmamış bile olsa elimizdeki
+# şarkı üretmenin en iyi sonuç verdiği tarzda popüler şarkılar üret, kapsamı olabildiğince genişlet"). Deezer'da bu
+# sorgularla aranan listelerin (editörlerinki önce) parçaları; tür süzgeci (haric_turler) ve yalnız İngilizce söz.
+# Sorgular kulaktan geçen türlerden (S31 kör test: balad/pop, rock, metal, pop-punk, country).
+acik = true
+sorgular = [
+  "10s Ballads", "00s Ballads", "90s Ballads", "80s Ballads", "Piano ballads", "Love Classics", "Acoustic Covers Pop",
+  "10s Pop", "00s Pop", "90s Pop", "Pop Essentials", "Singer Songwriter", "Sad Songs", "Breakup Songs",
+  "Rock Essentials", "2000s Rock", "90s Rock", "80s Pop Rock", "Brit Rock Essentials", "Indie Rock Essentials",
+  "Pop Punk Essentials", "Emo Essentials", "Metal Essentials", "Country Hits", "Country Essentials",
+  "Soft Rock", "Power Ballads", "Folk Pop",
+]
+# Her sorgudan kaç liste
+liste_basina = 2
+# Deezer rank (0–1.000.000) eşiği: yalnız gerçekten çok dinlenenler
+min_rank = 400000
+# Bir koşuda en çok kaç yeni aday ölçülsün (YouTube + Jev + LRCLIB, aday başına birkaç saniye); kalanı sonraki koşuya
+yeni_aday = 60
 
 [stillmore]
 # Spotify istemcisinin içindeki STILLMORE ile playlist taraması (yanki/stillmore.py): başkasının ve editoryal
