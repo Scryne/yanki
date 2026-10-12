@@ -21,7 +21,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from yanki import durum, kesif, kilit, olay, sozler, uretim
+from yanki import durum, kesif, kilit, olay, sozler, uretim, yapi
 from yanki.ayarlar import Ayarlar
 
 SAYFA = Path(__file__).with_name("sayfa")
@@ -159,7 +159,57 @@ def _ozet(d: durum.Durum, calisma: Path | None = None) -> dict:
     return {"kimlik": d.kimlik, "sanatci": d.sanatci, "ad": d.ad, "asama": d.asama, "hata": d.hata,
             "gecen_aday": sum(a.gecti for a in d.adaylar),
             "bekleyen_onarim": sum(o["durum"] == "bekliyor" for a in d.adaylar for o in a.onarimlar),
-            "kapak": _kapak_url(calisma, d.kimlik) if calisma else None}
+            "kapak": _kapak_url(calisma, d.kimlik) if calisma else None,
+            "guncel": d.gecmis[-1]["zaman"] if d.gecmis else None, "dil": d.analiz.get("dil")}
+
+
+def _bolumler(satirlar: list, sure_sn: float | None, ad: str) -> list[dict]:
+    """Sözler bölüm yapısıyla ve kaynağın zaman damgalarıyla (yanki/yapi.py; cover kaynağın zamanlamasını izler):
+    dinleme odasında çalan satır vurgulanır, satıra tıklayınca oraya gidilir."""
+    if not satirlar:
+        return []
+    try:
+        bolumler = yapi.coz([(None if t is None else float(t), m) for t, m in satirlar], sure_sn, ad=ad)
+    except (ValueError, TypeError):
+        return []
+    return [{"ad": b.ad, "bas": b.bas, "satirlar": [[t, m] for t, m in b.satirlar]} for b in bolumler]
+
+
+def _oneri(d: durum.Durum) -> dict | None:
+    """Hattın önerdiği aday ve kısa gerekçesi (onay.oneri: söz WER'i en düşük iki aday arasından ACE-Step söz
+    hizalaması yüksek olan). Yalnız öneri: karar Scryne'ın kulağı."""
+    from yanki import onay
+
+    a = onay.oneri(d)
+    if a is None:
+        return None
+    wer = (a.kapilar.get("soz_wer") or {}).get("deger")
+    hiz = onay._hizalama(a)
+    neden = [f"söz hatası {str(wer).replace('.', ',')}" if wer is not None else None,
+             f"söz hizalaması {hiz:.3f}".replace(".", ",") if hiz is not None else None]
+    return {"aday": a.no, "neden": " · ".join(x for x in neden if x)}
+
+
+def kosu_durumu(calisma: Path) -> dict:
+    """Şu an bir koşu sürüyor mu (gece/gündüz ya da elle `yanki uret`): `.yanki.kilit`'in ilk baytı işletim sistemi
+    kilidiyle tutuluyorsa okunamaz. Kilit alınmaz (koşunun başlamasını engellemesin). Kiralık GPU açıksa
+    `calisma/.runpod/acik_pod` vardır (pod kapanınca silinir); açılış zamanı dosyanın zamanı."""
+    from datetime import datetime
+
+    kilit_yolu, pod = calisma / ".yanki.kilit", calisma / ".runpod" / "acik_pod"
+    suruyor = False
+    if kilit_yolu.exists():
+        try:
+            with open(kilit_yolu, "rb") as f:
+                f.read(1)
+        except OSError:
+            suruyor = True
+    sonuc: dict = {"suruyor": suruyor, "pod": None}
+    if pod.exists():
+        acilis = datetime.fromtimestamp(pod.stat().st_mtime)
+        sonuc["pod"] = {"acilis": acilis.isoformat(timespec="minutes"),
+                        "dakika": int((datetime.now() - acilis).total_seconds() // 60)}
+    return sonuc
 
 
 def _son_gece(calisma: Path) -> dict | None:
@@ -303,6 +353,7 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None) -> FastA
         k = durum.klasor(calisma, kimlik)
         kaynak = k / "kapak_kaynak.json"
         return {**asdict(d), **_ozet(d, calisma), "kesitler": sozler.kesitler(satirlar, d.kaynak.get("sure_sn")),
+                "bolumler": _bolumler(satirlar, d.kaynak.get("sure_sn"), d.ad), "oneri": _oneri(d),
                 "otomatik_onay": {"zaman": oto.isoformat(timespec="minutes"), "aday": oneri.no}
                 if oto and oneri else None,
                 "onay_engeli": onay.engel(d, ayar) if ayar.acik and d.asama == "uretildi" else None,
@@ -490,7 +541,10 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None) -> FastA
                        "uretim": (f"kiralık GPU ({a.uzak.gpu.replace('NVIDIA ', '')})" if a.uzak.acik
                                   else "evdeki GPU"),
                        "uzak_ay_usd": uzak.bu_ay_harcama(a.kok) if a.uzak.acik else None,
-                       "uzak_butce": a.uzak.aylik_butce if a.uzak.acik else None}
+                       "uzak_butce": a.uzak.aylik_butce if a.uzak.acik else None,
+                       "tarif": {"model": a.motor.model, "lora": uretim.lora_adi(a.motor.lora),
+                                 "lora_olcek": a.motor.lora_olcek if a.motor.lora else None, "betim": a.motor.betim,
+                                 "aday": a.cover.aday_sayisi, "adim": a.cover.adim, "guc": a.cover.guc}}
         except (OSError, ValueError, KeyError):
             ayarlar = {}
         from yanki import tunearo
@@ -516,6 +570,8 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None) -> FastA
             "hatada": [_ozet(d, calisma) for d in hepsi if d.asama == "hata"],
             "dagitim": dagitimda, "takvim": _takvim(a.kok, calisma), "ayarlar": ayarlar,
             "olaylar": olay.oku(calisma, son=12)[::-1], "gece": _son_gece(calisma), "kota": _kota(a.kok),
+            "simdi": {**kosu_durumu(calisma), "uretimde": [_ozet(d, calisma) for d in hepsi
+                                                           if d.asama in ("analiz", "onarim")]},
         }
 
     @app.get("/api/kazanc")
@@ -528,7 +584,8 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None) -> FastA
         except tunearo.AyarYok:
             return {"bagli": False}
         except (tunearo.TunearoHatasi, OSError) as e:
-            raise HTTPException(502, f"Tunearo'ya ulaşılamadı: {e}") from e
+            # dağıtımcıya ulaşılamaması sayfanın hatası değil (erişim kapalıyken her açılışta konsol hatası veriyordu)
+            return {"bagli": True, "ulasilamadi": True, "erisim_kapali": "403" in str(e), "hata": str(e)[:300]}
 
     app.mount("/", StaticFiles(directory=SAYFA, html=True), name="sayfa")
     return app

@@ -752,13 +752,22 @@ def test_motor_secimi(tmp_path, monkeypatch):
     a = _uzak_ayar(tmp_path)
     _, tek, uzak_mi = uzak.motor_sec(a, kayit=lambda _m: None, stok=lambda k, g: "High", bakiye=lambda _k: 10.0)
     assert uzak_mi and tek == 480
-    assert uzak.motor_sec(a, kayit=lambda _m: None, stok=lambda k, g: "Low", bakiye=lambda _k: 10.0)[2] is False
+    assert uzak.motor_sec(a, kayit=lambda _m: None, stok=lambda k, g: "Low", bakiye=lambda _k: 10.0)[2] is True
+    assert uzak.motor_sec(a, kayit=lambda _m: None, stok=lambda k, g: None, bakiye=lambda _k: 10.0)[2] is False
     assert uzak.motor_sec(a, kayit=lambda _m: None, stok=lambda k, g: "High", bakiye=lambda _k: 1.0)[2] is False
     # koşu ortasında düşen sunucu: hata yükselir (şarkılar sırada kalır), 3 saat evdeki motor
     calistir, _, _ = uzak.motor_sec(a, kayit=lambda _m: None, stok=lambda k, g: "High", bakiye=lambda _k: 10.0)
 
+    def stoksuz(*_a, **_k):
+        raise uzak.runpod.StokYok("A40 açılamadı")
+
+    monkeypatch.setattr(uzak, "calistir", stoksuz)
+    with pytest.raises(uzak.runpod.StokYok):
+        calistir(a, [], tmp_path, 10)
+    assert not uzak.durma_yolu(tmp_path).exists()  # açılmayan pod sunucuyu devre dışı bırakmaz
+
     def duser(*_a, **_k):
-        raise uzak.runpod.RunPodHatasi("A40 açılamadı")
+        raise uzak.runpod.RunPodHatasi("SSH koptu")
 
     monkeypatch.setattr(uzak, "calistir", duser)
     with pytest.raises(uzak.runpod.RunPodHatasi):

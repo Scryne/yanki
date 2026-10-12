@@ -20,6 +20,7 @@ analizine yazılır (sonraki üretimler aynı stili kullanır). Betim düşerse 
 import dataclasses
 import json
 from collections.abc import Callable
+from datetime import datetime
 from pathlib import Path
 
 import numpy as np
@@ -210,9 +211,13 @@ def _kapilardan_gecir(degerlendir: Callable[..., dict], tam: Path, kaynak: Path,
 
 
 def _aday_kur(k: Path, d: durum.Durum, plan, n: int, tohum: int, sonuclar: dict, degerlendir, kaynak: Path,
-              soz: str, dil: str, orijinal_wer: float | None = None) -> durum.Aday:
+              soz: str, dil: str, orijinal_wer: float | None = None, tarif: dict | None = None) -> durum.Aday:
     rs = [sonuclar.get(f"{d.kimlik}|cover|{n}|{p.no}") for p in plan]
     aday = durum.Aday(n, "", tohum, stil=d.analiz["stil"])
+    if tarif is not None:
+        olcek = rs[0].lora_olcek if rs[0] else None
+        aday.tarif = {**tarif, "lora": tarif.get("lora") if olcek else None, "lora_olcek": olcek,
+                      "stil_kaynak": d.analiz.get("stil_kaynak")}
     hatali = [f"parça {p.no}: {r.hata if r else 'üretilmedi'}" for p, r in zip(plan, rs, strict=True)
               if not (r and r.basari)]
     if hatali:
@@ -290,6 +295,13 @@ def _yalniz_motor_dustu(adaylar: list[durum.Aday]) -> bool:
     return all(set(x.kapilar) == {"motor"} for x in adaylar)
 
 
+def lora_adi(yol: Path | None) -> str | None:
+    """Eğitimin adı (calisma/egitim/lora/<zaman>/final → <zaman>): adayın tarifinde hangi LoRA."""
+    if yol is None:
+        return None
+    return yol.parent.name if yol.name == "final" else yol.name
+
+
 def betim_gerekli(d: durum.Durum, elle_stil: set[str]) -> bool:
     """Betimi yok ve stilini Scryne yazmamış (listede `stil`, dinleme odasında stil değişikliği)."""
     return (not d.analiz.get("betim") and d.analiz.get("stil_kaynak") != "elle" and d.kimlik not in elle_stil)
@@ -322,6 +334,8 @@ def uret(a: Ayarlar, calisma: Path, kimlikler: list[str] | None = None,
         return {r.id: r for r in calistir(a, isler, calisma / "_motor" / ad, ZAMAN_ASIMI_SN_IS_BASI * len(isler))}
 
     planlar, tur1, pencere_bas, islenen, notlar = {}, [], {}, [], {}
+    tarif = {"model": a.motor.model, "lora": lora_adi(a.motor.lora),
+             "tarih": datetime.now().isoformat(timespec="minutes")}
     elle_stil = _elle_stil(a.kok) if betimle else set()
     for d in hedef:
         n0 = len(d.notlar)
@@ -393,7 +407,7 @@ def uret(a: Ayarlar, calisma: Path, kimlikler: list[str] | None = None,
         yeni_adaylar, onarimlar = [], {}
         if d.kimlik in planlar:
             plan, _, numaralar = planlar[d.kimlik]
-            yeni_adaylar = [_aday_kur(k, d, plan, n, tohum, sonuclar, degerlendir, kaynak, soz, dil, owr)
+            yeni_adaylar = [_aday_kur(k, d, plan, n, tohum, sonuclar, degerlendir, kaynak, soz, dil, owr, tarif)
                             for n, tohum in numaralar]
         else:
             for aday in d.adaylar:

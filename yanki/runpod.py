@@ -34,6 +34,10 @@ class RunPodHatasi(RuntimeError):
     pass
 
 
+class StokYok(RunPodHatasi):
+    """Pod hiç açılmadı (o an boş kart yok): ücret işlemez, sunucu bozuk sayılmaz."""
+
+
 def anahtar(kok: Path) -> str:
     from yanki.spotify import env_oku
 
@@ -130,7 +134,7 @@ class Pod:
             "env": [{"key": "PUBLIC_KEY", "value": acik}],
             "allowedCudaVersions": ["12.8", "12.9", "13.0"]}}, deneme=1)["podFindAndDeployOnDemand"]
         if not d or not d.get("id"):
-            raise RunPodHatasi(f"{self.gpu} açılamadı (stok yok olabilir)")
+            raise StokYok(f"{self.gpu} açılamadı (stok yok olabilir)")
         self.id, self.saatlik = d["id"], float(d.get("costPerHr") or 0)
         self.acilis = time.time()
         (self.klasor / self.kayit_adi).write_text(self.id, encoding="utf-8")

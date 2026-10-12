@@ -256,6 +256,7 @@ def main() -> int:
                 kayit["lora_olcek"] = float(i["lora_olcek"])
             elif lora_olcek is not None:
                 dit.set_lora_scale(lora_olcek)
+                kayit["lora_olcek"] = lora_olcek  # adayın tarifi (dinleme odası hangi modelle üretildiğini gösterir)
             bolge = {}
             if gorev == "repaint":
                 bas, son = i["bolge"]

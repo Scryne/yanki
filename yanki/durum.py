@@ -37,6 +37,9 @@ class Aday:
     stil: str | None = None  # üretildiği stil tanımı (stil değiştirilip yeniden üretilince adaylar ayırt edilsin)
     # ACE-Step söz hizalama puanı (motor_isci._hizalama; parça başına {"lm", "dit"}): seçim ölçüsü olarak sınanacak
     hizalama: list | None = None
+    # üretildiği tarif: {"model", "lora" (eğitim adı, yoksa None), "lora_olcek", "stil_kaynak", "tarih"}; eski
+    # adaylarda yok. Hat değişince (yeni LoRA, betim) dinleme odası eski ve yeni adayları ayırt eder.
+    tarif: dict | None = None
 
 
 @dataclass

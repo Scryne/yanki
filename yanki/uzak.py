@@ -264,7 +264,8 @@ def motor_sec(a: Ayarlar, kayit: Callable[[str], None] = print, stok=runpod.stok
     try:
         api = runpod.anahtar(a.kok)
         butce_kontrol(a, api, bakiye)
-        if (durum_ := stok(api, a.uzak.gpu)) in (None, "None", "Low"):
+        # "Low" da denenir (2026-10-12: A40 saatlerce Low kaldı, üretim hiç başlamadı); açılamazsa ücret yok
+        if (durum_ := stok(api, a.uzak.gpu)) in (None, "None"):
             raise runpod.RunPodHatasi(f"{a.uzak.gpu} stok: {durum_}")
     except (runpod.RunPodHatasi, OSError) as e:
         kayit(f"uzak GPU kullanılmıyor ({e}); {nerede}")
@@ -273,6 +274,8 @@ def motor_sec(a: Ayarlar, kayit: Callable[[str], None] = print, stok=runpod.stok
     def uzak_calistir(a_, isler, klasor, zaman_asimi_sn, **_k):
         try:
             return calistir(a_, isler, klasor, zaman_asimi_sn)
+        except runpod.StokYok:
+            raise  # pod açılmadı: şarkılar sırada kalır, sonraki koşu yine dener (devre dışı bırakılmaz)
         except (runpod.RunPodHatasi, OSError, subprocess.SubprocessError) as e:
             dosya.yaz(durma_yolu(a_.kok), f"{datetime.now():%Y-%m-%d %H:%M} {type(e).__name__}: {e}")
             raise

@@ -474,3 +474,23 @@ def test_durum_bilinmeyen_alani_atlar(tmp_path):
     yol.write_text(json.dumps(veri), encoding="utf-8")
     d = durum.oku(c, "x")
     assert d.kimlik == "x" and d.adaylar[0].no == 1
+
+
+def test_aday_uretildigi_tarifi_tasir(tmp_path):
+    # dinleme odası yeni hatla (LoRA) üretilen adayı öncekilerden ayırır
+    c = tmp_path / "c"
+    _sarki(c, "tarifli", 60)
+    lora = tmp_path / "egitim" / "20261012-0808" / "final"
+
+    class LoraliMotor(SahteMotor):
+        def __call__(self, a, isler, klasor, zaman_asimi_sn):
+            return [replace(r, lora_olcek=1.0) for r in super().__call__(a, isler, klasor, zaman_asimi_sn)]
+
+    a = _ayar()
+    uretim.uret(replace(a, motor=replace(a.motor, lora=lora)), c, calistir=LoraliMotor(), degerlendir=GECER)
+    t = durum.oku(c, "tarifli").adaylar[0].tarif
+    assert t["lora"] == "20261012-0808" and t["lora_olcek"] == 1.0 and t["model"] == a.motor.model
+    # LoRA ayarlı ama motor uygulamadıysa (yerel INT8) tarifte LoRA yok
+    _sarki(c, "lorasiz", 60)
+    uretim.uret(replace(a, motor=replace(a.motor, lora=lora)), c, ["lorasiz"], calistir=SahteMotor(), degerlendir=GECER)
+    assert durum.oku(c, "lorasiz").adaylar[0].tarif["lora"] is None

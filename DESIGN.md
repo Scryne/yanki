@@ -88,12 +88,17 @@ duraklarında): rakamlar sütun sütun hizalanır, kaymaz.
 
 ## Layout
 
-- Solda dar cam kenar çubuğu: marka, görünümler (Pano, Keşif, Yayın), şarkı kuyruğu (32 px kapak + ad + aşama).
-  Mobilde üste geçer.
-- **Pano** (açılış): üstte cam sinyal zinciri şeridi; altında asimetrik iki sütun — geniş sol "Senden beklenen" ve
-  "Sıradaki yüklemeler", dar sağ "Kazanç", "Son gece koşusu", "Otomasyon". En altta bildirim zaman çizelgesi.
-- **Şarkı ekranı:** başlıkta 132 px kapak (kare, `rounded.kapak`), yanında ad, sanatçı, aşama, künye; adaylar alt
-  alta tam genişlik dalga şeritleri.
+- Solda dar cam kenar çubuğu: marka, canlı durum satırı (koşu/kiralık GPU, camgöbeği nabız), görünümler (Pano, Keşif,
+  Yayın), arama (`/`), şarkılar aşama gruplarında (Dinlemende, Üretimde, Hata, Yayına hazırlanıyor, Dağıtımda,
+  Reddedilen; katlanır, durum tarayıcıda hatırlanır). Mobilde üste geçer.
+- **Pano** (açılış): üstte cam sinyal zinciri şeridi, altında "Şu an" şeridi (koşu sürerken camgöbeği; üretimdeki
+  şarkılar hap biçiminde); asimetrik iki sütun — geniş sol "Senden beklenen", "Dağıtımda" kapak duvarı, "Yükleme
+  sırası", bildirimler (iki satır, tıklayınca açılır); dar sağ "Kazanç", "Üretim tarifi", "Son gece koşusu",
+  "Otomasyon" (GPU bütçe çubuğu).
+- **Şarkı ekranı:** başlıkta 168 px kapak; kapağın kendisi bulanık bir ışık olarak başlığın arkasında (statik, 64 px
+  blur, %32). Yanında aşama, ad (34 px), sanatçı, bilgi çipleri (dil, süre, tempo, yazarlar…) ve katlanır betim.
+  Altında iki sütun: solda hızlı karşılaştırma + orijinal + aday şeritleri (yeni hatla üretilenler üstte, öncekiler
+  ara başlığın altında sönük), sağda 300 px yapışkan söz rayı. 1180 px altında ray şeritlerin altına iner.
 
 ## Components
 
@@ -107,6 +112,18 @@ duraklarında): rakamlar sütun sütun hizalanır, kaymaz.
 - **Düğmeler:** birincil metalik gümüş (onayla), ikincil gümüş kenarlı, punch-in amber kenarlı (onar), tehlike metin
   mercan.
 - **Kapak:** kare, `rounded.kapak`, ince `cizgi` kenar ve hafif iç gölge; "Başka kapak" ikincil düğme.
+- **Kapı ölçerleri:** kayıt masasının VU göstergesi gibi: ad + 44 px ince çubuk + mono değer. Dolgu değerin eşiğe
+  oranı (bütün kapılarda düşük iyi); geçen ada çayı, düşen mercan. Metin her zaman yanında (yalnız renk değil).
+- **Hattın önerisi:** gümüş gradyan dolgulu hap (`hattın önerisi`), önerilen şeridin kenarı gümüş. Yalnız karar
+  bekleyen şarkıda; gerekçe (söz hatası, hizalama) karşılaştırma panelinin altında tek satır.
+- **Tarif çipi:** gümüş kenarlı hap, adayın üretildiği hat ("LoRA · 12 Eki"); eski ve yeni aday birlikteyken eskiler
+  "önceki hat".
+- **Söz rayı:** opak yüzey; bölüm adları mono büyük harf etiket (nakarat gümüş kenarlı, enstrümantal kesik kenarlı).
+  Çalan satır camgöbeği sol çizgi ve hafif dolgu; ray kendi içinde kayar (sayfayı oynatmaz), fare üstündeyken kaymaz.
+  Tık: o satırdan çal; Shift+tık: satırı onarım için seç.
+- **Pencere:** yerel `<dialog>`, cam (blur 18 px) + gümüş kenar; ret penceresinde hazır neden hapları ve isteğe bağlı
+  metin. Kısayollar `?` ile.
+- **Kapak duvarı:** dağıtımdaki şarkılar 112 px kare kapak ızgarası, sol üstte durum hapı; satır listesinin yerine.
 
 ## Do's and Don'ts
 
@@ -114,4 +131,5 @@ duraklarında): rakamlar sütun sütun hizalanır, kaymaz.
 - `backdrop-filter`'lı katman canlandırılmaz; dalga canvas'ı cam katmanın altında yeniden çizilmez.
 - Rozetlerde yalnız renk değil metin de olur ("parmak izi 0,58 ✓").
 - Gümüş gradyan metin yalnız marka ve pano sayaçlarında; gövde metni düz `metin`.
+- Canlılık yalnız camgöbeği nabızla (koşu, üretimdeki şarkı); hareket azaltmada nabız ve dalga yükleme taraması durur.
 - Kontrast: gövde ≥ 4.5:1 (`metin`/`metin-2` grafit zemin ve camda ölçüldü), hareket azaltmada geçişler kapalı.

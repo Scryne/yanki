@@ -27,10 +27,11 @@ def ortam(tmp_path):
 
 
 def test_liste_ve_ayrinti(ortam):
-    istemci, _ = ortam
+    istemci, c = ortam
     assert istemci.get("/api/sarkilar").json()[0] == {"kimlik": "a-b", "sanatci": "A", "ad": "B", "asama": "uretildi",
                                                        "hata": None, "gecen_aday": 1, "bekleyen_onarim": 0,
-                                                       "kapak": None}
+                                                       "kapak": None, "guncel": durum.oku(c, "a-b").gecmis[-1]["zaman"],
+                                                       "dil": None}
     assert istemci.get("/api/sarki/a-b").json()["adaylar"][0]["tohum"] == 42
     assert istemci.get("/api/sarki/a-b").json()["kesitler"] == []  # söz zamanı yoksa kesit yok
 
@@ -277,3 +278,49 @@ def test_kazanc_baglanti_yoksa_bagli_degil(ortam, monkeypatch):
 
     monkeypatch.setattr(tunearo.Istemci, "kokten", classmethod(yok))
     assert istemci.get("/api/kazanc").json() == {"bagli": False}
+
+
+def test_sarki_bolumleri_ve_hattin_onerisi(ortam):
+    # sözler bölüm yapısıyla (söz rayı) ve öneri: söz WER'i en düşük iki aday arasından hizalaması yüksek olan
+    istemci, c = ortam
+    satirlar = [[10.0, "a1"], [14.0, "a2"], [40.0, "nakarat bir"], [44.0, "nakarat iki"], [60.0, "b1"], [64.0, "b2"],
+                [90.0, "nakarat bir"], [94.0, "nakarat iki"]]
+    (c / "a-b" / "soz_zaman.json").write_text(json.dumps(satirlar), encoding="utf-8")
+    with durum.guncelle(c, "a-b") as d:
+        wer = lambda w: {"soz_wer": {"gecti": True, "deger": w, "esik": 0.5}}  # noqa: E731
+        d.adaylar = [durum.Aday(1, "adaylar/1.flac", 42, wer(0.10), True, hizalama=[{"dit": 0.10}]),
+                     durum.Aday(2, "adaylar/1.flac", 7, wer(0.12), True, hizalama=[{"dit": 0.20}]),
+                     durum.Aday(3, "adaylar/1.flac", 123, wer(0.30), True, hizalama=[{"dit": 0.90}])]
+    r = istemci.get("/api/sarki/a-b").json()
+    adlar = [b["ad"] for b in r["bolumler"]]
+    assert "Chorus" in adlar and r["bolumler"][adlar.index("Chorus")]["satirlar"][0] == [40.0, "nakarat bir"]
+    assert r["oneri"]["aday"] == 2 and "0,12" in r["oneri"]["neden"]
+
+
+def test_pano_su_an_ve_uretim_tarifi(ortam):
+    istemci, c = ortam
+    p = istemci.get("/api/pano").json()
+    assert p["simdi"]["suruyor"] is False and p["simdi"]["pod"] is None and p["simdi"]["uretimde"] == []
+    (c / ".runpod").mkdir()
+    (c / ".runpod" / "acik_pod").write_text("pod", encoding="utf-8")
+    from yanki import kilit
+
+    with kilit.tek_kosu(c / ".yanki.kilit"):  # koşu sürerken kilit dosyası okunamaz
+        s = istemci.get("/api/pano").json()["simdi"]
+    assert s["suruyor"] is True and s["pod"]["dakika"] == 0
+    assert {"model", "lora", "betim", "aday"} <= set(p["ayarlar"]["tarif"])
+
+
+def test_kazanc_ulasilamayinca_hata_degil_bilgi(ortam, monkeypatch):
+    # erişim kapalıyken her pano açılışı konsola 502 düşürüyordu
+    from yanki import tunearo
+
+    istemci, _ = ortam
+    monkeypatch.setattr(tunearo.Istemci, "kokten", classmethod(lambda cls, kok: object()))
+
+    def kapali(*_a, **_k):
+        raise tunearo.TunearoHatasi(403, "API access not enabled")
+
+    monkeypatch.setattr(tunearo, "kazanc", kapali)
+    r = istemci.get("/api/kazanc")
+    assert r.status_code == 200 and r.json()["ulasilamadi"] and r.json()["erisim_kapali"]
