@@ -124,3 +124,24 @@ Eski adaylar işçide "puanla" göreviyle üretildikleri koşullarla (kaynak, ad
 Rastgele ≈ 7,2. Yalnız DiT hizalama 9/21 (seçilenin sırası 1,81), LM hizalama 6/21, yalnız söz WER 11/21 (1,52).
 **En düşük WER'li iki aday arasından hizalaması yüksek olan: 14/21.** (İki kural denendi; sıra toplamı 11/21. Örneklem
 küçük, veri biriktikçe yeniden ölçülür.) Otomatik onayın önerisi bu kurala geçti (`onay.oneri`).
+
+## S28 — çok türlü LoRA (95 şarkı, betimli stil, bölüm etiketli söz, 40 epoch; 2026-10-12 gecesi)
+
+S20'nin 6 şarkısı, üretim tarifi (betim + bölüm yapısı), LoRA ölçeği 0 / 0,5 / 1; 18 çıktının 18'i kapıdan geçti.
+
+| Ölçek | groove | döngüsellik farkı | vurmalı | bölüm | dinamik izleme | söz WER | hizalama |
+|---|---|---|---|---|---|---|---|
+| 0 | **0,238** | **+0,040** | ×1,36 | **0,82** | 0,63 | **0,137** | **0,131** |
+| 0,5 | 0,207 | +0,137 | ×1,58 | 0,60 | 0,72 | 0,150 | 0,119 |
+| 1 | 0,216 | +0,115 | ×1,45 | 0,64 | 0,72 | 0,181 | 0,108 |
+
+LoRA beat'i kötüleştiriyor (daha döngüsel, bölümler arası daha düz), sözü bulanıklaştırıyor; yalnız dinamik izleme
+iyileşiyor. İlk LoRA (balad) da ölçüde kazanç vermemişti. Olası neden: Side-Step LoRA'yı metinden-müzik görevinde
+eğitiyor, üretim cover görevi (kaynak kodlarıyla koşullu); öğrenilen stil cover'a iyi taşınmıyor. Üretime bağlanmadı.
+Not: söz WER'i bu ölçümde hâlâ tohumsuz Whisper'la (aşağıdaki düzeltmeden önce).
+
+## Söz WER'inin belirliliği (2026-10-12)
+
+Aynı dosya iki süreçte 0,37 ve 0,73 (blink-182 orijinal). Neden çok iş parçacıklı hesap değil (önceki not yanlış),
+Whisper'ın sıcaklık geri düşüşü: eşik tutmayınca tohumsuz örnekleme. Sıcaklık 0 belirli ama zor kayıtta tutunamıyor
+(Gasolina 1,0); sabit tohumlu geri düşüş belirli ve kurtarıcı (0,51). `kapilar.dokum` artık tohumlu.
