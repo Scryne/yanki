@@ -21,14 +21,13 @@ gece_ekle = 2
 # Keşfin kendiliğinden listeye almadığı türler (Deezer sanatçı türlerinde aranır; düzenli ifade parçaları). Scryne
 # (2026-10-12): şarkılar tek türde olmayacak → tür, yeni tarifle (bölüm yapısı + betim) dinlenip doğrulandıkça buradan
 # çıkar (spikes/s21_turler.py). [] = bütün türler.
-# 2026-10-12 açılan (S21, yeni tarifle kapılardan geçti; docs/arastirma/07): rap, hip-hop, trap, EDM, house, dance,
-# electro (+ synth-pop, rock zaten açıktı). Kapalı kalan: İspanyolca Latin (Despacito söz WER 0,70, orijinal 0,31),
-# denenmemiş türler (metal, punk, techno, dubstep, trance, drill…).
+# 2026-10-12 açılan (S21, S29: yeni tarifle kapılardan geçti; docs/arastirma/07): rap, hip-hop, trap, drill, EDM,
+# house, dance, electro, metal, punk, grunge, country, jazz, blues, reggae, reggaeton/Latin (İspanyolca), K-pop,
+# afrobeats (+ pop, rock, R&B, synth-pop zaten açıktı). Kapalı kalan: J-pop/anime (LRCLIB'de Japonca zaman damgalı söz
+# yok, çeviri sürümü geliyor), denenmemiş türler (techno, trance, dubstep, Brezilya, Hint, klasik, opera, film/oyun).
 haric_turler = [
-  "drill", "metal", "punk", "grunge", "hardcore", "techno", "dubstep",
-  "trance", "reggae", "reggaeton", "latin", "salsa", "mexicano", "brazilian", "sertanejo",
-  "forr[oó]", "african", "afrobeats?", "asian", "indian", "bollywood", "country", "jazz", "blues", "gospel", "opera",
-  "classical", "kids", "films", "games", "k-?pop", "j-?pop", "anime",
+  "hardcore", "techno", "dubstep", "trance", "brazilian", "sertanejo", "forr[oó]", "mexicano", "salsa", "asian",
+  "indian", "bollywood", "j-?pop", "anime", "gospel", "opera", "classical", "kids", "films", "games",
 ]
 
 [stillmore]
@@ -50,6 +49,7 @@ arama = [
   "sad songs", "piano ballads", "acoustic love songs", "2000s ballads", "2010s hits", "throwback hits",
   "breakup songs", "emotional songs", "indie folk", "old love songs", "emo 2000s", "singer songwriter",
   "hip hop classics", "rnb hits", "dance hits", "edm anthems", "rock anthems", "2000s rnb",
+  "country hits", "reggaeton hits", "kpop hits", "afrobeats hits", "metal classics", "jazz classics",
 ]
 arama_gece = 2
 min_parca = 100
@@ -68,7 +68,7 @@ tohumlar = []
 playlist_sanatcilari = 30
 # Deezer tür listeleri (0 hepsi, 132 pop, 152 rock, 165 R&B, 85 alternatif, 116 rap, 113 dans, 106 elektronik).
 # Deezer listeyi IP'nin ülkesine göre veriyor (bu ağda Türkiye); global genişleme benzer sanatçılardan gelir.
-liste_turleri = [0, 132, 152, 165, 85, 116, 113, 106]  # 2026-10-12: + rap, dans, elektronik (S21)
+liste_turleri = [0, 132, 152, 165, 85, 116, 113, 106, 464, 197, 144, 153, 129, 2]  # 2026-10-12: + rap, dans, elektronik (S21), metal, Latin, reggae, blues, caz, Afrika (S29)
 liste_adet = 25
 benzer_adet = 5
 parca_adet = 15

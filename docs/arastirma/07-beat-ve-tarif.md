@@ -145,3 +145,24 @@ Not: söz WER'i bu ölçümde hâlâ tohumsuz Whisper'la (aşağıdaki düzeltme
 Aynı dosya iki süreçte 0,37 ve 0,73 (blink-182 orijinal). Neden çok iş parçacıklı hesap değil (önceki not yanlış),
 Whisper'ın sıcaklık geri düşüşü: eşik tutmayınca tohumsuz örnekleme. Sıcaklık 0 belirli ama zor kayıtta tutunamıyor
 (Gasolina 1,0); sabit tohumlu geri düşüş belirli ve kurtarıcı (0,51). `kapilar.dokum` artık tohumlu.
+
+## S29 — kalan türler (N = üretim tarifi, tek tohum; söz kapısı tohumlu Whisper, orijinale göre)
+
+| Tür | Şarkı | söz WER (eşik) | orijinalin WER'i | kapı |
+|---|---|---|---|---|
+| metal | Metallica — Enter Sandman | 0,62 (0,72) | 0,62 | geçti |
+| pop-punk | blink-182 — All the Small Things | 0,48 (0,80) | 0,70 | geçti |
+| grunge | Nirvana — Smells Like Teen Spirit | 0,17 (0,80) | 1,26 | geçti |
+| country | Shania Twain — You're Still the One | 0,20 (0,50) | 0,27 | geçti |
+| jazz | Frank Sinatra — Fly Me to the Moon | 0,22 (0,50) | 0,36 | geçti |
+| blues | B.B. King — The Thrill Is Gone | 0,58 (0,50) | 0,36 | düştü (tek aday; üretimde 4) |
+| reggae | Bob Marley — Three Little Birds | 0,29 (0,56) | 0,46 | geçti |
+| reggaeton (es) | Daddy Yankee — Gasolina | 0,35 (0,61) | 0,51 | geçti |
+| K-pop (ko/en) | BLACKPINK — How You Like That | 0,48 (0,61) | 0,51 | geçti |
+| afrobeats | Burna Boy — Last Last | 0,72 (0,80) | 0,75 | geçti |
+| UK drill | Central Cee — Doja | 0,23 (0,59) | 0,49 | geçti |
+| J-pop (ja) | YOASOBI — Idol | — | — | hazırlıkta durdu: LRCLIB yalnız İngilizce sürümün sözünü veriyor |
+
+Parmak izi 0,50–0,61, dalga ≤ 0,08: hiçbiri orijinali taşımıyor. Keşifte açıldı: metal, punk, grunge, country, jazz,
+blues, reggae, reggaeton/Latin, K-pop, afrobeats, drill. Hazırlıkta bulunan iki çok dilli söz açığı kapandı: LRCLIB
+çeviri sürümü (Japonca seste İngilizce söz) ve satır sonu çevirisi (`Korece^İngilizce`).
