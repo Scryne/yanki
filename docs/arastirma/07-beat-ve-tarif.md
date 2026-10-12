@@ -75,3 +75,19 @@ değil. Seçim ölçüsü söz WER olarak kalır.
 Orijinale tonal uzaklık her şarkıda düştü (ör. Bruno Mars 6,98 → 4,29 dB, Lana Del Rey 2,50 → 1,37 dB); şarkılar
 arası aynılık 0,941 → 0,934 (orijinaller 0,891). Ton eşleme yardımcı ama "hepsi aynı" hissi spektral dengeden değil
 üretimden geliyor: çözüm üretim tarafında (S25, eğitim).
+
+## S25 — sanatçının başka şarkısı tını referansı (X) ve ScragVAE (V), C tarifi üstüne
+
+| Kol | groove | döngüsellik farkı | vurmalı | bölüm | aynılık | kapı |
+|---|---|---|---|---|---|---|
+| C (aynı 5 şarkı, Anise.K hariç) | 0,256 | +0,074 | ×1,42 | 0,83 | — | 5/5 |
+| X referans = sanatçının başka şarkısı (Deezer en çok dinlenen) | 0,319 | +0,070 | ×1,49 | 0,70 | 0,971 | 5/5 |
+| C (6 şarkı) | 0,235 | +0,043 | ×1,34 | 0,80 | 0,956 | 6/6 |
+| V ScragVAE | 0,251 | +0,035 | ×1,53 | 0,83 | 0,958 | 6/6 |
+
+- X: groove yükseldi (Passenger 0,37 → 0,62) ama aynılık arttı (0,971), Viva La Vida'nın bölüm değişimi çöktü
+  (0,63 → 0,18) ve aynı sanatçının sesi parmak izini yükseltti (Passenger 0,66, Jar of Hearts 0,62; eşik altında).
+  Alınmadı.
+- V: ölçülerde nötr. Bu ölçüler ritim/yapı; çözücünün etkisi tını (metalik vokal, transient) — kulağa kalır.
+- Tarif: C (bölüm yapısı + betim, güç 0,7, shift 1, resmî çözücü). Aynılık için kalan kaldıraç: çok türlü veriyle,
+  betimli stil ve bölüm etiketli sözle LoRA (2026-10-12 gece, 95 şarkı).
