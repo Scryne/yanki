@@ -279,3 +279,21 @@ def test_listeye_yaz_bozuk_eklemede_dosyaya_dokunmaz_ve_atomik_yazar(tmp_path):
     kesif.listeye_yaz([kesif.Aday("C", "D", "k", youtube_izlenme=1)], lyol)
     assert [s.sanatci for s in liste.yukle(lyol)] == ["A", "C"]
     assert not list(tmp_path.glob("*.tmp"))
+
+
+
+def test_uretim_duraklatilinca_surekli_kosu_uretmez(tmp_path, monkeypatch, capsys):
+    # Scryne (2026-10-12): üretim en iyi seviyeye gelene kadar dursun; sıradaki şarkı bekler, motor seçilmez
+    from dataclasses import replace
+
+    from yanki import ayarlar, cli, durum, uzak
+
+    c = tmp_path / "calisma"
+    d = durum.Durum("a-b", "A", "B")
+    d.gec("analiz")
+    durum.yaz(c, d)
+    gercek = ayarlar.yukle()
+    monkeypatch.setattr(ayarlar, "yukle", lambda *_a, **_k: replace(gercek, kok=tmp_path))
+    monkeypatch.setattr(uzak, "motor_sec", lambda *_a, **_k: pytest.fail("motor seçildi"))
+    assert cli._uret_surekli(tmp_path, replace(ayarlar.operasyon_oku(), surekli_uretim=False)) == 0
+    assert "duraklatıldı" in capsys.readouterr().out

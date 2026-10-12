@@ -837,6 +837,9 @@ def _uret_surekli(kok: Path, op) -> int:
     if not hedef:
         print("üretilecek bir şey yok (analiz ya da onarım bekleyen şarkı yok)")
         return 0
+    if not op.surekli_uretim:
+        print(f"üretim duraklatıldı (config/operasyon.toml → [surekli] uretim = false); {len(hedef)} şarkı sırada")
+        return 0
     calistir, tek_parca_sn, uzak_mi = uzak.motor_sec(a)
     if calistir is None:
         print(f"üretim bekliyor: kiralık GPU kullanılamıyor, evde üretim kapalı ({len(hedef)} şarkı sırada)")
@@ -1267,6 +1270,8 @@ def _gunduz(args: argparse.Namespace) -> int:
     _seyrek_yokla(a.kok, simdi)
     if not op.gunduz_acik:
         return print("gündüz üretimi kapalı (config/operasyon.toml)") or 0
+    if not op.surekli_uretim:
+        return print("üretim duraklatıldı (config/operasyon.toml → [surekli] uretim = false)") or 0
     if a.uzak.acik and not a.uzak.yerel_yedek:  # evde üretim kapalı; sürekli koşu sunucuda üretir
         return print("evde üretim kapalı (config/motor.toml → [uzak] yerel_yedek); üretim kiralık GPU'da") or 0
     if not op.gunduz_saatinde(simdi.hour) and not args.zorla:

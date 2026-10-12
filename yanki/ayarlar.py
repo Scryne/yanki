@@ -142,6 +142,8 @@ class Operasyon:
     # saatlerce kilitlemesin); kullanıcı etkinken de üretilsin mi
     surekli_uretim_sarki: int = 2
     surekli_bosta_bekle: bool = False
+    # false: sürekli ve gündüz koşusu üretmez (şarkılar sırada bekler); elle `yanki uret` yine çalışır
+    surekli_uretim: bool = True
 
     def gunduz_saatinde(self, saat: int) -> bool:
         bas, son = self.gunduz_saatler
@@ -159,4 +161,5 @@ def operasyon_oku(kok: Path = KOK) -> Operasyon:
     return Operasyon(klasor if klasor.is_absolute() else kok / klasor, max(1, int(y.get("gun", 7))),
                      max(1, int(y.get("sakla", 8))), max(0, int(t.get("gun", 14))), bool(g.get("acik", True)),
                      max(1, int(g.get("bosta_dk", 20))), max(1, int(g.get("sarki", 1))), saatler,
-                     max(1, int(sk.get("uretim_sarki", 2))), bool(sk.get("bosta_bekle", False)))
+                     max(1, int(sk.get("uretim_sarki", 2))), bool(sk.get("bosta_bekle", False)),
+                     bool(sk.get("uretim", True)))

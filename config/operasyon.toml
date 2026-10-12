@@ -24,6 +24,10 @@ sarki = 1
 saatler = [8, 1]  # 08:00'den 01:00'e
 
 [surekli]
+# Üretim açık mı. Kapalı (Scryne, 2026-10-12: "üretim dursun, boş yere üretmesin; öncelikli hedefimiz gerçekleşene kadar
+# bekleyelim"): şarkı üretimi en iyi seviyeye gelene kadar sürekli/gündüz koşusu üretmez, keşif listeye eklemez
+# (config/kesif.toml → gece_ekle = 0). Deneyler (spikes, eğitim) bundan etkilenmez.
+uretim = false
 # Sürekli koşu (\Yanki\Surekli, bilgisayar açıkken her 30 dk; Scryne 2026-10-10: "açıkken hep çalışsın").
 # Bir koşuda en çok kaç şarkı üretilsin: uzun üretim (şarkı başı ~30 dk) yüklemeyi ve yoklamayı saatlerce kilitlemesin
 uretim_sarki = 2

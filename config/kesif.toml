@@ -17,7 +17,7 @@ playlistler = [
 ]
 # Gece koşusu her gece en iyi kaç doğrulanmış adayı listeye eklesin (0 = eklemesin; elle: `yanki kesif --ekle N`).
 # Şarkı başı ~30 dk GPU; dinleme yükü de Scryne'da.
-gece_ekle = 2
+gece_ekle = 0  # 2 → 0 (2026-10-12): üretim duraklatıldı (config/operasyon.toml → [surekli] uretim)
 # Keşfin kendiliğinden listeye almadığı türler (Deezer sanatçı türlerinde aranır; düzenli ifade parçaları). Scryne
 # (2026-10-12): şarkılar tek türde olmayacak → tür, yeni tarifle (bölüm yapısı + betim) dinlenip doğrulandıkça buradan
 # çıkar (spikes/s21_turler.py). [] = bütün türler.
