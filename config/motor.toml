@@ -30,8 +30,10 @@ gorev = "cover"
 guc = 0.7
 adim = 100
 # 3 aday (2026-10-07): S13'te aynı ayarla tohum söz WER'ini 0,042–0,113 oynattı, diğer kollar tohumdan küçüktü
-aday_sayisi = 3
-tohumlar = [42, 7, 123]
+# 4 aday (2026-10-12): söz WER'i en düşük aday Scryne'ın seçimini 11/21 tuttu (rastgele 7,2), ACE-Step'in önerisi de
+# çok aday + otomatik eleme; rap'te 3 adaydan 1'i geçti. Aday başı ~2 dk A40 (~0,015 $).
+aday_sayisi = 4
+tohumlar = [42, 7, 123, 2024]
 
 [onarim]
 gorev = "repaint"
