@@ -122,6 +122,12 @@ def _hizalama(dit, eo: dict, dil: str, adim: int) -> dict | None:
     return {"lm": round(float(r["lm_score"]), 4), "dit": round(float(r["dit_score"]), 4)}
 
 
+def lora_adi(yol: str) -> str:
+    """Bağdaştırıcının PEFT adı. ACE-Step varsayılan olarak klasör adını kullanır; Side-Step'in ara kayıtları
+    `epoch_20_loss_0.7381` gibi nokta içerir ve PEFT bunu modül adı olarak reddeder (dördüncü eğitim, 2026-10-13)."""
+    return re.sub(r"\W", "_", Path(str(yol).rstrip("/\\")).name) or "yanki"
+
+
 class ModelYok(RuntimeError):
     pass
 
@@ -193,7 +199,7 @@ def main() -> int:
             raise ModelYok(f"model yüklenemedi: {durum[:500]}")
         # eğitilmiş tür LoRA'sı (yanki/egitim.py): bir kez yüklenir, ölçeği işe göre değişebilir
         if m.get("lora"):
-            mesaj = h.load_lora(str(m["lora"]))
+            mesaj = h.add_lora(str(m["lora"]), adapter_name=lora_adi(m["lora"]))
             if not str(mesaj).startswith("✅"):
                 raise ModelYok(f"LoRA yüklenemedi: {str(mesaj)[:500]}")
             lora_olcek = float(m.get("lora_olcek", 1.0))
@@ -254,7 +260,7 @@ def main() -> int:
             if i.get("lora") and i["lora"] != yuklu_lora:  # işe özel bağdaştırıcı: öncekini çıkar, bunu tak
                 if yuklu_lora:
                     dit.unload_lora()
-                mesaj = dit.load_lora(str(i["lora"]))
+                mesaj = dit.add_lora(str(i["lora"]), adapter_name=lora_adi(i["lora"]))
                 if not str(mesaj).startswith("✅"):
                     yuklu_lora = lora_olcek = None
                     raise RuntimeError(f"LoRA yüklenemedi: {str(mesaj)[:300]}")

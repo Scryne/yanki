@@ -25,7 +25,7 @@ import subprocess
 import tarfile
 import time
 import tomllib
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime
 from pathlib import Path
 
@@ -458,6 +458,72 @@ def egit(a: Ayarlar, ayar: Ayar, veri_tar: Path, bildir=print, pod_sinifi=runpod
         uzak.harcama_yaz(kok, kayit)
     kaydet(sonuc, ayar, commit)
     return sonuc
+
+
+def yerel_ara_kayitlar(yerel: Path, epochlar) -> dict[int, Path]:
+    """İnmiş ara kayıtlar (`<lora>/checkpoints/epoch_<N>_loss_<x>/`) → {epoch: klasör}; yalnız istenenler."""
+    bulunan = {}
+    for d in sorted((yerel / "checkpoints").glob("epoch_*")):
+        m = re.match(r"epoch_(\d+)_", d.name)
+        if m and int(m.group(1)) in epochlar and (d / "adapter_config.json").is_file():
+            bulunan[int(m.group(1))] = d
+    return bulunan
+
+
+def deneme_yeniden(a: Ayarlar, ayar: Ayar, yerel: Path, epochlar, bildir=print, pod_sinifi=runpod.Pod,
+                   kur=runpod.acestep_kur, bakiye=runpod.bakiye, commit: str | None = None) -> Sonuc:
+    """Biten bir eğitimin ara kayıtlarıyla deneme, eğitimsiz: bağdaştırıcılar yerelden pod'a gider, yalnız ara kayıt
+    kolları üretilir (son bağdaştırıcının kayıtları zaten var). Dördüncü eğitimde ara kayıt denemesi bağdaştırıcı adı
+    yüzünden düşmüştü (2026-10-13; `motor_isci.lora_adi`)."""
+    kok, calisma = a.kok, a.kok / "calisma"
+    ara_yerel = yerel_ara_kayitlar(yerel, epochlar)
+    if not ara_yerel:
+        raise ValueError(f"{yerel.name}: istenen ara kayıt yok ({', '.join(map(str, epochlar))})")
+    api = runpod.anahtar(kok, a.uzak.en_az_bakiye, bakiye)
+    uzak.butce_kontrol(a, api, bakiye)
+    commit = commit or uzak.acestep_commit(a)
+    sonuc, acilan = Sonuc(yerel, calisma / "dinleme" / "lora" / yerel.name, lora=yerel / "final"), []
+    kayit: dict = {"zaman": datetime.now().isoformat(timespec="seconds"), "gpu": ayar.gpu, "not": "egitim-deneme",
+                   "is": 0}
+    try:
+        with uzak.PodAcici(a, pod_sinifi, acilan, gpu=ayar.gpu, ad=POD_AD, kayit_adi=POD_KAYIT) as p:
+            kayit["pod"] = p.id
+            t = time.time()
+            hedef = kur(p, commit, (ayar.model,))
+            sonuc.sureler["kurulum"] = round(time.time() - t)
+            ara = {}
+            for ep, d in ara_yerel.items():
+                ara[ep] = f"{UZAK}/cikti/checkpoints/{d.name}"
+            for yerel_k, uzak_k in [(yerel / "final", f"{UZAK}/cikti/final"),
+                                    *((d, ara[ep]) for ep, d in ara_yerel.items())]:
+                p.komut(f"mkdir -p {uzak_k} {UZAK}/girdi")
+                for f in ("adapter_config.json", "adapter_model.safetensors"):
+                    p.gonder(yerel_k / f, f"{uzak_k}/{f}", zaman_asimi=1800)
+            t = time.time()
+            sonuc.deneme = _deneme(a, replace(ayar, deneme_olcekleri=()), p, hedef, calisma, sonuc.dinleme,
+                                   ayar.zaman_asimi_saat * 3600, bildir, ara)
+            sonuc.sureler["deneme"] = round(time.time() - t)
+    except Exception as e:
+        kayit["hata"] = f"{type(e).__name__}: {str(e)[:300]}"
+        raise
+    finally:
+        kayit["usd"] = sonuc.usd = round(sum(x.maliyet() for x in acilan), 3)
+        kayit.setdefault("pod", ",".join(str(x.id) for x in acilan if x.id) or None)
+        kayit["sureler"] = sonuc.sureler
+        uzak.harcama_yaz(kok, kayit)
+    return sonuc
+
+
+def deneme_birlestir(yerel: Path, yeni: list[dict], usd: float) -> Sonuc:
+    """Yeniden üretilen kolları eğitimin kaydına katar (aynı şarkı+kolun eskisi düşer, maliyet eklenir)."""
+    yol = yerel / "egitim.json"
+    eski = json.loads(yol.read_text(encoding="utf-8"))
+    anahtar = {(x["kimlik"], x.get("kol")) for x in yeni}
+    deneme = [x for x in eski.get("deneme", []) if (x["kimlik"], x.get("kol")) not in anahtar] + yeni
+    eski.update(deneme=deneme, usd=round(eski.get("usd", 0.0) + usd, 3))
+    dosya.json_yaz(yol, eski)
+    return Sonuc(yerel, yerel.parents[2] / "dinleme" / "lora" / yerel.name, yerel / "final", deneme, eski["usd"],
+                 eski.get("sureler", {}))
 
 
 def veri_betimle(a: Ayarlar, ayar: Ayar, p, hedef: str, kok: Path, yerel: Path, zaman_asimi: float,

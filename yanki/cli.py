@@ -1370,6 +1370,8 @@ def _egit(args: argparse.Namespace) -> int:
     a = ayarlar.yukle()
     calisma = a.kok / "calisma"
     ayar, sarkilar = egitim.oku(a.kok / "config" / "egitim.toml")
+    if args.deneme_yeniden:
+        return _deneme_yeniden(a, ayar, args.deneme_yeniden, args.ara or list(ayar.deneme_ara_kayitlar))
     print(f"veri: {len(sarkilar)} şarkı → {egitim.veri_klasoru(a.kok).relative_to(a.kok).as_posix()}", flush=True)
     ornekler, dusen = egitim.veri_hazirla(a.kok, ayar, sarkilar, bildir=lambda m: print(m, flush=True))
     print(f"veri hazır: {len(ornekler)} örnek, {sum(x['duration'] for x in ornekler) / 60:.0f} dk ses; "
@@ -1400,6 +1402,30 @@ def _egit(args: argparse.Namespace) -> int:
     bildir("dinleme", "LoRA eğitimi bitti, karşılaştırma hazır",
            f"{len(ornekler)} şarkıyla eğitildi ({sonuc.usd:.2f} $). LoRA'sız ve LoRA'lı aynı şarkılar: "
            f"{sonuc.dinleme.relative_to(a.kok).as_posix()}/OKU.md")
+    return 0
+
+
+def _deneme_yeniden(a, ayar, klasor: str, epochlar: list[int]) -> int:
+    """Biten eğitimin ara kayıtlarıyla denemeyi yeniden üret (eğitimsiz; kayıtlar ve OKU.md güncellenir)."""
+    import json
+    import subprocess
+
+    from yanki import dosya, egitim, runpod
+
+    yerel = a.kok / egitim.KLASOR / "lora" / klasor
+    if not (yerel / "egitim.json").is_file():
+        print(f"✗ eğitim kaydı yok: {yerel}")
+        return 1
+    try:
+        sonuc = egitim.deneme_yeniden(a, ayar, yerel, epochlar, bildir=lambda m: print(m, flush=True))
+    except (runpod.RunPodHatasi, OSError, ValueError, subprocess.SubprocessError) as e:
+        print(f"✗ deneme: {type(e).__name__}: {e}")
+        return 1
+    egitim.degerlendir(a, a.kok / "calisma", sonuc.deneme)
+    birlesik = egitim.deneme_birlestir(yerel, sonuc.deneme, sonuc.usd)
+    ornek = json.loads((yerel / "egitim.json").read_text(encoding="utf-8")).get("ornek", 0)
+    dosya.yaz(birlesik.dinleme / "OKU.md", egitim.rapor(birlesik, ornek, 0))
+    print(f"deneme: {sum(x['basari'] for x in sonuc.deneme)}/{len(sonuc.deneme)} · maliyet {sonuc.usd:.2f} $")
     return 0
 
 
@@ -1543,6 +1569,9 @@ def main(argv: list[str] | None = None) -> int:
     oz.set_defaults(fn=_ozet)
     eg = alt.add_parser("egit", help="ses modeline tür LoRA'sı eğit (kiralık GPU) ve karşılaştırmalı dinleme üret")
     eg.add_argument("--yalniz-veri", action="store_true", help="yalnız eğitim verisini hazırla (ücretsiz, yerel)")
+    eg.add_argument("--deneme-yeniden", metavar="ZAMAN",
+                    help="eğitimsiz: bu eğitimin (calisma/egitim/lora/<ZAMAN>) ara kayıtlarıyla denemeyi yeniden üret")
+    eg.add_argument("--ara", type=int, nargs="+", help="--deneme-yeniden için epoch'lar (varsayılan config)")
     eg.set_defaults(fn=_egit)
     dn = alt.add_parser("dinle", help="dinleme sayfasını aç")
     dn.add_argument("--port", type=int, default=8765)

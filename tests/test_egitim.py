@@ -373,3 +373,28 @@ def test_deneme_isleri_ara_kayitla(tmp_path):
     assert [x[0].lora for x in isler[2:]] == ["/final", "/final", "/ep20", "/ep20"]
     # ara kayıt yokken işe özel LoRA verilmez (motor ayarındaki son bağdaştırıcı)
     assert all(x[0].lora is None for x in egitim.deneme_isleri(a, c, ayar, str)[2:])
+
+
+def test_ara_kayit_bagdastirici_adi_noktasiz():
+    # dördüncü eğitim: Side-Step'in klasör adı (epoch_20_loss_0.7381) PEFT'e modül adı olarak gitti, nokta reddedildi
+    from yanki.motor_isci import lora_adi
+
+    assert lora_adi("/root/x/cikti/checkpoints/epoch_20_loss_0.7381") == "epoch_20_loss_0_7381"
+    assert lora_adi("/root/x/cikti/final/") == "final"
+    assert "." not in lora_adi("C:/a/epoch_10_loss_0.74")
+
+
+def test_deneme_yeniden_yerel_kayitlari_bulur_ve_birlestirir(tmp_path):
+    yerel = tmp_path / "calisma" / "egitim" / "lora" / "20261012-1702"
+    for ad in ("epoch_10_loss_0.74", "epoch_20_loss_0.73", "epoch_30_loss_0.73"):
+        (yerel / "checkpoints" / ad).mkdir(parents=True)
+        (yerel / "checkpoints" / ad / "adapter_config.json").write_text("{}", encoding="utf-8")
+    (yerel / "checkpoints" / "epoch_40_loss_0.7").mkdir()  # yarım inmiş: adapter_config yok
+    assert egitim.yerel_ara_kayitlar(yerel, (20, 40)) == {20: yerel / "checkpoints" / "epoch_20_loss_0.73"}
+
+    eski = [{"kimlik": "a", "kol": "1", "basari": True}, {"kimlik": "a", "kol": "ep20", "basari": False}]
+    (yerel / "egitim.json").write_text(json.dumps({"usd": 4.5, "deneme": eski, "ornek": 123}), encoding="utf-8")
+    s = egitim.deneme_birlestir(yerel, [{"kimlik": "a", "kol": "ep20", "basari": True}], 0.8)
+    assert [(x["kol"], x["basari"]) for x in s.deneme] == [("1", True), ("ep20", True)]  # düşen kol yenisiyle
+    assert s.usd == 5.3 and s.dinleme == tmp_path / "calisma" / "dinleme" / "lora" / "20261012-1702"
+    assert json.loads((yerel / "egitim.json").read_text(encoding="utf-8"))["ornek"] == 123
