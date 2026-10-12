@@ -24,7 +24,9 @@ en_uzun_sn = 240
 # Bu kadar sonra eğitim düşmüş sayılır, pod silinir
 zaman_asimi_saat = 6
 # Eğitimden sonra karşılaştırmalı dinleme: bu şarkılar LoRA'sız ve LoRA'lı, aynı tohumla
-deneme_sarkilari = ["adele-someone-like-you", "coldplay-the-scientist", "james-arthur-say-you-won-t-let-go"]
+# S20'nin şarkıları (balad, orkestral rock, folk, dance-pop + rap, indie rock): beat ölçüleri onlarla karşılaştırılır
+deneme_sarkilari = ["bruno-mars-when-i-was-your-man", "coldplay-viva-la-vida", "passenger-let-her-go",
+                    "anise-k-walking-on-air", "the-fray-how-to-save-a-life", "christina-perri-jar-of-hearts"]
 deneme_olcekleri = [0.0, 0.5, 1.0]
 
 # ── veri: kadın vokal ──
