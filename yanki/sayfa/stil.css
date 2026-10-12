@@ -506,3 +506,26 @@ a.durak:hover .durak-ad { color: var(--metin); text-decoration: underline; text-
   .bildirim, .dugme, .soz-satir, .grup summary > span:first-child::before, .duvar-kapak img { transition: none; }
   .nabiz::after, .dalga-kap.yukleniyor::after { animation: none; }
 }
+
+/* ---- karşılaştırma: kör kulak testi ---- */
+.kulak-aciklama { max-width: 70ch; margin: calc(-1 * var(--s1)) 0 var(--s3) !important; }
+.kulak-ozet { max-width: 34rem; border-bottom: 0; margin-bottom: var(--s4); }
+.kulak-sayim { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 2px; }
+.kulak-liste { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s3); }
+.kulak-kart { margin: 0; outline: none; }
+.kulak-kart:focus-within { border-color: var(--cizgi-gumus); }
+.kulak-kart.oylandi { background: color-mix(in srgb, var(--yuzey) 94%, var(--gecti)); }
+.kulak-ad { font: 600 15px/1.2 var(--f-baslik); margin: 0; }
+.kulak-izler { display: grid; grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr)); gap: var(--s2); }
+.kulak-iz { grid-template-columns: auto minmax(0, 1fr); padding: var(--s3); }
+.kulak-iz .iz-ad { font: 600 16px/1.2 var(--f-baslik); flex-wrap: wrap; gap: 6px; }
+.kulak-iz.orijinal .iz-ad { font: 500 14px/1.2 var(--f-govde); }
+.kulak-acik { font: 500 11px/1.2 var(--f-zaman); color: var(--metin-2); }
+.kulak-acik.yeni { color: var(--gumus-acik); }
+.kulak-ilerleme { flex: 1; min-width: 8rem; accent-color: var(--oynatma); height: 20px; background: transparent; }
+.kulak-oy { display: grid; gap: var(--s2); margin-top: var(--s3); padding-top: var(--s3); border-top: 1px solid var(--cizgi); }
+.kulak-oy .kesitler { margin: 0; }
+.kesit.kotu[aria-pressed="true"] { border-color: color-mix(in srgb, var(--dustu) 60%, transparent); color: var(--dustu); background: color-mix(in srgb, var(--dustu) 10%, transparent); }
+.kulak-not { font: inherit; font-size: 13px; color: var(--metin); background: rgba(0, 0, 0, .28); border: 1px solid var(--cizgi);
+  border-radius: var(--r-kucuk); padding: 6px var(--s3); width: 100%; }
+.kulak-not:focus { border-color: var(--cizgi-gumus); outline: none; }

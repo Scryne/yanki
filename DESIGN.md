@@ -123,6 +123,9 @@ duraklarında): rakamlar sütun sütun hizalanır, kaymaz.
   Tık: o satırdan çal; Shift+tık: satırı onarım için seç.
 - **Pencere:** yerel `<dialog>`, cam (blur 18 px) + gümüş kenar; ret penceresinde hazır neden hapları ve isteğe bağlı
   metin. Kısayollar `?` ile.
+- **Karşılaştırma (kör kulak testi):** şarkı başına opak kart; üstte iz düğmeleri (0 orijinal, 1–3 A/B/C; çalan
+  camgöbeği sol kenar), altında tek konum çubuğu (geçişte konum korunur), en altta oy hapları ve isteğe bağlı not.
+  Kolların adı oy verilene kadar görünmez; oylanan kart hafif ada çayı tonlu.
 - **Kapak duvarı:** dağıtımdaki şarkılar 112 px kare kapak ızgarası, sol üstte durum hapı; satır listesinin yerine.
 
 ## Do's and Don'ts

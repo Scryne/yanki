@@ -11,6 +11,8 @@ const el = (etiket, ozellik = {}, ...cocuk) => {
   for (const c of cocuk.flat()) if (c != null && c !== false) e.append(c);
   return e;
 };
+// replaceChildren boş değerleri "null" metni olarak ekler: koşullu parçalar (cond ? el : null) süzülür
+const doldur = (e, ...c) => e.replaceChildren(...c.flat().filter((x) => x != null && x !== false));
 const sure = (s) => { s = Math.max(0, s || 0); return `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`; };
 const aralik = (a, b) => `${sure(a)}–${sure(b)}`;
 const virgul = (n, basamak) => n == null ? "—" : String(basamak == null ? n : Number(n).toFixed(basamak)).replace(".", ",");
@@ -178,7 +180,7 @@ let acikSarki = null; // { kimlik, guncel }: arka planda değişirse (yeni adayl
 async function sarkiGoster(kimlik) {
   const ana = $("#ana");
   let d;
-  try { d = await api(`/api/sarki/${kimlik}`); } catch (e) { ana.replaceChildren(bosEkran("Şarkı açılamadı", e.message)); return; }
+  try { d = await api(`/api/sarki/${kimlik}`); } catch (e) { doldur(ana, bosEkran("Şarkı açılamadı", e.message)); return; }
   acikSarki = { kimlik, guncel: d.guncel, asama: d.asama };
   if (!["uretildi", "onarim"].includes(d.asama)) d.oneri = null; // karar verilmiş şarkıda öneri gürültü
   seritler.clear(); sozYuru = null; panelTus = null;
@@ -222,7 +224,7 @@ async function sarkiGoster(kimlik) {
       el("button", { class: "dugme ikincil", type: "button",
         onclick: () => eylem(d, "geri-al", {}, `"${d.ad}" yeniden listede, reddetmeden önceki aşamasında.`) }, "Reddi geri al")));
   }
-  ana.replaceChildren(...parcalar.filter(Boolean));
+  doldur(ana, ...parcalar.filter(Boolean));
 }
 
 function sarkiBasi(d) {
@@ -641,7 +643,7 @@ let suzgec = "oneri", turSuzgec = null;
 async function kesifGoster() {
   const ana = $("#ana");
   let d;
-  try { d = await api("/api/kesif"); } catch (e) { ana.replaceChildren(bosEkran("Keşif açılamadı", e.message)); return; }
+  try { d = await api("/api/kesif"); } catch (e) { doldur(ana, bosEkran("Keşif açılamadı", e.message)); return; }
   // ilk açılışta öneri yoksa boş ekran yerine tüm kayıtlar (neden elendikleri görünsün)
   if (!kesifGoster.acildi && !d.adaylar.some(SUZGEC.oneri.f)) suzgec = "hepsi";
   kesifGoster.acildi = true;
@@ -652,7 +654,7 @@ async function kesifGoster() {
       .sort((a, b) => b[1] - a[1]).slice(0, 10);
     if (turSuzgec && !turler.some(([t]) => t === turSuzgec)) turSuzgec = null;
     const gorunen = suzulen.filter((x) => !turSuzgec || tur(x) === turSuzgec);
-    ana.replaceChildren(
+    doldur(ana, 
       el("header", { class: "sayfa-ust" }, el("h1", {}, "Keşif"),
         el("p", { class: "ipucu" }, "Spotify'dan kalkmış ama hâlâ aranan şarkılar. Puan = talep (YouTube ya da eski Spotify dinlenmesi) × kapalı pazar oranı ÷ (1 + rakip cover).")),
       kotaSatiri(d.kota),
@@ -704,7 +706,7 @@ function kesifSatiri(x, guncelle) {
 async function yayinGoster() {
   const ana = $("#ana");
   let d;
-  try { d = await api("/api/yayin"); } catch (e) { ana.replaceChildren(bosEkran("Yayın durumu açılamadı", e.message)); return; }
+  try { d = await api("/api/yayin"); } catch (e) { doldur(ana, bosEkran("Yayın durumu açılamadı", e.message)); return; }
   const canli = d.sarkilar.filter((s) => s.son?.canli).length;
   const parcalar = [
     el("header", { class: "sayfa-ust" }, el("h1", {}, "Yayın"),
@@ -717,7 +719,7 @@ async function yayinGoster() {
     : el("p", { class: "bos-kutu" }, "Henüz yüklenmiş şarkı yok. Paketi yükleyince: yanki yuklendi <kimlik>"));
   parcalar.push(takvimBolumu(d.takvim));
   if (d.olaylar?.length) parcalar.push(olayBolumu(d.olaylar));
-  ana.replaceChildren(...parcalar.filter(Boolean));
+  doldur(ana, ...parcalar.filter(Boolean));
 }
 
 // paketlenmiş şarkıların yükleme sırası (yanki/dagitim.py; ölçüm değil, durumdan hesap)
@@ -778,7 +780,10 @@ function olayBolumu(olaylar, tamZaman = false) {
 
 async function gorunumSayilari() {
   try {
-    const [k, y, p] = await Promise.all([api("/api/kesif"), api("/api/yayin"), api("/api/pano")]);
+    const [k, y, p, ku] = await Promise.all([api("/api/kesif"), api("/api/yayin"), api("/api/pano"), api("/api/kulak")]);
+    const kalan = ku.reduce((n, x) => n + x.ozet.toplam - x.ozet.oylanan, 0);
+    $("#g-kulak").textContent = kalan ? String(kalan) : "";
+    $("#g-kulak").classList.toggle("dikkat", kalan > 0);
     const bekleyen = p.kulak.length + p.hatada.length + (p.takvim?.yazarsiz?.length || 0);
     $("#g-pano").textContent = bekleyen ? String(bekleyen) : "";
     $("#g-pano").classList.toggle("dikkat", bekleyen > 0);
@@ -793,10 +798,145 @@ async function gorunumSayilari() {
 function simdiDurum(s) {
   const yer = $("#simdi");
   if (!yer || !s) return;
-  if (!s.suruyor && !s.pod) { yer.replaceChildren(el("span", { class: "nokta" }), "Hat boşta"); yer.dataset.d = "bos"; return; }
+  if (!s.suruyor && !s.pod) { doldur(yer, el("span", { class: "nokta" }), "Hat boşta"); yer.dataset.d = "bos"; return; }
   yer.dataset.d = "suruyor";
-  yer.replaceChildren(el("span", { class: "nabiz", "aria-hidden": "true" }),
+  doldur(yer, el("span", { class: "nabiz", "aria-hidden": "true" }),
     s.pod ? `Kiralık GPU'da üretim · ${s.pod.dakika} dk` : "Koşu sürüyor");
+}
+
+// ---- karşılaştırma: deneme çıktılarının kör kulak testi (yanki/kulak.py) ----
+// Kollar şarkıdan şarkıya karışık sırayla A/B/C; hangisinin hangisi olduğu oy verilince açılır. Geçişte konum korunur.
+async function kulakGoster() {
+  const ana = $("#ana");
+  let setler;
+  try { setler = await api("/api/kulak"); } catch (e) { doldur(ana, bosEkran("Karşılaştırma açılamadı", e.message)); return; }
+  acikSarki = null;
+  const ozetler = new Map();
+  const ozetCiz = (s) => {
+    const o = s.ozet, yer = ozetler.get(s.kimlik);
+    const oran = o.toplam ? o.oylanan / o.toplam : 0;
+    const sayim = Object.entries(o.sayim).filter(([, n]) => n).map(([k, n]) =>
+      el("span", { class: "rozet" + (k === "hepsi_kotu" ? " no" : k in o.kollar && /yeni/.test(o.kollar[k]) ? " tarif" : "") },
+        `${o.kollar[k] || { fark_yok: "fark yok", hepsi_kotu: "hepsi kötü" }[k]} ${n}`));
+    doldur(yer, 
+      el("div", { class: "butce-ust" }, el("span", {}, `${o.oylanan}/${o.toplam} şarkı dinlendi`),
+        o.yayinlanir ? el("b", {}, `${o.yayinlanir} yayınlanabilir`) : null),
+      el("span", { class: "cubuk", "aria-hidden": "true" }, el("i", { style: { transform: `scaleX(${oran})` } })),
+      sayim.length ? el("div", { class: "kulak-sayim" }, el("span", { class: "ipucu kucuk-ipucu" }, "En iyi seçilen:"), ...sayim) : null);
+  };
+  const bolumler = setler.map((s) => {
+    const ozet = el("div", { class: "butce kulak-ozet" });
+    ozetler.set(s.kimlik, ozet);
+    ozetCiz(s);
+    const guncelle = (yeni) => {
+      const ys = yeni.find((x) => x.kimlik === s.kimlik);
+      if (ys) { Object.assign(s, ys); ozetCiz(s); }
+      gorunumSayilari();
+      return ys;
+    };
+    return el("section", { class: "bolum", "aria-label": s.ad },
+      el("h2", { class: "bolum-baslik" }, s.ad), el("p", { class: "ipucu kucuk-ipucu kulak-aciklama" }, s.aciklama), ozet,
+      el("ol", { class: "kulak-liste" }, ...s.sarkilar.map((x) => el("li", {}, kulakKarti(s, x, guncelle)))));
+  });
+  doldur(ana, 
+    el("header", { class: "sayfa-ust" }, el("h1", {}, "Karşılaştırma"),
+      el("p", { class: "ipucu" }, "Kör test: her şarkının kayıtları A, B, C diye karışık sırayla gelir; hangisinin eski, hangisinin yeni model olduğu sen seçince açılır. Senin seçimlerin bir sonraki eğitimin ve tarifin yönünü belirler.")),
+    el("p", { class: "ipucu kucuk-ipucu kisayol" }, "Kartın içindeyken: ", el("kbd", {}, "0"), " orijinal · ", el("kbd", {}, "1"), el("kbd", {}, "2"), el("kbd", {}, "3"),
+      " A/B/C (konum korunur) · ", el("kbd", {}, "Boşluk"), " çal/durdur · ", el("kbd", {}, "←"), el("kbd", {}, "→"), " 5 sn"),
+    ...bolumler);
+}
+
+function kulakKarti(s, x, guncelle) {
+  const izler = [...(x.orijinal ? [{ kol: "orijinal", harf: "O", tus: "0" }] : []),
+    ...x.kollar.map((k, i) => ({ ...k, tus: String(i + 1) }))];
+  let aktif = null;
+  const zaman = el("span", { class: "zaman" }, "0:00 / 0:00");
+  const ilerleme = el("input", { class: "kulak-ilerleme", type: "range", min: 0, max: 1000, value: 0, step: 1, "aria-label": `${x.ad} konum` });
+  const calDugme = el("button", { class: "dugme cal", type: "button", onclick: () => calDurdur() }, "Çal");
+  const goster = () => {
+    const ses = aktif?.ses, t = ses?.currentTime || 0, sure_ = ses?.duration || 0;
+    if (document.activeElement !== ilerleme) ilerleme.value = sure_ ? Math.round((t / sure_) * 1000) : 0;
+    zaman.textContent = `${sure(t)} / ${sure(sure_)}`;
+    calDugme.textContent = ses && !ses.paused ? "Durdur" : "Çal";
+    for (const iz of izler) iz.dugme.setAttribute("aria-pressed", iz === aktif ? "true" : "false");
+  };
+  const gec = (iz) => {
+    const konum = aktif ? aktif.ses.currentTime : 0, caliyordu = aktif && !aktif.ses.paused;
+    if (aktif && aktif !== iz) aktif.ses.pause();
+    aktif = iz;
+    const d = iz.ses.duration;
+    iz.ses.currentTime = Number.isFinite(d) ? Math.min(konum, d - 0.25) : konum;
+    if (caliyordu || iz.ses.paused) iz.ses.play().catch((e) => bildir(`Çalınamadı: ${e.message}`, true));
+    goster();
+  };
+  const calDurdur = () => {
+    if (!aktif) return gec(izler.find((iz) => iz.kol !== "orijinal") || izler[0]);
+    if (aktif.ses.paused) aktif.ses.play().catch((e) => bildir(`Çalınamadı: ${e.message}`, true)); else aktif.ses.pause();
+  };
+  for (const iz of izler) {
+    iz.ses = el("audio", { preload: "none", src: `/kulak-ses/${s.kimlik}/${x.kimlik}/${encodeURIComponent(iz.kol)}`, "data-dosya": `${s.kimlik}/${x.kimlik}/${iz.kol}` });
+    for (const olay of ["timeupdate", "play", "pause", "loadedmetadata", "ended"]) iz.ses.addEventListener(olay, () => iz === aktif && goster());
+    iz.etiket = el("span", { class: "iz-ad" });
+    iz.dugme = el("button", { class: "iz kulak-iz" + (iz.kol === "orijinal" ? " orijinal" : ""), type: "button", "aria-pressed": "false", onclick: () => gec(iz) },
+      el("kbd", {}, iz.tus), iz.etiket);
+  }
+  ilerleme.addEventListener("input", () => {
+    if (!aktif) gec(izler.find((iz) => iz.kol !== "orijinal") || izler[0]);
+    const d = aktif.ses.duration;
+    if (d) aktif.ses.currentTime = (ilerleme.value / 1000) * d;
+  });
+  const atla = (sn) => { if (aktif) { aktif.ses.currentTime = Math.max(0, aktif.ses.currentTime + sn); goster(); } };
+
+  // oy alanı: oy verilince kolların adı açılır
+  const oyAlani = el("div", { class: "kulak-oy" });
+  const notKutusu = el("input", { class: "kulak-not", type: "text", maxlength: 500, placeholder: "Not (isteğe bağlı): ör. vokal metalik, nakarat düz", value: x.oy?.not || "",
+    "aria-label": `${x.ad} için not` });
+  const gonder = async (govde, basari) => {
+    try {
+      const ys = guncelle(await api(`/api/kulak/${s.kimlik}/${x.kimlik}`, govde));
+      const yeni = ys?.sarkilar.find((y) => y.kimlik === x.kimlik);
+      if (yeni) { Object.assign(x, yeni); x.kollar.forEach((k, i) => Object.assign(izler.find((iz) => iz.kol === k.kol), k)); ciz(); }
+      if (basari) bildir(basari);
+    } catch (e) { bildir(e.message, true); }
+  };
+  notKutusu.addEventListener("change", () => gonder({ not: notKutusu.value }, "Not kaydedildi."));
+  const ciz = () => {
+    const oy = x.oy || {};
+    for (const iz of izler) doldur(iz.etiket, iz.kol === "orijinal" ? "Orijinal" : iz.harf,
+      iz.ad ? el("span", { class: "kulak-acik" + (/yeni/.test(iz.ad) ? " yeni" : "") }, iz.ad) : null,
+      oy.en_iyi === iz.kol ? el("span", { class: "rozet oneri" }, "seçtiğin") : null);
+    const secenek = (deger, yazi, sinif = "") => el("button", { class: `kesit kucuk ${sinif}`, type: "button", "aria-pressed": oy.en_iyi === deger ? "true" : "false",
+      onclick: () => gonder({ en_iyi: deger }, null) }, yazi);
+    const kollar = x.kollar.map((k) => secenek(k.kol, `${k.harf} daha iyi`));
+    doldur(oyAlani, 
+      el("div", { class: "kesitler", role: "group", "aria-label": "Hangisi daha iyi" }, el("span", { class: "ipucu kucuk-ipucu" }, "Hangisi daha iyi?"),
+        ...kollar, secenek("fark_yok", "Fark yok"), secenek("hepsi_kotu", x.kollar.length > 2 ? "Hepsi kötü" : "İkisi de kötü", "kotu")),
+      oy.en_iyi && !["fark_yok", "hepsi_kotu"].includes(oy.en_iyi) ? el("div", { class: "kesitler", role: "group", "aria-label": "Yayınlanır mı" },
+        el("span", { class: "ipucu kucuk-ipucu" }, "Seçtiğin yayınlanabilir mi?"),
+        el("button", { class: "kesit kucuk", type: "button", "aria-pressed": oy.yayinlanir === true ? "true" : "false", onclick: () => gonder({ yayinlanir: true }, null) }, "Evet"),
+        el("button", { class: "kesit kucuk", type: "button", "aria-pressed": oy.yayinlanir === false ? "true" : "false", onclick: () => gonder({ yayinlanir: false }, null) }, "Hayır")) : null,
+      notKutusu);
+    kart.classList.toggle("oylandi", !!oy.en_iyi);
+  };
+
+  const kart = el("article", { class: "serit kulak-kart", tabindex: "-1", "aria-label": `${x.sanatci} — ${x.ad}` },
+    el("div", { class: "serit-ust" }, el("h3", { class: "kulak-ad" }, x.ad), el("span", { class: "tohum" }, x.sanatci),
+      x.tur ? el("span", { class: "rozet gumus" }, x.tur) : null),
+    el("div", { class: "kulak-izler" }, ...izler.map((iz) => iz.dugme)),
+    el("div", { class: "serit-alt" }, calDugme,
+      el("button", { class: "dugme kucuk", type: "button", onclick: () => atla(-10), "aria-label": "10 saniye geri" }, "−10"),
+      ilerleme,
+      el("button", { class: "dugme kucuk", type: "button", onclick: () => atla(10), "aria-label": "10 saniye ileri" }, "+10"), zaman),
+    oyAlani, izler.map((iz) => iz.ses));
+  kart.addEventListener("keydown", (e) => {
+    if (e.ctrlKey || e.altKey || e.metaKey || e.target.closest("input")) return;
+    const iz = izler.find((z) => z.tus === e.key);
+    if (iz) { e.preventDefault(); gec(iz); }
+    else if (e.key === " " && !e.target.closest("button")) { e.preventDefault(); calDurdur(); }
+    else if (e.key === "ArrowRight" || e.key === "ArrowLeft") { if (e.target === ilerleme) return; e.preventDefault(); atla(e.key === "ArrowRight" ? 5 : -5); }
+  });
+  ciz(); goster();
+  return kart;
 }
 
 // ---- pano: hattın sinyal zinciri, şu an, senden beklenenler, dağıtım, kazanç, tarif ----
@@ -806,7 +946,7 @@ const ZINCIR_HEDEF = { "Keşif": "#_kesif", "Dinleme": null, "İnceleme": "#_yay
 async function panoGoster() {
   const ana = $("#ana");
   let p;
-  try { p = await api("/api/pano"); } catch (e) { ana.replaceChildren(bosEkran("Pano açılamadı", e.message)); return; }
+  try { p = await api("/api/pano"); } catch (e) { doldur(ana, bosEkran("Pano açılamadı", e.message)); return; }
   acikSarki = null;
   const ilkDinleme = (await api("/api/sarkilar").catch(() => [])).find((s) => s.asama === "uretildi");
   const zincir = el("section", { class: "cam zincir", "aria-label": "Hat" }, ...p.hat.map((d) => {
@@ -821,12 +961,13 @@ async function panoGoster() {
   }));
 
   const ayar = p.ayarlar || {};
-  const ozet = [ayar.takvim_acik === false ? "yayın takvimi kapalı" : ayar.haftada === 0 ? "sırası gelen her paket hemen yüklenir" : ayar.haftada ? `haftada ${ayar.haftada} yayın` : null,
+  const ozet = [ayar.uretim_acik === false ? "üretim duraklatıldı" : null,
+    !ayar.dagitimci ? "dağıtımcı seçilmedi: paketler bekler" : ayar.takvim_acik === false ? "yayın takvimi kapalı" : ayar.haftada === 0 ? "sırası gelen her paket hemen yüklenir" : ayar.haftada ? `haftada ${ayar.haftada} yayın` : null,
     ayar.oto_onay ? `${ayar.oto_onay_saat} saatte karar yoksa kendiliğinden onay` : "onay sende"].filter(Boolean).join(" · ");
   const saat = new Date().getHours();
   const selam = saat < 6 ? "İyi geceler" : saat < 12 ? "Günaydın" : saat < 18 ? "İyi günler" : "İyi akşamlar";
 
-  ana.replaceChildren(
+  doldur(ana, 
     el("header", { class: "pano-ust" },
       el("div", {}, el("p", { class: "ust-satir ipucu" }, `${selam}, Scryne`), el("h1", { class: "gumus-yazi" }, "Kontrol odası")),
       el("p", { class: "ipucu" }, ozet)),
@@ -894,23 +1035,23 @@ function kazancPaneli() {
     el("p", { class: "kazanc-alt" }, "Yükleniyor…"));
   const para = (n, birim) => new Intl.NumberFormat("tr-TR", { style: "currency", currency: birim || "GBP" }).format(n || 0);
   api("/api/kazanc").then((k) => {
-    if (!k.bagli) { kutu.replaceChildren(el("h2", {}, "Kazanç"), el("p", { class: "kazanc-alt" }, k.dagitimci_yok
+    if (!k.bagli) { doldur(kutu, el("h2", {}, "Kazanç"), el("p", { class: "kazanc-alt" }, k.dagitimci_yok
       ? "Dağıtımcı seçilmedi. Yayın baştan kurulunca kazanç raporları burada görünür." : "Tunearo anahtarı yok (.env).")); return; }
     if (k.ulasilamadi) {
-      kutu.replaceChildren(el("h2", {}, "Kazanç"), el("p", { class: "kazanc-toplam soluk-sayi" }, "—"),
+      doldur(kutu, el("h2", {}, "Kazanç"), el("p", { class: "kazanc-toplam soluk-sayi" }, "—"),
         el("p", { class: "kazanc-alt", title: k.hata }, k.erisim_kapali ? "Tunearo API erişimi kapalı. Hesap sahibi açınca raporlar burada görünür."
           : "Tunearo'ya şu an ulaşılamıyor; sonra yeniden denenir."));
       return;
     }
     const enCok = Math.max(...k.kaynaklar.map((x) => x.tutar), 0.01);
-    kutu.replaceChildren(el("h2", {}, "Kazanç"),
+    doldur(kutu, el("h2", {}, "Kazanç"),
       el("p", { class: "kazanc-toplam gumus-yazi" }, para(k.toplam, k.para)),
       el("p", { class: "kazanc-alt" }, `bu ay ${para(k.bu_ay, k.para)} · ${k.yayinlar.length} yayın · aylık raporla güncellenir`),
       k.kaynaklar.length ? el("ul", { class: "cubuklar" }, ...k.kaynaklar.slice(0, 6).map((x) => el("li", {},
         el("span", {}, x.kaynak), el("b", {}, para(x.tutar, k.para)),
         el("span", { class: "cubuk", "aria-hidden": "true" }, el("i", { style: { width: `${Math.round((x.tutar / enCok) * 100)}%` } })))))
         : el("p", { class: "kazanc-alt" }, "İlk rapor, parçalar mağazalarda dinlendikten sonraki ay gelir."));
-  }).catch((e) => kutu.replaceChildren(el("h2", {}, "Kazanç"), el("p", { class: "kazanc-alt" }, e.message)));
+  }).catch((e) => doldur(kutu, el("h2", {}, "Kazanç"), el("p", { class: "kazanc-alt" }, e.message)));
   return kutu;
 }
 
@@ -947,8 +1088,8 @@ function ayarPaneli(a, kota) {
       el("div", { class: "butce-ust" }, el("span", {}, "Bu ay GPU"), el("b", {}, `${a.uzak_ay_usd.toFixed(2)} $ / ${a.uzak_butce} $`)),
       el("span", { class: "cubuk", "aria-hidden": "true" }, el("i", { style: { transform: `scaleX(${butce})` } }))) : null,
     el("dl", { class: "ayar-listesi" },
-      ...satir("Üretim", a.uretim || "—"),
-      ...satir("Dağıtımcı", DAGITIMCI[a.dagitimci] || a.dagitimci || "—"),
+      ...satir("Üretim", a.uretim_acik === false ? "duraklatıldı" : a.uretim || "—"),
+      ...satir("Dağıtımcı", DAGITIMCI[a.dagitimci] || a.dagitimci || "seçilmedi"),
       ...satir("Takvim", !a.takvim_acik ? "kapalı" : a.haftada === 0 ? "açık · sınırsız" : a.haftada >= 7 ? "açık · her gün" : `açık · haftada ${a.haftada}`),
       ...satir("Otomatik onay", a.oto_onay ? `${a.oto_onay_saat} sa` : "kapalı"),
       ...satir("Kapak", a.kapak === "pinterest" ? "Pinterest" : "üretilen"),
@@ -1001,10 +1142,10 @@ function listeCiz(secili = decodeURIComponent(location.hash.slice(1)) || "_pano"
     det.addEventListener("toggle", () => { if (q) return; const d = depo.oku("gruplar", {}); d[g.k] = det.open; depo.yaz("gruplar", d); });
     return det;
   }).filter(Boolean);
-  $("#liste").replaceChildren(...(gruplar.length ? gruplar : [el("p", { class: "ipucu kucuk-ipucu" }, `"${aramaMetni}" ile eşleşen şarkı yok.`)]));
+  doldur($("#liste"), ...(gruplar.length ? gruplar : [el("p", { class: "ipucu kucuk-ipucu" }, `"${aramaMetni}" ile eşleşen şarkı yok.`)]));
 }
 
-const GORUNUM = { _pano: panoGoster, _kesif: kesifGoster, _yayin: yayinGoster };
+const GORUNUM = { _pano: panoGoster, _kesif: kesifGoster, _yayin: yayinGoster, _kulak: kulakGoster };
 async function yenile(kimlik = decodeURIComponent(location.hash.slice(1)) || "_pano") {
   await listeGoster(kimlik);
   gorunumSayilari();

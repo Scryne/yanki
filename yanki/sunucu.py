@@ -21,7 +21,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from yanki import durum, kesif, kilit, olay, sozler, uretim, yapi
+from yanki import durum, kesif, kilit, kulak, olay, sozler, uretim, yapi
 from yanki.ayarlar import Ayarlar
 
 SAYFA = Path(__file__).with_name("sayfa")
@@ -62,6 +62,12 @@ class RetIstegi(BaseModel):
 
 class EleIstegi(BaseModel):
     elendi: bool = True
+
+
+class KulakOyu(BaseModel):
+    en_iyi: str | None = Field(default=None, max_length=40)
+    yayinlanir: bool | None = None
+    not_: str | None = Field(default=None, alias="not", max_length=500)
 
 
 def _kesif_ozet(a: kesif.Aday, listede: set[str]) -> dict:
@@ -488,6 +494,31 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None) -> FastA
             raise HTTPException(409, "keşif kaydı şu an güncelleniyor; tekrar dene") from e
         return _kesif_ozet(x, kesif.listedekiler(liste_yolu, calisma))
 
+    # ---- kulak testi: deneme çıktılarının kör karşılaştırması (yanki/kulak.py) ----
+    @app.get("/api/kulak")
+    def kulak_listesi():
+        return kulak.gorunum(calisma)
+
+    @app.post("/api/kulak/{set_kimlik}/{sarki}")
+    def kulak_oyu(set_kimlik: str, sarki: str, istek: KulakOyu):
+        try:
+            kulak.oy_ver(calisma, set_kimlik, sarki, istek.en_iyi, istek.yayinlanir, istek.not_)
+        except LookupError as e:
+            raise HTTPException(404, str(e)) from e
+        except ValueError as e:
+            raise HTTPException(422, str(e)) from e
+        except kilit.KilitMesgul as e:
+            raise HTTPException(409, "oy kaydı şu an yazılıyor; tekrar dene") from e
+        return kulak.gorunum(calisma)
+
+    @app.get("/kulak-ses/{set_kimlik}/{sarki}/{kol}")
+    def kulak_sesi(set_kimlik: str, sarki: str, kol: str):
+        s = kulak.setler().get(set_kimlik)
+        yol = kulak.dosya_yolu(calisma, s, sarki, kol) if s and _kimlik_gecerli(sarki) else None
+        if yol is None:
+            raise HTTPException(404, "dosya yok")
+        return FileResponse(yol)
+
     # ---- yayın ----
     @app.get("/api/yayin")
     def yayin():
@@ -535,9 +566,12 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None) -> FastA
         try:
             y = paket.yayin_ayarlari(yayin_yolu)
             t = dagitim.takvim_oku(yayin_yolu)
+            from yanki import ayarlar as ayarlar_
             from yanki import uzak
 
-            ayarlar = {"dagitimci": y.dagitimci, "kapak": y.kapak, "takvim_acik": t.acik, "haftada": t.haftada,
+            ayarlar = {"dagitimci": y.dagitimci, "kapak": y.kapak,
+                       "uretim_acik": ayarlar_.operasyon_oku(a.kok).surekli_uretim,
+                       "takvim_acik": t.acik, "haftada": t.haftada,
                        "oto_onay": ayar.acik, "oto_onay_saat": ayar.sure_saat,
                        "uretim": (f"kiralık GPU ({a.uzak.gpu.replace('NVIDIA ', '')})" if a.uzak.acik
                                   else "evdeki GPU"),
