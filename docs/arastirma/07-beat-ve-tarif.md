@@ -198,3 +198,16 @@ ortalama +0,06–0,08, en çok 0,687 / eşik 0,72; dalga en çok 0,158 / eşik 0
 
 Karar: ölçek 1 üretime bağlandı (`[motor] lora`). Dinleme: `calisma/dinleme/lora/20261012-0808/` (lora_0 / 0,5 / 1),
 `calisma/dinleme/s29/` (N / L).
+
+
+### S30 kulak testi (2026-10-12 akşam, Scryne, üretim hattı: LoRA + betim + 4 aday)
+
+| Şarkı | Tür / dil | En iyi söz WER (eski → yeni) | Kulak |
+|---|---|---|---|
+| Anise.K — Walking on Air | dance-pop + rap, İngilizce | 0,233 → 0,181 | aday 9 "gayet iyi", onaylandı (hattın önerisiyle aynı) |
+| Big Daddy Kane — Daddy's Home | hip-hop, İngilizce | 0,677 → 0,566 | "çok kötü, bozuk", reddedildi |
+| Nyoy Volante — Ipagpatawad Mo | OPM balad, Tagalogca | 0,561 → 0,424 | "kötü", reddedildi |
+
+Kapılar ve söz ölçüsü üç şarkıda da iyileşti, kulak yalnız İngilizce pop'u geçirdi. Sonuç: rap keşifte yeniden kapalı
+(`config/kesif.toml`); İngilizce dışı diller otomatik onayda zaten kapalı (`diller = ["en"]`). Rap ve İngilizce dışı dil
+için ölçü kulağı tutmuyor: söz WER'i düşük olsa da ses bozuk olabiliyor, bu türlerde karar dinlemeden verilmez.

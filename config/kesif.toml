@@ -25,8 +25,10 @@ gece_ekle = 2
 # house, dance, electro, metal, punk, grunge, country, jazz, blues, reggae, reggaeton/Latin (İspanyolca), K-pop,
 # afrobeats (+ pop, rock, R&B, synth-pop zaten açıktı). Kapalı kalan: J-pop/anime (LRCLIB'de Japonca zaman damgalı söz
 # yok, çeviri sürümü geliyor), denenmemiş türler (techno, trance, dubstep, Brezilya, Hint, klasik, opera, film/oyun).
+# 2026-10-12 akşam: rap yeniden kapalı. Kulak (Scryne): yeni LoRA hattıyla Big Daddy Kane "çok kötü, bozuk"; kapılar
+# (söz WER) geçse de rap tarifi kulaktan geçmedi. Rap tarifi dinleme testiyle düzelince açılır.
 haric_turler = [
-  "hardcore", "techno", "dubstep", "trance", "brazilian", "sertanejo", "forr[oó]", "mexicano", "salsa", "asian",
+  "rap", "hip[ -]?hop", "trap", "drill", "hardcore", "techno", "dubstep", "trance", "brazilian", "sertanejo", "forr[oó]", "mexicano", "salsa", "asian",
   "indian", "bollywood", "j-?pop", "anime", "gospel", "opera", "classical", "kids", "films", "games",
 ]
 

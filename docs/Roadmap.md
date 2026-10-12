@@ -723,6 +723,9 @@ baladına). Yüklenen 22 şarkıda beat: orijinalden döngüsel (+0,11), groove'
 - **Tüm türler (S29):** metal, punk, grunge, country, jazz, blues, reggae, reggaeton (İspanyolca), K-pop, afrobeats,
   drill; 11 türün 10'u tek tohumla kapılardan geçti, keşifte açık. Kapalı: J-pop (LRCLIB'de Japonca söz yok),
   denenmemiş türler (techno, trance, Brezilya, Hint, klasik…).
+- **İlk kulak testi (S30, 2026-10-12 akşam):** Walking on Air aday 9 onaylandı ("gayet iyi"; hattın önerisi); Daddy's
+  Home (rap) "çok kötü, bozuk" ve Ipagpatawad Mo (Tagalogca) "kötü" reddedildi; söz ölçüsü üçünde de iyileşmişti.
+  Rap ve drill keşifte yeniden kapalı; rap ve İngilizce dışı dilde karar kulağa kalır.
 - **Çok dilli söz güvenliği:** LRCLIB çeviri sürümü (Japonca seste İngilizce söz) ve satır sonu çevirisi
   (`Korece^İngilizce`) yakalanır; boşluksuz dillerde (ja, zh, th) söz kapısı karakter hata oranıyla.
 - **Söz kapısı belirli:** Whisper'ın tohumsuz sıcaklık geri düşüşü aynı dosyaya 0,37–0,73 veriyordu; tohumlu.
