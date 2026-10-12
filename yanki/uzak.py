@@ -202,6 +202,7 @@ def calistir(a: Ayarlar, isler: list[motor.Is], klasor: Path, zaman_asimi_sn: fl
             t = time.time()
             ham = isci_kos(p, hedef, zaman_asimi_sn, toplam=len(uzak_isler))
             kayit["uretim_sn"] = round(time.time() - t)
+            dosya.json_yaz(klasor / "motor_sonuc.json", ham)  # ham işçi kaydı (puanlar, süreler) yerelde de kalsın
             try:
                 p.al(f"{UZAK_DIZIN}/motor.log", klasor / "motor.log")
             except (runpod.RunPodHatasi, subprocess.SubprocessError, OSError):
