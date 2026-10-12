@@ -103,6 +103,11 @@ arası aynılık 0,941 → 0,934 (orijinaller 0,891). Ton eşleme yardımcı ama
 | synth-pop | The Weeknd — Blinding Lights | 0,20 → 0,32 | — | 0,76 → 0,80 | geçer |
 | rock | Imagine Dragons — Believer | 0,22 → 0,13 | — | 0,71 → 0,86 | geçer |
 
+Beat (S22 ölçüleri, 6 tür): groove 0,35 → **0,51** (Hotline Bling 0,09 → 0,82, Believer 0,41 → 0,60), bölüm değişimi
+0,83 → 0,92, dinamik izleme 0,58 → 0,69. Şarkılar arası aynılık cover 0,93 / orijinal 0,94: farklı türden kaynakta
+cover'lar da orijinaller kadar farklı. "Hepsi aynı"nın bir kaynağı da yüklenen 22 şarkının neredeyse hepsinin balad
+olması ve genel stil tanımıydı.
+
 Kapılardaki iki tür körlüğü bu denemeyle bulundu ve düzeltildi (yanki/kapilar.py):
 - **Dalga** tam bantta EDM'in kick/bas örtüşmesini (cover kaynağın zamanlamasını izliyor) kopya sanıyordu: Avicii 0,26
   (eşik 0,25). 300 Hz üstünde 0,03; orijinali taşıyan örnek her bantta 0,45. Kapı artık 300 Hz üstünde, eşik 0,20.
