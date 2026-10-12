@@ -154,11 +154,12 @@ def calistir(a: Ayarlar, isler: list[motor.Is], klasor: Path, zaman_asimi_sn: fl
     (sunucunun GPU'su bizim). Bütçe yoksa ya da pod açılamazsa `RunPodHatasi` (çağıran evdeki motora döner)."""
     if not isler:
         return []
-    api = runpod.anahtar(a.kok)
+    api = runpod.anahtar(a.kok, a.uzak.en_az_bakiye, bakiye)
     butce_kontrol(a, api, bakiye)
     # önceki koşudan açık kalan pod (bilgisayar koşu ortasında kapandı/uyudu) saatlik yanmasın: bu koşu kilitli, başka
-    # bir koşunun pod'u olamaz
-    if artik := kapat(api, a.kok / "calisma" / ".runpod"):
+    # bir koşunun pod'u olamaz. Her hesapta bakılır (pod önceki koşuda öbür hesapta açılmış olabilir).
+    if artik := [p for k in dict.fromkeys([api, *runpod.anahtarlar(a.kok)])
+                 for p in kapat(k, a.kok / "calisma" / ".runpod")]:
         print(f"önceki koşudan açık kalan pod silindi: {', '.join(artik)}")
     klasor = klasor.resolve()
     klasor.mkdir(parents=True, exist_ok=True)
@@ -262,7 +263,7 @@ def motor_sec(a: Ayarlar, kayit: Callable[[str], None] = print, stok=runpod.stok
         kayit(f"uzak GPU {DURMA_SAAT} saat devre dışı ({durdu.read_text(encoding='utf-8')[:200]}); {nerede}")
         return yedek
     try:
-        api = runpod.anahtar(a.kok)
+        api = runpod.anahtar(a.kok, a.uzak.en_az_bakiye, bakiye)
         butce_kontrol(a, api, bakiye)
         # "Low" da denenir (2026-10-12: A40 saatlerce Low kaldı, üretim hiç başlamadı); açılamazsa ücret yok
         if (durum_ := stok(api, a.uzak.gpu)) in (None, "None"):

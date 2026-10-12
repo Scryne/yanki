@@ -65,7 +65,9 @@ acik = true
 gpu = "NVIDIA A40"
 # Bakiye bunun altındaysa ya da bu ayki harcama sınırdaysa sunucu açılmaz (USD)
 en_az_bakiye = 3.0
-aylik_butce = 15.0
+# 15 → 25 (2026-10-12): ikinci RunPod hesabı (~10 $, .env → RUNPOD_API_KEY_2); ilkinin bakiyesi en_az_bakiye altına
+# inince hat kendiliğinden ikinciye geçer (yanki/runpod.py → anahtar)
+aylik_butce = 25.0
 # Bir koşuda sunucuda en çok kaç şarkı (şarkı başı 3 aday × ~2,5 dk + açılış ~2 dk)
 sarki = 8
 # Bu süreden kısa şarkı tek parça (sunucuda bölmeye gerek yok; ACE-Step sınırı 8 dk)

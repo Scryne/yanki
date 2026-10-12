@@ -936,3 +936,20 @@ def test_pod_komutu_asili_kalirsa_zaman_asimi_yeniden_denenir(tmp_path, monkeypa
     monkeypatch.setattr(runpod.time, "sleep", lambda _: None)
     assert p.komut("mkdir -p /root/is") == "tamam" and olaylar == []
     assert "zaman aşımı" in (tmp_path / "calisma" / "gunluk" / "runpod.log").read_text(encoding="utf-8")
+
+
+def test_runpod_ikinci_hesaba_bakiye_bitince_gecer(tmp_path, monkeypatch):
+    from yanki import runpod
+
+    monkeypatch.delenv("RUNPOD_API_KEY", raising=False)
+    monkeypatch.delenv("RUNPOD_API_KEY_2", raising=False)
+    (tmp_path / ".env").write_text("RUNPOD_API_KEY=bir\nRUNPOD_API_KEY_2=iki\n", encoding="utf-8")
+    bakiyeler = {"bir": 2.0, "iki": 10.0}
+    assert runpod.anahtarlar(tmp_path) == ["bir", "iki"]
+    assert runpod.anahtar(tmp_path) == "bir"  # seçim yapılmadan ilk hesap
+    assert runpod.anahtar(tmp_path, 3.0, bakiyeler.get) == "iki"
+    assert runpod.anahtar(tmp_path) == "iki"  # pod aynı hesapta açılıp silinsin
+    bakiyeler["bir"] = 8.0
+    assert runpod.anahtar(tmp_path, 3.0, bakiyeler.get) == "bir"
+    bakiyeler.update(bir=1.0, iki=1.0)  # hiçbirinde yok: bütçe denetimi durdurur
+    assert runpod.anahtar(tmp_path, 3.0, bakiyeler.get) in ("bir", "iki")

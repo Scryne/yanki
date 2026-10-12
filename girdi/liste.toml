@@ -20,48 +20,6 @@
 # chroma; Someone Like You A major, Viva La Vida Ab major, Perfect Ab major ile sınandı) ve yaygın bilinen değer.
 # Uyuşmayan boş: You Are the Reason bpm (85–86 arası oynadı), Young and Beautiful bpm/ton (D major / B minor ayrışmadı).
 
-[[sarki]]
-sanatci = "Tom Odell"
-ad = "Another Love"
-vokal = "erkek"
-stil = "melancholic piano pop, male lead vocal, raw and emotional, driving piano chords, drums building in the chorus, clean modern studio recording"
-bpm = 123
-ton = "E minor"
-
-[[sarki]]  # YouTube 76,938 izlenme; playlist:3PMsSWdcfg8X6JdEMlcBpB
-sanatci = "HAARPER"
-ad = "Cadavers in My Cadillac"
-
-[[sarki]]  # YouTube 23,127 izlenme, rakip cover 1; playlist:4BONsw2IXNq17K1CQhqWem
-sanatci = "1nonly"
-ad = "Cotton Candy Swirls"
-
-[[sarki]]  # YouTube 54,683 izlenme, rakip cover 5; playlist:4BONsw2IXNq17K1CQhqWem
-sanatci = "Day$okee"
-ad = "MAMACITA"
-
-# kesif 2026-10-10: Spotify'da kaldırılmış şarkılar (yanki kesif)
-[[sarki]]  # YouTube 678,761 izlenme, rakip cover 4; playlist:6Rp2bOX82WJkjktyU9pj73
-sanatci = "Vinnie Vincent Invasion"
-ad = "Love Kills"
-
-# 2026-10-10: sürekli yayın için kuyruk beslemesi (Scryne: "sürekli olarak şarkı atalım", seçim Claude). Keşifteki
-# adayların hepsi Orvane'in çizgisi dışında çıktı (rap, metal, Brezilya müziği); Faz 7 ölçütüyle: İngilizce, tek solo
-# vokal, piyano/akustik balad, çok dinlenen. Stil/BPM/ton otomatik (MusicBrainz), vokal cinsiyeti elle.
-[[sarki]]
-sanatci = "Lewis Capaldi"
-ad = "Before You Go"
-vokal = "erkek"
-
-[[sarki]]  # YouTube 455,027 izlenme; deezer:30530711
-sanatci = "Xiu Xiu"
-ad = "Boy Soprano"
-
-[[sarki]]  # YouTube 377,555 izlenme, rakip cover 2; stillmore:2RuZoZNM8Q5ZXNTYfFiqtT
-sanatci = "Janice Javier"
-ad = "Heaven Knows"
-
-# kesif 2026-10-11: Spotify'da kaldırılmış şarkılar (yanki kesif)
 [[sarki]]  # YouTube 3,699,812 izlenme, rakip cover 9; stillmore:2o8ZUUVGgRvoJx6Jx0i7EY
 sanatci = "Anise.K"
 ad = "Walking on Air"

@@ -372,9 +372,10 @@ def egit(a: Ayarlar, ayar: Ayar, veri_tar: Path, bildir=print, pod_sinifi=runpod
          bakiye=runpod.bakiye, kapat=runpod.kapat_artiklari, commit: str | None = None) -> Sonuc:
     """Kiralık GPU'da ön işleme + eğitim + karşılaştırmalı deneme. LoRA `calisma/egitim/lora/<zaman>/`'e iner."""
     kok, calisma = a.kok, a.kok / "calisma"
-    api = runpod.anahtar(kok)
+    api = runpod.anahtar(kok, a.uzak.en_az_bakiye, bakiye)
     uzak.butce_kontrol(a, api, bakiye)
-    if artik := kapat(api, calisma / ".runpod", POD_KAYIT, "egitim-"):
+    if artik := [p for k in dict.fromkeys([api, *runpod.anahtarlar(kok)])
+                 for p in kapat(k, calisma / ".runpod", POD_KAYIT, "egitim-")]:
         bildir(f"önceki eğitimden açık kalan pod silindi: {', '.join(artik)}")
     commit = commit or uzak.acestep_commit(a)
     zaman = datetime.now().strftime("%Y%m%d-%H%M")
