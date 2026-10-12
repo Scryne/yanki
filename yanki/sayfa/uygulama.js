@@ -894,7 +894,8 @@ function kazancPaneli() {
     el("p", { class: "kazanc-alt" }, "Yükleniyor…"));
   const para = (n, birim) => new Intl.NumberFormat("tr-TR", { style: "currency", currency: birim || "GBP" }).format(n || 0);
   api("/api/kazanc").then((k) => {
-    if (!k.bagli) { kutu.replaceChildren(el("h2", {}, "Kazanç"), el("p", { class: "kazanc-alt" }, "Tunearo anahtarı yok (.env).")); return; }
+    if (!k.bagli) { kutu.replaceChildren(el("h2", {}, "Kazanç"), el("p", { class: "kazanc-alt" }, k.dagitimci_yok
+      ? "Dağıtımcı seçilmedi. Yayın baştan kurulunca kazanç raporları burada görünür." : "Tunearo anahtarı yok (.env).")); return; }
     if (k.ulasilamadi) {
       kutu.replaceChildren(el("h2", {}, "Kazanç"), el("p", { class: "kazanc-toplam soluk-sayi" }, "—"),
         el("p", { class: "kazanc-alt", title: k.hata }, k.erisim_kapali ? "Tunearo API erişimi kapalı. Hesap sahibi açınca raporlar burada görünür."

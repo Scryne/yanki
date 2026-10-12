@@ -6,7 +6,10 @@ sanatci_adi = "Orvane"  # Scryne, 2026-10-07
 # "tunearo" (API: hat kendisi yükler) | "routenote" | "distrokid" (form insanda) | ""
 # Scryne, 2026-10-07: RouteNote, mekanik lisans alınmadan. 2026-10-10: arkadaşın dağıtım API'si (Tunearo) geldi →
 # yeni yüklemeler Tunearo'ya; RouteNote'taki üç parça orada kalır, takip ISRC'leriyle sürer.
-dagitimci = "tunearo"
+# 2026-10-12 (Scryne): Tunearo API'si yok, yüklenen şarkılar reddedildi; yayınlananlar silindi
+# (calisma/_arsiv/2026-10-12-yayin-silindi/). Yayın baştan kurulacak: dağıtımcı seçilene kadar boş (otomatik yükleme yok,
+# paketler YUKLE.md ile hazır bekler).
+dagitimci = ""
 # Kapakta ve metadata'da: plak şirketi yoksa sanatçı adı kullanılır
 etiket = ""
 

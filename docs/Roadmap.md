@@ -264,6 +264,10 @@ Durum sütunu session-start hook'u tarafından otomatik okunur — format bozulm
   ile çalışır: `yanki.exe` açıkken kilitleniyor, bağımlılık değişince `uv` senkronu düşüyordu (bulundu, düzeltildi).
 
 ### Faz 10: Tam otomatik yayın (dağıtım API'si) ⛔
+- **Tunearo kapandı (2026-10-12, Scryne):** API artık yok, yüklenen 21 şarkı reddedildi. Yayınlananlar silindi: klasörleri
+  `calisma/_arsiv/2026-10-12-yayin-silindi/`'e, liste kayıtları oradaki `liste_onceki.toml`'a (geri alınabilir);
+  `dagitimci = ""` (otomatik yükleme yok). Üretim en iyi haline gelince keşiften yayına baştan kurulacak; dağıtımcı
+  seçimi Scryne'ın. S20 deneme şarkılarının kaynağı `calisma/_referans/`'ta (eğitim denemesi oradan okur).
 - **Engel (2026-10-11 12:47):** Tunearo API erişimi hesap sahibince kapatıldı (`403 API access not enabled for this user`); 21 yayın incelemede, durum okunamıyor, yükleme yok. Hat bekliyor, erişim açılınca kendiliğinden sürer (Denetim 4).
 Hedef (Scryne, 2026-10-09): "arkadaşımın API'si gelince her şeyin otomatik olması". Uçtan uca: keşif → üretim →
 onay (insan ya da veto penceresi) → paket → API ile yükleme → durum izleme → takip. İnsan yalnız dinler ve isterse

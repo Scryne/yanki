@@ -578,8 +578,10 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None) -> FastA
     @app.get("/api/kazanc")
     def kazanc(yenile: bool = False):
         """Tunearo'daki bizim yayınların kazancı (önbellekli; anahtar yoksa bağlı değil)."""
-        from yanki import tunearo
+        from yanki import paket, tunearo
 
+        if paket.yayin_ayarlari(a.kok / "config" / "yayin.toml").dagitimci != "tunearo":
+            return {"bagli": False, "dagitimci_yok": True}
         try:
             return {"bagli": True, **tunearo.kazanc(calisma, tunearo.Istemci.kokten(a.kok), zorla=yenile)}
         except tunearo.AyarYok:

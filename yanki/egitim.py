@@ -334,6 +334,15 @@ class Sonuc:
     sureler: dict = field(default_factory=dict)
 
 
+REFERANS = "_referans"
+
+
+def deneme_kok(calisma: Path, kimlik: str) -> Path:
+    """Deneme şarkısının durum kökü: hattaki şarkı ya da `calisma/_referans/` (yayından silinen şarkıların kaynağı ve
+    sözü, karşılaştırma için kalır; 2026-10-12'de yayınlananlar silinince S20 şarkıları oraya alındı)."""
+    return calisma if durum.oku(calisma, kimlik) is not None else calisma / REFERANS
+
+
 def deneme_isleri(a: Ayarlar, calisma: Path, ayar: Ayar, ses_yolu) -> list[tuple[motor.Is, durum.Durum, float]]:
     """Karşılaştırmalı deneme: üretim tarifiyle (cover, güç, adım, ilk tohum) tek parça, her ölçek için bir iş.
     `ses_yolu(yerel) → uzak yol`."""
@@ -341,10 +350,11 @@ def deneme_isleri(a: Ayarlar, calisma: Path, ayar: Ayar, ses_yolu) -> list[tuple
 
     isler = []
     for kimlik in ayar.deneme_sarkilari:
-        d = durum.oku(calisma, kimlik)
+        kok = deneme_kok(calisma, kimlik)
+        d = durum.oku(kok, kimlik)
         if d is None or not d.analiz.get("stil") or not d.kaynak.get("dosya"):
             continue
-        k = durum.klasor(calisma, kimlik)
+        k = durum.klasor(kok, kimlik)
         betim = None
         if ayar.betim:  # üretim tarifi: stil şarkıyı dinleyen betimden (ölçek None: betim işi)
             betim = f"{kimlik}|betim"
@@ -573,8 +583,9 @@ def degerlendir(a: Ayarlar, calisma: Path, deneme: list[dict], degerlendirici=No
     for x in deneme:
         if not x.get("dosya"):
             continue
-        d = durum.oku(calisma, x["kimlik"])
-        k = durum.klasor(calisma, x["kimlik"])
+        kok = deneme_kok(calisma, x["kimlik"])
+        d = durum.oku(kok, x["kimlik"])
+        k = durum.klasor(kok, x["kimlik"])
         try:
             x["kapilar"] = degerlendirici(Path(x["dosya"]), k / d.kaynak["dosya"],
                                           (k / d.soz["dosya"]).read_text(encoding="utf-8"), d.analiz.get("dil", "en"))

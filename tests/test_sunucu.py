@@ -268,10 +268,20 @@ def test_son_gece_gunlukten(tmp_path):
     assert sunucu._son_gece(tmp_path)["suruyor"] is True
 
 
+def _tunearo_secili(monkeypatch):
+    from dataclasses import replace
+
+    from yanki import paket
+
+    gercek = paket.yayin_ayarlari
+    monkeypatch.setattr(paket, "yayin_ayarlari", lambda yol: replace(gercek(yol), dagitimci="tunearo"))
+
+
 def test_kazanc_baglanti_yoksa_bagli_degil(ortam, monkeypatch):
     from yanki import tunearo
 
     istemci, _ = ortam
+    _tunearo_secili(monkeypatch)
 
     def yok(cls, kok):
         raise tunearo.AyarYok(None, "anahtar yok")
@@ -316,6 +326,7 @@ def test_kazanc_ulasilamayinca_hata_degil_bilgi(ortam, monkeypatch):
     from yanki import tunearo
 
     istemci, _ = ortam
+    _tunearo_secili(monkeypatch)
     monkeypatch.setattr(tunearo.Istemci, "kokten", classmethod(lambda cls, kok: object()))
 
     def kapali(*_a, **_k):
@@ -324,3 +335,16 @@ def test_kazanc_ulasilamayinca_hata_degil_bilgi(ortam, monkeypatch):
     monkeypatch.setattr(tunearo, "kazanc", kapali)
     r = istemci.get("/api/kazanc")
     assert r.status_code == 200 and r.json()["ulasilamadi"] and r.json()["erisim_kapali"]
+
+
+def test_kazanc_dagitimci_yokken_istek_atmaz(ortam, monkeypatch):
+    # Tunearo kapandı (2026-10-12): dağıtımcı seçilmemişken kazanç sorulmaz
+    from dataclasses import replace
+
+    from yanki import paket, tunearo
+
+    istemci, _ = ortam
+    gercek = paket.yayin_ayarlari
+    monkeypatch.setattr(paket, "yayin_ayarlari", lambda yol: replace(gercek(yol), dagitimci=""))
+    monkeypatch.setattr(tunearo, "kazanc", lambda *_a, **_k: pytest.fail("Tunearo'ya istek atıldı"))
+    assert istemci.get("/api/kazanc").json() == {"bagli": False, "dagitimci_yok": True}

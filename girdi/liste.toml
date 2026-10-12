@@ -21,52 +21,6 @@
 # Uyuşmayan boş: You Are the Reason bpm (85–86 arası oynadı), Young and Beautiful bpm/ton (D major / B minor ayrışmadı).
 
 [[sarki]]
-sanatci = "Lewis Capaldi"
-ad = "Someone You Loved"
-vokal = "erkek"
-stil = "emotional piano ballad, male lead vocal, raspy and powerful, piano with soft strings, intimate verses building to a soaring chorus, clean modern studio recording"
-bpm = 110
-ton = "C# major"
-
-[[sarki]]
-sanatci = "John Legend"
-ad = "All of Me"
-vokal = "erkek"
-stil = "romantic piano ballad, male lead vocal, soulful and warm, solo grand piano accompaniment, intimate, clean modern studio recording"
-bpm = 63
-ton = "Ab major"
-
-[[sarki]]
-sanatci = "Christina Perri"
-ad = "A Thousand Years"
-vokal = "kadin"
-stil = "romantic piano and strings ballad, female lead vocal, soft and airy, piano with string orchestra, cinematic, clean modern studio recording"
-bpm = 139
-ton = "Bb major"
-
-[[sarki]]
-sanatci = "Coldplay"
-ad = "The Scientist"
-vokal = "erkek"
-stil = "melancholic piano ballad, male lead vocal, gentle with falsetto, piano-driven, acoustic guitar and soft drums in the second half, clean modern studio recording"
-bpm = 74
-ton = "F major"
-
-[[sarki]]
-sanatci = "Coldplay"
-ad = "Fix You"
-vokal = "erkek"
-stil = "emotional organ and piano ballad, male lead vocal, gentle falsetto, building to full band with guitar and drums, clean modern studio recording"
-
-[[sarki]]
-sanatci = "Adele"
-ad = "When We Were Young"
-vokal = "kadin"
-stil = "soulful piano ballad, female lead vocal, powerful and emotional, piano with organ and soft drums, building, clean modern studio recording"
-bpm = 72
-ton = "Eb major"
-
-[[sarki]]
 sanatci = "Tom Odell"
 ad = "Another Love"
 vokal = "erkek"
@@ -74,42 +28,6 @@ stil = "melancholic piano pop, male lead vocal, raw and emotional, driving piano
 bpm = 123
 ton = "E minor"
 
-[[sarki]]
-sanatci = "Calum Scott"
-ad = "You Are the Reason"
-vokal = "erkek"
-stil = "emotional piano ballad, male lead vocal, tender with falsetto, piano with strings, building, clean modern studio recording"
-ton = "Bb major"
-
-[[sarki]]
-sanatci = "James Arthur"
-ad = "Say You Won't Let Go"
-vokal = "erkek"
-stil = "acoustic guitar ballad, male lead vocal, raspy and heartfelt, fingerpicked acoustic guitar with soft piano and strings, clean modern studio recording"
-
-[[sarki]]
-sanatci = "Keane"
-ad = "Somewhere Only We Know"
-vokal = "erkek"
-stil = "piano rock, male lead vocal, clear tenor, driving piano, bass and drums, no guitar, clean modern studio recording"
-bpm = 86
-ton = "A major"
-
-[[sarki]]
-sanatci = "Olivia Rodrigo"
-ad = "drivers license"
-vokal = "kadin"
-stil = "emotional piano pop ballad, female lead vocal, intimate to powerful, piano with atmospheric synths, drums building in the bridge, clean modern studio recording"
-bpm = 144
-ton = "Bb major"
-
-[[sarki]]
-sanatci = "Lana Del Rey"
-ad = "Young and Beautiful"
-vokal = "kadin"
-stil = "cinematic orchestral pop ballad, female lead vocal, dreamy and haunting, piano and lush strings, slow, clean modern studio recording"
-
-# kesif 2026-10-09: Spotify'da kaldırılmış şarkılar (yanki kesif)
 [[sarki]]  # YouTube 76,938 izlenme; playlist:3PMsSWdcfg8X6JdEMlcBpB
 sanatci = "HAARPER"
 ad = "Cadavers in My Cadillac"
@@ -131,46 +49,10 @@ ad = "Love Kills"
 # adayların hepsi Orvane'in çizgisi dışında çıktı (rap, metal, Brezilya müziği); Faz 7 ölçütüyle: İngilizce, tek solo
 # vokal, piyano/akustik balad, çok dinlenen. Stil/BPM/ton otomatik (MusicBrainz), vokal cinsiyeti elle.
 [[sarki]]
-sanatci = "Bruno Mars"
-ad = "When I Was Your Man"
-vokal = "erkek"
-
-[[sarki]]
-sanatci = "Passenger"
-ad = "Let Her Go"
-vokal = "erkek"
-
-[[sarki]]
 sanatci = "Lewis Capaldi"
 ad = "Before You Go"
 vokal = "erkek"
 
-[[sarki]]
-sanatci = "Christina Perri"
-ad = "Jar of Hearts"
-vokal = "kadin"
-
-[[sarki]]
-sanatci = "Snow Patrol"
-ad = "Chasing Cars"
-vokal = "erkek"
-
-[[sarki]]
-sanatci = "The Fray"
-ad = "How to Save a Life"
-vokal = "erkek"
-
-[[sarki]]
-sanatci = "James Blunt"
-ad = "You're Beautiful"
-vokal = "erkek"
-
-[[sarki]]
-sanatci = "Adele"
-ad = "Hello"
-vokal = "kadin"
-
-# kesif 2026-10-10: Spotify'da kaldırılmış şarkılar (yanki kesif)
 [[sarki]]  # YouTube 455,027 izlenme; deezer:30530711
 sanatci = "Xiu Xiu"
 ad = "Boy Soprano"

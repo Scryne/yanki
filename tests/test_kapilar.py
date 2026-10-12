@@ -6,7 +6,8 @@ import pytest
 from yanki import ayarlar, kapilar
 
 KOK = Path(__file__).resolve().parents[1]
-GERCEK_KAYNAK = KOK / "calisma" / "adele-someone-like-you" / "kaynak.wav"
+# herhangi bir gerçek şarkı kaynağı (pozitif kontrol; şarkının kendisi önemli değil)
+GERCEK_KAYNAK = next(iter(sorted((KOK / "calisma").glob("*/kaynak.wav"))), KOK / "calisma" / "yok" / "kaynak.wav")
 FPCALC = ayarlar.yukle().fpcalc
 
 
