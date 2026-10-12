@@ -56,3 +56,18 @@ def test_gecersiz_oy_ve_ses_yolu(ortam):
     for yol in ("/kulak-ses/deneme/a-b/..%2F..%2F..%2Fgizli.txt", "/kulak-ses/deneme/..%2F..%2Fx/yeni",
                 "/kulak-ses/deneme/c-d/orijinal", "/kulak-ses/yok/a-b/yeni"):
         assert istemci.get(yol).status_code == 404, yol
+
+
+def test_kollar_farkli_denemelerden(tmp_path):
+    # önceki eğitimin hazır çıktısı (iki ayrı klasörden, ilk var olan) ile yeni eğitimin kaydı aynı testte
+    c = tmp_path / "calisma"
+    ses = np.zeros(4800, dtype="float32")
+    for yol in ("s29/a-b/L/L.flac", "lora3/c-d/lora_1.flac", "lora4/a-b/lora_1.flac", "lora4/c-d/lora_1.flac"):
+        (c / "dinleme" / yol).parent.mkdir(parents=True, exist_ok=True)
+        sf.write(str(c / "dinleme" / yol), ses, 48000)
+    s = kulak.Set("v4", "V4", "", "", {"v3": "önceki", "v4": "yeni"}, sarkilar=("a-b", "c-d"),
+                  yollar={"v3": ("dinleme/s29/{sarki}/L/L.flac", "dinleme/lora3/{sarki}/lora_1.flac"),
+                          "v4": ("dinleme/lora4/{sarki}/lora_1.flac",)})
+    assert kulak.dosya_yolu(c, s, "a-b", "v3") == c / "dinleme" / "s29" / "a-b" / "L" / "L.flac"
+    assert kulak.dosya_yolu(c, s, "c-d", "v3") == c / "dinleme" / "lora3" / "c-d" / "lora_1.flac"
+    assert kulak.dosya_yolu(c, s, "e-f", "v4") is None and kulak.dosya_yolu(c, s, "a-b", "baska") is None

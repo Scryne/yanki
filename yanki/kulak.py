@@ -30,6 +30,9 @@ class Set:
     # şarkı → dosya: kol için `<klasor>/<şarkı>/<kalip>`; {kol} yerine kol adı
     kalip: str = "{kol}.flac"
     sarkilar: tuple = field(default=())  # boşsa klasördeki alt klasörler
+    # kol → calisma'ya göre yol kalıpları ({sarki}); ilk var olan. Kollar farklı denemelerden gelince (ör. önceki
+    # eğitimin hazır çıktısı ile yeni eğitimin ara kayıtları) `klasor`/`kalip` yerine
+    yollar: dict = field(default_factory=dict)
 
 
 SETLER = (
@@ -66,7 +69,7 @@ def _bilgi(calisma: Path, s: Set, kimlik: str) -> dict:
         pass
     for kok in (calisma / "_referans", calisma):
         if d := durum.oku(kok, kimlik):
-            return {"sanatci": d.sanatci, "ad": d.ad, "tur": None}
+            return {"sanatci": d.sanatci, "ad": d.ad, "tur": d.analiz.get("tur")}
     return {"sanatci": "", "ad": kimlik, "tur": None}
 
 
@@ -81,6 +84,8 @@ def dosya_yolu(calisma: Path, s: Set, sarki: str, kol: str) -> Path | None:
         return _kaynak(calisma, sarki)
     if kol not in s.kollar or sarki not in sarki_listesi(calisma, s):
         return None
+    if kol in s.yollar:
+        return next((y for k in s.yollar[kol] if (y := calisma / k.format(sarki=sarki)).is_file()), None)
     yol = calisma / s.klasor / sarki / s.kalip.format(kol=kol)
     return yol if yol.is_file() else None
 
