@@ -683,3 +683,30 @@ Scryne'ın kulağında (`calisma/dinleme/lora/20261011-1554/OKU.md`). Bağlamak:
 üretildiğini dağıtımcıdan, mağazalardan ve dinleyiciden gizlemek olur (Deezer/Tidal bu bilgiyle etiketliyor ya da
 ödüyor). Operasyonel gereği de yok: Tunearo'da AI tespiti tek başına red değil, Orvane biyografisi "AI-assisted".
 Kalite işleri (mastering, eğitim) dedektör skoru hedeflenmeden yapıldı.
+
+## Üretim kalitesi (2026-10-12, Scryne: "beat kısmı çok kötü, sürekli aynı şeyler oluyor"; "şarkılar tek türde olmayacak"; "şarkı üretimini en iyi haline getir")
+
+Ayrıntı ve ölçümler: `docs/arastirma/07-beat-ve-tarif.md` (S20–S26). Üretim zaten kiralık A40'ta nicelemesiz XL-SFT;
+sorun modelde değil, modele verilen girdideydi.
+
+**Teşhis:** sözde bölüm etiketi yoktu (19/31 şarkıda nakarat yok), stil sanatçının genel türüydü ("pop, funk" bir piyano
+baladına). Yüklenen 22 şarkıda beat: orijinalden döngüsel (+0,11), groove'u zayıf izliyor (0,30), baladlara genel davul
+(×1,5), şarkılar birbirine orijinallerden çok benziyor (0,941 / 0,891).
+
+**Yapılanlar:**
+- **Bölüm yapısı (`yanki/yapi.py`, `yanki yapi`):** zaman damgalı sözden giriş, kıta, ön nakarat, nakarat, köprü,
+  ara, çıkış; söz değişmiş son nakarat ve şarkı adını taşıyan gerçek nakarat bulunur. 31 şarkının sözü yeniden yazıldı.
+- **Şarkıya özel betim (`[motor] betim = true`):** ACE-Step'in eğitim verisini etiketlediği `acestep-captioner` aynı
+  pod'da şarkıyı dinler, stil o betimden; 256 jetonluk metin sınırına sığar. S20: groove 0,18 → 0,24, fazladan
+  döngüsellik −%66; S21 (6 tür): groove 0,35 → 0,51, dinamik izleme 0,58 → 0,69.
+- **Kapılar türe göre doğru:** dalga 300 Hz üstünde (EDM'in kick örtüşmesi kopya sayılıyordu), söz WER'i orijinal
+  kayda göre (Whisper orijinal rap'i de 0,49 anlıyor).
+- **Dil:** ses emin değilse söz karar verir (Nyoy Volante Tagalogca İngilizce sayılıyordu).
+- **Türler:** keşifte rap, hip-hop, trap, EDM, house, dance, electro açık (config'te); İspanyolca Latin kapalı (cover
+  orijinalden belirgin az anlaşılır). Otomatik onayda yeni türler Scryne dinleyene kadar kapalı.
+- **Denenip alınmayanlar:** cover gücü 0,85/1,0 (beat değişmedi), orijinal kayıt tını referansı (kaydı sızdırdı),
+  sanatçının başka şarkısı referans (aynılık arttı), shift 3 ve ScragVAE (ölçüde nötr; ScragVAE kulağa kalır).
+- **Aday seçimi:** beat ölçüleri Scryne'ın seçimini tutmadı (rastgele düzeyi), söz WER 11/21 tuttu → seçim WER ile
+  kalır; her adaya ACE-Step söz hizalama puanı yazılıyor (seçim ölçüsü olarak sınanacak).
+- **Eğitim yeniden (çok türlü):** 95 şarkı (balad + rap, R&B, EDM, rock, Latin, country, uptempo pop), stil pod'da
+  betimleyiciyle, sözler bölüm yapısıyla, dil sesten; deneme S20 şarkılarıyla. Sonuç: aşağıda.
