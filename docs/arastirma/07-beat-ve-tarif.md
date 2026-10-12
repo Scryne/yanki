@@ -245,3 +245,18 @@ türlerde az iyi. Söz şarkıdan şarkıya oynuyor (tek tohum): ep30 Walking on
 ama Last Last 0,64 → 0,94, Gasolina 0,22 → 0,48. Parmak izi aynı bantta (en çok 0,689, eşik 0,72). Ölçü kararı
 vermiyor; seçim kör testte (set `egitim-4`, kollar v3 / ep20 / ep30). Dinleme:
 `calisma/dinleme/lora/20261012-1702/` (`lora_1` = ep30, `lora_ep20`).
+
+### S31 kör kulak testi (2026-10-13, Scryne, set `egitim-4`)
+
+| Kol | En iyi | Yayınlanabilir |
+|---|---|---|
+| v3 (15 epoch, 95 şarkı) | 3: Jar of Hearts, Three Little Birds, Last Last | 1 |
+| ep20 (123 şarkı) | 6: When I Was Your Man, Viva La Vida, Enter Sandman, The Thrill Is Gone, Gasolina, Doja | 4 |
+| ep30 (123 şarkı) | 6: Walking on Air, How to Save a Life, All the Small Things, You're Still the One, Fly Me to the Moon, How You Like That | 4 |
+| hepsi kötü | 2: Let Her Go ("vokal"), Smells Like Teen Spirit | — |
+
+Yayınlanabilir 9/17 (S30'da 4/17): balad/pop 4, metal, pop-punk, country, reggaeton. Yeni veri ve uzun eğitim
+12/17'de eskisini yendi. ep20 ile ep30 berabere; **ep20 üretime bağlandı** (türlerde söz WER'i daha iyi, beat aynı,
+daha az eğitim). En iyisi bile yayınlanamaz bulunan türler iki testte de aynı: caz, blues, reggae, afrobeats, K-pop,
+drill, grunge → keşifte kapalı (`config/kesif.toml`); keşif sorguları kulağı geçen türlere daraltıldı.
+

@@ -31,7 +31,11 @@ betim = true
 # düştü, 6'sında arttı (ortalama 0,104 → 0,120 balad, 0,388 → 0,374 tür). Çıktı orijinale biraz yaklaşıyor
 # (parmak izi en çok 0,69, dalga 0,16; kapılar aday başına süzüyor).
 # Önceki iki LoRA metinden-müzik görevinde eğitilmişti, cover'da beat'i kötüleştirdi (S28). Klasör gitignore'da.
-lora = "calisma/egitim/lora/20261012-0808/final"
+# 2026-10-13 (S31): dördüncü eğitimin 20. epoch'u (123 şarkı). Kör test (Scryne, 17 şarkı, A/B/C): 15 epoch 3, 20 epoch
+# 6, 30 epoch 6, hepsi kötü 2; yayınlanabilir 9/17 (önceki test 4/17). 20 ile 30 berabere (yayınlanabilir 4–4); 20
+# seçildi: türlerde söz WER'i daha iyi (0,37 / 0,41), beat aynı, daha az eğitim orijinal kayda daha az yaslanır.
+# 30 epoch: calisma/egitim/lora/20261012-1702/final
+lora = "calisma/egitim/lora/20261012-1702/checkpoints/epoch_20_loss_0.7381"
 lora_olcek = 1.0
 
 [cover]

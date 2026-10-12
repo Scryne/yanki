@@ -19,6 +19,7 @@ analizine yazılır (sonraki üretimler aynı stili kullanır). Betim düşerse 
 
 import dataclasses
 import json
+import re
 from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
@@ -296,9 +297,12 @@ def _yalniz_motor_dustu(adaylar: list[durum.Aday]) -> bool:
 
 
 def lora_adi(yol: Path | None) -> str | None:
-    """Eğitimin adı (calisma/egitim/lora/<zaman>/final → <zaman>): adayın tarifinde hangi LoRA."""
+    """Eğitimin adı (calisma/egitim/lora/<zaman>/final → <zaman>; ara kayıt …/<zaman>/checkpoints/epoch_20_… →
+    <zaman>/ep20): adayın tarifinde hangi LoRA."""
     if yol is None:
         return None
+    if yol.parent.name == "checkpoints" and (m := re.match(r"epoch_(\d+)_", yol.name)):
+        return f"{yol.parent.parent.name}/ep{m.group(1)}"
     return yol.parent.name if yol.name == "final" else yol.name
 
 

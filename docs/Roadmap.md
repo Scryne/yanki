@@ -722,7 +722,9 @@ baladına). Yüklenen 22 şarkıda beat: orijinalden döngüsel (+0,11), groove'
   düştü), çıktı orijinale biraz yaklaşıyor (parmak izi en çok 0,69 / eşik 0,72); kapılar aday başına süzüyor.
   **S31: dördüncü eğitim** (30 epoch, 123 şarkı, 5,03 $): kayıp 20. epoch'tan sonra yatay; ep20 ve ep30 beat'te
   aynı, v3'ten balad'da belirgin (groove 0,57 → 0,63), türlerde az iyi (0,58 → 0,60); söz karışık. Kör test
-  (`egitim-4`: v3 / ep20 / ep30) Scryne'da; kazanan üretime bağlanır, o zamana kadar üretim duraklatılmış.
+  (`egitim-4`: v3 / ep20 / ep30): yeni eğitim 12/17'de kazandı, **yayınlanabilir 9/17** (önce 4/17); ep20 ile ep30
+  berabere, **ep20 üretimde**. Caz, blues, reggae, afrobeats, K-pop, drill, grunge keşifte kapalı (en iyisi bile
+  yayınlanamaz). Üretim Scryne'ın kararıyla duraklatılmış; dağıtımcı seçimi bekliyor.
 - **Tüm türler (S29):** metal, punk, grunge, country, jazz, blues, reggae, reggaeton (İspanyolca), K-pop, afrobeats,
   drill; 11 türün 10'u tek tohumla kapılardan geçti, keşifte açık. Kapalı: J-pop (LRCLIB'de Japonca söz yok),
   denenmemiş türler (techno, trance, Brezilya, Hint, klasik…).

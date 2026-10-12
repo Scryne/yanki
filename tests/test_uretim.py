@@ -494,3 +494,11 @@ def test_aday_uretildigi_tarifi_tasir(tmp_path):
     _sarki(c, "lorasiz", 60)
     uretim.uret(replace(a, motor=replace(a.motor, lora=lora)), c, ["lorasiz"], calistir=SahteMotor(), degerlendir=GECER)
     assert durum.oku(c, "lorasiz").adaylar[0].tarif["lora"] is None
+
+
+def test_tarifte_lora_adi_ara_kaydi_da_adlandirir():
+    # S31: üretimde dördüncü eğitimin 20. epoch'u; tarif hangi eğitim ve hangi epoch olduğunu söylesin
+    kok = Path("calisma/egitim/lora/20261012-1702")
+    assert uretim.lora_adi(kok / "checkpoints" / "epoch_20_loss_0.7381") == "20261012-1702/ep20"
+    assert uretim.lora_adi(kok / "final") == "20261012-1702"
+    assert uretim.lora_adi(None) is None

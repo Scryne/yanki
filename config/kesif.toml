@@ -27,7 +27,10 @@ gece_ekle = 0  # 2 → 0 (2026-10-12): üretim duraklatıldı (config/operasyon.
 # yok, çeviri sürümü geliyor), denenmemiş türler (techno, trance, dubstep, Brezilya, Hint, klasik, opera, film/oyun).
 # 2026-10-12 akşam: rap yeniden kapalı. Kulak (Scryne): yeni LoRA hattıyla Big Daddy Kane "çok kötü, bozuk"; kapılar
 # (söz WER) geçse de rap tarifi kulaktan geçmedi. Rap tarifi dinleme testiyle düzelince açılır.
+# 2026-10-13: kör test (S31, en iyi model bile yayınlanamaz dedi; iki testte de): caz, blues, reggae (reggaeton
+# açık: Gasolina yayınlanabilir), afrobeats, K-pop, grunge.
 haric_turler = [
+  "jazz", "blues", "reggae", "afro ?beats?", "afropop", "k-?pop", "grunge",
   "rap", "hip[ -]?hop", "trap", "drill", "hardcore", "techno", "dubstep", "trance", "brazilian", "sertanejo", "forr[oó]", "mexicano", "salsa", "asian",
   "indian", "bollywood", "j-?pop", "anime", "gospel", "opera", "classical", "kids", "films", "games",
 ]
@@ -50,8 +53,8 @@ playlistler = [
 arama = [
   "sad songs", "piano ballads", "acoustic love songs", "2000s ballads", "2010s hits", "throwback hits",
   "breakup songs", "emotional songs", "indie folk", "old love songs", "emo 2000s", "singer songwriter",
-  "hip hop classics", "rnb hits", "dance hits", "edm anthems", "rock anthems", "2000s rnb",
-  "country hits", "reggaeton hits", "kpop hits", "afrobeats hits", "metal classics", "jazz classics",
+  "rnb hits", "dance hits", "edm anthems", "rock anthems", "2000s rnb",
+  "country hits", "reggaeton hits", "metal classics", "pop punk",
 ]
 arama_gece = 2
 min_parca = 100
