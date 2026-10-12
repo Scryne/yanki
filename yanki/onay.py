@@ -4,7 +4,8 @@ onaylanır.
 Hedef (Scryne, 2026-10-09): dağıtım API'si gelince hattın baştan sona kendiliğinden yürümesi; insan dinler ve isterse
 veto eder (onaylar, onarım ister ya da reddeder: hepsi şarkıyı `uretildi`den çıkarır ve pencereyi kapatır).
 
-Öneri kuralı: kapılardan geçmiş, bekleyen onarımı olmayan adaylardan en düşük söz WER'li (eşitlikte küçük numara).
+Öneri kuralı: kapılardan geçmiş, bekleyen onarımı olmayan adaylardan söz WER'i en düşük iki aday arasından ACE-Step
+söz hizalama puanı yüksek olan (puanı yoksa en düşük WER'li). 2026-10-12 (S27): 21 şarkıda 14 isabet.
 Ölçüm (2026-10-09, Scryne'ın 15 şarkıdaki seçimi): en düşük söz WER seçimi 4/15 tuttu (%27; şarkı başı ~3,4 aday,
 rastgele ~%29), parmak izi/dalga en iyi %47, tohum eşit dağılmış. Yani hiçbir ölçü kulağı tahmin etmiyor: otomatik onay
 "Scryne'ın favorisi"ni değil "kapılardan geçmiş, sözü en anlaşılır" adayı seçer. Bu yüzden `config/yayin.toml` →
@@ -83,7 +84,19 @@ def oneri(d: durum.Durum) -> durum.Aday | None:
                and not any(o.get("durum") == "bekliyor" for o in a.onarimlar)]
     if not adaylar:
         return None
-    return min(adaylar, key=lambda a: (_wer(a) if _wer(a) is not None else float("inf"), a.no))
+    # Söz WER'i en düşük iki aday arasından ACE-Step söz hizalama puanı yüksek olan (S27, 2026-10-12: Scryne'ın 21
+    # şarkıdaki seçimini 14 tuttu; yalnız WER 11, yalnız hizalama 9, rastgele 7,2). Puanı olmayan adayda yalnız WER.
+    sirali = sorted(adaylar, key=lambda a: (_wer(a) if _wer(a) is not None else float("inf"), a.no))
+    iki = sirali[:2]
+    if len(iki) == 2 and all(_hizalama(a) is not None for a in iki):
+        return max(iki, key=lambda a: (_hizalama(a), -sirali.index(a)))
+    return sirali[0]
+
+
+def _hizalama(a: durum.Aday) -> float | None:
+    """Adayın DiT söz hizalama puanı (parçaların ortalaması); yoksa None."""
+    degerler = [p["dit"] for p in (a.hizalama or []) if isinstance(p, dict) and p.get("dit") is not None]
+    return sum(degerler) / len(degerler) if degerler else None
 
 
 def dinlemeye_cikis(d: durum.Durum) -> datetime | None:

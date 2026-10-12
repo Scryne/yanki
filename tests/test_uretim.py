@@ -447,3 +447,17 @@ def test_hizalama_puani_adaya_yazilir(tmp_path):
     _sarki(c, "kisa", 60)
     uretim.uret(_ayar(), c, calistir=Puanli(), degerlendir=GECER)
     assert durum.oku(c, "kisa").adaylar[0].hizalama == [{"lm": 0.4, "dit": 0.7}]
+
+
+def test_oneri_en_dusuk_iki_wer_arasindan_hizalamasi_yuksek():
+    # S27: Scryne'ın 21 seçiminden 14'ünü tuttu (yalnız WER 11)
+    from yanki import onay
+
+    def aday(no, wer, dit=None):
+        return durum.Aday(no, f"a{no}.flac", no, kapilar={"soz_wer": {"deger": wer, "gecti": True}}, gecti=True,
+                          hizalama=[{"lm": 0.1, "dit": dit}] if dit is not None else None)
+
+    d = durum.Durum("x", "A", "B", adaylar=[aday(1, 0.05, 0.10), aday(2, 0.08, 0.14), aday(3, 0.30, 0.50)])
+    assert onay.oneri(d).no == 2  # 3'ün puanı yüksek ama WER'i en düşük iki aday arasında değil
+    d.adaylar = [aday(1, 0.05), aday(2, 0.08, 0.14)]
+    assert onay.oneri(d).no == 1  # puanı olmayan aday varsa yalnız WER

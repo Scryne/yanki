@@ -117,3 +117,10 @@ Kapılardaki iki tür körlüğü bu denemeyle bulundu ve düzeltildi (yanki/kap
 Keşifte açılan türler (config/kesif.toml): rap, hip-hop, trap, EDM, house, dance, electro. İspanyolca Latin kapalı
 (cover orijinalden belirgin anlaşılmaz). Otomatik onayda bu türler kapalı kalır: Scryne dinleyince açılır
 (calisma/dinleme/s21/).
+
+## S27 — ACE-Step söz hizalama puanı aday seçimini tutuyor mu (21 şarkı, 62 aday, Scryne'ın seçimi)
+
+Eski adaylar işçide "puanla" göreviyle üretildikleri koşullarla (kaynak, adayın stili, o günkü söz, tohum) puanlandı.
+Rastgele ≈ 7,2. Yalnız DiT hizalama 9/21 (seçilenin sırası 1,81), LM hizalama 6/21, yalnız söz WER 11/21 (1,52).
+**En düşük WER'li iki aday arasından hizalaması yüksek olan: 14/21.** (İki kural denendi; sıra toplamı 11/21. Örneklem
+küçük, veri biriktikçe yeniden ölçülür.) Otomatik onayın önerisi bu kurala geçti (`onay.oneri`).
