@@ -30,3 +30,11 @@ def _whispersiz(monkeypatch):
     monkeypatch.setattr(kapilar, "dil_tespit", lambda _yol: ("en", 0.99))
     # göreli söz kapısının orijinal kayıt ölçümü (gerçekte Whisper, ~1 dk); testte ölçülmez (mutlak eşik)
     monkeypatch.setattr(kapilar, "orijinal_wer", lambda *a, **k: None)
+
+
+@pytest.fixture(autouse=True)
+def _tur_listesi_varsayilan(monkeypatch):
+    # keşfin tür süzgeci testlerde gerçek config'e bağlı olmasın (config/kesif.toml türleri açtıkça değişiyor)
+    from yanki import kesif, onay
+
+    monkeypatch.setattr(kesif, "haric_kalip", lambda: onay.tur_kalibi(onay.DENENMEMIS_VARSAYILAN))

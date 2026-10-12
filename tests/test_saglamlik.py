@@ -282,8 +282,7 @@ def test_tur_listesi_configten_bos_liste_hepsini_acar(tmp_path, monkeypatch):
     assert onay.engel(d, onay.Ayar(acik=True, denenmemis_turler=("metal",))) is None
     yol = tmp_path / "kesif.toml"
     yol.write_text('[kesif]\nharic_turler = ["metal"]\n', encoding="utf-8")
-    oku = kesif.haric_kalip.__wrapped__
-    monkeypatch.setattr(kesif, "haric_kalip", lambda: oku(yol))
+    monkeypatch.setattr(kesif, "haric_kalip", lambda: kesif.haric_kalip_oku(yol))
     assert _aday(turler=["rap", "hip hop"]).uygun is True and _aday(turler=["heavy metal"]).uygun is False
 
 

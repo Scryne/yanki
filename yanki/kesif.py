@@ -113,8 +113,7 @@ class Aday:
         return max(self.youtube_izlenme or 0, self.spotify_dinlenme or 0)
 
 
-@functools.cache
-def haric_kalip(yol: Path | None = None):
+def haric_kalip_oku(yol: Path | None = None):
     """Keşfin kendiliğinden almadığı türler (`config/kesif.toml` → `[kesif] haric_turler`; yoksa onay varsayılanı)."""
     import tomllib
 
@@ -126,6 +125,9 @@ def haric_kalip(yol: Path | None = None):
     except OSError:
         turler = onay.DENENMEMIS_VARSAYILAN
     return onay.tur_kalibi(turler)
+
+
+haric_kalip = functools.cache(haric_kalip_oku)
 
 
 def spotifya_sorulur(a: Aday) -> bool:

@@ -91,3 +91,24 @@ arası aynılık 0,941 → 0,934 (orijinaller 0,891). Ton eşleme yardımcı ama
 - V: ölçülerde nötr. Bu ölçüler ritim/yapı; çözücünün etkisi tını (metalik vokal, transient) — kulağa kalır.
 - Tarif: C (bölüm yapısı + betim, güç 0,7, shift 1, resmî çözücü). Aynılık için kalan kaldıraç: çok türlü veriyle,
   betimli stil ve bölüm etiketli sözle LoRA (2026-10-12 gece, 95 şarkı).
+
+## S21 — yeni tarif balad dışı türlerde (A bugünkü, N bölüm yapısı + betim; her türden tanınmış bir şarkı)
+
+| Tür | Şarkı | söz WER A → N | orijinalin WER'i | dinamik izleme A → N | kapı (yeniden ayarlı) |
+|---|---|---|---|---|---|
+| rap | Kendrick Lamar — HUMBLE. | 0,53 → 0,52 | 0,49 | 0,33 → 0,44 | geçer |
+| melodik rap / R&B | Drake — Hotline Bling | 0,19 → 0,11 | — | 0,56 → 0,82 | geçer |
+| EDM | Avicii — Wake Me Up | 0,29 → 0,24 | — | 0,73 → 0,86 | geçer |
+| Latin (İspanyolca) | Luis Fonsi — Despacito | 1,03 → 0,70 | 0,31 | 0,60 → 0,56 | düşer |
+| synth-pop | The Weeknd — Blinding Lights | 0,20 → 0,32 | — | 0,76 → 0,80 | geçer |
+| rock | Imagine Dragons — Believer | 0,22 → 0,13 | — | 0,71 → 0,86 | geçer |
+
+Kapılardaki iki tür körlüğü bu denemeyle bulundu ve düzeltildi (yanki/kapilar.py):
+- **Dalga** tam bantta EDM'in kick/bas örtüşmesini (cover kaynağın zamanlamasını izliyor) kopya sanıyordu: Avicii 0,26
+  (eşik 0,25). 300 Hz üstünde 0,03; orijinali taşıyan örnek her bantta 0,45. Kapı artık 300 Hz üstünde, eşik 0,20.
+- **Söz WER** mutlak eşikti: Whisper orijinal rap kaydını da 0,49 anlıyor. Kapı orijinale göre: aday orijinalden en
+  çok 0,10 kötü (tavan 0,80).
+
+Keşifte açılan türler (config/kesif.toml): rap, hip-hop, trap, EDM, house, dance, electro. İspanyolca Latin kapalı
+(cover orijinalden belirgin anlaşılmaz). Otomatik onayda bu türler kapalı kalır: Scryne dinleyince açılır
+(calisma/dinleme/s21/).
