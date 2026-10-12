@@ -100,7 +100,17 @@ def test_ornek_hazirlama_kesit_ve_onbellek(tmp_path, monkeypatch):
     assert indirilen == ["v1"]
     with pytest.raises(LookupError, match="zaman damgalı"):
         egitim.ornek_hazirla(egitim.VeriSarki("C", "D", "x"), egitim.Ayar(), tmp_path,
-                             lrclib=lambda *_: sozler.Soz("[verse]\nx", "lrclib", 200.0), adaylar=None, indir=None)
+                             lrclib=lambda *_: sozler.Soz("[verse]\nx", "lrclib", 200.0), adaylar=lambda _q: [],
+                             indir=None, surumler=lambda *_: [])
+    # `/get` başka sürümü verdi (Uptown Funk 51 sn): zaman damgalı sürümlerden videonun süresine uyan alınır
+    zamanli_uzun = ((10.0, "uzun bir"), (100.0, "uzun iki"))
+    s3 = egitim.VeriSarki("E", "F", "funk")
+    m3 = egitim.ornek_hazirla(s3, egitim.Ayar(en_uzun_sn=240), tmp_path, indir=indir,
+                              lrclib=lambda *_: sozler.Soz("[Verse 1]\nkısa", "lrclib", 51.0, ((1.0, "kısa"),)),
+                              adaylar=lambda _q: [kaynak.Aday("v2", "E - F (Audio)", 270.0)],
+                              surumler=lambda *_: [sozler.Soz("x", "lrclib", 51.0, ((1.0, "kısa"),)),
+                                                   sozler.Soz("y", "lrclib", 269.0, zamanli_uzun)])
+    assert "uzun bir" in m3["lyrics"] and indirilen[-1] == "v2"
 
 
 def test_cover_sanatcisi_veriye_girmez(tmp_path):

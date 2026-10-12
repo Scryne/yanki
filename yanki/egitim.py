@@ -141,7 +141,8 @@ def ornek_dili(ses_yolu: Path, metin: str, tespit=None) -> str:
 
 
 def ornek_hazirla(s: VeriSarki, ayar: Ayar, klasor: Path, lrclib=sozler.lrclib,
-                  adaylar=kaynak.youtube_adaylari, indir=kaynak.youtube_indir, dil_tespit=None) -> dict:
+                  adaylar=kaynak.youtube_adaylari, indir=kaynak.youtube_indir, dil_tespit=None,
+                  surumler=sozler.lrclib_surumleri) -> dict:
     """Bir eğitim örneği: `<kimlik>.flac` + `<kimlik>.json` (Side-Step örnek alanları + kaynak). Varsa yeniden
     indirilmez."""
     ses_yolu, meta_yolu = klasor / f"{s.kimlik}.flac", klasor / f"{s.kimlik}.json"
@@ -158,9 +159,20 @@ def ornek_hazirla(s: VeriSarki, ayar: Ayar, klasor: Path, lrclib=sozler.lrclib,
             dosya.json_yaz(meta_yolu, meta)
         return meta
     soz = lrclib(s.sanatci, s.ad)
-    if not soz.satirlar:
-        raise LookupError("LRCLIB'de zaman damgalı söz yok: söz-ses hizası kurulamaz")
-    secilen = sec(adaylar(f"{s.sanatci} {s.ad} official audio"), soz.sure_sn)
+    videolar = adaylar(f"{s.sanatci} {s.ad} official audio")
+    try:
+        if not soz.satirlar:
+            raise LookupError("LRCLIB'de zaman damgalı söz yok: söz-ses hizası kurulamaz")
+        secilen = sec(videolar, soz.sure_sn)
+    except LookupError as ilk:  # KaynakYok dahil: `/get` başka sürümü vermiş olabilir (çok türlü veride 10'da 7)
+        for alt in surumler(s.sanatci, s.ad):
+            try:
+                secilen, soz = sec(videolar, alt.sure_sn), alt
+                break
+            except kaynak.KaynakYok:
+                continue
+        else:
+            raise ilk
     klasor.mkdir(parents=True, exist_ok=True)
     ham = indir(secilen.id, klasor / f"{s.kimlik}.indirilen")
     try:

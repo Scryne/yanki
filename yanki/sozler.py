@@ -128,6 +128,21 @@ def lrclib(sanatci: str, ad: str, json_al=ag.json_al) -> Soz:
     return Soz(metin, "lrclib", sure, satirlar)
 
 
+def lrclib_surumleri(sanatci: str, ad: str, json_al=ag.json_al) -> list[Soz]:
+    """Aynı sanatçının bu adlı, zaman damgalı bütün LRCLIB kayıtları (albüm, single edit, radyo sürümü…). `/get` bazen
+    kısa ya da başka bir sürümü döndürüyor (Uptown Funk 51 sn, Happy 364 sn): çağıran ses kaydının süresine uyanı
+    seçer."""
+    bulunan = json_al(f"{LRCLIB}/search", {"artist_name": sanatci, "track_name": ad})
+    cikti = []
+    for b in bulunan:
+        if b.get("instrumental") or not b.get("syncedLyrics") or not ayni_sanatci(sanatci, b.get("artistName") or ""):
+            continue
+        sure = float(b["duration"]) if b.get("duration") else None
+        satirlar = senkron(b["syncedLyrics"])
+        cikti.append(Soz(yapi.metin(yapi.coz(satirlar, sure, ad)), "lrclib", sure, satirlar))
+    return cikti
+
+
 def bul(sanatci: str, ad: str, dosya: Path, json_al=ag.json_al) -> Soz:
     """Scryne `girdi/sozler/<kimlik>.txt` bıraktıysa o esastır."""
     if dosya.exists() and dosya.read_text(encoding="utf-8").strip():
