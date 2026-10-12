@@ -461,3 +461,16 @@ def test_oneri_en_dusuk_iki_wer_arasindan_hizalamasi_yuksek():
     assert onay.oneri(d).no == 2  # 3'ün puanı yüksek ama WER'i en düşük iki aday arasında değil
     d.adaylar = [aday(1, 0.05), aday(2, 0.08, 0.14)]
     assert onay.oneri(d).no == 1  # puanı olmayan aday varsa yalnız WER
+
+
+def test_durum_bilinmeyen_alani_atlar(tmp_path):
+    # yeni sürümün yazdığı alanı eski kodla açık süreç okuyabilmeli (adaya hizalama eklenince oda 500 verdi)
+    c = tmp_path / "c"
+    _sarki(c, "x", 10)
+    yol = c / "x" / "durum.json"
+    veri = json.loads(yol.read_text(encoding="utf-8"))
+    veri["gelecek_alan"] = 1
+    veri["adaylar"] = [{"no": 1, "dosya": "a.flac", "tohum": 42, "gelecek_aday_alani": [1]}]
+    yol.write_text(json.dumps(veri), encoding="utf-8")
+    d = durum.oku(c, "x")
+    assert d.kimlik == "x" and d.adaylar[0].no == 1

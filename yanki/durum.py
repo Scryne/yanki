@@ -72,8 +72,11 @@ def oku(calisma: Path, kimlik: str) -> Durum | None:
     if not yol.exists():
         return None
     d = json.loads(yol.read_text(encoding="utf-8"))
-    d["adaylar"] = [Aday(**x) for x in d.get("adaylar", [])]
-    return Durum(**d)
+    # bilinmeyen alan atlanır: yeni sürümün yazdığı kaydı eski kodla açık süreç (dinleme odası) okuyabilsin
+    # (2026-10-12: adaya `hizalama` eklenince açık oda her isteğe 500 verdi)
+    d["adaylar"] = [Aday(**{k: v for k, v in x.items() if k in Aday.__dataclass_fields__})
+                    for x in d.get("adaylar", [])]
+    return Durum(**{k: v for k, v in d.items() if k in Durum.__dataclass_fields__})
 
 
 def yaz(calisma: Path, d: Durum) -> Path:
