@@ -35,7 +35,22 @@ class Set:
     yollar: dict = field(default_factory=dict)
 
 
+DORDUNCU = "dinleme/lora/20261012-1702"  # dördüncü eğitim (30 epoch, 123 şarkı): son bağdaştırıcı ve 20. epoch
+S20_S29 = ("bruno-mars-when-i-was-your-man", "coldplay-viva-la-vida", "passenger-let-her-go", "anise-k-walking-on-air",
+           "the-fray-how-to-save-a-life", "christina-perri-jar-of-hearts", "metallica-enter-sandman",
+           "blink-182-all-the-small-things", "nirvana-smells-like-teen-spirit", "shania-twain-you-re-still-the-one",
+           "frank-sinatra-fly-me-to-the-moon", "b-b-king-the-thrill-is-gone",
+           "bob-marley-the-wailers-three-little-birds",
+           "daddy-yankee-gasolina", "blackpink-how-you-like-that", "burna-boy-last-last", "central-cee-doja")
+
 SETLER = (
+    Set("egitim-4", "Daha uzun eğitim · 17 şarkı",
+        "Aynı 17 şarkı. Şu an üretimdeki model (15 epoch, 95 şarkı) ile yeni eğitimin 20. ve 30. epoch'u (123 "
+        "şarkı; caz, blues, afrobeats, drill, reggae, metal, folk eklendi). Aynı tohum ve tarif.",
+        "", {"v3": "şu anki model (15 epoch)", "ep20": "yeni eğitim, 20 epoch", "ep30": "yeni eğitim, 30 epoch"},
+        sarkilar=S20_S29,
+        yollar={"v3": ("dinleme/s29/{sarki}/L/L.flac", "dinleme/lora/20261012-0808/{sarki}/lora_1.flac"),
+                "ep20": (f"{DORDUNCU}/{{sarki}}/lora_ep20.flac",), "ep30": (f"{DORDUNCU}/{{sarki}}/lora_1.flac",)}),
     Set("lora-tur", "Yeni model · 11 tür",
         "Her tür için tanınmış bir şarkı; eğitimde yok. Eski üretim tarifi ile kendi LoRA'mızla (cover görevinde "
         "eğitildi) üretilen aynı tohumlu kayıt.",
