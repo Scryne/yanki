@@ -35,6 +35,8 @@ class Aday:
     #   "dosya", "kapilar", "hata"}]
     onarimlar: list = field(default_factory=list)
     stil: str | None = None  # üretildiği stil tanımı (stil değiştirilip yeniden üretilince adaylar ayırt edilsin)
+    # ACE-Step söz hizalama puanı (motor_isci._hizalama; parça başına {"lm", "dit"}): seçim ölçüsü olarak sınanacak
+    hizalama: list | None = None
 
 
 @dataclass

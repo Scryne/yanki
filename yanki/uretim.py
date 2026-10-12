@@ -218,6 +218,7 @@ def _aday_kur(k: Path, d: durum.Durum, plan, n: int, tohum: int, sonuclar: dict,
     if hatali:
         aday.kapilar = {"motor": {"gecti": False, "hata": "; ".join(hatali)}}
         return aday
+    aday.hizalama = [r.hizalama for r in rs] if any(r.hizalama for r in rs) else None
     tam = k / "adaylar" / str(n) / "tam.flac"
     try:
         if len(plan) == 1:

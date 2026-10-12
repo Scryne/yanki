@@ -435,3 +435,15 @@ def test_orijinal_kaydin_soz_weri_bir_kez_olculur_ve_kapiya_gider(tmp_path):
     uretim.uret(_ayar(), c, calistir=SahteMotor(), degerlendir=degerlendir,
                 orijinal_wer=lambda *a: olculen.append(a) or 0.49)
     assert len(olculen) == 1  # ikinci üretimde yeniden ölçülmez
+
+
+def test_hizalama_puani_adaya_yazilir(tmp_path):
+    class Puanli(SahteMotor):
+        def __call__(self, a, isler, klasor, zaman_asimi_sn):
+            return [replace(r, hizalama={"lm": 0.4, "dit": 0.7}) if r.basari else r
+                    for r in super().__call__(a, isler, klasor, zaman_asimi_sn)]
+
+    c = tmp_path / "c"
+    _sarki(c, "kisa", 60)
+    uretim.uret(_ayar(), c, calistir=Puanli(), degerlendir=GECER)
+    assert durum.oku(c, "kisa").adaylar[0].hizalama == [{"lm": 0.4, "dit": 0.7}]
