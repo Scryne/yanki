@@ -166,7 +166,7 @@ def calistir(a: Ayarlar, isler: list[motor.Is], klasor: Path, zaman_asimi_sn: fl
     # girdi sesleri: aynı dosya bir kez gider (aynı şarkının adayları aynı kaynağı kullanır)
     girdiler: dict[str, str] = {}
     for i in isler:
-        for yol in (i.kaynak, i.referans):
+        for yol in (i.kaynak, i.referans, i.puanlanan):
             if yol and yol not in girdiler:
                 girdiler[yol] = f"{UZAK_DIZIN}/girdi/{len(girdiler)}{Path(yol).suffix}"
     kayit: dict = {"zaman": datetime.now().isoformat(timespec="seconds"), "is": len(isler), "gpu": a.uzak.gpu}
@@ -189,6 +189,7 @@ def calistir(a: Ayarlar, isler: list[motor.Is], klasor: Path, zaman_asimi_sn: fl
             uzak_isler = []
             for n, i in enumerate(isler):
                 d = {**i.__dict__, "kaynak": girdiler[i.kaynak], "referans": girdiler.get(i.referans or ""),
+                     "puanlanan": girdiler.get(i.puanlanan or ""),
                      "cikti_klasor": f"{UZAK_DIZIN}/cikti/{n}", "bolge": list(i.bolge) if i.bolge else None}
                 uzak_isler.append(d)
             is_yolu = klasor / "motor_is.json"

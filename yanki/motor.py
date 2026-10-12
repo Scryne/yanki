@@ -21,7 +21,7 @@ ISCI = Path(__file__).with_name("motor_isci.py")
 @dataclass(frozen=True)
 class Is:
     id: str
-    gorev: str  # "cover" | "repaint" | "anla" | "betimle"
+    gorev: str  # "cover" | "repaint" | "anla" | "betimle" | "puanla"
     kaynak: str
     cikti_klasor: str = ""
     stil: str = ""
@@ -38,12 +38,15 @@ class Is:
     lora_olcek: float | None = None
     # aynı işçideki bir "betimle" işinin id'si: stil o betimden kurulur (motor_isci.betim_stili; önce dinle, sonra üret)
     stil_betimden: str | None = None
+    puanlanan: str | None = None  # "puanla": puanlanacak hazır aday
     # ACE-Step GenerationParams'a olduğu gibi giden ek ayarlar (shift, guidance_scale, use_adg, sampler_mode …)
     ek: dict = field(default_factory=dict, hash=False)
 
     def __post_init__(self):
-        if self.gorev not in ("cover", "repaint", "anla", "betimle"):
-            raise ValueError(f"görev cover, repaint, anla ya da betimle olmalı: {self.gorev}")
+        if self.gorev not in ("cover", "repaint", "anla", "betimle", "puanla"):
+            raise ValueError(f"görev cover, repaint, anla, betimle ya da puanla olmalı: {self.gorev}")
+        if self.gorev == "puanla" and not self.puanlanan:
+            raise ValueError("puanla için puanlanan aday gerekli")
         if self.gorev in ("anla", "betimle"):
             return
         if self.adim <= 0 or not self.cikti_klasor:

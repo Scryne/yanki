@@ -18,6 +18,9 @@ ACE-Step Python API tuzakları (docs/arastirma/01) burada düzeltilir:
 - repaint'te `repainting_end=-1` kodda "sona kadar" sayılmıyor (end > start şartı) → aralık açıkça verilir
 - `thinking` varsayılan True; cover/repaint LM kullanmaz, LM yüklenmez → False
 
+"puanla": hazır bir aday (`puanlanan`) üretildiği koşullarla (kaynak, stil, söz) ACE-Step söz hizalama puanını alır:
+koşullar kısa bir cover üretiminden, latent adayın kendisinden (aday seçimi ölçüsünü geçmiş seçimlerle sınamak için).
+
 "anla": kaynak ses anlamsal kodlara çevrilir, 5Hz LM stil tanımı/BPM/ton/dil çıkarır
 (REST full_analysis_only ile aynı yol).
 LM yalnız ilk "anla" işinde, bir kez yüklenir.
@@ -85,6 +88,20 @@ def _betimle(model, islemci, kaynak: str) -> str:
     with torch.inference_mode():
         cikti = model.generate(**girdi, return_audio=False, max_new_tokens=512, do_sample=False)
     return islemci.batch_decode(cikti[:, girdi["input_ids"].shape[1]:], skip_special_tokens=True)[0].strip()
+
+
+PUANLA_URETIM_ADIM = 2  # "puanla": koşul tensörleri (söz, stil, kaynak kodları) için yeterli; ses kullanılmaz
+
+
+def _aday_latenti(dit, yol: str, ornek):
+    """Hazır adayın VAE latenti, üretimin latent boyutuna kırpılmış/doldurulmuş: [1, T, D]."""
+    import torch
+
+    lat = dit._encode_audio_to_latents(dit.process_src_audio(yol)).to(ornek.device, ornek.dtype)  # [T, D]
+    t = ornek.shape[1]
+    if lat.shape[0] < t:
+        lat = torch.cat([lat, torch.zeros(t - lat.shape[0], lat.shape[1], dtype=lat.dtype, device=lat.device)])
+    return lat[:t].unsqueeze(0)
 
 
 HIZALAMA_GEREKLI = ("pred_latents", "encoder_hidden_states", "encoder_attention_mask", "context_latents",
@@ -230,7 +247,7 @@ def main() -> int:
                 sonuclar.append(kayit)
                 yaz()
                 continue
-            if gorev not in ("cover", "repaint"):
+            if gorev not in ("cover", "repaint", "puanla"):
                 raise ValueError(f"desteklenmeyen görev: {gorev}")
             if i.get("lora_olcek") is not None:
                 if lora_olcek is None:
@@ -250,6 +267,8 @@ def main() -> int:
                 elif not stil:  # betim düştüyse işin kendi stili (varsa) yedek
                     raise RuntimeError(f"dayandığı betim yok: {i['stil_betimden']}")
                 kayit["stil"] = stil
+            puanla = gorev == "puanla"  # hazır adayı, üretildiği koşullarla puanla (koşullar kısa bir üretimden)
+            gorev = "cover" if puanla else gorev
             params = GenerationParams(
                 task_type=gorev,
                 instruction=TASK_INSTRUCTIONS[gorev],
@@ -261,7 +280,7 @@ def main() -> int:
                 bpm=i.get("bpm"),
                 keyscale=i.get("ton") or "",
                 audio_cover_strength=float(i.get("guc", 1.0)),
-                inference_steps=int(i["adim"]),
+                inference_steps=PUANLA_URETIM_ADIM if puanla else int(i["adim"]),
                 seed=int(i["tohum"]),
                 thinking=False,
                 **bolge,
@@ -276,6 +295,13 @@ def main() -> int:
             kayit["vram_tepe_gb"] = round(torch.cuda.max_memory_allocated() / 1e9, 2)
             if not sonuc.success or not sonuc.audios:
                 raise RuntimeError(sonuc.error or "çıktı yok")
+            if puanla:
+                eo = dict(getattr(sonuc, "extra_outputs", None) or {})
+                eo["pred_latents"] = _aday_latenti(dit, i["puanlanan"], eo["pred_latents"])
+                kayit.update(basari=True, hizalama=_hizalama(dit, eo, i.get("dil", "en"), int(i["adim"])))
+                sonuclar.append(kayit)
+                yaz()
+                continue
             cikti = sonuc.audios[0]["path"]
             kayit.update(basari=True, cikti=str(Path(cikti).resolve()), cikti_sure_sn=round(sf.info(cikti).duration, 2))
             try:  # puan düşerse aday yine geçerli
