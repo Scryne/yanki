@@ -90,8 +90,9 @@ def _takvim(kok: Path, calisma: Path) -> dict:
         p = dagitim.plan(calisma, dagitim.takvim_oku(kok / "config" / "yayin.toml"),
                          dagitimci=paket.yayin_ayarlari(kok / "config" / "yayin.toml").dagitimci)
     except (OSError, ValueError, KeyError) as e:
-        return {"hata": str(e), "sira": [], "beklemede": None, "duzeltme": []}
-    return {"beklemede": p.beklemede, "duzeltme": p.duzeltme,
+        return {"hata": str(e), "sira": [], "beklemede": None, "duzeltme": [], "yazarsiz": []}
+    yazarsiz = [_ozet(d, calisma) for k in p.yazarsiz if (d := durum.oku(calisma, k))]
+    return {"beklemede": p.beklemede, "duzeltme": p.duzeltme, "yazarsiz": yazarsiz,
             "sira": [{"kimlik": x.kimlik, "sanatci": x.sanatci, "ad": x.ad, "yukleme": x.yukleme.isoformat(),
                       "yayin_tarihi": x.yayin_tarihi.isoformat(), "kesif": x.puan > 0,
                       "kapak": _kapak_url(calisma, x.kimlik)} for x in p.sira]}

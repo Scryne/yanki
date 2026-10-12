@@ -251,7 +251,7 @@ def test_pano_hat_ve_kulak_bekleyen(ortam):
     assert next(x for x in p["hat"] if x["ad"] == "Dinleme")["sayi"] == 1
     if p["ayarlar"].get("oto_onay"):  # gerçek config: otomatik onay açıksa rap şarkı kulak bekler
         assert p["kulak"][0]["kimlik"] == "a-b" and "rap" in p["kulak"][0]["neden"]
-    assert "takvim" in p and "olaylar" in p
+    assert "takvim" in p and "olaylar" in p and p["takvim"].get("yazarsiz", []) == []
 
 
 def test_son_gece_gunlukten(tmp_path):

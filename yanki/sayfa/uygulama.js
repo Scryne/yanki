@@ -779,7 +779,7 @@ function olayBolumu(olaylar, tamZaman = false) {
 async function gorunumSayilari() {
   try {
     const [k, y, p] = await Promise.all([api("/api/kesif"), api("/api/yayin"), api("/api/pano")]);
-    const bekleyen = p.kulak.length + p.hatada.length;
+    const bekleyen = p.kulak.length + p.hatada.length + (p.takvim?.yazarsiz?.length || 0);
     $("#g-pano").textContent = bekleyen ? String(bekleyen) : "";
     $("#g-pano").classList.toggle("dikkat", bekleyen > 0);
     $("#g-pano").title = bekleyen ? "Senden beklenen" : "";
@@ -854,6 +854,8 @@ function beklenenBolumu(p) {
     ...p.kulak.map((s) => ({ s, rozet: ["dinlemen gerekiyor", "amber"], metin: s.neden })),
     ...p.hatada.map((s) => ({ s, rozet: ["hata", "no"], metin: s.hata })),
     ...p.yakinda.map((s) => ({ s, rozet: ["kendiliğinden onaylanacak", "gumus"], metin: saatDakika(s.zaman) })),
+    ...(p.takvim?.yazarsiz || []).map((s) => ({ s, rozet: ["yazar gerekli", "amber"],
+      metin: "Orijinal söz yazarı bulunamadı; dağıtımcılar yazarsız cover almıyor. girdi/liste.toml'da şarkıya yazarlar = [\"Ad Soyad\"] ekle, paket sonraki koşuda yenilenip sıraya girer." })),
   ];
   const uyarilar = (p.uyarilar || []).map((u) => el("li", { class: "kayit uyari-kayit" },
     el("div", { class: "kayit-ad" }, el("span", { class: "ad" }, u.baslik)),
