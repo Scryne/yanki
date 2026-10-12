@@ -200,3 +200,23 @@ def test_deezer_sanatci_turleri():
              "/album/2": {"genres": {"data": [{"name": "Rap/Hip Hop"}, {"name": "Alternative"}]}}}
     ja = lambda url, p=None: cevap[url.replace(katalog.DEEZER, "")]  # noqa: E731
     assert katalog.sanatci_turleri("HAARPER", ja) == ["rap, hip hop", "alternative"]
+
+
+def test_ses_ingilizce_disi_soz_ingilizceyse_dili_tutan_surum_alinir(tmp_path):
+    # YOASOBI "Idol": Japonca ses, LRCLIB İngilizce sürümün sözünü verdi
+    from yanki import durum, hazirlik, sozler
+
+    d = durum.Durum("y-i", "YOASOBI", "Idol", kaynak={"dosya": "kaynak.wav", "sure_sn": 213.0},
+                    soz={"dosya": "soz.txt", "kaynak": "lrclib"})
+    (tmp_path / "soz.txt").write_text("[Verse 1]\nCouldn't beat her smile it stirred up all the media\nYou are so "
+                                      "mysterious and I want to know", encoding="utf-8")
+    satir = "無敵の笑顔で荒らすメディア"
+    japonca = sozler.Soz(f"[Verse 1]\n{satir}", "lrclib", 214.0, ((1.0, satir),))
+    ingilizce = sozler.Soz("[Verse 1]\nyou are the one and I love you", "lrclib", 213.0, ((1.0, "you"),))
+    assert hazirlik.soz_dili_uyumu(d, tmp_path, "ja", surumler=lambda *_: [ingilizce, japonca]) is None
+    assert "無敵" in (tmp_path / "soz.txt").read_text(encoding="utf-8")
+    assert "無敵" in (tmp_path / "soz_zaman.json").read_text(encoding="utf-8")
+    # dili tutan sürüm yoksa yanlış dilde söyletilmez: hata
+    (tmp_path / "soz.txt").write_text("[Verse 1]\nyou are the one and I love you so", encoding="utf-8")
+    assert "çeviri" in hazirlik.soz_dili_uyumu(d, tmp_path, "ja", surumler=lambda *_: [ingilizce])
+    assert hazirlik.soz_dili_uyumu(d, tmp_path, "en", surumler=lambda *_: []) is None  # İngilizce şarkı: dokunulmaz

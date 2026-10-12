@@ -85,10 +85,15 @@ def analiz_et(a: Ayarlar, sarkilar: list[Sarki], calisma: Path, zaman_asimi_sn: 
         return
     if a.motor.analiz_yontemi == "musicbrainz":
         for s, d in hedef:
+            k = durum.klasor(calisma, s.kimlik)
+            dil = dil_bul(d, k)
+            if hata := soz_dili_uyumu(d, k, dil["dil"]):
+                _hataya(calisma, s.kimlik, hata)
+                continue
             # BPM/ton yalnız listeden: yanlış değer modeli detone eder, tahmin göndermek göndermemekten kötü
             _analizi_yaz(calisma, s.kimlik, {
                 "stil": stil_kur(s, kunye=d.kunye, yedek_turler=_yedek_turler(s, d)), "bpm": s.bpm,
-                "ton": s.ton or "", **dil_bul(d, durum.klasor(calisma, s.kimlik)), "kaynak": "musicbrainz"})
+                "ton": s.ton or "", **dil, "kaynak": "musicbrainz"})
         return
     isler = []
     for s, d in hedef:
@@ -108,6 +113,44 @@ def analiz_et(a: Ayarlar, sarkilar: list[Sarki], calisma: Path, zaman_asimi_sn: 
             "lm": lm,
             "lm_hata": None if r.basari else r.hata,
         })
+
+
+INGILIZCE_UYUMSUZ = 0.30  # ses İngilizce dışıyken söz bu kadar İngilizceyse çeviri sürümü gelmiştir
+
+
+def soz_dili_uyumu(d: durum.Durum, k: Path, dil: str, surumler=None) -> str | None:
+    """Ses İngilizce dışı (emin), söz İngilizce ise LRCLIB çeviri sürümünü vermiştir (YOASOBI "Idol": Japonca ses,
+    İngilizce sürümün sözü; 2026-10-12). Dili ve süresi tutan zaman damgalı sürüm aranır; bulunursa söz dosyaları
+    değişir. Dönen: düzeltilemezse hata metni (yanlış dilde söz söyletilmez)."""
+    soz_yolu = k / (d.soz or {}).get("dosya", "soz.txt")
+    if dil in ("en", "unknown") or (d.soz or {}).get("kaynak") != "lrclib" or not soz_yolu.exists():
+        return None
+    oran = kapilar.ingilizce_orani(soz_yolu.read_text(encoding="utf-8"))
+    if oran is None or oran < INGILIZCE_UYUMSUZ:
+        return None
+    sure = (d.kaynak or {}).get("sure_sn")
+    try:
+        adaylar = (surumler or sozler.lrclib_surumleri)(d.sanatci, d.ad)
+    except Exception:  # noqa: BLE001 — arama düşerse hata metni kalır
+        adaylar = []
+    for alt in adaylar:
+        o = kapilar.ingilizce_orani(alt.metin)
+        if o is not None and o < INGILIZCE_ESIGI and (sure is None or alt.sure_sn is None
+                                                     or abs(alt.sure_sn - sure) <= SURUM_SURE_PAYI_SN):
+            soz_yolu.write_text(alt.metin, encoding="utf-8")
+            (k / "soz_zaman.json").write_text(json.dumps(alt.satirlar, ensure_ascii=False), encoding="utf-8")
+            return None
+    return (f"söz İngilizce (pay {oran:.2f}) ama ses {dil}: LRCLIB çeviri sürümünü vermiş, dili tutan sürüm yok; "
+            f"doğru söz `girdi/sozler/{d.kimlik}.txt` olarak bırakılabilir")
+
+
+SURUM_SURE_PAYI_SN = 5.0
+
+
+def _hataya(calisma: Path, kimlik: str, hata: str) -> None:
+    with durum.guncelle(calisma, kimlik) as d:
+        if d.asama == "hazir":
+            d.gec("hata", hata)
 
 
 def _analizi_yaz(calisma: Path, kimlik: str, analiz: dict) -> None:

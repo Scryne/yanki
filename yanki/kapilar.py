@@ -146,10 +146,11 @@ _INGILIZCE_SIK = frozenset("the a an and or but i you me my your we our it is ar
 
 
 def ingilizce_orani(soz: str) -> float | None:
-    """Söz kelimelerinin İngilizcenin en sık kelimelerinden olanlarının payı (etiket satırları hariç). Kelime yoksa
-    None."""
+    """Söz kelimelerinin İngilizcenin en sık kelimelerinden olanlarının payı (etiket satırları hariç). Bütün yazılar
+    sayılır (Hangul/Kana dahil: önce yalnız Latin harfli kelimeler sayılıyordu, İngilizce parçalı Korece söz
+    "İngilizce" çıkardı). Kelime yoksa None."""
     kelimeler = [w for satir in soz.splitlines() if not satir.strip().startswith("[")
-                 for w in re.findall(r"[a-z']+", satir.casefold())]
+                 for w in re.findall(r"[^\W\d_][\w']*", satir.casefold())]
     return sum(w in _INGILIZCE_SIK for w in kelimeler) / len(kelimeler) if kelimeler else None
 
 

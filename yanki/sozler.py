@@ -85,12 +85,25 @@ def kesitler(satirlar, sure_sn: float | None, uzunluk: float = 30.0, on_pay: flo
     return sonuc
 
 
+CEVIRI_AYRACI = "^"  # bazı LRCLIB kayıtlarında satır sonuna çeviri: "보란 듯이 무너졌어^It all crumbled spectacularly"
+
+
+def ceviri_at(satirlar: list[str]) -> list[str]:
+    """Satırların çoğu `özgün^çeviri` biçimindeyse çeviri atılır (BLACKPINK "How You Like That", 2026-10-12): model
+    çeviriyi de söylemeye çalışırdı. Tek tük `^` olan söze dokunulmaz."""
+    dolu = [x for x in satirlar if x.strip()]
+    if not dolu or sum(CEVIRI_AYRACI in x for x in dolu) < len(dolu) / 2:
+        return satirlar
+    return [x.split(CEVIRI_AYRACI, 1)[0].rstrip() for x in satirlar]
+
+
 def senkron(lrc: str | None) -> tuple[tuple[float, str], ...]:
     satirlar = []
     for satir in (lrc or "").splitlines():
         if m := re.match(r"\[(\d+):(\d+(?:\.\d+)?)\]\s*(.*)", satir.strip()):
             satirlar.append((round(int(m.group(1)) * 60 + float(m.group(2)), 2), m.group(3).strip()))
-    return tuple(satirlar)
+    metinler = ceviri_at([m for _, m in satirlar])
+    return tuple((t, m) for (t, _), m in zip(satirlar, metinler, strict=True))
 
 
 def _sozcukler(s: str) -> tuple[str, ...]:
@@ -124,7 +137,8 @@ def lrclib(sanatci: str, ad: str, json_al=ag.json_al) -> Soz:
     sure = float(d["duration"]) if d.get("duration") else None
     satirlar = senkron(d.get("syncedLyrics"))
     # zaman damgası varsa yapı ondan (boşluklar bölüm sınırı, giriş/ara/çıkış); yoksa düz sözün tekrarlarından
-    metin = yapi.metin(yapi.coz(satirlar, sure, ad)) if satirlar else etiketle(d["plainLyrics"], ad)
+    duz = "\n".join(ceviri_at(d["plainLyrics"].splitlines()))
+    metin = yapi.metin(yapi.coz(satirlar, sure, ad)) if satirlar else etiketle(duz, ad)
     return Soz(metin, "lrclib", sure, satirlar)
 
 

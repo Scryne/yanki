@@ -240,3 +240,11 @@ def test_kesitler_cakisan_ilk_kita_kisalir_nakarat_kalir():
 def test_kesitler_nakarat_yoksa_yalniz_ilk_kita_sozsuzse_bos():
     assert [x["kimlik"] for x in sozler.kesitler([[5.0, "a"], [9.0, "b"], [12.0, "a"]], None)] == ["ilk_kita"]
     assert sozler.kesitler([[3.0, "♪"], [8.0, ""]], 100.0) == []
+
+
+def test_lrclib_satir_sonu_cevirisi_atilir():
+    # BLACKPINK: "보란 듯이 무너졌어^It all crumbled spectacularly" — model çeviriyi de söylemeye çalışırdı
+    lrc = ("[00:10.00]보란 듯이 무너졌어^It all crumbled\n[00:14.00]바닥을 뚫고^Down to the bottom\n"
+           "[00:18.00]light up the sky")
+    assert [m for _, m in sozler.senkron(lrc)] == ["보란 듯이 무너졌어", "바닥을 뚫고", "light up the sky"]
+    assert sozler.ceviri_at(["a^b", "c", "d", "e"]) == ["a^b", "c", "d", "e"]  # tek tük ^: dokunulmaz
