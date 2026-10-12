@@ -211,3 +211,17 @@ Karar: ölçek 1 üretime bağlandı (`[motor] lora`). Dinleme: `calisma/dinleme
 Kapılar ve söz ölçüsü üç şarkıda da iyileşti, kulak yalnız İngilizce pop'u geçirdi. Sonuç: rap keşifte yeniden kapalı
 (`config/kesif.toml`); İngilizce dışı diller otomatik onayda zaten kapalı (`diller = ["en"]`). Rap ve İngilizce dışı dil
 için ölçü kulağı tutmuyor: söz WER'i düşük olsa da ses bozuk olabiliyor, bu türlerde karar dinlemeden verilmez.
+
+### S30 kör kulak testi (2026-10-12 gece, Scryne, dinleme odası → Karşılaştırma)
+
+Kollar şarkıdan şarkıya karışık A/B/C, oy verilene kadar adsız (yanki/kulak.py; oylar `calisma/dinleme/kulak.json`).
+
+| Set | Yeni model (LoRA, ölçek 1) en iyi | Eski model en iyi | Yarım ölçek en iyi | Hepsi kötü | Yayınlanabilir |
+|---|---|---|---|---|---|
+| 11 tür (eski / LoRA) | 8 | 0 | — | 3: afrobeats, UK drill, caz | 2: metal, country |
+| 6 balad/pop (0 / 0,5 / 1) | 5 | 0 | 0 | 1: Let Her Go | 2: When I Was Your Man, How to Save a Life |
+
+Cover görevinde eğitilen LoRA her şarkıda eskisini yeniyor ve tam ölçek yarımını yeniyor: uyarlama arttıkça iyi.
+Ama 17 şarkıdan 4'ü yayınlanabilir. Sonuç: dördüncü eğitim daha uzun (15 → 30 epoch, 20. epoch ara kayıt) ve kötü
+çıkan türlerden veriyle (95 → 123 şarkı: caz, blues, afrobeats, İngiliz rap/drill, reggae, metal, folk); aynı 17
+şarkıda kör testle karşılaştırılır (set `egitim-4`). Üretim bu sırada duraklatıldı (Scryne: "boş yere üretmesin").
