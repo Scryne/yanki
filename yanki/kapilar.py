@@ -128,10 +128,13 @@ def _model(ad: str):
 def dokum(yol: Path, dil: str = "en") -> str:
     # dosya yolu değil dizi: faster-whisper 1.2.1, PyAV 19'da kaldırılan bir argümanı kullanıyor
     model = _model("small.en" if dil == "en" else "small")
-    # temperature=0: varsayılan sıcaklık geri düşüşü (eşik tutmayınca rastgele örnekleme) aynı dosyada süreçten sürece
-    # 0,37 ile 0,73 arası söz WER'i veriyordu (blink-182, 2026-10-12); 0'da birebir aynı
-    parcalar, _ = model.transcribe(mono(yol, 16000), language=dil if dil in ACESTEP_DILLERI else None, beam_size=5,
-                                   temperature=0.0)
+    # Sıcaklık geri düşüşü (eşik tutmayınca örnekleme) tohumsuz rastgeleydi: aynı dosya süreçten sürece 0,37 ile 0,73
+    # (blink-182, 2026-10-12). Sıcaklık 0 belirli ama zor kayıtta tutunamıyor (Gasolina 1,0); sabit tohumla geri
+    # düşüş hem belirli hem kurtarıcı (0,51, iki çalıştırmada birebir).
+    import ctranslate2
+
+    ctranslate2.set_random_seed(0)
+    parcalar, _ = model.transcribe(mono(yol, 16000), language=dil if dil in ACESTEP_DILLERI else None, beam_size=5)
     return " ".join(p.text.strip() for p in parcalar)
 
 
