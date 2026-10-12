@@ -200,16 +200,17 @@ def _onarim_isleri(a: Ayarlar, calisma: Path, d: durum.Durum, pencere_bas: dict[
     return isler
 
 
-def _kapilardan_gecir(degerlendir: Callable[..., dict], tam: Path, kaynak: Path, soz: str, dil: str) -> dict:
+def _kapilardan_gecir(degerlendir: Callable[..., dict], tam: Path, kaynak: Path, soz: str, dil: str,
+                      orijinal_wer: float | None = None) -> dict:
     """Kapı ölçümü düşerse (Whisper, fpcalc, ffmpeg) aday düşmüş sayılır; saatlik koşunun geri kalanı sürer."""
     try:
-        return degerlendir(tam, kaynak, soz, dil)
+        return degerlendir(tam, kaynak, soz, dil, orijinal_wer)
     except Exception as e:  # noqa: BLE001
         return {"degerlendirme": {"gecti": False, "hata": f"{type(e).__name__}: {e}"}}
 
 
 def _aday_kur(k: Path, d: durum.Durum, plan, n: int, tohum: int, sonuclar: dict, degerlendir, kaynak: Path,
-              soz: str, dil: str) -> durum.Aday:
+              soz: str, dil: str, orijinal_wer: float | None = None) -> durum.Aday:
     rs = [sonuclar.get(f"{d.kimlik}|cover|{n}|{p.no}") for p in plan]
     aday = durum.Aday(n, "", tohum, stil=d.analiz["stil"])
     hatali = [f"parça {p.no}: {r.hata if r else 'üretilmedi'}" for p, r in zip(plan, rs, strict=True)
@@ -229,13 +230,13 @@ def _aday_kur(k: Path, d: durum.Durum, plan, n: int, tohum: int, sonuclar: dict,
         aday.kapilar = {"birlestirme": {"gecti": False, "hata": f"{type(e).__name__}: {e}"}}
         return aday
     aday.dosya = _goreli(k, tam)
-    aday.kapilar = _kapilardan_gecir(degerlendir, tam, kaynak, soz, dil)
+    aday.kapilar = _kapilardan_gecir(degerlendir, tam, kaynak, soz, dil, orijinal_wer)
     aday.gecti = kapilar.hepsi_gecti(aday.kapilar)
     return aday
 
 
 def _onarim_sonucu(k: Path, o: dict, r: motor.Sonuc, pencere_bas: float, degerlendir, kaynak: Path, soz: str,
-                   dil: str) -> dict:
+                   dil: str, orijinal_wer: float | None = None) -> dict:
     if not r.basari:
         return {"durum": "hata", "hata": r.hata}
     try:
@@ -243,7 +244,7 @@ def _onarim_sonucu(k: Path, o: dict, r: motor.Sonuc, pencere_bas: float, degerle
     except Exception as e:  # noqa: BLE001
         return {"durum": "hata", "hata": f"dikiş: {type(e).__name__}: {e}"}
     return {"durum": "hazir", "dosya": _goreli(k, tam),
-            "kapilar": _kapilardan_gecir(degerlendir, tam, kaynak, soz, dil)}
+            "kapilar": _kapilardan_gecir(degerlendir, tam, kaynak, soz, dil, orijinal_wer)}
 
 
 def _sonuclari_isle(calisma: Path, baslangic: str, yeni_adaylar: list[durum.Aday], onarimlar: dict[str, dict],
@@ -303,11 +304,12 @@ def _elle_stil(kok: Path) -> set[str]:
 def uret(a: Ayarlar, calisma: Path, kimlikler: list[str] | None = None,
          calistir: Callable[..., list[motor.Sonuc]] = motor.calistir,
          degerlendir: Callable[..., dict] | None = None, tek_parca_sn: float = TEK_PARCA_SN,
-         betimle: bool = False) -> list[durum.Durum]:
+         betimle: bool = False, orijinal_wer: Callable[..., float | None] | None = None) -> list[durum.Durum]:
     """`tek_parca_sn`: bundan kısa şarkı tek parça üretilir (evde 110 sn; kiralık GPU'da 480, `uzak.motor_sec`).
     `betimle`: betimi olmayan şarkının stili önce dinlenip betimden kurulur (yalnız kiralık GPU'da)."""
-    degerlendir = degerlendir or (lambda aday, kaynak, soz, dil="en":
-                                  kapilar.degerlendir(aday, kaynak, soz, a.fpcalc, dil=dil))
+    degerlendir = degerlendir or (lambda aday, kaynak, soz, dil="en", orijinal_wer=None:
+                                  kapilar.degerlendir(aday, kaynak, soz, a.fpcalc, dil=dil, orijinal_wer=orijinal_wer))
+    orijinal_wer = orijinal_wer or kapilar.orijinal_wer
     hedef = [d for d in durum.hepsi(calisma) if d.asama in ("analiz", "onarim")
              and (kimlikler is None or d.kimlik in kimlikler)]
     if not hedef:
@@ -382,10 +384,15 @@ def uret(a: Ayarlar, calisma: Path, kimlikler: list[str] | None = None,
             continue
         k = durum.klasor(calisma, d.kimlik)
         kaynak, soz, dil = k / d.kaynak["dosya"], _soz(calisma, d), d.analiz.get("dil", "en")
+        # göreli söz kapısı: orijinal kaydın söz WER'i şarkı başı bir kez ölçülür, analize yazılır
+        if "orijinal_wer" not in d.analiz:
+            analizler.setdefault(d.kimlik, {})["orijinal_wer"] = d.analiz["orijinal_wer"] = orijinal_wer(
+                kaynak, soz, dil)
+        owr = d.analiz.get("orijinal_wer")
         yeni_adaylar, onarimlar = [], {}
         if d.kimlik in planlar:
             plan, _, numaralar = planlar[d.kimlik]
-            yeni_adaylar = [_aday_kur(k, d, plan, n, tohum, sonuclar, degerlendir, kaynak, soz, dil)
+            yeni_adaylar = [_aday_kur(k, d, plan, n, tohum, sonuclar, degerlendir, kaynak, soz, dil, owr)
                             for n, tohum in numaralar]
         else:
             for aday in d.adaylar:
@@ -393,7 +400,7 @@ def uret(a: Ayarlar, calisma: Path, kimlikler: list[str] | None = None,
                     r = sonuclar.get(f"{d.kimlik}|onarim|{aday.no}|{o['id']}")
                     if o["durum"] == "bekliyor" and r is not None:
                         onarimlar[o["id"]] = _onarim_sonucu(k, o, r, pencere_bas[o["id"]], degerlendir, kaynak, soz,
-                                                            dil)
+                                                            dil, owr)
         sonuc.append(_sonuclari_isle(calisma, d.asama, yeni_adaylar, onarimlar, d.kimlik, notlar.get(d.kimlik),
                                      analizler.get(d.kimlik)))
     return sonuc

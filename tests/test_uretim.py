@@ -415,3 +415,23 @@ def test_cover_referansi_ve_ek_ayarlar_configten(tmp_path):
     _sarki(c, "varsayilan", 60)
     uretim.uret(_ayar(), c, ["varsayilan"], calistir=m, degerlendir=GECER)
     assert m.turlar[0][0].referans is None and m.turlar[0][0].ek == {}
+
+
+def test_orijinal_kaydin_soz_weri_bir_kez_olculur_ve_kapiya_gider(tmp_path):
+    c = tmp_path / "c"
+    _sarki(c, "rap", 60)
+    olculen, gelen = [], []
+
+    def degerlendir(aday, kaynak, soz, dil="en", orijinal_wer=None):
+        gelen.append(orijinal_wer)
+        return GECER()
+
+    uretim.uret(_ayar(), c, calistir=SahteMotor(), degerlendir=degerlendir,
+                orijinal_wer=lambda *a: olculen.append(a) or 0.49)
+    d = durum.oku(c, "rap")
+    assert d.analiz["orijinal_wer"] == 0.49 and gelen == [0.49, 0.49] and len(olculen) == 1
+    uretim.yeniden_uretime_al(d)
+    durum.yaz(c, d)
+    uretim.uret(_ayar(), c, calistir=SahteMotor(), degerlendir=degerlendir,
+                orijinal_wer=lambda *a: olculen.append(a) or 0.49)
+    assert len(olculen) == 1  # ikinci üretimde yeniden ölçülmez

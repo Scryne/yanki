@@ -28,3 +28,5 @@ def _whispersiz(monkeypatch):
     from yanki import kapilar
 
     monkeypatch.setattr(kapilar, "dil_tespit", lambda _yol: ("en", 0.99))
+    # göreli söz kapısının orijinal kayıt ölçümü (gerçekte Whisper, ~1 dk); testte ölçülmez (mutlak eşik)
+    monkeypatch.setattr(kapilar, "orijinal_wer", lambda *a, **k: None)

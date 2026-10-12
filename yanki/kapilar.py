@@ -5,9 +5,14 @@ Spike'ta otomatik kalite ölçüleri (Audiobox, perde, gürültülülük) Scryne
 
 | Kapı       | İyi cover        | Olmaz                                | Eşik    |
 | parmak_izi | 0,59–0,66        | orijinali taşıyan 0,74–0,93          | < 0,72  |
-| dalga      | 0,01–0,04        | orijinali taşıyan 0,41–0,90          | < 0,25  |
+| dalga      | 0,01–0,06        | orijinali taşıyan 0,41–0,90          | < 0,20  |
 | soz_wer    | 0,01–0,33        | sözsüz/anlamsız vokal 0,94–0,98      | < 0,50  |
 | sure_fark  | 0                | kesik/yanlış çıktı                   | ≤ 2 sn  |
+
+Dalga 300 Hz üstünde ölçülür (2026-10-12): cover kaynağın zamanlamasını izlediği için dört vuruşlu türde (EDM) kick
+ve bas orijinalinkiyle üst üste biniyor; tam bantta temiz bir cover 0,25–0,26 çıkıp düşüyordu (Avicii "Wake Me Up",
+300 Hz üstünde 0,03). Orijinali taşıyan çıktı her bantta yüksek: spike'taki referans örneği tam bant 0,445, 300 Hz
+üstü 0,449; orijinal + gürültü 0,95; temiz cover'lar 0,03–0,06.
 """
 
 import json
@@ -21,7 +26,19 @@ import numpy as np
 
 from yanki import ses
 
-ESIK = {"parmak_izi": 0.72, "dalga": 0.25, "soz_wer": 0.50, "sure_fark": 2.0}
+ESIK = {"parmak_izi": 0.72, "dalga": 0.20, "soz_wer": 0.50, "sure_fark": 2.0}
+DALGA_ALT_HZ = 300.0
+# Söz kapısı orijinal kayda göre (2026-10-12): Whisper orijinal kaydın kendisini de her türde aynı anlamıyor
+# (balad 0,06–0,16; Kendrick Lamar "HUMBLE." 0,49, Despacito 0,31). Rap cover'ı orijinal kadar anlaşılır (0,52) olduğu
+# halde mutlak 0,50 eşiğinden düşüyordu. Aday orijinalden en çok SOZ_PAYI kötü olabilir; anlamsız vokal (0,94–0,98)
+# her durumda düşer (SOZ_TAVAN).
+SOZ_PAYI, SOZ_TAVAN = 0.10, 0.80
+
+
+def soz_esigi(orijinal_wer: float | None) -> float:
+    if orijinal_wer is None:
+        return ESIK["soz_wer"]
+    return max(ESIK["soz_wer"], min(orijinal_wer + SOZ_PAYI, SOZ_TAVAN))
 
 
 @dataclass(frozen=True)
@@ -72,6 +89,13 @@ def dalga_korelasyonu(a: np.ndarray, b: np.ndarray, sr: int, en_fazla_kayma_sn: 
     k = int(en_fazla_kayma_sn * sr)
     pencere = np.concatenate([xc[: k + 1], xc[-k:]])
     return float(np.abs(pencere).max() / payda)
+
+
+def alcak_kes(x: np.ndarray, sr: int, hz: float = DALGA_ALT_HZ) -> np.ndarray:
+    """`hz` altını atar (FFT): kick ve bas zamanlaması dalga kapısına girmesin."""
+    X = np.fft.rfft(x)
+    X[np.fft.rfftfreq(len(x), 1 / sr) < hz] = 0
+    return np.fft.irfft(X, len(x)).astype(np.float32)
 
 
 def normalle(s: str) -> str:
@@ -138,17 +162,27 @@ def soz_wer(soz: str, dokum_metni: str) -> float:
     return 1.0 if not hyp else float(jiwer.wer(ref, hyp))
 
 
-def degerlendir(aday: Path, kaynak: Path, soz: str, fpcalc: Path, dokumcu=dokum, dil: str = "en"
-                ) -> dict[str, dict]:
+def degerlendir(aday: Path, kaynak: Path, soz: str, fpcalc: Path, dokumcu=dokum, dil: str = "en",
+                orijinal_wer: float | None = None) -> dict[str, dict]:
+    """`orijinal_wer`: orijinal kaydın söz WER'i (aynı söz, aynı Whisper); söz eşiği ona göre (`soz_esigi`)."""
     sr = 8000
     olc = {
         "parmak_izi": parmak_izi_benzerligi(parmak_izi(fpcalc, kaynak), parmak_izi(fpcalc, aday)),
-        "dalga": dalga_korelasyonu(mono(kaynak, sr), mono(aday, sr), sr),
+        "dalga": dalga_korelasyonu(alcak_kes(mono(kaynak, sr), sr), alcak_kes(mono(aday, sr), sr), sr),
         "soz_wer": soz_wer(soz, dokumcu(aday, dil)),
         "sure_fark": abs(ses.sure(aday) - ses.sure(kaynak)),
     }
-    return {ad: asdict(Olcum(round(d, 3), ESIK[ad], d < ESIK[ad] if ad != "sure_fark" else d <= ESIK[ad]))
+    esik = {**ESIK, "soz_wer": round(soz_esigi(orijinal_wer), 3)}
+    return {ad: asdict(Olcum(round(d, 3), esik[ad], d < esik[ad] if ad != "sure_fark" else d <= esik[ad]))
             for ad, d in olc.items()}
+
+
+def orijinal_wer(kaynak: Path, soz: str, dil: str = "en", dokumcu=dokum) -> float | None:
+    """Orijinal kaydın söz WER'i (göreli söz kapısı için; şarkı başı bir kez, CPU'da ~1 dk). Ölçülemezse None."""
+    try:
+        return round(soz_wer(soz, dokumcu(kaynak, dil)), 3)
+    except Exception:  # noqa: BLE001 — ölçülemezse mutlak eşik
+        return None
 
 
 def hepsi_gecti(kapilar: dict[str, dict]) -> bool:
