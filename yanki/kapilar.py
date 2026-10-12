@@ -153,13 +153,22 @@ def ingilizce_orani(soz: str) -> float | None:
     return sum(w in _INGILIZCE_SIK for w in kelimeler) / len(kelimeler) if kelimeler else None
 
 
-def soz_wer(soz: str, dokum_metni: str) -> float:
+# Kelimeler arasında boşluk olmayan diller: kelime hata oranı her satırı tek "kelime" sayıp hep ~1 çıkıyordu (YOASOBI
+# "Idol" orijinal kaydın kendisi 0,998, 2026-10-12). Bu dillerde karakter hata oranı.
+KARAKTER_DILLERI = frozenset({"ja", "zh", "yue", "th"})
+
+
+def soz_wer(soz: str, dokum_metni: str, dil: str = "en") -> float:
     import jiwer
 
     ref, hyp = normalle(soz), normalle(dokum_metni)
     if not ref:
         raise ValueError("referans söz boş")
-    return 1.0 if not hyp else float(jiwer.wer(ref, hyp))
+    if not hyp:
+        return 1.0
+    if dil in KARAKTER_DILLERI:
+        return float(jiwer.cer(ref.replace(" ", ""), hyp.replace(" ", "")))
+    return float(jiwer.wer(ref, hyp))
 
 
 def degerlendir(aday: Path, kaynak: Path, soz: str, fpcalc: Path, dokumcu=dokum, dil: str = "en",
@@ -169,7 +178,7 @@ def degerlendir(aday: Path, kaynak: Path, soz: str, fpcalc: Path, dokumcu=dokum,
     olc = {
         "parmak_izi": parmak_izi_benzerligi(parmak_izi(fpcalc, kaynak), parmak_izi(fpcalc, aday)),
         "dalga": dalga_korelasyonu(alcak_kes(mono(kaynak, sr), sr), alcak_kes(mono(aday, sr), sr), sr),
-        "soz_wer": soz_wer(soz, dokumcu(aday, dil)),
+        "soz_wer": soz_wer(soz, dokumcu(aday, dil), dil),
         "sure_fark": abs(ses.sure(aday) - ses.sure(kaynak)),
     }
     esik = {**ESIK, "soz_wer": round(soz_esigi(orijinal_wer), 3)}
@@ -180,7 +189,7 @@ def degerlendir(aday: Path, kaynak: Path, soz: str, fpcalc: Path, dokumcu=dokum,
 def orijinal_wer(kaynak: Path, soz: str, dil: str = "en", dokumcu=dokum) -> float | None:
     """Orijinal kaydın söz WER'i (göreli söz kapısı için; şarkı başı bir kez, CPU'da ~1 dk). Ölçülemezse None."""
     try:
-        return round(soz_wer(soz, dokumcu(kaynak, dil)), 3)
+        return round(soz_wer(soz, dokumcu(kaynak, dil), dil), 3)
     except Exception:  # noqa: BLE001 — ölçülemezse mutlak eşik
         return None
 

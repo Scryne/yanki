@@ -90,3 +90,11 @@ def test_soz_kapisi_orijinal_kayda_gore():
     assert kapilar.soz_esigi(None) == 0.50 and kapilar.soz_esigi(0.06) == 0.50
     assert kapilar.soz_esigi(0.49) == pytest.approx(0.59)
     assert kapilar.soz_esigi(0.95) == kapilar.SOZ_TAVAN  # anlamsız vokal her durumda düşer
+
+
+def test_bosluksuz_dilde_karakter_hata_orani():
+    # Japonca: kelime hata oranı satırı tek kelime sayıp ~1 çıkıyordu (orijinal kaydın kendisi 0,998)
+    ref = "[Verse 1]\n無敵の笑顔で荒らすメディア\n知りたいその秘密ミステリアス"
+    hyp = "無敵の笑顔で荒らすメディア 知りたいその秘密ミステリ"
+    assert kapilar.soz_wer(ref, hyp, "en") >= 0.5  # satır = kelime: tek harf eksiği bütün satırı yanlış sayar
+    assert kapilar.soz_wer(ref, hyp, "ja") < 0.1
