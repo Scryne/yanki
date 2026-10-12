@@ -709,4 +709,15 @@ baladına). Yüklenen 22 şarkıda beat: orijinalden döngüsel (+0,11), groove'
 - **Aday seçimi:** beat ölçüleri Scryne'ın seçimini tutmadı (rastgele düzeyi), söz WER 11/21 tuttu → seçim WER ile
   kalır; her adaya ACE-Step söz hizalama puanı yazılıyor (seçim ölçüsü olarak sınanacak).
 - **Eğitim yeniden (çok türlü):** 95 şarkı (balad + rap, R&B, EDM, rock, Latin, country, uptempo pop), stil pod'da
-  betimleyiciyle, sözler bölüm yapısıyla, dil sesten; deneme S20 şarkılarıyla. Sonuç: aşağıda.
+  betimleyiciyle, sözler bölüm yapısıyla, dil sesten. S28: beat'i kötüleştirdi (groove 0,24 → 0,21, döngüsellik
+  +0,04 → +0,14), bağlanmadı. Neden: Side-Step LoRA'yı metinden-müzik görevinde eğitiyor, üretim cover. →
+  **Cover görevi eğitimi** (`yanki/kapak_hazirla.py`): her örneğin cover kopyası (bağlam kendi kaynak kodlarından,
+  talimat ve söz biçimi üretimdeki gibi); yerel 2B turbo denemesiyle doğrulandı, A40'ta 15 epoch. Sonuç: aşağıda.
+- **Tüm türler (S29):** metal, punk, grunge, country, jazz, blues, reggae, reggaeton (İspanyolca), K-pop, afrobeats,
+  drill; 11 türün 10'u tek tohumla kapılardan geçti, keşifte açık. Kapalı: J-pop (LRCLIB'de Japonca söz yok),
+  denenmemiş türler (techno, trance, Brezilya, Hint, klasik…).
+- **Çok dilli söz güvenliği:** LRCLIB çeviri sürümü (Japonca seste İngilizce söz) ve satır sonu çevirisi
+  (`Korece^İngilizce`) yakalanır; boşluksuz dillerde (ja, zh, th) söz kapısı karakter hata oranıyla.
+- **Söz kapısı belirli:** Whisper'ın tohumsuz sıcaklık geri düşüşü aynı dosyaya 0,37–0,73 veriyordu; tohumlu.
+- **Aday önerisi:** en düşük WER'li iki aday arasından ACE-Step söz hizalaması yüksek olan (S27: Scryne'ın 21
+  seçiminden 14'ü; yalnız WER 11, rastgele 7). Aday sayısı 4.
