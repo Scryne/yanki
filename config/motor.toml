@@ -24,6 +24,15 @@ analiz_kesit_sn = 40
 # 0,18 → 0,24, fazladan döngüsellik +0,13 → +0,04, bölümler arası değişim 0,67 → 0,80 (1 = orijinal), kapılar aynı.
 # Eski stil sanatçının genel türüydü ("pop, funk song" bir piyano baladına).
 betim = true
+# Kendi LoRA'mız (yanki/egitim.py, kapak = true): 95 çok türlü şarkı, cover görevinde eğitildi (2026-10-12, 15 epoch).
+# Yalnız kiralık GPU'da (INT8 yerel motora bağdaştırıcı uygulanmıyor). Eğitimde olmayan şarkılarda, aynı tohum,
+# ölçek 0 → 1 (docs/arastirma/07, S30): balad/pop 6 şarkı groove 0,23 → 0,57, döngüsellik +0,04 → −0,16, bölüm
+# değişimi 0,82 → 0,98; 11 tür groove 0,30 → 0,58, dinamik izleme 0,53 → 0,79. Söz WER'i karışık: 17 şarkının 10'unda
+# düştü, 6'sında arttı (ortalama 0,104 → 0,120 balad, 0,388 → 0,374 tür). Çıktı orijinale biraz yaklaşıyor
+# (parmak izi en çok 0,69, dalga 0,16; kapılar aday başına süzüyor).
+# Önceki iki LoRA metinden-müzik görevinde eğitilmişti, cover'da beat'i kötüleştirdi (S28). Klasör gitignore'da.
+lora = "calisma/egitim/lora/20261012-0808/final"
+lora_olcek = 1.0
 
 [cover]
 gorev = "cover"

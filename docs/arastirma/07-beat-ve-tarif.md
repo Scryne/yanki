@@ -166,3 +166,35 @@ Whisper'ın sıcaklık geri düşüşü: eşik tutmayınca tohumsuz örnekleme. 
 Parmak izi 0,50–0,61, dalga ≤ 0,08: hiçbiri orijinali taşımıyor. Keşifte açıldı: metal, punk, grunge, country, jazz,
 blues, reggae, reggaeton/Latin, K-pop, afrobeats, drill. Hazırlıkta bulunan iki çok dilli söz açığı kapandı: LRCLIB
 çeviri sürümü (Japonca seste İngilizce söz) ve satır sonu çevirisi (`Korece^İngilizce`).
+
+## S30 — cover görevinde eğitilmiş LoRA (2026-10-12; üretime bağlandı)
+
+S28'in teşhisi: Side-Step metinden-müzik görevinde eğitiyor (bağlam sessizlik, başka talimat, dil başlıksız söz),
+üretim cover. `yanki/kapak_hazirla.py` her örneğin yanına bir cover kopyası yazar: hedef aynı kayıt, bağlam kaydın
+kendi anlamsal kodlarından (üretimdeki tokenize → detokenize), talimat ve söz biçimi üretimdeki gibi. 95 şarkı × 2
+tensör, 15 epoch, A40'ta 155 dk, 2,14 $. Değerlendirme eğitimde olmayan şarkılarla (deneme şarkılarının sanatçıları da
+eğitimde yok), aynı tohum, üretim tarifi (betim + bölüm yapısı), LoRA ölçeği dışında her şey aynı.
+
+Balad/pop (S20'nin 6 şarkısı; 18 çıktının 18'i kapıdan geçti):
+
+| Ölçek | groove | döngüsellik farkı | vurmalı | bölüm | dinamik izleme | aynılık (orijinal 0,834) | söz WER | parmak izi | dalga |
+|---|---|---|---|---|---|---|---|---|---|
+| 0 | 0,234 | +0,041 | ×1,35 | 0,82 | 0,63 | 0,955 | 0,104 | 0,545 | 0,038 |
+| 0,5 | 0,340 | −0,072 | ×1,34 | 0,86 | 0,74 | 0,934 | **0,094** | 0,584 | 0,073 |
+| 1 | **0,569** | **−0,164** | ×1,13 | **0,98** | **0,82** | **0,918** | 0,120 | 0,620 | 0,102 |
+
+11 tür (S29'un şarkıları; N = LoRA'sız, L = ölçek 1):
+
+| Kol | groove | döngüsellik farkı | vurmalı | bölüm | dinamik izleme | aynılık (orijinal 0,902) | söz WER | kapı |
+|---|---|---|---|---|---|---|---|---|
+| N | 0,300 | +0,073 | ×1,85 | 1,12 | 0,53 | 0,911 | 0,388 | 11/11 |
+| L | **0,583** | **−0,046** | **×1,38** | 1,31 | **0,79** | 0,927 | **0,374** | 10/11 (blues WER 0,70 > 0,50) |
+
+Groove 11 türün 10'unda arttı (metal 0,11 → 0,50, afrobeats 0,06 → 0,79, K-pop 0,05 → 0,67, country 0,13 → 0,69);
+dinamik izleme 11'inde. Beat orijinal kaydın ritmini ve bölüm dinamiğini izlemeye başladı: döngüsellik ilk kez
+orijinalin altında. Söz karışık: 17 şarkının 10'unda düştü, 6'sında arttı (Walking on Air 0,16 → 0,41, Doja 0,23 →
+0,45, B.B. King eşiği aştı); üretimde 4 aday ve kapı bunu süzer. Bedel: çıktı orijinale yaklaşıyor (parmak izi
+ortalama +0,06–0,08, en çok 0,687 / eşik 0,72; dalga en çok 0,158 / eşik 0,20); kapılar aday başına aynı.
+
+Karar: ölçek 1 üretime bağlandı (`[motor] lora`). Dinleme: `calisma/dinleme/lora/20261012-0808/` (lora_0 / 0,5 / 1),
+`calisma/dinleme/s29/` (N / L).

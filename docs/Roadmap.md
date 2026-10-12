@@ -712,7 +712,10 @@ baladına). Yüklenen 22 şarkıda beat: orijinalden döngüsel (+0,11), groove'
   betimleyiciyle, sözler bölüm yapısıyla, dil sesten. S28: beat'i kötüleştirdi (groove 0,24 → 0,21, döngüsellik
   +0,04 → +0,14), bağlanmadı. Neden: Side-Step LoRA'yı metinden-müzik görevinde eğitiyor, üretim cover. →
   **Cover görevi eğitimi** (`yanki/kapak_hazirla.py`): her örneğin cover kopyası (bağlam kendi kaynak kodlarından,
-  talimat ve söz biçimi üretimdeki gibi); yerel 2B turbo denemesiyle doğrulandı, A40'ta 15 epoch. Sonuç: aşağıda.
+  talimat ve söz biçimi üretimdeki gibi); yerel 2B turbo denemesiyle doğrulandı, A40'ta 15 epoch (2,14 $).
+  **S30: üretime bağlandı** (ölçek 1). Eğitimde olmayan şarkılarda groove balad 0,23 → 0,57, 11 tür 0,30 → 0,58;
+  döngüsellik ilk kez orijinalin altında; dinamik izleme 0,63 → 0,82 / 0,53 → 0,79. Söz WER karışık (17'nin 10'unda
+  düştü), çıktı orijinale biraz yaklaşıyor (parmak izi en çok 0,69 / eşik 0,72); kapılar aday başına süzüyor.
 - **Tüm türler (S29):** metal, punk, grunge, country, jazz, blues, reggae, reggaeton (İspanyolca), K-pop, afrobeats,
   drill; 11 türün 10'u tek tohumla kapılardan geçti, keşifte açık. Kapalı: J-pop (LRCLIB'de Japonca söz yok),
   denenmemiş türler (techno, trance, Brezilya, Hint, klasik…).

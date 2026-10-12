@@ -2,6 +2,7 @@
 ağ, GPU ve ffmpeg yok; pod sahte."""
 
 import json
+import re
 from dataclasses import replace
 from pathlib import Path
 
@@ -283,7 +284,7 @@ def test_lora_uretime_baglanir_yalniz_nicelemesiz_motorda(tmp_path):
     assert motor.lora_ayari(acik) == {"lora": str(lora), "lora_olcek": 0.7}
     assert motor.lora_ayari(acik, model="acestep-v15-turbo") == {}  # analiz modeline uygulanmaz
     assert motor.lora_ayari(replace(acik, motor=replace(acik.motor, niceleme="int8_weight_only"))) == {}
-    toml = (KOK / "config" / "motor.toml").read_text(encoding="utf-8").replace(
+    toml = re.sub(r"(?m)^lora = .*\n", "", (KOK / "config" / "motor.toml").read_text(encoding="utf-8")).replace(
         "[motor]\n", f'[motor]\nlora = "{tmp_path.as_posix()}/yok"\n', 1)
     (tmp_path / "motor.toml").write_text(toml, encoding="utf-8")
     with pytest.raises(ValueError, match="LoRA klasörü değil"):
