@@ -18,17 +18,27 @@ alpha = 128
 lr = 1e-4
 # ~95 şarkı + cover kopyaları (kapak = true): epoch başı ~9,5 dk (95 şarkı 286 sn, iki kat); 15 epoch ~2,4 saat.
 # 2026-10-12 öncesi 40 epoch yalnız metinden-müzik: S28'de cover üretimini kötüleştirdi (beat döngüsel, söz bulanık).
-epoch = 15
-kaydet_her = 5
+# 2026-10-12 gece (dördüncü eğitim): S30 kör testinde LoRA'lı kayıt 13 şarkının 13'ünde LoRA'sızı yendi, tam ölçek
+# yarımı 6'da 5 yendi (daha çok uyarlama daha iyi) ama 17'den 4'ü yayınlanabilir → 15 → 30 epoch, ara kayıt her 10'da;
+# 20. ve 30. epoch kör testte önceki (15) ile karşılaştırılır. Veri 95 → 123 (kötü çıkan türler).
+epoch = 30
+kaydet_her = 10
 # Eğitim kesiti (sn): ses ve söz aynı yerden kesilir (söz zaman damgasıyla), söz-ses kayması öğretilmesin
 en_uzun_sn = 240
 # Bu kadar sonra eğitim düşmüş sayılır, pod silinir
-zaman_asimi_saat = 6
+zaman_asimi_saat = 9  # 30 epoch × ~13 dk ≈ 6,6 saat
 # Eğitimden sonra karşılaştırmalı dinleme: bu şarkılar LoRA'sız ve LoRA'lı, aynı tohumla
 # S20'nin şarkıları (balad, orkestral rock, folk, dance-pop + rap, indie rock): beat ölçüleri onlarla karşılaştırılır
+# + S29'un 11 tür şarkısı (kaynakları calisma/_referans/): kör testin 17 şarkısı, önceki LoRA'nın çıktıları hazır
 deneme_sarkilari = ["bruno-mars-when-i-was-your-man", "coldplay-viva-la-vida", "passenger-let-her-go",
-                    "anise-k-walking-on-air", "the-fray-how-to-save-a-life", "christina-perri-jar-of-hearts"]
-deneme_olcekleri = [0.0, 0.5, 1.0]
+                    "anise-k-walking-on-air", "the-fray-how-to-save-a-life", "christina-perri-jar-of-hearts",
+                    "metallica-enter-sandman", "blink-182-all-the-small-things", "nirvana-smells-like-teen-spirit",
+                    "shania-twain-you-re-still-the-one", "frank-sinatra-fly-me-to-the-moon", "b-b-king-the-thrill-is-gone",
+                    "bob-marley-the-wailers-three-little-birds", "daddy-yankee-gasolina", "blackpink-how-you-like-that",
+                    "burna-boy-last-last", "central-cee-doja"]
+# LoRA'sız ve yarım ölçek önceki testte hiç kazanmadı: yalnız tam ölçek; ara kayıt 20. epoch
+deneme_olcekleri = [1.0]
+deneme_ara_kayitlar = [20]
 
 # ── veri: kadın vokal ──
 [[sarki]]
@@ -474,3 +484,125 @@ ad = "Happy"
 [[sarki]]
 sanatci = "BTS"
 ad = "Dynamite"
+
+# ── 2026-10-12 gece: kulak testinde kötü çıkan türler (S30 kör test: afrobeats, drill, caz "ikisi de kötü"; folk balad
+# Let Her Go kötü; rap Big Daddy Kane "bozuk"). Veride bu türlerden hiç ya da az örnek vardı. Deneme şarkılarının
+# sanatçıları (S20, S29) yok: model sınadığımız kayıtları ezberlemesin. Stil betimden.
+# ── veri: caz / vokal standart ──
+[[sarki]]
+sanatci = "Michael Bublé"
+ad = "Feeling Good"
+
+[[sarki]]
+sanatci = "Amy Winehouse"
+ad = "Back to Black"
+
+[[sarki]]
+sanatci = "Diana Krall"
+ad = "The Look of Love"
+
+[[sarki]]
+sanatci = "Gregory Porter"
+ad = "Liquid Spirit"
+
+[[sarki]]
+sanatci = "Laufey"
+ad = "From The Start"
+
+[[sarki]]
+sanatci = "Louis Armstrong"
+ad = "What a Wonderful World"
+
+# ── veri: blues ──
+[[sarki]]
+sanatci = "Gary Moore"
+ad = "Still Got the Blues"
+
+[[sarki]]
+sanatci = "John Lee Hooker"
+ad = "Boom Boom"
+
+# ── veri: afrobeats ──
+[[sarki]]
+sanatci = "Wizkid"
+ad = "Essence"
+
+[[sarki]]
+sanatci = "Rema"
+ad = "Calm Down"
+
+[[sarki]]
+sanatci = "Davido"
+ad = "FALL"
+
+[[sarki]]
+sanatci = "Tems"
+ad = "Free Mind"
+
+[[sarki]]
+sanatci = "CKay"
+ad = "love nwantiti (ah ah ah)"
+
+# ── veri: İngiliz rap / drill ──
+[[sarki]]
+sanatci = "Dave"
+ad = "Location"
+
+[[sarki]]
+sanatci = "Stormzy"
+ad = "Vossi Bop"
+
+[[sarki]]
+sanatci = "Pop Smoke"
+ad = "Dior"
+
+[[sarki]]
+sanatci = "Headie One"
+ad = "Ain't It Different"
+
+[[sarki]]
+sanatci = "Kendrick Lamar"
+ad = "HUMBLE."
+
+# ── veri: reggae ──
+[[sarki]]
+sanatci = "Damian Marley"
+ad = "Welcome to Jamrock"
+
+[[sarki]]
+sanatci = "UB40"
+ad = "Red Red Wine"
+
+[[sarki]]
+sanatci = "Chronixx"
+ad = "Skankin' Sweet"
+
+# ── veri: metal ──
+[[sarki]]
+sanatci = "System Of A Down"
+ad = "Chop Suey!"
+
+[[sarki]]
+sanatci = "Slipknot"
+ad = "Duality"
+
+# ── veri: akustik folk / balad ──
+[[sarki]]
+sanatci = "Vance Joy"
+ad = "Riptide"
+
+[[sarki]]
+sanatci = "Ben Howard"
+ad = "Keep Your Head Up"
+
+[[sarki]]
+sanatci = "George Ezra"
+ad = "Budapest"
+
+[[sarki]]
+sanatci = "Of Monsters and Men"
+ad = "Little Talks"
+
+[[sarki]]
+sanatci = "Tracy Chapman"
+ad = "Fast Car"

@@ -164,9 +164,10 @@ def main() -> int:
     dit = None
     yukleme_sn = None
     lora_olcek = None
+    yuklu_lora = None  # şu an takılı bağdaştırıcının yolu (işe özel LoRA: aynı işçide eğitimin ara kayıtları)
 
     def dit_hazirla():
-        nonlocal dit, yukleme_sn, lora_olcek, betimleyici
+        nonlocal dit, yukleme_sn, lora_olcek, betimleyici, yuklu_lora
         if dit is not None:
             return dit
         if betimleyici is not None:  # VRAM: betimleyici (~22 GB) DiT'ten önce bırakılır
@@ -197,6 +198,7 @@ def main() -> int:
                 raise ModelYok(f"LoRA yüklenemedi: {str(mesaj)[:500]}")
             lora_olcek = float(m.get("lora_olcek", 1.0))
             h.set_lora_scale(lora_olcek)
+            yuklu_lora = str(m["lora"])
         dit = h
         return dit
 
@@ -249,6 +251,17 @@ def main() -> int:
                 continue
             if gorev not in ("cover", "repaint", "puanla"):
                 raise ValueError(f"desteklenmeyen görev: {gorev}")
+            if i.get("lora") and i["lora"] != yuklu_lora:  # işe özel bağdaştırıcı: öncekini çıkar, bunu tak
+                if yuklu_lora:
+                    dit.unload_lora()
+                mesaj = dit.load_lora(str(i["lora"]))
+                if not str(mesaj).startswith("✅"):
+                    yuklu_lora = lora_olcek = None
+                    raise RuntimeError(f"LoRA yüklenemedi: {str(mesaj)[:300]}")
+                yuklu_lora, lora_olcek = str(i["lora"]), 1.0
+                dit.set_lora_scale(1.0)
+            if yuklu_lora:
+                kayit["lora"] = yuklu_lora
             if i.get("lora_olcek") is not None:
                 if lora_olcek is None:
                     raise ValueError("işe LoRA ölçeği verildi ama LoRA yüklü değil")

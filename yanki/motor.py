@@ -36,6 +36,8 @@ class Is:
     referans: str | None = None  # tını referansı (parçalı üretimde ilk parçanın çıktısı)
     # yüklü LoRA'nın bu işteki ölçeği (karşılaştırmalı dinleme: aynı işçide 0 / 0,5 / 1); None: motor ayarındaki ölçek
     lora_olcek: float | None = None
+    # işe özel LoRA (işçinin gördüğü yol): aynı işçide farklı bağdaştırıcılar (eğitimin ara kayıtları)
+    lora: str | None = None
     # aynı işçideki bir "betimle" işinin id'si: stil o betimden kurulur (motor_isci.betim_stili; önce dinle, sonra üret)
     stil_betimden: str | None = None
     puanlanan: str | None = None  # "puanla": puanlanacak hazır aday

@@ -41,6 +41,9 @@ SOZ_SONU_PAYI = 3.0  # kesitin son saniyelerinde başlayan satır yarım kalır:
 SONUS_SN = 2.0  # kesilen şarkının sonu yumuşak biter (ani kesik öğretilmesin)
 KAPAK_BETIGI = Path(__file__).with_name("kapak_hazirla.py")
 SOZ_BICIMI = "yapi-1"  # sözler yanki/yapi.py bölüm etiketleriyle (2026-10-12)
+# A40'ın saatlik fiyatına pay (ölçülen ~0,67 $): uzun eğitim, en kötü durumda (zaman aşımı) bakiyesi yetecek hesapta
+# başlar. Bakiye eğitim ortasında biterse RunPod pod'u kapatır, saatlerin emeği gider.
+SAATLIK_USD_PAYI = 0.75
 
 
 @dataclass(frozen=True)
@@ -56,6 +59,8 @@ class Ayar:
     zaman_asimi_saat: float = 6.0
     deneme_sarkilari: tuple[str, ...] = ()
     deneme_olcekleri: tuple[float, ...] = (0.0, 0.5, 1.0)
+    # son bağdaştırıcının yanında denenen ara kayıtlar (epoch; ölçek 1): kaç epoch'un iyi olduğunu kulak seçsin
+    deneme_ara_kayitlar: tuple[int, ...] = ()
     # örneklerin stili, eğitimden önce pod'da ACE-Step betimleyicisiyle (acestep-captioner) yazılır: üretim de betimden
     # stil kullandığı için (config/motor.toml [motor] betim) eğitim ile üretim aynı dili konuşur; listedeki stil yedek
     betim: bool = True
@@ -343,12 +348,15 @@ def deneme_kok(calisma: Path, kimlik: str) -> Path:
     return calisma if durum.oku(calisma, kimlik) is not None else calisma / REFERANS
 
 
-def deneme_isleri(a: Ayarlar, calisma: Path, ayar: Ayar, ses_yolu) -> list[tuple[motor.Is, durum.Durum, float]]:
-    """Karşılaştırmalı deneme: üretim tarifiyle (cover, güç, adım, ilk tohum) tek parça, her ölçek için bir iş.
-    `ses_yolu(yerel) → uzak yol`."""
+def deneme_isleri(a: Ayarlar, calisma: Path, ayar: Ayar, ses_yolu, ara: dict[int, str] | None = None,
+                  son: str | None = None) -> list[tuple[motor.Is, durum.Durum, float | str | None]]:
+    """Karşılaştırmalı deneme: üretim tarifiyle (cover, güç, adım, ilk tohum) tek parça, her ölçek için bir iş; `ara`
+    (epoch → pod'daki bağdaştırıcı) verilirse her ara kayıt için de bir iş (ölçek 1, kol `ep<N>`). `son`: son
+    bağdaştırıcının pod'daki yolu (ara kayıt varken işçi bağdaştırıcıları değiştirir). `ses_yolu(yerel) → uzak yol`.
+    Sıra: önce betimler, sonra bağdaştırıcı başına işler (işçi her bağdaştırıcıyı bir kez takar)."""
     from yanki import uretim
 
-    isler = []
+    isler, kollar = [], []
     for kimlik in ayar.deneme_sarkilari:
         kok = deneme_kok(calisma, kimlik)
         d = durum.oku(kok, kimlik)
@@ -359,20 +367,29 @@ def deneme_isleri(a: Ayarlar, calisma: Path, ayar: Ayar, ses_yolu) -> list[tuple
         if ayar.betim:  # üretim tarifi: stil şarkıyı dinleyen betimden (ölçek None: betim işi)
             betim = f"{kimlik}|betim"
             isler.append((motor.Is(id=betim, gorev="betimle", kaynak=ses_yolu(k / d.kaynak["dosya"])), d, None))
+        ortak = dict(gorev="cover", kaynak=ses_yolu(k / d.kaynak["dosya"]),
+                     soz=(k / d.soz["dosya"]).read_text(encoding="utf-8"), adim=a.cover.adim,
+                     tohum=a.cover.tohumlar[0], guc=a.cover.guc, stil_betimden=betim, **uretim._ortak(d))
         for olcek in ayar.deneme_olcekleri:
-            isler.append((motor.Is(id=f"{kimlik}|{olcek:g}", gorev="cover", kaynak=ses_yolu(k / d.kaynak["dosya"]),
-                                   cikti_klasor=f"{UZAK}/deneme/{kimlik}/{olcek:g}",
-                                   soz=(k / d.soz["dosya"]).read_text(encoding="utf-8"), adim=a.cover.adim,
-                                   tohum=a.cover.tohumlar[0], guc=a.cover.guc, lora_olcek=olcek,
-                                   stil_betimden=betim, **uretim._ortak(d)), d, olcek))
-    return isler
+            i = motor.Is(id=f"{kimlik}|{olcek:g}", cikti_klasor=f"{UZAK}/deneme/{kimlik}/{olcek:g}", lora_olcek=olcek,
+                         lora=son if ara else None, **ortak)
+            kollar.append((son or "", i, d, olcek))
+        for ep, yol in sorted((ara or {}).items()):
+            kollar.append((yol, motor.Is(id=f"{kimlik}|ep{ep}", cikti_klasor=f"{UZAK}/deneme/{kimlik}/ep{ep}",
+                                         lora_olcek=1.0, lora=yol, **ortak), d, f"ep{ep}"))
+    return isler + [(i, d, kol) for _, i, d, kol in sorted(kollar, key=lambda x: (x[0] != (son or ""), x[0]))]
 
 
 def egit(a: Ayarlar, ayar: Ayar, veri_tar: Path, bildir=print, pod_sinifi=runpod.Pod, kur=runpod.acestep_kur,
          bakiye=runpod.bakiye, kapat=runpod.kapat_artiklari, commit: str | None = None) -> Sonuc:
     """Kiralık GPU'da ön işleme + eğitim + karşılaştırmalı deneme. LoRA `calisma/egitim/lora/<zaman>/`'e iner."""
     kok, calisma = a.kok, a.kok / "calisma"
-    api = runpod.anahtar(kok, a.uzak.en_az_bakiye, bakiye)
+    # en kötü durumda (zaman aşımına kadar) bakiyesi yetecek hesap; yoksa en az bakiyeli kural (bütçe denetimi durdurur)
+    gereken = max(a.uzak.en_az_bakiye, ayar.zaman_asimi_saat * SAATLIK_USD_PAYI)
+    api = runpod.anahtar(kok, gereken, bakiye)
+    if bakiye(api) < gereken:
+        api = runpod.anahtar(kok, a.uzak.en_az_bakiye, bakiye)
+        bildir(f"uyarı: hiçbir hesapta {gereken:.1f} $ yok; eğitim bakiye biterse yarıda kalabilir")
     uzak.butce_kontrol(a, api, bakiye)
     if artik := [p for k in dict.fromkeys([api, *runpod.anahtarlar(kok)])
                  for p in kapat(k, calisma / ".runpod", POD_KAYIT, "egitim-")]:
@@ -429,7 +446,8 @@ def egit(a: Ayarlar, ayar: Ayar, veri_tar: Path, bildir=print, pod_sinifi=runpod
             if not (final / "adapter_config.json").exists():
                 raise runpod.RunPodHatasi(f"eğitim bitti ama son bağdaştırıcı inmedi: {liste_[:10]}")
             sonuc.lora = final
-            sonuc.deneme = _deneme(a, ayar, p, hedef, calisma, sonuc.dinleme, zaman_asimi, bildir)
+            sonuc.deneme = _deneme(a, ayar, p, hedef, calisma, sonuc.dinleme, zaman_asimi, bildir,
+                                   ara_kayitlar(liste_, ayar.deneme_ara_kayitlar))
     except Exception as e:
         kayit["hata"] = f"{type(e).__name__}: {str(e)[:300]}"
         raise
@@ -495,6 +513,17 @@ def _ornek_meta(veri: Path, ses_adi: str) -> dict:
         return {}
 
 
+def ara_kayitlar(dosyalar: list[str], epochlar) -> dict[int, str]:
+    """Side-Step'in ara kayıtları (`./checkpoints/epoch_<N>_loss_<x>/adapter_config.json`) → {epoch: pod'daki klasör};
+    yalnız istenen epoch'lar."""
+    bulunan = {}
+    for f in dosyalar:
+        m = re.search(r"checkpoints/(epoch_(\d+)_[^/]*)/adapter_config\.json$", f)
+        if m and int(m.group(2)) in epochlar:
+            bulunan[int(m.group(2))] = f"{UZAK}/cikti/checkpoints/{m.group(1)}"
+    return bulunan
+
+
 def kapak_komutu(ayar: Ayar) -> str:
     return (f"uv run python {UZAK}/kapak_hazirla.py {runpod.ACESTEP_DIZIN} {ayar.model} {UZAK}/tensor "
             f"{UZAK}/veri/dataset.json")
@@ -525,7 +554,8 @@ def rapor(sonuc: Sonuc, ornek: int, dusen: int) -> str:
         wer = (k.get("soz_wer") or {}).get("deger")
         pi = (k.get("parmak_izi") or {}).get("deger")
         gecti = all(v.get("gecti") for v in k.values()) if k and "hata" not in k else None
-        satirlar.append(f"| {x['ad']} | {x['olcek']:g} | {Path(x['dosya']).name if x.get('dosya') else '—'} | "
+        kol = x.get("kol") or format(x["olcek"], "g")
+        satirlar.append(f"| {x['ad']} | {kol} | {Path(x['dosya']).name if x.get('dosya') else '—'} | "
                         f"{wer if wer is not None else '—'} | {pi if pi is not None else '—'} | "
                         f"{'geçti' if gecti else 'düştü' if gecti is False else x.get('hata') or '—'} |")
     if sonuc.lora:
@@ -534,13 +564,13 @@ def rapor(sonuc: Sonuc, ornek: int, dusen: int) -> str:
 
 
 def _deneme(a: Ayarlar, ayar: Ayar, p, hedef: str, calisma: Path, dinleme: Path, zaman_asimi: float,
-            bildir) -> list[dict]:
+            bildir, ara: dict[int, str] | None = None) -> list[dict]:
     girdiler: dict[str, str] = {}
 
     def ses_yolu(yerel: Path) -> str:
         return girdiler.setdefault(str(yerel), f"{UZAK}/girdi/{len(girdiler)}{yerel.suffix}")
 
-    isler = deneme_isleri(a, calisma, ayar, ses_yolu)
+    isler = deneme_isleri(a, calisma, ayar, ses_yolu, ara, f"{UZAK}/cikti/final")
     if not isler:
         return []
     for yerel_yol, uzak_yol in girdiler.items():
@@ -562,13 +592,15 @@ def _deneme(a: Ayarlar, ayar: Ayar, p, hedef: str, calisma: Path, dinleme: Path,
         eslesen = next(((i, d, o) for i, d, o in isler if i.id == r.get("id")), None)
         if eslesen is None:
             continue
-        i, d, olcek = eslesen
-        if olcek is None:  # betim işi
+        i, d, kol = eslesen
+        if kol is None:  # betim işi
             continue
-        satir = {"kimlik": d.kimlik, "ad": d.ad, "olcek": olcek, "basari": bool(r.get("basari")),
-                 "hata": r.get("hata"), "sure_sn": r.get("sure_sn")}
+        ara_mi = isinstance(kol, str)  # "ep20": ara kayıt (ölçek 1)
+        satir = {"kimlik": d.kimlik, "ad": d.ad, "olcek": 1.0 if ara_mi else kol, "kol": kol if ara_mi else f"{kol:g}",
+                 "basari": bool(r.get("basari")), "hata": r.get("hata"), "sure_sn": r.get("sure_sn")}
         if r.get("basari") and r.get("cikti"):
-            satir["dosya"] = str(p.al(r["cikti"], dinleme / d.kimlik / f"lora_{olcek:g}.flac"))
+            ad = f"lora_{kol}.flac" if ara_mi else f"lora_{kol:g}.flac"
+            satir["dosya"] = str(p.al(r["cikti"], dinleme / d.kimlik / ad))
         sonuclar.append(satir)
     bildir(f"deneme: {sum(x['basari'] for x in sonuclar)}/{sum(o is not None for _, _, o in isler)} iş")
     return sonuclar

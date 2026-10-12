@@ -20,7 +20,10 @@ def test_gercek_egitim_ayari_okunur_ve_cover_sanatcisi_icermez():
     cover = {s.sanatci.casefold() for s in liste.yukle(KOK / "girdi" / "liste.toml")}
     assert len(sarkilar) >= egitim_en_az() and not {s.sanatci.casefold() for s in sarkilar} & cover
     assert len({s.sanatci for s in sarkilar}) == len(sarkilar)
-    assert ayar.model == "acestep-v15-xl-sft" and 0.0 in ayar.deneme_olcekleri
+    assert ayar.model == "acestep-v15-xl-sft" and ayar.deneme_olcekleri
+    # deneme şarkıları eğitimde yok (sınadığımız kaydı ezberlemesin); 2026-10-12'den beri karşılaştırma önceki
+    # LoRA'nın hazır çıktılarıyla (kör test), LoRA'sız kol yok
+    assert not {s.kimlik for s in sarkilar} & set(ayar.deneme_sarkilari)
 
 
 def egitim_en_az():
@@ -344,3 +347,29 @@ def test_betimi_olan_ornek_yeniden_betimlenmez(tmp_path):
     egitim.veri_betimle(None, egitim.Ayar(), Pod(), "/root/x", tmp_path, yerel, 60, bildir=lambda *_: None)
     caption = json.loads((veri / "dataset.json").read_text(encoding="utf-8"))["samples"][0]["caption"]
     assert caption == betim_stili(betim)
+
+
+def test_ara_kayit_denemesi_bagdastiricilari_gruplar():
+    # dördüncü eğitim: son bağdaştırıcı ve 20. epoch aynı işçide; işçi her bağdaştırıcıyı bir kez taksın
+    dosyalar = ["./final/adapter_config.json", "./checkpoints/epoch_10_loss_0.74/adapter_config.json",
+                "./checkpoints/epoch_20_loss_0.71/adapter_config.json"]
+    ara = egitim.ara_kayitlar(dosyalar, (20,))
+    assert ara == {20: f"{egitim.UZAK}/cikti/checkpoints/epoch_20_loss_0.71"}
+
+
+def test_deneme_isleri_ara_kayitla(tmp_path):
+    from dataclasses import replace
+
+    a = ayarlar.yukle()
+    c = tmp_path / "calisma"
+    for kimlik in ("a-b", "c-d"):
+        d = durum.Durum(kimlik, "A", "B", kaynak={"dosya": "kaynak.wav"}, soz={"dosya": "soz.txt"},
+                        analiz={"stil": "pop", "dil": "en"})
+        durum.yaz(c, d)
+        (c / kimlik / "soz.txt").write_text("la", encoding="utf-8")
+    ayar = replace(egitim.Ayar(), deneme_sarkilari=("a-b", "c-d"), deneme_olcekleri=(1.0,))
+    isler = egitim.deneme_isleri(a, c, ayar, str, {20: "/ep20"}, "/final")
+    assert [x[2] for x in isler] == [None, None, 1.0, 1.0, "ep20", "ep20"]  # betimler, son, ara kayıt
+    assert [x[0].lora for x in isler[2:]] == ["/final", "/final", "/ep20", "/ep20"]
+    # ara kayıt yokken işe özel LoRA verilmez (motor ayarındaki son bağdaştırıcı)
+    assert all(x[0].lora is None for x in egitim.deneme_isleri(a, c, ayar, str)[2:])
