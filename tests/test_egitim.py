@@ -212,7 +212,9 @@ def test_egitim_orkestrasyonu(tmp_path, monkeypatch):
     baslat = [k for k in p.komutlar if "nohup" in k]
     # önce eğitim verisi betimlenir (üretimle aynı stil dili), sonra ön işleme, eğitim, deneme
     assert "betim_is.json" in baslat[0] and ["--preprocess" in k for k in baslat[1:3]] == [True, False]
-    assert "motor_isci.py" in baslat[3]
+    # ön işlemeden sonra cover görevi tensörleri (üretim cover; Side-Step yalnız metinden-müzik öğretiyordu)
+    assert "kapak_hazirla.py" in baslat[2] and "--epochs" in baslat[3] and "motor_isci.py" in baslat[4]
+    assert p.gonderilen[str(egitim.KAPAK_BETIGI)] == f"{egitim.UZAK}/kapak_hazirla.py"
     ornekler = json.loads((veri / "dataset.json").read_text(encoding="utf-8"))["samples"]
     assert [o["caption"] for o in ornekler] == ["A punchy trap beat with 808s.", "eski b"]
     assert p.gonderilen[str(veri / "dataset.json")] == f"{egitim.UZAK}/veri/dataset.json"
@@ -316,3 +318,28 @@ def test_ornek_dili_sesten_belirsizse_sozden(tmp_path):
         raise RuntimeError("ses okunamadı")
 
     assert egitim.ornek_dili(ses, "x", bozuk) == "en"
+
+
+def test_betimi_olan_ornek_yeniden_betimlenmez(tmp_path):
+    # her eğitimde 95 şarkıyı yeniden dinlemek boşa para: betim örnek kaydında saklanır
+    from yanki.motor_isci import betim_stili
+
+    veri = egitim.veri_klasoru(tmp_path)
+    veri.mkdir(parents=True)
+    (veri / "dataset.json").write_text(json.dumps({"samples": [{"audio_path": "a.flac", "caption": "eski"}]}),
+                                       encoding="utf-8")
+    betim = "A punchy trap beat with deep 808s."
+    (veri / "a.json").write_text(json.dumps({"audio_path": "a.flac", "betim": betim}), encoding="utf-8")
+
+    class Pod:
+        def komut(self, *a, **k):
+            raise AssertionError("betimleyici çalıştırılmamalı")
+
+        def gonder(self, yerel, uzak_, zaman_asimi=900):
+            pass
+
+    yerel = tmp_path / "lora"
+    yerel.mkdir()
+    egitim.veri_betimle(None, egitim.Ayar(), Pod(), "/root/x", tmp_path, yerel, 60, bildir=lambda *_: None)
+    caption = json.loads((veri / "dataset.json").read_text(encoding="utf-8"))["samples"][0]["caption"]
+    assert caption == betim_stili(betim)

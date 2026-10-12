@@ -39,6 +39,7 @@ UZAK = f"{runpod.ACESTEP_DIZIN}/yanki_egitim"
 POD_AD, POD_KAYIT = "egitim-yanki", "acik_pod_egitim"
 SOZ_SONU_PAYI = 3.0  # kesitin son saniyelerinde başlayan satır yarım kalır: söze girmez
 SONUS_SN = 2.0  # kesilen şarkının sonu yumuşak biter (ani kesik öğretilmesin)
+KAPAK_BETIGI = Path(__file__).with_name("kapak_hazirla.py")
 SOZ_BICIMI = "yapi-1"  # sözler yanki/yapi.py bölüm etiketleriyle (2026-10-12)
 
 
@@ -58,6 +59,9 @@ class Ayar:
     # örneklerin stili, eğitimden önce pod'da ACE-Step betimleyicisiyle (acestep-captioner) yazılır: üretim de betimden
     # stil kullandığı için (config/motor.toml [motor] betim) eğitim ile üretim aynı dili konuşur; listedeki stil yedek
     betim: bool = True
+    # LoRA cover görevinde de öğrenir (yanki/kapak_hazirla.py): her örneğin yanına bağlamı kendi kaynak kodlarından,
+    # talimatı ve söz biçimi üretimdeki gibi bir kopyası. Side-Step yalnız metinden-müzik öğretiyordu; üretim cover.
+    kapak: bool = True
 
 
 @dataclass(frozen=True)
@@ -148,8 +152,9 @@ def ornek_hazirla(s: VeriSarki, ayar: Ayar, klasor: Path, lrclib=sozler.lrclib,
     ses_yolu, meta_yolu = klasor / f"{s.kimlik}.flac", klasor / f"{s.kimlik}.json"
     if ses_yolu.exists() and meta_yolu.exists():
         meta = json.loads(meta_yolu.read_text(encoding="utf-8"))
-        degisti = meta.get("caption") != s.stil  # stil metni düzeltildiyse ses yeniden inmez
-        meta["caption"] = s.stil
+        stil = meta.get("betim_stil") or s.stil  # betim (pod'da yazıldıysa) listedeki stilden önce
+        degisti = meta.get("caption") != stil  # stil metni düzeltildiyse ses yeniden inmez
+        meta["caption"] = stil
         if meta.get("soz_bicimi") != SOZ_BICIMI:  # eski biçimli söz (bölüm yapısından önce): yeniden kurulur
             soz = lrclib(s.sanatci, s.ad)
             tam = meta.get("tam_sn") or (soz.sure_sn if meta["duration"] >= ayar.en_uzun_sn - 1 else meta["duration"])
@@ -383,7 +388,11 @@ def egit(a: Ayarlar, ayar: Ayar, veri_tar: Path, bildir=print, pod_sinifi=runpod
                 t = time.time()
                 veri_betimle(a, ayar, p, hedef, kok, yerel, zaman_asimi, bildir)
                 sonuc.sureler["betim"] = round(time.time() - t)
-            for ad, komut in (("on_isleme", on_isleme_komutu(ayar)), ("egitim", egitim_komutu(ayar))):
+            adimlar = [("on_isleme", on_isleme_komutu(ayar))]
+            if ayar.kapak:
+                p.gonder(KAPAK_BETIGI, f"{UZAK}/kapak_hazirla.py")
+                adimlar.append(("kapak", kapak_komutu(ayar)))
+            for ad, komut in (*adimlar, ("egitim", egitim_komutu(ayar))):
                 t = time.time()
                 p.komut(arka_plan_betigi(hedef, komut, ad), tekrar=False)
                 kod = bekle(p, ad, zaman_asimi, bildir=bildir)
@@ -430,18 +439,27 @@ def veri_betimle(a: Ayarlar, ayar: Ayar, p, hedef: str, kok: Path, yerel: Path, 
 
     veri = veri_klasoru(kok)
     dataset = json.loads((veri / "dataset.json").read_text(encoding="utf-8"))
-    is_yolu = yerel / "betim_is.json"
-    dosya.json_yaz(is_yolu, {"motor": {"klasor": hedef, "model": ayar.model},
-                             "isler": [{"id": o["audio_path"], "gorev": "betimle",
-                                        "kaynak": f"{UZAK}/veri/{o['audio_path']}"} for o in dataset["samples"]]})
-    p.gonder(motor.ISCI, f"{UZAK}/motor_isci.py")
-    p.gonder(is_yolu, f"{UZAK}/betim_is.json")
-    p.komut(arka_plan_betigi(hedef, f"uv run python {UZAK}/motor_isci.py {UZAK}/betim_is.json {UZAK}/betim_sonuc.json",
-                             "betim"), tekrar=False)
-    bekle(p, "betim", zaman_asimi, aralik_sn=30, bildir=bildir)
-    ham = json.loads(p.komut(f"cat {UZAK}/betim_sonuc.json 2>/dev/null || echo '[]'") or "[]")
-    betimler = {r["id"]: r["analiz"]["betim"] for r in ham
+    betimler = {o["audio_path"]: b for o in dataset["samples"]
+                if (b := _ornek_meta(veri, o["audio_path"]).get("betim"))}  # önceki eğitimden (örnek kaydında)
+    eksik = [o for o in dataset["samples"] if o["audio_path"] not in betimler]
+    if eksik:
+        is_yolu = yerel / "betim_is.json"
+        dosya.json_yaz(is_yolu, {"motor": {"klasor": hedef, "model": ayar.model},
+                                 "isler": [{"id": o["audio_path"], "gorev": "betimle",
+                                            "kaynak": f"{UZAK}/veri/{o['audio_path']}"} for o in eksik]})
+        p.gonder(motor.ISCI, f"{UZAK}/motor_isci.py")
+        p.gonder(is_yolu, f"{UZAK}/betim_is.json")
+        p.komut(arka_plan_betigi(hedef, f"uv run python {UZAK}/motor_isci.py {UZAK}/betim_is.json "
+                                        f"{UZAK}/betim_sonuc.json", "betim"), tekrar=False)
+        bekle(p, "betim", zaman_asimi, aralik_sn=30, bildir=bildir)
+        ham = json.loads(p.komut(f"cat {UZAK}/betim_sonuc.json 2>/dev/null || echo '[]'") or "[]")
+        yeni = {r["id"]: r["analiz"]["betim"] for r in ham
                 if r.get("basari") and r.get("id") and (r.get("analiz") or {}).get("betim")}
+        for ad, b in yeni.items():  # örnek kaydına: sonraki eğitim yeniden betimlemez
+            meta = _ornek_meta(veri, ad)
+            if meta:
+                dosya.json_yaz(veri / (Path(ad).stem + ".json"), {**meta, "betim": b, "betim_stil": betim_stili(b)})
+        betimler.update(yeni)
     for o in dataset["samples"]:
         if o["audio_path"] in betimler:
             o["caption"] = betim_stili(betimler[o["audio_path"]])
@@ -457,6 +475,18 @@ def veri_betimle(a: Ayarlar, ayar: Ayar, p, hedef: str, kok: Path, yerel: Path, 
     if not betimler:
         raise runpod.RunPodHatasi("betimleyici hiçbir örneği betimleyemedi (eğitim listedeki stillerle yapılmasın)")
     return betimler
+
+
+def _ornek_meta(veri: Path, ses_adi: str) -> dict:
+    try:
+        return json.loads((veri / (Path(ses_adi).stem + ".json")).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
+def kapak_komutu(ayar: Ayar) -> str:
+    return (f"uv run python {UZAK}/kapak_hazirla.py {runpod.ACESTEP_DIZIN} {ayar.model} {UZAK}/tensor "
+            f"{UZAK}/veri/dataset.json")
 
 
 def kaydet(sonuc: Sonuc, ayar: Ayar, commit: str | None = None, ornek: int | None = None) -> None:

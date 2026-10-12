@@ -16,9 +16,10 @@ gpu = "NVIDIA A40"
 rank = 64
 alpha = 128
 lr = 1e-4
-# ~95 şarkı: epoch başı ~5 dk (48 şarkıda 158 sn); 40 epoch ~3,5 saat
-epoch = 40
-kaydet_her = 10
+# ~95 şarkı + cover kopyaları (kapak = true): epoch başı ~9,5 dk (95 şarkı 286 sn, iki kat); 15 epoch ~2,4 saat.
+# 2026-10-12 öncesi 40 epoch yalnız metinden-müzik: S28'de cover üretimini kötüleştirdi (beat döngüsel, söz bulanık).
+epoch = 15
+kaydet_her = 5
 # Eğitim kesiti (sn): ses ve söz aynı yerden kesilir (söz zaman damgasıyla), söz-ses kayması öğretilmesin
 en_uzun_sn = 240
 # Bu kadar sonra eğitim düşmüş sayılır, pod silinir
