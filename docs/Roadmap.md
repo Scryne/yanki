@@ -730,6 +730,11 @@ baladına). Yüklenen 22 şarkıda beat: orijinalden döngüsel (+0,11), groove'
   listeleri (balad, pop, rock, metal, pop-punk, country; 28 sorgu, rank ≥ 400 bin), yalnız İngilizce söz, Spotify'sız
   (12 saatte bir, Web API kilidinden bağımsız), Jev sorulmaz. Gece 10 şarkı. İlk gece 30 şarkı listeye girdi, ilk 8'i
   RunPod'da üretildi. Jev çağrısına 60 sn sınır (TypeSafe 20 dk asılı kaldı). Dağıtımcı Scryne'da.
+- **Ağ ve eğitim çakışması (2026-10-13):** ZIYARETCI Wi-Fi dışarıya yalnız 80/443 açıyordu; üç pod SSH'sız ~15'er dk
+  yandı (~0,6 $). Pod açılmadan önce port denemesi (`runpod.ssh_engeli`: github.com:22, portquiz.net:22100); kapalıysa
+  sunucu atlanır, günde bir bildirim. Popüler keşif eğitim verisindeki 14 sanatçıyı listeye almıştı, ikisi eğitimdeki
+  kaydın ta kendisi (Do I Wanna Know?, Californication): onlar üretilmez (`uretim.uretilecek`), keşif artık eğitim
+  sanatçısını almaz. Kalan 12 aynı-sanatçı şarkı (farklı kayıt) Scryne'ın kararında.
 - **Tüm türler (S29):** metal, punk, grunge, country, jazz, blues, reggae, reggaeton (İspanyolca), K-pop, afrobeats,
   drill; 11 türün 10'u tek tohumla kapılardan geçti, keşifte açık. Kapalı: J-pop (LRCLIB'de Japonca söz yok),
   denenmemiş türler (techno, trance, Brezilya, Hint, klasik…).
