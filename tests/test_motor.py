@@ -88,6 +88,20 @@ def test_sozsuz_is_reddedilir():
         motor.Is(id="a", gorev="cover", kaynak="k", cikti_klasor="c", stil="s", soz="  ", adim=8, tohum=1)
 
 
+def test_complete_parcalarla_talimat():
+    sys.path.insert(0, str(Path(motor.ISCI).parent))
+    from motor_isci import talimat
+
+    t = {"complete": "Complete the input track with {TRACK_CLASSES}:", "complete_default": "Complete the input track:",
+         "cover": "Generate audio semantic tokens based on the given conditions:"}
+    assert talimat(t, "complete", ["drums", "bass"]) == "Complete the input track with DRUMS | BASS:"
+    assert talimat(t, "complete", []) == "Complete the input track:"
+    assert talimat(t, "cover") == t["cover"]
+    i = motor.Is(id="a", gorev="complete", kaynak="v.wav", cikti_klasor="c", stil="s", soz="x", adim=64, tohum=1,
+                 parcalar=("drums", "bass"))
+    assert i.parcalar == ("drums", "bass")
+
+
 @pytest.mark.parametrize("bolge", [None, (5.0, 5.0), (-1.0, 3.0)])
 def test_repaint_bolge_ister(bolge):
     with pytest.raises(ValueError, match="bölge"):

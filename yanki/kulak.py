@@ -45,6 +45,14 @@ S20_S29 = ("bruno-mars-when-i-was-your-man", "coldplay-viva-la-vida", "passenger
            "daddy-yankee-gasolina", "blackpink-how-you-like-that", "burna-boy-last-last", "central-cee-doja")
 
 SETLER = (
+    Set("beat-1", "Beat · 17 şarkı",
+        "Aynı 17 şarkı, vokal hep şu anki modelin (ep20) vokali. Kollar: şu anki çıktı; aynı çıktının davul, bas ve "
+        "diğer parçaları orijinalin parçalarına göre yeniden karışmış hali; orijinalin vokalsiz eşliğinden ayrı "
+        "üretilmiş beat; vokalin üstüne baştan kurulmuş beat. Hepsi yayın mastering'inden geçti, aynı ses "
+        "yüksekliğinde.",
+        "dinleme/s32", {"A": "şu anki çıktı", "B": "parça parça ton eşleme",
+                        "E": "ayrı üretilen beat (orijinal eşlikten)", "C": "vokale baştan kurulan beat (complete)"},
+        sarkilar=S20_S29),
     Set("egitim-5", "Ek eğitim · 17 şarkı",
         "Aynı 17 şarkı. Şu an üretimdeki model (20 epoch) ile ondan devam eden eğitimin 6. ve 12. ek epoch'u "
         "(52 şarkı daha: 80'ler/90'lar/2000'ler rock, metal, country, caz, blues, reggae, afrobeats, K-pop, rap). "

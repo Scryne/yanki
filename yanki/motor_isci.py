@@ -5,10 +5,11 @@
 is.json:
   {"motor": {"klasor": ..., "model": ..., "niceleme": "int8_weight_only" | null, "cpu_offload": true,
               "lm_model": ..., "lm_backend": "pt", "lora": yol | null, "lora_olcek": 1.0},
-   "isler": [{"id", "gorev": "cover" | "repaint" | "anla" | "betimle", "kaynak", "cikti_klasor", "stil",
+   "isler": [{"id", "gorev": "cover" | "repaint" | "anla" | "betimle" | "complete", "kaynak", "cikti_klasor", "stil",
               "stil_betimden": betimle işinin id'si | null, "soz", "dil", "bpm", "ton",
               "guc", "adim", "tohum", "bolge": [bas, son] | null, "referans": yol | null,
-              "lora_olcek": 0–1 | null (işe özel; karşılaştırmalı dinleme), "ek": {GenerationParams alanı: değer}}]}
+              "lora_olcek": 0–1 | null (işe özel; karşılaştırmalı dinleme), "ek": {GenerationParams alanı: değer},
+              "parcalar": ["drums", "bass", …] (complete)}]}
 
 Model bir kez yüklenir, işler sırayla yapılır; her işin sonucu (başarı, hata, süre, VRAM tepe, çıktı dosyası)
 sonuc.json'a yazılır. Bir işin hatası diğerlerini durdurmaz.
@@ -30,6 +31,10 @@ tabanlı 11B, bf16 ~22 GB) kaynak sesi dinleyip tür, enstrümanlar, ritim, voka
 ilk "betimle" işinde indirilip yüklenir, betimle işleri bitince bellekten atılır. Cover/repaint işi
 `"stil_betimden": <betimle işinin id'si>` taşırsa stil o betimden kurulur (`betim_stili`): aynı pod'da önce dinlenir,
 sonra üretilir; betim düştüyse işin kendi "stil"i kullanılır. DiT yalnız cover/repaint/anla işi varsa yüklenir.
+
+"complete": kaynak tek bir parça (ör. cover'dan ayrılmış vokal), model üstüne `parcalar`ı (davul, bas, gitar …)
+kurar; talimat "Complete the input track with DRUMS | BASS:". Yalnız base/xl-base modelinde (ACE-Step Tutorial; S32).
+Süre kaynağa kilitli değil (cover/repaint gibi): kaynağın süresi verilir.
 """
 
 import json
@@ -126,6 +131,14 @@ def lora_adi(yol: str) -> str:
     """Bağdaştırıcının PEFT adı. ACE-Step varsayılan olarak klasör adını kullanır; Side-Step'in ara kayıtları
     `epoch_20_loss_0.7381` gibi nokta içerir ve PEFT bunu modül adı olarak reddeder (dördüncü eğitim, 2026-10-13)."""
     return re.sub(r"\W", "_", Path(str(yol).rstrip("/\\")).name) or "yanki"
+
+
+def talimat(talimatlar: dict, gorev: str, parcalar=None) -> str:
+    """Görevin DiT talimatı; complete'te eklenecek parçalarla (ACE-Step task_utils ile aynı biçim)."""
+    if gorev == "complete":
+        return (talimatlar["complete"].format(TRACK_CLASSES=" | ".join(x.upper() for x in parcalar))
+                if parcalar else talimatlar["complete_default"])
+    return talimatlar[gorev]
 
 
 class ModelYok(RuntimeError):
@@ -255,7 +268,7 @@ def main() -> int:
                 sonuclar.append(kayit)
                 yaz()
                 continue
-            if gorev not in ("cover", "repaint", "puanla"):
+            if gorev not in ("cover", "repaint", "puanla", "complete"):
                 raise ValueError(f"desteklenmeyen görev: {gorev}")
             if i.get("lora") and i["lora"] != yuklu_lora:  # işe özel bağdaştırıcı: öncekini çıkar, bunu tak
                 if yuklu_lora:
@@ -291,7 +304,7 @@ def main() -> int:
             gorev = "cover" if puanla else gorev
             params = GenerationParams(
                 task_type=gorev,
-                instruction=TASK_INSTRUCTIONS[gorev],
+                instruction=talimat(TASK_INSTRUCTIONS, gorev, i.get("parcalar")),
                 src_audio=i["kaynak"],
                 reference_audio=i.get("referans") or None,
                 caption=stil,
@@ -304,6 +317,7 @@ def main() -> int:
                 seed=int(i["tohum"]),
                 thinking=False,
                 **bolge,
+                **({"duration": round(sf.info(i["kaynak"]).duration, 2)} if gorev == "complete" else {}),
                 **i.get("ek", {}),
             )
             config = GenerationConfig(batch_size=1, use_random_seed=False, seeds=[int(i["tohum"])], audio_format="flac")

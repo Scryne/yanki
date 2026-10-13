@@ -21,7 +21,7 @@ ISCI = Path(__file__).with_name("motor_isci.py")
 @dataclass(frozen=True)
 class Is:
     id: str
-    gorev: str  # "cover" | "repaint" | "anla" | "betimle" | "puanla"
+    gorev: str  # "cover" | "repaint" | "anla" | "betimle" | "puanla" | "complete"
     kaynak: str
     cikti_klasor: str = ""
     stil: str = ""
@@ -43,16 +43,19 @@ class Is:
     puanlanan: str | None = None  # "puanla": puanlanacak hazır aday
     # ACE-Step GenerationParams'a olduğu gibi giden ek ayarlar (shift, guidance_scale, use_adg, sampler_mode …)
     ek: dict = field(default_factory=dict, hash=False)
+    # "complete": kaynağa (ör. ayrılmış vokal) eklenecek parçalar (ACE-Step TRACK_NAMES: drums, bass, guitar …);
+    # yalnız xl-base/base modelinde (S32)
+    parcalar: tuple[str, ...] = ()
 
     def __post_init__(self):
-        if self.gorev not in ("cover", "repaint", "anla", "betimle", "puanla"):
-            raise ValueError(f"görev cover, repaint, anla, betimle ya da puanla olmalı: {self.gorev}")
+        if self.gorev not in ("cover", "repaint", "anla", "betimle", "puanla", "complete"):
+            raise ValueError(f"görev cover, repaint, anla, betimle, puanla ya da complete olmalı: {self.gorev}")
         if self.gorev == "puanla" and not self.puanlanan:
             raise ValueError("puanla için puanlanan aday gerekli")
         if self.gorev in ("anla", "betimle"):
             return
         if self.adim <= 0 or not self.cikti_klasor:
-            raise ValueError("cover/repaint için adim ve cikti_klasor gerekli")
+            raise ValueError("cover/repaint/complete için adim ve cikti_klasor gerekli")
         if self.gorev == "repaint" and (self.bolge is None or not 0 <= self.bolge[0] < self.bolge[1]):
             raise ValueError(f"repaint için geçerli bir bölge gerekli: {self.bolge}")
         if not self.soz.strip():
