@@ -27,7 +27,9 @@ saatler = [8, 1]  # 08:00'den 01:00'e
 # Üretim açık mı. 2026-10-12'de kapatıldı (Scryne: "üretim dursun, boş yere üretmesin; öncelikli hedefimiz gerçekleşene
 # kadar bekleyelim"). 2026-10-13'te açıldı (Scryne: "üretimi yeniden aç ve çok kapsamlı olsun"): dördüncü eğitimle kör
 # testte yayınlanabilir 4/17 → 9/17 (docs/arastirma/07, S31). Deneyler (spikes, eğitim) bundan etkilenmez.
-uretim = true
+# 2026-10-13 akşam duraklatıldı: beşinci eğitim (tür verisi) ve kör testi bitene kadar; sıradaki şarkılar kazanan
+# modelle üretilsin, ep20 ile üretilip boşa harcanmasın (Scryne: "modeli en iyi hale getirmeliyiz").
+uretim = false
 # Sürekli koşu (\Yanki\Surekli, bilgisayar açıkken her 30 dk; Scryne 2026-10-10: "açıkken hep çalışsın").
 # Bir koşuda en çok kaç şarkı üretilsin: uzun üretim (şarkı başı ~30 dk) yüklemeyi ve yoklamayı saatlerce kilitlemesin
 uretim_sarki = 2

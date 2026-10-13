@@ -67,6 +67,9 @@ class Ayar:
     # LoRA cover görevinde de öğrenir (yanki/kapak_hazirla.py): her örneğin yanına bağlamı kendi kaynak kodlarından,
     # talimatı ve söz biçimi üretimdeki gibi bir kopyası. Side-Step yalnız metinden-müzik öğretiyordu; üretim cover.
     kapak: bool = True
+    # önceki bağdaştırıcıdan devam (kök göreli klasör, adapter_config.json + adapter_model.safetensors): yeni veriyle
+    # sıfırdan değil, üretimdekinden sürdürülür (S31: kayıp 20. epoch'tan sonra yatay; ucuz olan yeni veriyi eklemek)
+    devam: str = ""
 
 
 @dataclass(frozen=True)
@@ -330,9 +333,24 @@ def on_isleme_komutu(ayar: Ayar) -> str:
                           f"--tensor-output {UZAK}/tensor --max-duration {ayar.en_uzun_sn:g}")
 
 
+DEVAM_DOSYALARI = ("adapter_config.json", "adapter_model.safetensors")
+# Side-Step'in devam yüklemesi bağdaştırıcıyı yüklemiyor; pod'da `devam_yamasi.py` düzeltir (gerekçe orada)
+DEVAM_BETIGI = Path(__file__).with_name("devam_yamasi.py")
+
+
+def devam_yolu(kok: Path, ayar: Ayar) -> Path | None:
+    """Devam edilecek bağdaştırıcı klasörü; dosyaları eksikse hata (pod açılmadan, ücret işlemeden)."""
+    if not ayar.devam:
+        return None
+    yol = (kok / ayar.devam).resolve()
+    if eksik := [f for f in DEVAM_DOSYALARI if not (yol / f).is_file()]:
+        raise ValueError(f"egitim: devam klasöründe {', '.join(eksik)} yok: {yol}")
+    return yol
+
+
 def egitim_komutu(ayar: Ayar) -> str:
     # SFT: çıkarım kaydırması 1.0, 50 adım (Side-Step bunu bağdaştırıcıya üst veri olarak yazar; eğitimi etkilemez)
-    return sidestep(ayar, f"--epochs {ayar.epoch} "
+    return sidestep(ayar, (f"--resume-from {UZAK}/devam " if ayar.devam else "") + f"--epochs {ayar.epoch} "
                           f"--lr {ayar.lr:g} --rank {ayar.rank} --alpha {ayar.alpha} --save-every {ayar.kaydet_her} "
                           "--shift 1.0 --num-inference-steps 50 --gradient-checkpointing")
 
@@ -392,6 +410,7 @@ def egit(a: Ayarlar, ayar: Ayar, veri_tar: Path, bildir=print, pod_sinifi=runpod
          bakiye=runpod.bakiye, kapat=runpod.kapat_artiklari, commit: str | None = None) -> Sonuc:
     """Kiralık GPU'da ön işleme + eğitim + karşılaştırmalı deneme. LoRA `calisma/egitim/lora/<zaman>/`'e iner."""
     kok, calisma = a.kok, a.kok / "calisma"
+    devam = devam_yolu(kok, ayar)
     # en kötü durumda (zaman aşımına kadar) bakiyesi yetecek hesap; yoksa en az bakiyeli kural (bütçe denetimi durdurur)
     gereken = max(a.uzak.en_az_bakiye, ayar.zaman_asimi_saat * SAATLIK_USD_PAYI)
     api = runpod.anahtar(kok, gereken, bakiye)
@@ -416,6 +435,12 @@ def egit(a: Ayarlar, ayar: Ayar, veri_tar: Path, bildir=print, pod_sinifi=runpod
             hedef = kur(p, commit, (ayar.model,))
             sonuc.sureler["kurulum"] = round(time.time() - t)
             p.komut(f"mkdir -p {UZAK}/veri {UZAK}/girdi")
+            if devam is not None:
+                p.komut(f"mkdir -p {UZAK}/devam")
+                for f in DEVAM_DOSYALARI:
+                    p.gonder(devam / f, f"{UZAK}/devam/{f}")
+                p.gonder(DEVAM_BETIGI, f"{UZAK}/devam_yamasi.py")
+                bildir(p.komut(f"cd {hedef} && uv run python {UZAK}/devam_yamasi.py {hedef}").strip())
             t = time.time()
             p.gonder(veri_tar, f"{UZAK}/veri.tar", zaman_asimi=3600)
             p.komut(f"tar xf {UZAK}/veri.tar -C {UZAK}/veri && rm {UZAK}/veri.tar")

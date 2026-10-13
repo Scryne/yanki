@@ -266,6 +266,45 @@ def test_egitim_orkestrasyonu(tmp_path, monkeypatch):
     assert "lora_0" in egitim.rapor(s, 48, 2) or "lora_0.flac" in egitim.rapor(s, 48, 2)
 
 
+def test_egitim_onceki_bagdastiricidan_devam_eder(tmp_path, monkeypatch):
+    monkeypatch.setenv("RUNPOD_API_KEY", "x")
+    monkeypatch.setattr(egitim.time, "sleep", lambda _: None)
+    a = replace(ayarlar.yukle(), kok=tmp_path)
+    tar = tmp_path / "veri.tar"
+    tar.write_bytes(b"tar")
+    ayar = egitim.Ayar(betim=False, kapak=False, devam="lora/ep20")
+    with pytest.raises(ValueError, match="devam"):  # bağdaştırıcı yoksa pod açılmaz
+        egitim.egit(a, ayar, tar, bildir=lambda *_: None, pod_sinifi=pytest.fail)
+    for f in egitim.DEVAM_DOSYALARI:
+        (tmp_path / "lora" / "ep20").mkdir(parents=True, exist_ok=True)
+        (tmp_path / "lora" / "ep20" / f).write_text("x", encoding="utf-8")
+    egitim.egit(a, ayar, tar, bildir=lambda *_: None, pod_sinifi=_EgitimPodu,
+                kur=lambda p, cm, m: runpod.ACESTEP_DIZIN, bakiye=lambda _k: 10.0, kapat=lambda *x: [],
+                commit="ca1e85f")
+    p = _EgitimPodu.acilan[-1]
+    assert p.gonderilen[str(tmp_path / "lora" / "ep20" / "adapter_model.safetensors")] == \
+        f"{egitim.UZAK}/devam/adapter_model.safetensors"
+    yama = next(i for i, k in enumerate(p.komutlar) if "devam_yamasi.py" in k)
+    egit = next(i for i, k in enumerate(p.komutlar) if "--epochs" in k)
+    assert yama < egit and f"--resume-from {egitim.UZAK}/devam " in p.komutlar[egit]
+    assert "--resume-from" not in egitim.egitim_komutu(egitim.Ayar())
+
+
+def test_devam_yamasi_side_step_yuklemesini_degistirir(tmp_path):
+    from yanki import devam_yamasi
+
+    yol = tmp_path / devam_yamasi.DOSYA
+    yol.parent.mkdir(parents=True)
+    yol.write_text("def f():\n        if x:\n" + devam_yamasi.ESKI + "            y = 1\n", encoding="utf-8")
+    assert devam_yamasi.yamala(tmp_path) == "yama tamam" and devam_yamasi.yamala(tmp_path) == "zaten yamalı"
+    metin = yol.read_text(encoding="utf-8")
+    assert "set_peft_model_state_dict" in metin and "strict=False" not in metin
+    compile(metin, str(yol), "exec")
+    yol.write_text("degisti\n", encoding="utf-8")  # Side-Step değişirse sessiz geçmez
+    with pytest.raises(SystemExit, match="bulunamadı"):
+        devam_yamasi.yamala(tmp_path)
+
+
 def test_egitim_duserse_gunluk_iner_maliyet_yazilir(tmp_path, monkeypatch):
     monkeypatch.setenv("RUNPOD_API_KEY", "x")
     monkeypatch.setattr(egitim.time, "sleep", lambda _: None)
