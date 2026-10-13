@@ -219,9 +219,10 @@ class Pod:
         raise RunPodHatasi(f"pod {self.id} {self.bekleme_sn} sn içinde SSH'a açılmadı (son durum {son_durum}; "
                            f"son SSH hatası: {son_hata})")
 
-    # Evden pod'a yükleme bunun altındaysa (MB/s) pod bırakılır, `uzak.PodAcici` başka makine dener. 2026-10-13: 194.68.x
-    # makinesinde 0,28 MB/s (ACE-Step kurulumu da 11 dk); 3,8 GB eğitim verisi ~4 saat GPU boşta yanacaktı. 69.30.x'te
-    # aynı veri ~22 MB/s. Ölçü kurulumdan önce, küçük bir dosyayla (SSH el sıkışması dahil: eşik bilerek düşük).
+    # Evden pod'a yükleme bunun altındaysa (MB/s) pod bırakılır, `uzak.PodAcici` başka makine dener. 2026-10-13:
+    # 194.68.x makinesinde 0,28 MB/s (ACE-Step kurulumu da 11 dk); 3,8 GB eğitim verisi ~4 saat GPU boşta
+    # yanacaktı. 69.30.x'te aynı veri ~22 MB/s. Ölçü kurulumdan önce, küçük bir dosyayla (SSH el sıkışması dahil:
+    # eşik bilerek düşük).
     EN_AZ_YUKLEME_MBS = 2.0
     HIZ_OLCU_MB = 16
 
