@@ -14,10 +14,11 @@ dagitimci = ""
 etiket = ""
 
 [kapak]
-# "pinterest": şarkının moduna göre Pinterest görseli, insansız ve yazısız (yanki/pinterest.py; Scryne, 2026-10-10:
-# "üretilen kapağı istemiyorum"). "uretilen": dalga formundan tipografik kapak. Şarkı klasöründeki kapak_ozel.jpg
-# (elle seçilen) her zaman önce gelir. Beğenilmeyen kapak: yanki kapak <kimlik> --yeni
-kaynak = "pinterest"
+# "stok": şarkının moduna göre Unsplash/Pexels fotoğrafı, insansız ve yazısız, en az 3000 px, ticari kullanım lisanslı
+# (yanki/stok.py; .env → UNSPLASH_ACCESS_KEY ya da PEXELS_API_KEY). "pinterest": aynı sorguyla Pinterest görseli
+# (görselin hakkı paylaşanda değil; dağıtımcı şikâyette yayını kaldırabilir). "uretilen": dalga formundan tipografik
+# kapak. Şarkı klasöründeki kapak_ozel.jpg (elle seçilen) her zaman önce gelir. Beğenilmeyen: yanki kapak <kimlik> --yeni
+kaynak = "stok"
 
 [master]
 # Zincir (yanki/paket.py → master): 28 Hz alçak kesim (DC, uğultu) → ton eşleme → sabit kazanç → 4× aşırı örneklenmiş

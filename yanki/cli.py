@@ -1071,13 +1071,14 @@ def _yukle(args: argparse.Namespace) -> int:
 
 
 def _kapak(args: argparse.Namespace) -> int:
-    """Pinterest kapağı getir (`--yeni`: beğenilmeyeni değiştir); şarkı paketliyse paket yeni kapakla yenilenir.
-    Yüklenmiş şarkıya dokunmaz (dağıtımcıda kapak değişmez)."""
+    """Kapak getir (`config/yayin.toml` → `[kapak] kaynak`: stok ya da pinterest; `--yeni`: beğenilmeyeni değiştir);
+    şarkı paketliyse paket yeni kapakla yenilenir. Yüklenmiş şarkıya dokunmaz (dağıtımcıda kapak değişmez)."""
     import json
 
-    from yanki import pinterest
+    from yanki import pinterest, stok
 
     a = ayarlar.yukle()
+    kaynak_modul = stok if paket.yayin_ayarlari(a.kok / "config" / "yayin.toml").kapak == "stok" else pinterest
     calisma = a.kok / "calisma"
     kimlikler = args.kimlik or [d.kimlik for d in durum.hepsi(calisma) if d.asama == "paketlendi"]
     kod = 0
@@ -1088,16 +1089,17 @@ def _kapak(args: argparse.Namespace) -> int:
             kod = 1
             continue
         if (durum.klasor(calisma, kimlik) / "kapak_ozel.jpg").exists():
-            print(f"  {d.ad}: elle seçilmiş kapak_ozel.jpg var, o kullanılıyor (Pinterest'e bakılmadı)")
+            print(f"  {d.ad}: elle seçilmiş kapak_ozel.jpg var, o kullanılıyor (kapak aranmadı)")
             continue
         try:
-            pinterest.getir(calisma, d, yeni=args.yeni)
+            kaynak_modul.getir(calisma, d, yeni=args.yeni)
         except (OSError, LookupError, ValueError) as e:  # ağ, uygun görsel yok, bozuk görsel
             print(f"✗ {d.ad}: {e}")
             kod = 1
             continue
         k = json.loads((durum.klasor(calisma, kimlik) / "kapak_kaynak.json").read_text(encoding="utf-8"))
-        print(f"  {d.ad}: {k['boyut'][0]}×{k['boyut'][1]} — {k['aciklama']} ({k['pin']})")
+        print(f"  {d.ad}: {k['boyut'][0]}×{k['boyut'][1]} — {k.get('aciklama')} ({k.get('pin') or k.get('sayfa')})"
+              + (f", foto: {k['fotografci']}, {k['lisans']}" if k.get("lisans") else ""))
         if d.asama == "paketlendi":
             hatalar: list = []
             paket.paketle(calisma, a.kok / "config" / "yayin.toml", [kimlik], yeniden=True, hatalar=hatalar)

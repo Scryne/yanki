@@ -22,6 +22,7 @@ DESENLER = (
     "calisma/*/soz_zaman.json",
     "calisma/*/kapak_ozel.jpg",
     "calisma/*/kapak_pinterest.jpg",
+    "calisma/*/kapak_stok.jpg",
     "calisma/*/kapak_kaynak.json",
     "calisma/*/paket/metadata.json",
     "calisma/*/paket/YUKLE.md",

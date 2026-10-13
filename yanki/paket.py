@@ -51,7 +51,7 @@ class Yayin:
     lufs: float
     gercek_tepe: float
     ornekleme: int
-    kapak: str = "uretilen"  # "pinterest" (şarkının moduna göre görsel) | "uretilen" (dalga formundan tipografik)
+    kapak: str = "uretilen"  # "stok" (Unsplash/Pexels, lisanslı) | "pinterest" | "uretilen" (dalga formundan tipografik)
     # cover'ın frekans dengesi orijinal kayda yaklaştırılır (yanki/ton.py; referans mastering)
     ton_eslesme: bool = True
 
@@ -63,8 +63,8 @@ def yayin_ayarlari(yol: Path) -> Yayin:
     if y["dagitimci"] not in ("", "routenote", "distrokid", "tunearo"):
         raise ValueError(f"dagitimci tunearo, routenote, distrokid ya da boş olmalı: {y['dagitimci']}")
     kapak_kaynagi = d.get("kapak", {}).get("kaynak", "uretilen")
-    if kapak_kaynagi not in ("pinterest", "uretilen"):
-        raise ValueError(f"kapak.kaynak pinterest ya da uretilen olmalı: {kapak_kaynagi}")
+    if kapak_kaynagi not in ("stok", "pinterest", "uretilen"):
+        raise ValueError(f"kapak.kaynak stok, pinterest ya da uretilen olmalı: {kapak_kaynagi}")
     return Yayin(y["sanatci_adi"].strip(), y["dagitimci"], y.get("etiket", "").strip(), float(m["lufs"]),
                  float(m["gercek_tepe_dbtp"]), int(m["ornekleme"]), kapak_kaynagi, bool(m.get("ton_eslesme", True)))
 
@@ -278,7 +278,7 @@ def yukle_md(meta: dict, y: Yayin, dosyalar: dict[str, str]) -> str:
 def _kapak_notu(meta: dict) -> str:
     k = meta.get("kapak") or {}
     en, boy = k.get("ozgun_boyut") or (KAPAK_BOYUT, KAPAK_BOYUT)
-    if k.get("kaynak") in ("ozel", "pinterest") and min(en, boy) < KUCUK_KAPAK:
+    if k.get("kaynak") in ("ozel", "pinterest", "stok") and min(en, boy) < KUCUK_KAPAK:
         return f". **Dikkat:** özgün görsel {en}×{boy} px, {KAPAK_BOYUT}'e büyütüldü; bulanıksa dağıtımcı reddedebilir"
     return ""
 
@@ -466,6 +466,19 @@ def _paketle_bir(calisma: Path, d: durum.Durum, y: Yayin) -> durum.Durum:
     # üretilen. Görsel 3000×3000 kareye getirilir. Pinterest bulamazsa hata: şarkı onaylı kalır, sonraki koşu dener.
     if (ozel := k / "kapak_ozel.jpg").exists():
         kapak_bilgi = ozel_kapak(ozel, kapak_yolu)
+    elif y.kapak == "stok":
+        from yanki import olay, stok
+
+        yeni_secim = not (k / "kapak_stok.jpg").exists()
+        kapak_bilgi = {**ozel_kapak(stok.getir(calisma, d), kapak_yolu), "kaynak": "stok"}
+        kaynak = json.loads((k / "kapak_kaynak.json").read_text(encoding="utf-8"))
+        # lisans kaydı: hangi fotoğraf, kimin, hangi lisansla
+        kapak_bilgi.update({a: kaynak.get(a) for a in ("sayfa", "fotografci", "lisans")})
+        if yeni_secim:  # açıklama süzgeci her insanı/yazıyı yakalamayabilir: göz atılsın
+            olay.bildir(calisma, "kapak", f"kapak seçildi: {d.ad}",
+                        f"{kaynak.get('aciklama')} — {kaynak.get('fotografci')} ({kaynak.get('kaynak')}). "
+                        f"calisma/{d.kimlik}/kapak_stok.jpg. Beğenmezsen: yanki kapak {d.kimlik} --yeni",
+                        f"kapak:{d.kimlik}:{kaynak.get('stok_id')}")
     elif y.kapak == "pinterest":
         from yanki import olay, pinterest
 

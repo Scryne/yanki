@@ -123,7 +123,7 @@ def kapak_kaynagi(calisma: Path, kimlik: str) -> Path | None:
     dosyalar sayılmaz."""
     k = durum.klasor(calisma, kimlik)
     paketteki = sorted(x for x in (k / "paket").glob("*.jpg") if not x.name.startswith("."))
-    for yol in (*paketteki, k / "kapak_ozel.jpg", k / "kapak_pinterest.jpg"):
+    for yol in (*paketteki, k / "kapak_ozel.jpg", k / "kapak_stok.jpg", k / "kapak_pinterest.jpg"):
         if yol.is_file():
             return yol
     return None
@@ -324,8 +324,12 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None) -> FastA
 
     @app.post("/api/sarki/{kimlik}/kapak")
     def yeni_kapak(kimlik: str):
-        """Pinterest'ten başka kapak (öncekiler bir daha seçilmez); paketliyse paket yeni kapakla yenilenir."""
-        from yanki import paket, pinterest
+        """Başka kapak (stok ya da Pinterest, ayara göre; öncekiler bir daha seçilmez); paketliyse paket yeni kapakla
+        yenilenir."""
+        from yanki import paket, pinterest, stok
+
+        stokta = paket.yayin_ayarlari(a.kok / "config" / "yayin.toml").kapak == "stok"
+        modul, dosya_adi = (stok, "kapak_stok.jpg") if stokta else (pinterest, "kapak_pinterest.jpg")
 
         d = oku(kimlik)
         if d.asama not in ("uretildi", "onarim", "onaylandi", "paketlendi"):
@@ -336,9 +340,9 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None) -> FastA
             if not alindi:
                 raise HTTPException(409, "gece ya da gündüz koşusu sürüyor; bitince tekrar dene")
             try:
-                pinterest.getir(calisma, d, yeni=(durum.klasor(calisma, kimlik) / "kapak_pinterest.jpg").exists())
+                modul.getir(calisma, d, yeni=(durum.klasor(calisma, kimlik) / dosya_adi).exists())
             except (OSError, LookupError, ValueError) as e:
-                raise HTTPException(502, f"Pinterest'ten kapak alınamadı: {e}") from e
+                raise HTTPException(502, f"{'Stok fotoğraftan' if stokta else 'Pinterest’ten'} kapak alınamadı: {e}") from e
             if d.asama == "paketlendi":
                 hatalar: list = []
                 paket.paketle(calisma, a.kok / "config" / "yayin.toml", [kimlik], yeniden=True, hatalar=hatalar)
