@@ -661,3 +661,18 @@ def test_populer_listeye_ekleme_basligi(tmp_path):
     a = kesif.Aday("Adele", "Someone Like You", "deezer-populer:1", neden="populer", youtube_izlenme=5)
     kesif.listeye_yaz([a], yol)
     assert "popüler şarkılar" in yol.read_text(encoding="utf-8")
+
+
+def test_jev_karari_sure_sinirli():
+    # 2026-10-13 gecesi TypeSafe isteği 20 dakikadan uzun asılı kaldı; gece keşfi beklememeli
+    import threading
+
+    from yanki import yargi
+
+    assert yargi.sinirli(lambda: 5, 1) == 5
+    olay = threading.Event()
+    with pytest.raises(TimeoutError):
+        yargi.sinirli(olay.wait, 0.05)
+    olay.set()
+    with pytest.raises(ValueError):
+        yargi.sinirli(lambda: int("x"), 1)

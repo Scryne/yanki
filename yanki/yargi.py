@@ -91,6 +91,33 @@ class Yargic:
             close()
 
 
+SINIR_SN = 60  # bir kararın en çok süresi (SDK zaman aşımı + yeniden denemeler dahil)
+
+
+def sinirli(fn, sn: float = SINIR_SN):
+    """`fn()` en çok `sn` saniye: 2026-10-13 gecesi TypeSafe isteği SDK'nın 20 sn zaman aşımına rağmen 20 dakikadan
+    uzun ssl okumasında kaldı, gece keşfi (ve arkasındaki hazırlık/üretim) bekledi. Süre dolunca TimeoutError; asılı
+    istek arka planda (daemon) kalır, süreç kapanırken beklenmez."""
+    import threading
+
+    sonuc: dict = {}
+
+    def is_():
+        try:
+            sonuc["deger"] = fn()
+        except BaseException as e:  # noqa: BLE001 — çağırana taşınır
+            sonuc["hata"] = e
+
+    t = threading.Thread(target=is_, daemon=True)
+    t.start()
+    t.join(sn)
+    if t.is_alive():
+        raise TimeoutError(f"{sn:g} sn'de cevap gelmedi")
+    if "hata" in sonuc:
+        raise sonuc["hata"]
+    return sonuc["deger"]
+
+
 def ac(kok: Path | None = None) -> Yargic | None:
     k = anahtar(kok)
     return Yargic(k) if k else None

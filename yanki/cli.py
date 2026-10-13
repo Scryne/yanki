@@ -403,11 +403,11 @@ def _kesif(args: argparse.Namespace) -> int:
 
     olculecek = [x for x in tekil if not kesif.taze(x.olcum)]
     try:
-        yargic = yargi.ac(a.kok) if olculecek else None
+        yargic = yargi.ac(a.kok) if any(not x.populer for x in olculecek) else None
     except Exception as e:  # noqa: BLE001 — SDK yüklenemedi ya da istemci kurulamadı: regex yedeği
         print(f"TypeSafe istemcisi açılamadı: {e}")
         yargic = None
-    if olculecek and yargic is None:
+    if yargic is None and any(not x.populer for x in olculecek):
         print("TypeSafe yok (TYPESAFE_API_KEY): özgünlük kararı regex yedeğiyle (daha zayıf)")
     for x in olculecek:
         try:
@@ -415,10 +415,15 @@ def _kesif(args: argparse.Namespace) -> int:
         except Exception as e:  # noqa: BLE001 — YouTube araması düşerse aday kalır, talep boş
             print(f"  YouTube ölçülemedi ({x.sanatci} — {x.ad}): {e}")
             continue
-        if yargic and x.youtube_kanit:
+        # Popüler aday Deezer editörlerinin tür listelerinden: sanatçı gerçek, sızıntı/takma ad sorusu yok (regex).
+        # 2026-10-13 gecesi TypeSafe aday başına dakikalarca bekletti; 60 adaylık koşu bitmiyordu.
+        if yargic and x.youtube_kanit and not x.populer:
             try:  # Jev birincil karar; düşerse regex sonucu (talep_olc'de) kalır
-                x.ozgunluk = yargic.ozgunluk(x.sanatci, x.ad, x.youtube_kanit)
+                x.ozgunluk = yargi.sinirli(lambda x=x, y=yargic: y.ozgunluk(x.sanatci, x.ad, x.youtube_kanit))
                 x.sanatci_uyusuyor = x.ozgunluk["karar"]
+            except TimeoutError as e:  # servis asılı: bu koşuda bir daha sorulmaz, kalanlar regex yedeğiyle
+                print(f"  TypeSafe {e} ({x.sanatci} — {x.ad}); bu koşuda regex yedeği")
+                yargic = None
             except Exception as e:  # noqa: BLE001
                 print(f"  TypeSafe kararı alınamadı ({x.sanatci} — {x.ad}), regex yedeği: {e}")
         if x.sanatci_uyusuyor is True:
