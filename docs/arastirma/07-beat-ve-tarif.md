@@ -272,3 +272,27 @@ Kör test (set `egitim-5`, aynı 17 şarkı ve tohum; ep20 / ek 6 epoch / ek 12 
 a Life, Doja), ek6 1 (Last Last), hepsi kötü 1 (Let Her Go). Yayınlanabilir 10/17 (9'u ep20). Ek eğitim kazanmadı,
 **ep20 üretimde kalır**. Scryne: "vokal şu anlık okey, beat tarafı hâlâ eksik ve kötü": ince/güçsüz, bas zayıf,
 enstrüman eksik, ritim yanlış, hepsi aynı. Aynı tek-geçişli cover üstüne daha fazla eğitim beat'i düzeltmiyor → S32.
+
+## S32 — beat'i ayrı ele almak (2026-10-14; `spikes/s32_*`)
+
+**Ölçüm (Demucs htdemucs, 17 şarkı, ep20 − orijinal, parça seviyesi vokale göre):** bas medyan −4,1 dB (13/17
+düşük), diğer enstrümanlar −2,6 dB (13/17), davul −0,7 dB. Baladlarda tersine orijinalde olmayan davul ve bas
+ekleniyor (When I Was Your Man +18/+24 dB, Jar of Hearts +38/+41 dB) ve bu davulun vuruşu boğuk (crest −6,9 dB).
+Kulağın "ince, bas zayıf" teşhisi ölçüde de var.
+
+**Kollar (hepsi ep20 vokaliyle, yayın mastering'inden geçmiş, −14 LUFS):** A şu anki çıktı · B parça parça ton
+eşleme (Demucs parçaları orijinalin parçalarına göre EQ + seviye; arkadaşın yapımcı isteminin otomatik hali) · E
+orijinalin vokalsiz eşliğinin enstrümantal cover'ı (xl-sft + ep20, 0,47 $) + ep20 vokali · C ep20 vokali üstüne
+xl-base `complete` (0,30 $; işçiye `complete` görevi eklendi). Araştırma: SFT-stems checkpoint'i yayımlanmamış,
+`lego`/`complete` yalnız base/xl-base'de.
+
+| Kol | Kapılar | Söz WER medyan | Parmak izi en çok (eşik 0,72) |
+|---|---|---|---|
+| A | 15/17 | 0,195 | 0,684 |
+| B | 14/17 | 0,294 | 0,683 |
+| E | 10/17 | 0,375 | 0,692 |
+| C | 15/17 | 0,238 | **0,640** |
+
+Sızıntı yok (orijinal eşlikten üretilen E bile eşiğin altında). Eşlik yükseldikçe Whisper vokali daha az anlıyor
+(B, E): söz WER'i burada "vokal gömüldü mü" uyarısı, kalite ölçüsü değil. C orijinalden en uzak (parmak izi en
+düşük): beat vokalden yeniden kuruluyor. Karar kör testte (set `beat-1`).

@@ -88,6 +88,7 @@ def olc(klasor: Path) -> dict:
 
 
 def main() -> None:
+    sys.stdout.reconfigure(encoding="utf-8")
     cihaz = "cpu" if "--cpu" in sys.argv else "cuda"
     set_ = kulak.setler()["egitim-5"]
     sonuc = {}
