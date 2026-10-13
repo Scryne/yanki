@@ -36,6 +36,7 @@ class Set:
 
 
 DORDUNCU = "dinleme/lora/20261012-1702"  # dördüncü eğitim (30 epoch, 123 şarkı): son bağdaştırıcı ve 20. epoch
+BESINCI = "dinleme/lora/20261013-1816"  # beşinci eğitim (ep20'den 12 epoch, 52 şarkı daha): son ve 6. epoch
 S20_S29 = ("bruno-mars-when-i-was-your-man", "coldplay-viva-la-vida", "passenger-let-her-go", "anise-k-walking-on-air",
            "the-fray-how-to-save-a-life", "christina-perri-jar-of-hearts", "metallica-enter-sandman",
            "blink-182-all-the-small-things", "nirvana-smells-like-teen-spirit", "shania-twain-you-re-still-the-one",
@@ -44,6 +45,14 @@ S20_S29 = ("bruno-mars-when-i-was-your-man", "coldplay-viva-la-vida", "passenger
            "daddy-yankee-gasolina", "blackpink-how-you-like-that", "burna-boy-last-last", "central-cee-doja")
 
 SETLER = (
+    Set("egitim-5", "Ek eğitim · 17 şarkı",
+        "Aynı 17 şarkı. Şu an üretimdeki model (20 epoch) ile ondan devam eden eğitimin 6. ve 12. ek epoch'u "
+        "(52 şarkı daha: 80'ler/90'lar/2000'ler rock, metal, country, caz, blues, reggae, afrobeats, K-pop, rap). "
+        "Aynı tohum ve tarif.",
+        "", {"ep20": "şu anki model (20 epoch)", "ek6": "ek eğitim, 6 epoch", "ek12": "ek eğitim, 12 epoch"},
+        sarkilar=S20_S29,
+        yollar={"ep20": (f"{DORDUNCU}/{{sarki}}/lora_ep20.flac",), "ek6": (f"{BESINCI}/{{sarki}}/lora_ep6.flac",),
+                "ek12": (f"{BESINCI}/{{sarki}}/lora_1.flac",)}),
     Set("egitim-4", "Daha uzun eğitim · 17 şarkı",
         "Aynı 17 şarkı. Şu an üretimdeki model (15 epoch, 95 şarkı) ile yeni eğitimin 20. ve 30. epoch'u (123 "
         "şarkı; caz, blues, afrobeats, drill, reggae, metal, folk eklendi). Aynı tohum ve tarif.",
