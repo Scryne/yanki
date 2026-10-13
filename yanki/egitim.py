@@ -46,6 +46,10 @@ SOZ_BICIMI = "yapi-1"  # sözler yanki/yapi.py bölüm etiketleriyle (2026-10-12
 SAATLIK_USD_PAYI = 0.75
 
 
+class YoutubeEngeli(RuntimeError):
+    pass
+
+
 @dataclass(frozen=True)
 class Ayar:
     model: str = "acestep-v15-xl-sft"
@@ -267,7 +271,11 @@ def veri_hazirla(kok: Path, ayar: Ayar, sarkilar: list[VeriSarki], bildir=print,
         try:
             ornekler.append(ornek_hazirla(s, ayar, klasor, **bagimlilik))
             bildir(f"  ✓ {s.sanatci} — {s.ad} ({ornekler[-1]['duration']:.0f} sn)")
-        except (LookupError, OSError, ValueError, subprocess.SubprocessError) as e:
+        except Exception as e:  # noqa: BLE001 — yt-dlp DownloadError da (kaldırılmış video tek şarkıyı düşürür)
+            # YouTube IP'yi bot sayınca (2026-10-13 akşam) her şarkı düşerdi: veri yarım kalmasın, hazırlık dursun
+            if "not a bot" in str(e):
+                raise YoutubeEngeli(f"YouTube bu IP'yi bot sayıyor; {len(ornekler)} örnek hazır, kalanı engel "
+                                    "kalkınca (önbellekteki şarkılar yeniden inmez)") from e
             dusen.append((s, f"{type(e).__name__}: {e}"))
             bildir(f"  ✗ {s.sanatci} — {s.ad}: {e}")
     dosya.json_yaz(klasor / "dataset.json", {

@@ -21,12 +21,19 @@ lr = 1e-4
 # 2026-10-12 gece (dördüncü eğitim): S30 kör testinde LoRA'lı kayıt 13 şarkının 13'ünde LoRA'sızı yendi, tam ölçek
 # yarımı 6'da 5 yendi (daha çok uyarlama daha iyi) ama 17'den 4'ü yayınlanabilir → 15 → 30 epoch, ara kayıt her 10'da;
 # 20. ve 30. epoch kör testte önceki (15) ile karşılaştırılır. Veri 95 → 123 (kötü çıkan türler).
-epoch = 30
-kaydet_her = 10
+# 2026-10-13 (beşinci eğitim; Scryne: "modeli en iyi hale getirmeliyiz, şarkı türlerini daha çok eğitmemiz lazım"):
+# S31'de kayıp 20. epoch'tan sonra yatay, ep20 = ep30 → aynı veriyle uzatmak değil, veri eklemek. Üretimdeki ep20'den
+# devam (devam; Side-Step'in devam yüklemesi yamalı, yanki/devam_yamasi.py), 123 → ~178 şarkı: keşfin hedef türleri
+# (80'ler pop-rock/power ballad, 90'lar alternatif/grunge, 2000'ler pop-punk/emo, metal, country; veri neredeyse hep
+# 2010 sonrasıydı, liste 80'ler/90'lar şarkılarıyla dolu) + kapalı türler (caz, blues, reggae, afrobeats, K-pop, rap).
+# 12 epoch, ara kayıt 6: kör testte ep20 ile karşılaştırılır; yenemezse ep20 üretimde kalır.
+devam = "calisma/egitim/lora/20261012-1702/checkpoints/epoch_20_loss_0.7381"
+epoch = 12
+kaydet_her = 6
 # Eğitim kesiti (sn): ses ve söz aynı yerden kesilir (söz zaman damgasıyla), söz-ses kayması öğretilmesin
 en_uzun_sn = 240
 # Bu kadar sonra eğitim düşmüş sayılır, pod silinir
-zaman_asimi_saat = 9  # 30 epoch × ~13 dk ≈ 6,6 saat
+zaman_asimi_saat = 6  # 12 epoch × ~19 dk (178 şarkı) ≈ 3,9 saat
 # Eğitimden sonra karşılaştırmalı dinleme: bu şarkılar LoRA'sız ve LoRA'lı, aynı tohumla
 # S20'nin şarkıları (balad, orkestral rock, folk, dance-pop + rap, indie rock): beat ölçüleri onlarla karşılaştırılır
 # + S29'un 11 tür şarkısı (kaynakları calisma/_referans/): kör testin 17 şarkısı, önceki LoRA'nın çıktıları hazır
@@ -38,7 +45,7 @@ deneme_sarkilari = ["bruno-mars-when-i-was-your-man", "coldplay-viva-la-vida", "
                     "burna-boy-last-last", "central-cee-doja"]
 # LoRA'sız ve yarım ölçek önceki testte hiç kazanmadı: yalnız tam ölçek; ara kayıt 20. epoch
 deneme_olcekleri = [1.0]
-deneme_ara_kayitlar = [20]
+deneme_ara_kayitlar = [6]
 
 # ── veri: kadın vokal ──
 [[sarki]]
@@ -606,3 +613,223 @@ ad = "Little Talks"
 [[sarki]]
 sanatci = "Tracy Chapman"
 ad = "Fast Car"
+
+# ── 2026-10-13 beşinci eğitim: keşfin hedef türleri ve kapalı türler (stil betimden) ──
+# ── veri: 80'ler pop-rock / power ballad ──
+[[sarki]]
+sanatci = "Toto"
+ad = "Africa"
+
+[[sarki]]
+sanatci = "Journey"
+ad = "Don't Stop Believin'"
+
+[[sarki]]
+sanatci = "Survivor"
+ad = "Eye of the Tiger"
+
+[[sarki]]
+sanatci = "Heart"
+ad = "Alone"
+
+[[sarki]]
+sanatci = "Foreigner"
+ad = "I Want to Know What Love Is"
+
+[[sarki]]
+sanatci = "Tears for Fears"
+ad = "Everybody Wants to Rule the World"
+
+[[sarki]]
+sanatci = "Def Leppard"
+ad = "Pour Some Sugar on Me"
+
+[[sarki]]
+sanatci = "Phil Collins"
+ad = "In the Air Tonight"
+
+# ── veri: 90'lar alternatif / grunge ──
+[[sarki]]
+sanatci = "Pearl Jam"
+ad = "Alive"
+
+[[sarki]]
+sanatci = "Soundgarden"
+ad = "Black Hole Sun"
+
+[[sarki]]
+sanatci = "Alice In Chains"
+ad = "Man in the Box"
+
+[[sarki]]
+sanatci = "Stone Temple Pilots"
+ad = "Interstate Love Song"
+
+[[sarki]]
+sanatci = "The Cranberries"
+ad = "Zombie"
+
+[[sarki]]
+sanatci = "Oasis"
+ad = "Wonderwall"
+
+[[sarki]]
+sanatci = "Goo Goo Dolls"
+ad = "Iris"
+
+# ── veri: 2000'ler pop-punk / emo / rock ──
+[[sarki]]
+sanatci = "Fall Out Boy"
+ad = "Sugar, We're Goin Down"
+
+[[sarki]]
+sanatci = "My Chemical Romance"
+ad = "Welcome to the Black Parade"
+
+[[sarki]]
+sanatci = "Simple Plan"
+ad = "Welcome to My Life"
+
+[[sarki]]
+sanatci = "Avril Lavigne"
+ad = "Complicated"
+
+[[sarki]]
+sanatci = "Sum 41"
+ad = "In Too Deep"
+
+[[sarki]]
+sanatci = "Yellowcard"
+ad = "Ocean Avenue"
+
+[[sarki]]
+sanatci = "Jimmy Eat World"
+ad = "The Middle"
+
+[[sarki]]
+sanatci = "Snow Patrol"
+ad = "Chasing Cars"
+
+# ── veri: metal (2) ──
+[[sarki]]
+sanatci = "Iron Maiden"
+ad = "The Trooper"
+
+[[sarki]]
+sanatci = "Avenged Sevenfold"
+ad = "Hail to the King"
+
+[[sarki]]
+sanatci = "Bring Me The Horizon"
+ad = "Can You Feel My Heart"
+
+[[sarki]]
+sanatci = "Breaking Benjamin"
+ad = "The Diary of Jane"
+
+[[sarki]]
+sanatci = "Korn"
+ad = "Freak on a Leash"
+
+# ── veri: country (2) ──
+[[sarki]]
+sanatci = "Carrie Underwood"
+ad = "Before He Cheats"
+
+[[sarki]]
+sanatci = "Morgan Wallen"
+ad = "Whiskey Glasses"
+
+[[sarki]]
+sanatci = "Dolly Parton"
+ad = "Jolene"
+
+[[sarki]]
+sanatci = "Florida Georgia Line"
+ad = "Cruise"
+
+# ── veri: caz (2) ──
+[[sarki]]
+sanatci = "Melody Gardot"
+ad = "Baby I'm a Fool"
+
+[[sarki]]
+sanatci = "Nat King Cole"
+ad = "L-O-V-E"
+
+[[sarki]]
+sanatci = "Harry Connick Jr."
+ad = "It Had to Be You"
+
+# ── veri: blues (2) ──
+[[sarki]]
+sanatci = "Gary Clark Jr."
+ad = "Bright Lights"
+
+[[sarki]]
+sanatci = "Stevie Ray Vaughan"
+ad = "Pride and Joy"
+
+[[sarki]]
+sanatci = "Joe Bonamassa"
+ad = "Sloe Gin"
+
+[[sarki]]
+sanatci = "The Black Keys"
+ad = "Lonely Boy"
+
+# ── veri: reggae (2) ──
+[[sarki]]
+sanatci = "Koffee"
+ad = "Toast"
+
+[[sarki]]
+sanatci = "Protoje"
+ad = "Who Knows"
+
+[[sarki]]
+sanatci = "Toots and the Maytals"
+ad = "54-46 That's My Number"
+
+[[sarki]]
+sanatci = "Jimmy Cliff"
+ad = "Many Rivers to Cross"
+
+# ── veri: afrobeats (2) ──
+[[sarki]]
+sanatci = "Ayra Starr"
+ad = "Rush"
+
+[[sarki]]
+sanatci = "Fireboy DML"
+ad = "Peru"
+
+[[sarki]]
+sanatci = "Asake"
+ad = "Lonely At The Top"
+
+# ── veri: K-pop ──
+[[sarki]]
+sanatci = "TWICE"
+ad = "FANCY"
+
+[[sarki]]
+sanatci = "NewJeans"
+ad = "Hype Boy"
+
+[[sarki]]
+sanatci = "Stray Kids"
+ad = "MANIAC"
+
+# ── veri: rap / hip-hop (2) ──
+[[sarki]]
+sanatci = "OutKast"
+ad = "Ms. Jackson"
+
+[[sarki]]
+sanatci = "Nas"
+ad = "N.Y. State of Mind"
+
+[[sarki]]
+sanatci = "Lauryn Hill"
+ad = "Doo Wop (That Thing)"

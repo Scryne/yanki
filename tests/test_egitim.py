@@ -142,6 +142,24 @@ def test_ornek_hazirlama_kesit_ve_onbellek(tmp_path, monkeypatch):
     assert "uzun bir" in m3["lyrics"] and indirilen[-1] == "v2"
 
 
+def test_kaldirilmis_video_tek_sarkiyi_dusurur_bot_engeli_hazirligi_durdurur(tmp_path):
+    zamanli = ((10.0, "bir"), (100.0, "iki"))
+    hata = {"A": "ERROR: [youtube] x: Video unavailable",
+            "B": "ERROR: [youtube] y: Sign in to confirm you’re not a bot. Use --cookies"}
+
+    def indir(vid, _hedef):
+        raise RuntimeError(hata[vid])  # yt-dlp DownloadError gibi: OSError değil
+
+    bag = dict(lrclib=lambda *_: sozler.Soz("[verse]\nbir", "lrclib", 200.0, zamanli), indir=indir,
+               adaylar=lambda q: [kaynak.Aday(q.split()[0], f"{q} (Audio)", 200.0)])
+    ornekler, dusen = egitim.veri_hazirla(tmp_path, egitim.Ayar(), [egitim.VeriSarki("A", "a", "x")],
+                                          bildir=lambda *_: None, **bag)
+    assert ornekler == [] and "unavailable" in dusen[0][1]
+    with pytest.raises(egitim.YoutubeEngeli, match="bot"):
+        egitim.veri_hazirla(tmp_path, egitim.Ayar(), [egitim.VeriSarki("A", "a", "x"), egitim.VeriSarki("B", "b", "x")],
+                            bildir=lambda *_: None, **bag)
+
+
 def test_cover_sanatcisi_veriye_girmez(tmp_path):
     (tmp_path / "girdi").mkdir()
     (tmp_path / "girdi" / "liste.toml").write_text('[[sarki]]\nsanatci = "Adele"\nad = "Hello"\n', encoding="utf-8")

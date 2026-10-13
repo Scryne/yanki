@@ -1397,7 +1397,11 @@ def _egit(args: argparse.Namespace) -> int:
     if args.deneme_yeniden:
         return _deneme_yeniden(a, ayar, args.deneme_yeniden, args.ara or list(ayar.deneme_ara_kayitlar))
     print(f"veri: {len(sarkilar)} şarkı → {egitim.veri_klasoru(a.kok).relative_to(a.kok).as_posix()}", flush=True)
-    ornekler, dusen = egitim.veri_hazirla(a.kok, ayar, sarkilar, bildir=lambda m: print(m, flush=True))
+    try:
+        ornekler, dusen = egitim.veri_hazirla(a.kok, ayar, sarkilar, bildir=lambda m: print(m, flush=True))
+    except egitim.YoutubeEngeli as e:
+        print(f"✗ {e}")
+        return 2
     print(f"veri hazır: {len(ornekler)} örnek, {sum(x['duration'] for x in ornekler) / 60:.0f} dk ses; "
           f"{len(dusen)} düştü", flush=True)
     if len(ornekler) < EGITIM_EN_AZ_ORNEK:
