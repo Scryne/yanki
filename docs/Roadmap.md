@@ -730,6 +730,9 @@ baladına). Yüklenen 22 şarkıda beat: orijinalden döngüsel (+0,11), groove'
   listeleri (balad, pop, rock, metal, pop-punk, country; 28 sorgu, rank ≥ 400 bin), yalnız İngilizce söz, Spotify'sız
   (12 saatte bir, Web API kilidinden bağımsız), Jev sorulmaz. Gece 10 şarkı. İlk gece 30 şarkı listeye girdi, ilk 8'i
   RunPod'da üretildi. Jev çağrısına 60 sn sınır (TypeSafe 20 dk asılı kaldı). Dağıtımcı Scryne'da.
+- **Beşinci eğitim (2026-10-13, S31b):** ep20'den devam, 52 şarkı daha, 12 epoch (3,31 $). Side-Step devam
+  yüklemesi hiçbir ağırlığı yüklemiyordu (PEFT anahtar adı), yamalandı. Kayıp yatay; kör testte ep20 13/17 kazandı,
+  **ep20 üretimde kalır**. Scryne: vokal yeterli, beat eksik ve kötü → beat ayrı ele alınıyor (S32).
 - **Ağ ve eğitim çakışması (2026-10-13):** ZIYARETCI Wi-Fi dışarıya yalnız 80/443 açıyordu; üç pod SSH'sız ~15'er dk
   yandı (~0,6 $). Pod açılmadan önce port denemesi (`runpod.ssh_engeli`: github.com:22, portquiz.net:22100); kapalıysa
   sunucu atlanır, günde bir bildirim. Popüler keşif eğitim verisindeki 14 sanatçıyı listeye almıştı, ikisi eğitimdeki

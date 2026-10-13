@@ -260,3 +260,15 @@ Yayınlanabilir 9/17 (S30'da 4/17): balad/pop 4, metal, pop-punk, country, regga
 daha az eğitim). En iyisi bile yayınlanamaz bulunan türler iki testte de aynı: caz, blues, reggae, afrobeats, K-pop,
 drill, grunge → keşifte kapalı (`config/kesif.toml`); keşif sorguları kulağı geçen türlere daraltıldı.
 
+
+### S31b: beşinci eğitim, ep20'den devam (2026-10-13, 12 epoch, 160 şarkı, A40 3,4 saat, 3,31 $)
+
+Dördüncü eğitimin 20. epoch'undan devam (Side-Step'in devam yüklemesi PEFT anahtar adı yüzünden hiçbir ağırlık
+yüklemiyordu; yama `yanki/devam_yamasi.py`, podda "512 anahtar yüklendi", ilk kayıp 0,756 ↔ sıfırdan ~1,07). 52 şarkı
+eklendi (80'ler/90'lar/2000'ler rock, metal, country, caz, blues, reggae, afrobeats, K-pop, rap). Kayıp 12 epoch
+boyunca 0,743–0,758: yatay; model veri dağılımını ep20'de zaten öğrenmiş.
+
+Kör test (set `egitim-5`, aynı 17 şarkı ve tohum; ep20 / ek 6 epoch / ek 12 epoch): **ep20 13**, ek12 2 (How to Save
+a Life, Doja), ek6 1 (Last Last), hepsi kötü 1 (Let Her Go). Yayınlanabilir 10/17 (9'u ep20). Ek eğitim kazanmadı,
+**ep20 üretimde kalır**. Scryne: "vokal şu anlık okey, beat tarafı hâlâ eksik ve kötü": ince/güçsüz, bas zayıf,
+enstrüman eksik, ritim yanlış, hepsi aynı. Aynı tek-geçişli cover üstüne daha fazla eğitim beat'i düzeltmiyor → S32.
