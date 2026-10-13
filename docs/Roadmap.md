@@ -724,7 +724,12 @@ baladına). Yüklenen 22 şarkıda beat: orijinalden döngüsel (+0,11), groove'
   aynı, v3'ten balad'da belirgin (groove 0,57 → 0,63), türlerde az iyi (0,58 → 0,60); söz karışık. Kör test
   (`egitim-4`: v3 / ep20 / ep30): yeni eğitim 12/17'de kazandı, **yayınlanabilir 9/17** (önce 4/17); ep20 ile ep30
   berabere, **ep20 üretimde**. Caz, blues, reggae, afrobeats, K-pop, drill, grunge keşifte kapalı (en iyisi bile
-  yayınlanamaz). Üretim Scryne'ın kararıyla duraklatılmış; dağıtımcı seçimi bekliyor.
+  yayınlanamaz).
+- **Üretim yeniden açık ve geniş (2026-10-13, Scryne: "kaldırılmamış bile olsa ... popüler şarkılar üret, kapsamı
+  olabildiğince genişlet"):** keşfe popüler kaynak (`yanki/katalog.py → populer`): Deezer editörlerinin tür
+  listeleri (balad, pop, rock, metal, pop-punk, country; 28 sorgu, rank ≥ 400 bin), yalnız İngilizce söz, Spotify'sız
+  (12 saatte bir, Web API kilidinden bağımsız), Jev sorulmaz. Gece 10 şarkı. İlk gece 30 şarkı listeye girdi, ilk 8'i
+  RunPod'da üretildi. Jev çağrısına 60 sn sınır (TypeSafe 20 dk asılı kaldı). Dağıtımcı Scryne'da.
 - **Tüm türler (S29):** metal, punk, grunge, country, jazz, blues, reggae, reggaeton (İspanyolca), K-pop, afrobeats,
   drill; 11 türün 10'u tek tohumla kapılardan geçti, keşifte açık. Kapalı: J-pop (LRCLIB'de Japonca söz yok),
   denenmemiş türler (techno, trance, Brezilya, Hint, klasik…).
