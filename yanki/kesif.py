@@ -474,15 +474,18 @@ def sirala(kayit: dict[str, Aday]) -> list[Aday]:
     return sorted(kayit.values(), key=lambda a: (-a.puan, a.sanatci, a.ad))
 
 
-def listeye_ekle(adaylar: list[Aday], liste_yolu: Path, calisma: Path, adet: int) -> list[Aday]:
+def listeye_ekle(adaylar: list[Aday], liste_yolu: Path, calisma: Path, adet: int,
+                 egitim_sanatcilari: set[str] = frozenset()) -> list[Aday]:
     """Doğrulanmış (geri gelmemiş, talebi ölçülmüş) ilk `adet` adayı `liste.toml`'un sonuna ekler. Listede ya da
-    çalışma alanında zaten olan şarkı atlanır. Dosyanın açıklamaları korunur (sona metin eklenir)."""
+    çalışma alanında zaten olan şarkı atlanır. Dosyanın açıklamaları korunur (sona metin eklenir).
+    `egitim_sanatcilari` (küçük harf) eklenmez: eğitim verisi cover listesindeki sanatçıları içermez, tersi de
+    (`egitim.veri`; bir sesin kopyası olmasın)."""
     mevcut = listedekiler(liste_yolu, calisma)
     # Aynı sanatçıdan sırada bekleyen şarkı varken yenisi eklenmez: kataloğunu Spotify'dan çeken bir sanatçının her
     # şarkısı "Spotify'da yok" ve aynı puan aralığında; 2026-10-10 keşfinde ilk 10'un 6'sı Xiu Xiu'ydu, gece eklemesi
     # her gün aynı sanatçıyı listeye koyacaktı (profil tek bir sanatçının cover kanalına döner, kulak da aynı tarzı
     # dinler). Sanatçının şarkısı yayına çıkınca ya da reddedilince sıradaki eklenebilir.
-    sanatcilar = bekleyen_sanatcilar(liste_yolu, calisma)
+    sanatcilar = bekleyen_sanatcilar(liste_yolu, calisma) | set(egitim_sanatcilari)
     secilen: list[Aday] = []
     for a in adaylar:
         if len(secilen) >= adet:

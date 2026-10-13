@@ -105,6 +105,36 @@ def stok(api_anahtari: str, gpu: str) -> str | None:
     return ((d or [{}])[0].get("lowestPrice") or {}).get("stockStatus")
 
 
+# Pod'un SSH'ı genel IP'de 22xxx portundan gelir (runpod.log: 22008…22153). Dışarıya yalnız 80/443 açan ağda pod
+# açılıyor ama SSH hiç gelmiyor, her deneme ~15 dk GPU parası yakıyordu (2026-10-13, ZIYARETCI Wi-Fi'da üç pod, ~0,6 $).
+# Pod açılmadan önce iki bağlantı denenir: 22 (github.com) ve 22xxx (portquiz.net her porttan cevap verir). portquiz'e
+# 443'ten de ulaşılamıyorsa sunucu kapalı sayılır, ağ değil: o adım engellemez.
+PORT_DENEME = (("github.com", 22), ("portquiz.net", 22100))
+PORT_ZAMAN_ASIMI_SN = 6.0
+
+
+def _tcp(host: str, port: int, zaman_asimi: float) -> bool:
+    import socket
+
+    try:
+        with socket.create_connection((host, port), timeout=zaman_asimi):
+            return True
+    except OSError:
+        return False
+
+
+def ssh_engeli(tcp=_tcp, zaman_asimi: float = PORT_ZAMAN_ASIMI_SN) -> str | None:
+    """Ağ pod'un SSH'ına izin vermiyorsa nedeni, veriyorsa None."""
+    (h22, p22), (hyuksek, pyuksek) = PORT_DENEME
+    if not tcp(h22, p22, zaman_asimi):
+        if tcp(h22, 443, zaman_asimi):
+            return f"bu ağ dışarıya {p22} portunu kapatıyor ({h22}:{p22} açılmadı, 443 açık)"
+        return f"internet yok ya da {h22}'a ulaşılamıyor"
+    if not tcp(hyuksek, pyuksek, zaman_asimi) and tcp(hyuksek, 443, zaman_asimi):
+        return f"bu ağ dışarıya yüksek portları kapatıyor ({hyuksek}:{pyuksek} açılmadı, 443 açık)"
+    return None
+
+
 def ssh_anahtari(klasor: Path) -> tuple[Path, str]:
     klasor.mkdir(parents=True, exist_ok=True)
     gizli = klasor / "id_ed25519"

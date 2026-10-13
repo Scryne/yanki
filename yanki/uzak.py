@@ -242,13 +242,23 @@ def durma_yolu(kok: Path) -> Path:
     return kok / "calisma" / ".uzak_durdu"
 
 
+def ag_engeli_bildir(kok: Path, neden: str) -> None:
+    """SSH'ı kapatan ağ günde bir bildirilir (sürekli koşu her 30 dk'da yeniden bildirmesin)."""
+    from yanki import olay
+
+    olay.bildir(kok / "calisma", "kayip", "üretim bekliyor: ağ SSH'a kapalı",
+                f"{neden}. Kiralık GPU açılmadı (ücret yok); 22 ve 22xxx portlarına açık bir ağa geçince üretim "
+                "kendiliğinden sürer.", f"ag-ssh:{datetime.now():%Y-%m-%d}")
+
+
 def motor_sec(a: Ayarlar, kayit: Callable[[str], None] = print, stok=runpod.stok,
-              bakiye: Callable[[str], float] = runpod.bakiye
+              bakiye: Callable[[str], float] = runpod.bakiye, ssh_engeli: Callable[[], str | None] | None = None,
+              ag_bildir: Callable[[Path, str], None] = ag_engeli_bildir
               ) -> tuple[Callable[..., list[motor.Sonuc]] | None, float, bool]:
-    """Üretimin motoru ve tek parça eşiği, işler planlanmadan önce: uzak açık, son 3 saatte düşmemiş, anahtar ve
-    bütçe yerinde, GPU stokta ise sunucu (tek parça); değilse evdeki kart (INT8, parçalı). Karar sonradan değişmez:
-    sunucu için tek parça planlanan iş evde 8 GB'a ve motorun iç zaman aşımına sığmaz. Sunucu koşu ortasında düşerse
-    hata yükselir (şarkılar sırada kalır) ve uzak motor `DURMA_SAAT` devre dışı kalır.
+    """Üretimin motoru ve tek parça eşiği, işler planlanmadan önce: uzak açık, son 3 saatte düşmemiş, ağ SSH'a açık,
+    anahtar ve bütçe yerinde, GPU stokta ise sunucu (tek parça); değilse evdeki kart (INT8, parçalı). Karar sonradan
+    değişmez: sunucu için tek parça planlanan iş evde 8 GB'a ve motorun iç zaman aşımına sığmaz. Sunucu koşu
+    ortasında düşerse hata yükselir (şarkılar sırada kalır) ve uzak motor `DURMA_SAAT` devre dışı kalır.
     Dönen: (calistir, tek_parca_sn, uzak_mi); calistir None: sunucu yok ve evde üretim kapalı (`yerel_yedek`)."""
     from yanki import uretim
 
@@ -261,6 +271,10 @@ def motor_sec(a: Ayarlar, kayit: Callable[[str], None] = print, stok=runpod.stok
     durdu = durma_yolu(a.kok)
     if durdu.exists() and time.time() - durdu.stat().st_mtime < DURMA_SAAT * 3600:
         kayit(f"uzak GPU {DURMA_SAAT} saat devre dışı ({durdu.read_text(encoding='utf-8')[:200]}); {nerede}")
+        return yedek
+    if engel := (ssh_engeli or runpod.ssh_engeli)():
+        kayit(f"uzak GPU kullanılmıyor ({engel}); {nerede}")
+        ag_bildir(a.kok, engel)
         return yedek
     try:
         api = runpod.anahtar(a.kok, a.uzak.en_az_bakiye, bakiye)

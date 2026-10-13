@@ -13,17 +13,42 @@ from yanki import ayarlar, durum, egitim, kaynak, liste, motor, runpod, sozler, 
 KOK = Path(__file__).resolve().parents[1]
 
 
+# Popüler keşif (2026-10-13) eğitim sanatçısı süzgeci yokken listeye bunları ekledi; süzgeç (kesif.listeye_ekle) o
+# günden beri eklemiyor. Yeni bir çakışma testi kırar.
+ESKI_CAKISMA = {"arctic monkeys", "billie eilish", "calvin harris", "camila cabello", "dua lipa", "katy perry",
+                "lady gaga", "linkin park", "onerepublic", "post malone", "red hot chili peppers", "shawn mendes",
+                "sia", "system of a down"}
+
+
 def test_gercek_egitim_ayari_okunur_ve_cover_sanatcisi_icermez():
     """Veri cover listesindeki sanatçıları içermemeli (kapak yaptığımız kayıtlar ezberlenmesin, tek bir sesin
     kopyası olmasın); her sanatçıdan en çok bir şarkı."""
     ayar, sarkilar = egitim.oku(KOK / "config" / "egitim.toml")
     cover = {s.sanatci.casefold() for s in liste.yukle(KOK / "girdi" / "liste.toml")}
-    assert len(sarkilar) >= egitim_en_az() and not {s.sanatci.casefold() for s in sarkilar} & cover
+    assert len(sarkilar) >= egitim_en_az() and not {s.sanatci.casefold() for s in sarkilar} & cover - ESKI_CAKISMA
     assert len({s.sanatci for s in sarkilar}) == len(sarkilar)
     assert ayar.model == "acestep-v15-xl-sft" and ayar.deneme_olcekleri
     # deneme şarkıları eğitimde yok (sınadığımız kaydı ezberlemesin); 2026-10-12'den beri karşılaştırma önceki
     # LoRA'nın hazır çıktılarıyla (kör test), LoRA'sız kol yok
     assert not {s.kimlik for s in sarkilar} & set(ayar.deneme_sarkilari)
+
+
+def test_egitimdeki_sarkinin_coveri_uretilmez(tmp_path):
+    from yanki import uretim
+
+    (tmp_path / "config").mkdir()
+    (tmp_path / "config" / "egitim.toml").write_text("".join(
+        f'[[sarki]]\nsanatci = "{s}"\nad = "{ad}"\nstil = "rock"\n'
+        for s, ad in (("Arctic Monkeys", "Do I Wanna Know?"), ("Red Hot Chili Peppers", "Californication"))),
+        encoding="utf-8")
+    a = replace(ayarlar.yukle(), kok=tmp_path)
+    c = tmp_path / "calisma"
+    for s, ad, asama in (("Arctic Monkeys", "Do I Wanna Know?", "analiz"), ("Arctic Monkeys", "R U Mine?", "analiz"),
+                         ("Red Hot Chili Peppers", "Californication", "onarim")):  # üretilmiş olanın onarımı sürer
+        durum.yaz(c, durum.Durum(liste.kimlik(s, ad), s, ad, asama=asama))
+    assert sorted(d.kimlik for d in uretim.uretilecek(a, c)) == ["arctic-monkeys-r-u-mine",
+                                                                   "red-hot-chili-peppers-californication"]
+    assert uretim.egitimde(tmp_path / "yok") == set()  # eğitim ayarı yoksa süzgeç boş
 
 
 def egitim_en_az():

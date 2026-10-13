@@ -16,6 +16,9 @@ def _agsiz(monkeypatch):
         raise urllib.error.URLError("testte ağ yok")
 
     monkeypatch.setattr(urllib.request, "urlopen", yok)
+    from yanki import runpod
+
+    monkeypatch.setattr(runpod, "ssh_engeli", lambda: None)  # pod öncesi port denemesi (gerçek TCP bağlantısı)
 
 
 @pytest.fixture(autouse=True)

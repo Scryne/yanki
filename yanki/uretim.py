@@ -318,6 +318,19 @@ def _elle_stil(kok: Path) -> set[str]:
         return set()
 
 
+def egitimde(kok: Path) -> set[str]:
+    """Eğitim verisindeki şarkıların kimlikleri: cover'ı üretilmez (`egitim.veri`)."""
+    from yanki import egitim
+
+    return {s.kimlik for s in egitim.veri(kok)}
+
+
+def uretilecek(a: Ayarlar, calisma: Path) -> list[durum.Durum]:
+    """Üretim sırası: analiz ve onarım bekleyenler, eğitim verisindeki şarkılar hariç."""
+    haric = egitimde(a.kok)
+    return [d for d in durum.hepsi(calisma) if d.asama == "onarim" or (d.asama == "analiz" and d.kimlik not in haric)]
+
+
 def uret(a: Ayarlar, calisma: Path, kimlikler: list[str] | None = None,
          calistir: Callable[..., list[motor.Sonuc]] = motor.calistir,
          degerlendir: Callable[..., dict] | None = None, tek_parca_sn: float = TEK_PARCA_SN,
@@ -327,8 +340,7 @@ def uret(a: Ayarlar, calisma: Path, kimlikler: list[str] | None = None,
     degerlendir = degerlendir or (lambda aday, kaynak, soz, dil="en", orijinal_wer=None:
                                   kapilar.degerlendir(aday, kaynak, soz, a.fpcalc, dil=dil, orijinal_wer=orijinal_wer))
     orijinal_wer = orijinal_wer or kapilar.orijinal_wer
-    hedef = [d for d in durum.hepsi(calisma) if d.asama in ("analiz", "onarim")
-             and (kimlikler is None or d.kimlik in kimlikler)]
+    hedef = [d for d in uretilecek(a, calisma) if kimlikler is None or d.kimlik in kimlikler]
     if not hedef:
         return []
 

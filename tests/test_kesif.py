@@ -152,6 +152,18 @@ def test_listeye_ekle_dogrulanmisi_ekler_mevcudu_atlar(tmp_path):
     assert kesif.listeye_ekle(adaylar, lyol, calisma, adet=5)[0].sanatci == "İkinci"
 
 
+def test_listeye_ekle_egitim_sanatcisini_almaz(tmp_path):
+    lyol = tmp_path / "liste.toml"
+    lyol.write_text("", encoding="utf-8")
+    calisma = tmp_path / "calisma"
+    calisma.mkdir()
+    adaylar = [kesif.Aday("Dua Lipa", "New Rules", "k", youtube_izlenme=10**9, geri_geldi=False),
+               kesif.Aday("ZAYN", "Dusk Till Dawn", "k", youtube_izlenme=10**8, geri_geldi=False)]
+    for x in adaylar:
+        x.sanatci_uyusuyor = True
+    assert [x.sanatci for x in kesif.listeye_ekle(adaylar, lyol, calisma, 5, {"dua lipa"})] == ["ZAYN"]
+
+
 # ── Spotify istemcisi ───────────────────────────────────────
 class KayitliSpotify(spotify.Spotify):
     def __init__(self, tmp_path, yanitlar):

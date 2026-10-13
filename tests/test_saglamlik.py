@@ -12,6 +12,7 @@ from pathlib import Path
 import pytest
 
 from yanki import ag, dagitim, dosya, durum, kesif, olay, onay, pinterest, sozler, takip, temizlik, tunearo
+from yanki.runpod import ssh_engeli as gercek_ssh_engeli  # conftest modüldekini kapatır; burada gerçeği sınanır
 
 
 # ── atomik yazım: okuyucu dosyayı tutarken (Windows) yerine koyma yeniden denenir ──
@@ -852,6 +853,36 @@ def test_evde_uretim_kapaliyken_sunucu_yoksa_uretim_yok(tmp_path, monkeypatch):
     assert calistir is None and uzak_mi is False
     a2 = _uzak_ayar(tmp_path, yerel_yedek=True)
     assert uzak.motor_sec(a2, kayit=lambda _m: None, stok=lambda k, g: None, bakiye=lambda _k: 10.0)[0] is not None
+
+
+def test_ssh_engeli_yalniz_80_443_acan_agi_yakalar():
+    gercek = gercek_ssh_engeli
+    ziyaretci = lambda h, p, z: p in (80, 443)  # noqa: E731 — 2026-10-13 ZIYARETCI Wi-Fi
+    assert "22 portunu kapatıyor" in gercek(tcp=ziyaretci)
+    assert gercek(tcp=lambda h, p, z: True) is None
+    assert "yüksek portları" in gercek(tcp=lambda h, p, z: p != 22100)
+    assert gercek(tcp=lambda h, p, z: h != "portquiz.net") is None  # test sunucusu kapalı: ağ suçlanmaz
+    assert "internet yok" in gercek(tcp=lambda h, p, z: False)
+
+
+def test_ssh_kapali_agda_pod_acilmaz_bildirilir(tmp_path, monkeypatch):
+    from yanki import uzak
+
+    monkeypatch.setenv("RUNPOD_API_KEY", "x")
+    a = _uzak_ayar(tmp_path, yerel_yedek=False)
+    bildirilen = []
+
+    def sorulmamali(*_a):
+        raise AssertionError("ağ kapalıyken RunPod'a soruldu")
+
+    calistir, _, uzak_mi = uzak.motor_sec(a, kayit=lambda _m: None, stok=sorulmamali, bakiye=sorulmamali,
+                                          ssh_engeli=lambda: "bu ağ dışarıya 22 portunu kapatıyor",
+                                          ag_bildir=lambda kok, neden: bildirilen.append(neden))
+    assert calistir is None and uzak_mi is False and bildirilen == ["bu ağ dışarıya 22 portunu kapatıyor"]
+    # günde bir bildirim
+    uzak.ag_engeli_bildir(tmp_path, "x")
+    uzak.ag_engeli_bildir(tmp_path, "x")
+    assert len(olay.oku(tmp_path / "calisma")) == 1
 
 
 def test_pod_aktarimi_baglanti_koparsa_yeniden_dener(tmp_path, monkeypatch):

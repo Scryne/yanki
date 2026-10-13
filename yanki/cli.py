@@ -469,7 +469,10 @@ def _kesif(args: argparse.Namespace) -> int:
               f"{x.rakip_cover if x.rakip_cover is not None else '—':>5}  {pazar:>5}  {kesif.hal(x):16} "
               f"{x.sanatci} — {x.ad}")
     if args.ekle:
-        eklenen = kesif.listeye_ekle(sirali, a.kok / "girdi" / "liste.toml", calisma, args.ekle)
+        from yanki import egitim
+
+        eklenen = kesif.listeye_ekle(sirali, a.kok / "girdi" / "liste.toml", calisma, args.ekle,
+                                     {s.sanatci.casefold() for s in egitim.veri(a.kok)})
         for x in eklenen:
             print(f"listeye eklendi: {x.sanatci} — {x.ad}")
         if not eklenen:
@@ -853,7 +856,7 @@ def _uret_surekli(kok: Path, op) -> int:
 
     a = ayarlar.yukle()
     calisma = a.kok / "calisma"
-    hedef = sorted((d for d in durum.hepsi(calisma) if d.asama in ("onarim", "analiz")),
+    hedef = sorted(uretim.uretilecek(a, calisma),
                    key=lambda d: (d.asama != "onarim", d.gecmis[-1]["zaman"] if d.gecmis else ""))
     if not hedef:
         print("üretilecek bir şey yok (analiz ya da onarım bekleyen şarkı yok)")
@@ -1305,7 +1308,7 @@ def _gunduz(args: argparse.Namespace) -> int:
         return print(f"GPU boş değil ({kullanilan} MiB)") or 0
     args.yeniden, args.analizsiz = False, False
     _hazirla(args)
-    hedef = sorted((d for d in durum.hepsi(calisma) if d.asama in ("onarim", "analiz")),
+    hedef = sorted(uretim.uretilecek(a, calisma),
                    key=lambda d: (d.asama != "onarim", d.gecmis[-1]["zaman"] if d.gecmis else ""))[: op.gunduz_sarki]
     if not hedef:
         return print("üretilecek şarkı yok") or 0

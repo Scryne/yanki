@@ -102,6 +102,14 @@ def oku(yol: Path) -> tuple[Ayar, list[VeriSarki]]:
     return ayar, sarkilar
 
 
+def veri(kok: Path) -> list[VeriSarki]:
+    """Eğitim verisindeki şarkılar (`config/egitim.toml`; yoksa boş). Üretim ve keşif buna bakar: popüler keşif
+    (2026-10-13) eğitim sanatçılarını listeye almaya başladı, ikisi eğitimdeki kaydın ta kendisiydi (Do I Wanna Know?,
+    Californication); modelin öğrendiği kaydın cover'ı ezberden gelir."""
+    yol = kok / "config" / "egitim.toml"
+    return oku(yol)[1] if yol.exists() else []
+
+
 # ── 1. veri ─────────────────────────────────────────────────
 # Eğitimde kayıt stüdyo sürümü olmalı: söz zaman damgaları albüm sürümüne göre ve stil metni o kaydı anlatıyor.
 # "(Acoustic)" sürümü ya da fragman kurgusu ("… // Project Hail Mary") ilk denemede seçildi (2026-10-11).
