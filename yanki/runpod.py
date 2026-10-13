@@ -164,9 +164,10 @@ class Pod:
     """`with Pod(...) as p:` pod açılır, SSH hazır olunca döner; çıkışta (hata olsa da) silinir."""
 
     def __init__(self, kok: Path, gpu: str = "NVIDIA A40", ad: str = "yanki-motor", disk_gb: int = 120,
-                 bulut: str = "SECURE", bekleme_sn: int = 900, kayit_adi: str = "acik_pod"):
+                 bulut: str = "SECURE", bekleme_sn: int = 900, kayit_adi: str = "acik_pod",
+                 veri_merkezi: str | None = None):
         self.kok, self.gpu, self.ad, self.disk_gb, self.kayit_adi = kok, gpu, ad, disk_gb, kayit_adi
-        self.bulut, self.bekleme_sn = bulut, bekleme_sn
+        self.bulut, self.bekleme_sn, self.veri_merkezi = bulut, bekleme_sn, veri_merkezi
         self.klasor = kok / "calisma" / ".runpod"
         self.api = anahtar(kok)
         self.id: str | None = None
@@ -178,12 +179,14 @@ class Pod:
         self.gizli, acik = ssh_anahtari(self.klasor)
         # her pod yeni host anahtarıyla gelir; eski pod'un aynı IP:port'taki kaydı bağlantıyı bozmasın
         (self.klasor / "known_hosts").unlink(missing_ok=True)
+        girdi = {"cloudType": self.bulut, "gpuCount": 1, "gpuTypeId": self.gpu, "name": self.ad, "imageName": IMAJ,
+                 "containerDiskInGb": self.disk_gb, "volumeInGb": 0, "ports": "22/tcp", "startSsh": True,
+                 "env": [{"key": "PUBLIC_KEY", "value": acik}], "allowedCudaVersions": ["12.8", "12.9", "13.0"]}
+        if self.veri_merkezi:  # evden yükleme yolu veri merkezine göre değişiyor (2026-10-13: _hiz_kontrol)
+            girdi["dataCenterId"] = self.veri_merkezi
         d = gql(self.api, """mutation($girdi: PodFindAndDeployOnDemandInput) {
-            podFindAndDeployOnDemand(input: $girdi) { id costPerHr machineId } }""", {"girdi": {
-            "cloudType": self.bulut, "gpuCount": 1, "gpuTypeId": self.gpu, "name": self.ad, "imageName": IMAJ,
-            "containerDiskInGb": self.disk_gb, "volumeInGb": 0, "ports": "22/tcp", "startSsh": True,
-            "env": [{"key": "PUBLIC_KEY", "value": acik}],
-            "allowedCudaVersions": ["12.8", "12.9", "13.0"]}}, deneme=1)["podFindAndDeployOnDemand"]
+            podFindAndDeployOnDemand(input: $girdi) { id costPerHr machineId } }""", {"girdi": girdi},
+                deneme=1)["podFindAndDeployOnDemand"]
         if not d or not d.get("id"):
             raise StokYok(f"{self.gpu} açılamadı (stok yok olabilir)")
         self.id, self.saatlik = d["id"], float(d.get("costPerHr") or 0)
