@@ -903,6 +903,27 @@ def test_pod_aktarimi_baglanti_koparsa_yeniden_dener(tmp_path, monkeypatch):
     assert kodlar == []
 
 
+def test_yavas_yuklemeli_pod_birakilir(tmp_path, monkeypatch):
+    import subprocess
+
+    from yanki import runpod
+
+    p = runpod.Pod.__new__(runpod.Pod)
+    p.gizli, p.klasor, p.port, p.ip, p.kok, p.id = tmp_path / "k", tmp_path, 22, "1.2.3.4", tmp_path, "pod-1"
+    saat = {"t": 0.0, "sure": 1.0}
+    monkeypatch.setattr(runpod.time, "time", lambda: saat["t"])
+
+    def scp(arg, **k):
+        saat["t"] += saat["sure"]
+        return subprocess.CompletedProcess(arg, 0, "", "")
+
+    monkeypatch.setattr(subprocess, "run", scp)
+    assert p._hiz_kontrol() == 16.0 and not (tmp_path / "hiz_olcu.bin").exists()
+    saat["sure"] = 57.0  # 2026-10-13: 0,28 MB/s
+    with pytest.raises(runpod.RunPodHatasi, match="yükleme 0.28 MB/s"):
+        p._hiz_kontrol()
+
+
 def test_uzak_kosu_duserse_maliyet_yine_kaydedilir(tmp_path, monkeypatch):
     from yanki import motor, runpod, uzak
 

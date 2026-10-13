@@ -191,6 +191,7 @@ class Pod:
         (self.klasor / self.kayit_adi).write_text(self.id, encoding="utf-8")
         try:
             self._ssh_bekle()
+            self._hiz_kontrol()
         except BaseException:
             self.__exit__(None, None, None)
             raise
@@ -217,6 +218,31 @@ class Pod:
             time.sleep(10)
         raise RunPodHatasi(f"pod {self.id} {self.bekleme_sn} sn içinde SSH'a açılmadı (son durum {son_durum}; "
                            f"son SSH hatası: {son_hata})")
+
+    # Evden pod'a yükleme bunun altındaysa (MB/s) pod bırakılır, `uzak.PodAcici` başka makine dener. 2026-10-13: 194.68.x
+    # makinesinde 0,28 MB/s (ACE-Step kurulumu da 11 dk); 3,8 GB eğitim verisi ~4 saat GPU boşta yanacaktı. 69.30.x'te
+    # aynı veri ~22 MB/s. Ölçü kurulumdan önce, küçük bir dosyayla (SSH el sıkışması dahil: eşik bilerek düşük).
+    EN_AZ_YUKLEME_MBS = 2.0
+    HIZ_OLCU_MB = 16
+
+    def _hiz_kontrol(self) -> float:
+        if not self.EN_AZ_YUKLEME_MBS:
+            return 0.0
+        olcu = self.klasor / "hiz_olcu.bin"
+        olcu.write_bytes(os.urandom(self.HIZ_OLCU_MB << 20))
+        try:
+            t = time.time()
+            r = self._tekrarla(["scp", *self._ssh(), "-P", str(self.port), "-q", str(olcu),
+                                f"root@{self.ip}:/tmp/hiz_olcu.bin"],
+                               self.HIZ_OLCU_MB / self.EN_AZ_YUKLEME_MBS + 10, 1)
+            hiz = self.HIZ_OLCU_MB / max(time.time() - t, 0.01)
+        finally:
+            olcu.unlink(missing_ok=True)
+        self._gunluk(f"yükleme hızı {hiz:.2f} MB/s")
+        if r.returncode != 0 or hiz < self.EN_AZ_YUKLEME_MBS:
+            raise RunPodHatasi(f"pod {self.id} ({self.ip}) yükleme {hiz:.2f} MB/s (en az {self.EN_AZ_YUKLEME_MBS:g}); "
+                               "başka makine denenecek")
+        return hiz
 
     def _ssh(self) -> list[str]:
         # her pod yeni anahtar: bilinen sunucular projeye yazılır (/dev/null Windows OpenSSH'ta yok). BatchMode: soru
