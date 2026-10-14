@@ -42,6 +42,9 @@ ANAHTAR_ADLARI = ("RUNPOD_API_KEY", "RUNPOD_API_KEY_2")  # sırayla: ilki bitinc
 _SECILEN: dict[Path, str] = {}
 
 
+KAPATMA_DENEME, KAPATMA_BEKLEME_SN = 10, 30
+
+
 def anahtarlar(kok: Path) -> list[str]:
     from yanki.spotify import env_oku
 
@@ -314,13 +317,15 @@ class Pod:
 
     def __exit__(self, *_):
         if self.id:
-            for _deneme in range(3):
+            # ağ kopukken silme düşerse pod saatlik yanmaya devam eder (2026-10-14, S33: 3 × 5 sn yetmedi, pod açık
+            # kaldı): ~5 dk dene; yine olmazsa `acik_pod` kaydı kalır, sonraki koşu `kapat_artiklari` ile siler
+            for _deneme in range(KAPATMA_DENEME):
                 try:
                     gql(self.api, "mutation($id: String!) { podTerminate(input: {podId: $id}) }", {"id": self.id})
                     (self.klasor / self.kayit_adi).unlink(missing_ok=True)
                     break
                 except (RunPodHatasi, OSError):
-                    time.sleep(5)
+                    time.sleep(KAPATMA_BEKLEME_SN)
 
 
 def acestep_kur(p: Pod, commit: str, modeller: tuple[str, ...] = ("acestep-v15-xl-sft",)) -> str:

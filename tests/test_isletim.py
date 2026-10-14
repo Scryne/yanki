@@ -297,3 +297,23 @@ def test_uretim_duraklatilinca_surekli_kosu_uretmez(tmp_path, monkeypatch, capsy
     monkeypatch.setattr(uzak, "motor_sec", lambda *_a, **_k: pytest.fail("motor seçildi"))
     assert cli._uret_surekli(tmp_path, replace(ayarlar.operasyon_oku(), surekli_uretim=False)) == 0
     assert "duraklatıldı" in capsys.readouterr().out
+
+
+def test_isci_kos_kopuk_yoklamada_dusmez_isci_bitene_kadar_bekler():
+    """2026-10-14 (S33): evdeki ağ ~10 dk koptu, yoklama hata fırlatıp koşuyu düşürdü; işçi podda sürüyordu."""
+    class Pod:
+        def __init__(self):
+            self.yokla = ["kopuk", "kopuk", [{"id": "a", "basari": True}]]
+
+        def komut(self, betik, zaman_asimi=120, tekrar=True):
+            if "motor_sonuc.json" not in betik or "cat " not in betik:
+                return ""
+            s = self.yokla.pop(0)
+            if s == "kopuk":
+                raise runpod.RunPodHatasi("komut 255: ssh: connect to host 1.2.3.4 port 22: No route to host")
+            return json.dumps(s) + "\n#DURUM#\nBITTI\n"
+
+    satirlar = []
+    sonuc = uzak.isci_kos(Pod(), "/root/ACE", 60, aralik_sn=0, toplam=1, bildir=satirlar.append)
+    assert sonuc == [{"id": "a", "basari": True}]
+    assert sum("yoklama kopuk" in s for s in satirlar) == 2

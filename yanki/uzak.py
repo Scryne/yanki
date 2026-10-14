@@ -100,8 +100,13 @@ def isci_kos(p: runpod.Pod, hedef: str, zaman_asimi_sn: float, aralik_sn: float 
     sonuc: list[dict] = []
     while time.monotonic() < bitis:
         time.sleep(aralik_sn)
-        cikti = p.komut(f"cat {UZAK_DIZIN}/motor_sonuc.json 2>/dev/null || echo '[]'; echo; echo '#DURUM#'; "
-                        f"kill -0 $(cat {UZAK_DIZIN}/motor.pid) 2>/dev/null && echo SURUYOR || echo BITTI")
+        try:
+            cikti = p.komut(f"cat {UZAK_DIZIN}/motor_sonuc.json 2>/dev/null || echo '[]'; echo; echo '#DURUM#'; "
+                            f"kill -0 $(cat {UZAK_DIZIN}/motor.pid) 2>/dev/null && echo SURUYOR || echo BITTI")
+        except runpod.RunPodHatasi as e:
+            # evdeki ağ koptu (2026-10-14, S33: ~10 dk "No route to host"); işçi podda sürüyor, yoklamaya devam
+            bildir(f"  yoklama kopuk: {str(e)[-120:]}")
+            continue
         govde, hal = cikti.split("#DURUM#")
         try:
             yeni = json.loads(govde.strip() or "[]")
@@ -114,7 +119,10 @@ def isci_kos(p: runpod.Pod, hedef: str, zaman_asimi_sn: float, aralik_sn: float 
         sonuc = yeni
         if hal.strip() == "BITTI":
             return sonuc
-    p.komut(f"kill $(cat {UZAK_DIZIN}/motor.pid) 2>/dev/null || true")
+    try:
+        p.komut(f"kill $(cat {UZAK_DIZIN}/motor.pid) 2>/dev/null || true")
+    except runpod.RunPodHatasi:
+        pass  # pod zaten silinecek
     return sonuc
 
 
