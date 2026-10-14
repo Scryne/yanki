@@ -358,6 +358,12 @@ indirildi (`calisma/dinleme/s33/<şarkı>/<kol>.flac`, `sonuc.json`), pod kapat�
   `calisma/dinleme/s33k/`. Demucs `uv --with demucs` ile CPU torch çekiyordu; `s32_beat_olcum.DEMUCS` torch
   `2.7.1+cu128`'e sabitlendi (dosya başı ~40 sn, RTX 4060).
 
+**Kör test `ornekleme-1` (Scryne, 2026-10-14, 15 şarkı):** G (CFG 10) 9, A 3 (Three Little Birds, Gasolina, How to
+Save a Life), H 1 (How You Like That), hepsi kötü 2 (Enter Sandman, Let Her Go). Rastgelede G'nin 13 kararın ≥ 9'unu
+alması ~%0,4. **Karar:** üretim tarifine CFG 10 (`config/motor.toml` → `[cover] ek`). Let Her Go her testte kötü
+kalmaya devam ediyor. S33 betiğinin A kolu tarifi okumaz, CFG 7 tabanı olarak kalır. İkinci tur (J ADG, L CFG 3)
+bekliyor; öneri yapmamak: ölçüde CFG yükselince bas toparlandı, CFG 3 ters yönde, ~1,1 $ S34'e kalsın (Scryne'ın kararı).
+
 ## S34 — dikkat + MLP LoRA (hazır, bakiye bekliyor)
 
 Sıfırdan (katman kümesi değişti), aynı 175 şarkı, rank 64, lr 1e-4, 20 epoch, ara kayıt 10; `config/egitim.toml`

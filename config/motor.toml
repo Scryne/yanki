@@ -47,6 +47,10 @@ adim = 100
 # çok aday + otomatik eleme; rap'te 3 adaydan 1'i geçti. Aday başı ~2 dk A40 (~0,015 $).
 aday_sayisi = 4
 tohumlar = [42, 7, 123, 2024]
+# CFG 7 (varsayılan) → 10 (2026-10-14, S33, docs/arastirma/07): kör test (Scryne, 15 şarkı, A/G/H) CFG 10 9, varsayılan 3,
+# heun 1, hepsi kötü 2. Ölçüde söz WER'i 0,216 → 0,147, kapı 12/16 → 13/15, bas (vokale göre, orijinale fark)
+# −4,4 → −3,3 dB; diğer parça 0,8 dB inceldi, groove 0,63 → 0,59. DCW sözü tamamen bozdu, sde kapıda kaldı.
+ek = { guidance_scale = 10.0 }
 
 [onarim]
 gorev = "repaint"

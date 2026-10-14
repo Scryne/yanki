@@ -414,7 +414,7 @@ def test_cover_referansi_ve_ek_ayarlar_configten(tmp_path):
     m = SahteMotor()
     _sarki(c, "varsayilan", 60)
     uretim.uret(_ayar(), c, ["varsayilan"], calistir=m, degerlendir=GECER)
-    assert m.turlar[0][0].referans is None and m.turlar[0][0].ek == {}
+    assert m.turlar[0][0].referans is None and m.turlar[0][0].ek == dict(_ayar().cover.ek)  # tarifteki (S33: CFG 10)
 
 
 def test_orijinal_kaydin_soz_weri_bir_kez_olculur_ve_kapiya_gider(tmp_path):
