@@ -27,13 +27,19 @@ lr = 1e-4
 # (80'ler pop-rock/power ballad, 90'lar alternatif/grunge, 2000'ler pop-punk/emo, metal, country; veri neredeyse hep
 # 2010 sonrasıydı, liste 80'ler/90'lar şarkılarıyla dolu) + kapalı türler (caz, blues, reggae, afrobeats, K-pop, rap).
 # 12 epoch, ara kayıt 6: kör testte ep20 ile karşılaştırılır; yenemezse ep20 üretimde kalır.
-devam = "calisma/egitim/lora/20261012-1702/checkpoints/epoch_20_loss_0.7381"
-epoch = 12
-kaydet_her = 6
+# 2026-10-14 (S34; Scryne: "model en iyi halinde değil, daha fazla eğitmemiz lazım"): ek eğitim (S31b) ve beat'i sonradan
+# işlemek (S32) ep20'yi yenemedi. Bütün eğitimler Side-Step varsayılanıyla yalnız dikkat katmanlarına (q/k/v/o_proj)
+# LoRA'ydı; MLP'ye (gate/up/down_proj) hiç dokunulmadı. Tını ve enstrüman dokusu ("ince, bas zayıf", S32) MLP'de.
+# Sıfırdan (katman kümesi değiştiği için devam yok), aynı 178 şarkı, dikkat + MLP; 20 epoch, ara kayıt 10. Kör testte
+# ep20 (üretimdeki) ile karşılaştırılır; yenemezse ep20 kalır.
+devam = ""
+hedef_moduller = ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"]
+epoch = 20
+kaydet_her = 10
 # Eğitim kesiti (sn): ses ve söz aynı yerden kesilir (söz zaman damgasıyla), söz-ses kayması öğretilmesin
 en_uzun_sn = 240
 # Bu kadar sonra eğitim düşmüş sayılır, pod silinir
-zaman_asimi_saat = 6  # 12 epoch × ~19 dk (178 şarkı) ≈ 3,9 saat
+zaman_asimi_saat = 11  # 20 epoch × ~17 dk (178 şarkı, dikkat-yalnız; S31b ölçüsü) + MLP payı ≈ 7–8 saat
 # Eğitimden sonra karşılaştırmalı dinleme: bu şarkılar LoRA'sız ve LoRA'lı, aynı tohumla
 # S20'nin şarkıları (balad, orkestral rock, folk, dance-pop + rap, indie rock): beat ölçüleri onlarla karşılaştırılır
 # + S29'un 11 tür şarkısı (kaynakları calisma/_referans/): kör testin 17 şarkısı, önceki LoRA'nın çıktıları hazır
@@ -45,7 +51,7 @@ deneme_sarkilari = ["bruno-mars-when-i-was-your-man", "coldplay-viva-la-vida", "
                     "burna-boy-last-last", "central-cee-doja"]
 # LoRA'sız ve yarım ölçek önceki testte hiç kazanmadı: yalnız tam ölçek; ara kayıt 20. epoch
 deneme_olcekleri = [1.0]
-deneme_ara_kayitlar = [6]
+deneme_ara_kayitlar = [10]
 
 # ── veri: kadın vokal ──
 [[sarki]]

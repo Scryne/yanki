@@ -480,3 +480,9 @@ def test_deneme_yeniden_yerel_kayitlari_bulur_ve_birlestirir(tmp_path):
     assert [(x["kol"], x["basari"]) for x in s.deneme] == [("1", True), ("ep20", True)]  # düşen kol yenisiyle
     assert s.usd == 5.3 and s.dinleme == tmp_path / "calisma" / "dinleme" / "lora" / "20261012-1702"
     assert json.loads((yerel / "egitim.json").read_text(encoding="utf-8"))["ornek"] == 123
+
+
+def test_hedef_moduller_bossa_side_step_varsayilani_doluysa_komuta_gider():
+    assert "--target-modules" not in egitim.egitim_komutu(egitim.Ayar())
+    k = egitim.egitim_komutu(egitim.Ayar(hedef_moduller=("q_proj", "gate_proj", "down_proj")))
+    assert k.endswith("--gradient-checkpointing --target-modules q_proj gate_proj down_proj")

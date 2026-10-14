@@ -74,6 +74,10 @@ class Ayar:
     # önceki bağdaştırıcıdan devam (kök göreli klasör, adapter_config.json + adapter_model.safetensors): yeni veriyle
     # sıfırdan değil, üretimdekinden sürdürülür (S31: kayıp 20. epoch'tan sonra yatay; ucuz olan yeni veriyi eklemek)
     devam: str = ""
+    # LoRA'nın uygulandığı katmanlar (Side-Step `--target-modules`). Boş: Side-Step varsayılanı, yalnız dikkat
+    # (q/k/v/o_proj); 2026-10-14'e kadarki bütün eğitimler böyleydi. MLP (gate/up/down_proj) tını ve enstrüman dokusunu
+    # taşıyan katmanlar; beat "ince, bas zayıf" (S32) dikkat-yalnız LoRA'nın erişemediği yerde olabilir (S34).
+    hedef_moduller: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -360,7 +364,8 @@ def egitim_komutu(ayar: Ayar) -> str:
     # SFT: çıkarım kaydırması 1.0, 50 adım (Side-Step bunu bağdaştırıcıya üst veri olarak yazar; eğitimi etkilemez)
     return sidestep(ayar, (f"--resume-from {UZAK}/devam " if ayar.devam else "") + f"--epochs {ayar.epoch} "
                           f"--lr {ayar.lr:g} --rank {ayar.rank} --alpha {ayar.alpha} --save-every {ayar.kaydet_her} "
-                          "--shift 1.0 --num-inference-steps 50 --gradient-checkpointing")
+                          "--shift 1.0 --num-inference-steps 50 --gradient-checkpointing"
+                          + (f" --target-modules {' '.join(ayar.hedef_moduller)}" if ayar.hedef_moduller else ""))
 
 
 @dataclass
