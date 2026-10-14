@@ -9,6 +9,12 @@ neyin nasıl alındığını ve Spotify Web API'nin bugünkü sınırlarını ka
 Depo: `github.com/Caferlyy/distro-finder-bulmaca` (son commit `8ce0f09`, 2026-10-06, v12.1). Virus Records markalı,
 lisans anahtarıyla açılan bir araç ailesi:
 
+**Güncelleme (2026-10-14, v12.5, `8ed2471`):** `C:\df-archive` çekildi, eklenti `install-spicetify.mjs --no-restart` ile
+yeniden uygulandı. Yanki'nin dayandığı `Stillmore.playlist.info/scan` ve satır alanları (`removed.reasonCode`, `plays`,
+`isrc`, `reuploads`, `artistListeners`) değişmedi. Yenilikler: 90 gün sayacı (kaldırılan parçanın dinlenmesi 90 gün
+korunur), `KUR.bat` tek tık kurulum, token'lı GitHub güncellemesi ve `uploader/` (STILLMORE Yükleyici: dağıtımcı
+formunu bir kez öğrenip yayınları **taslak** olarak giren Playwright paneli, `127.0.0.1:4747`; göndermez).
+
 | Parça | Ne | Nerede çalışır |
 |---|---|---|
 | `spicetify/stillmore-finder.js` + `custom-app/stillmore` | Spotify masaüstü istemcisine eklenen sağ tık paneli ve tam sayfa uygulama (v12) | Spotify'ın içinde (Spicetify) |

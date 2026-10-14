@@ -3,7 +3,7 @@
 Neden: başkasının (ve Spotify'ın editoryal) playlist'lerini Web API Şubat 2026'dan beri vermiyor; STILLMORE ise
 istemcinin kendi `PlaylistAPI`'siyle her playlist'i okuyor ve kaldırılmış her parça için neden, kaldırılmadan önceki
 Spotify dinlenmesi, ISRC, sanatçının aylık dinleyicisi ve aynı ISRC'nin çalınabilir yeniden yüklemesini veriyor
-(`window.Stillmore.playlist.scan`, stillmore-finder.js v12.1). CSV'yi elle indirmek yerine Yanki bunu gece kendisi
+(`window.Stillmore.playlist.scan`, stillmore-finder.js v12.1–12.5). CSV'yi elle indirmek yerine Yanki bunu gece kendisi
 çağırır; Web API kotası harcanmaz (istekler istemcinin kendi iç uçlarına gider).
 
 Spotify'ın CDP portuyla (`--remote-debugging-port`) açık olması gerekir. Gece koşusu: Spotify kapalıysa bayrakla açar,
