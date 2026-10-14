@@ -296,3 +296,36 @@ xl-base `complete` (0,30 $; işçiye `complete` görevi eklendi). Araştırma: S
 Sızıntı yok (orijinal eşlikten üretilen E bile eşiğin altında). Eşlik yükseldikçe Whisper vokali daha az anlıyor
 (B, E): söz WER'i burada "vokal gömüldü mü" uyarısı, kalite ölçüsü değil. C orijinalden en uzak (parmak izi en
 düşük): beat vokalden yeniden kuruluyor. Karar kör testte (set `beat-1`).
+
+**Kör test (Scryne, 2026-10-14):** A 13, B 3 (Viva La Vida, Gasolina, Last Last), E 1 (How You Like That), C 0;
+yayınlanamaz işaretli 3 (When I Was Your Man A, Viva La Vida B, Let Her Go A). Beat'i sonradan işlemek kazanmadı: sorun
+üretimin kendisinde. Tür deseni yok: baladlarda When I Was Your Man ve Jar of Hearts iki testte de yayınlanabilir, Let
+Her Go her testte kötü. Aynı ep20 dosyası `egitim-4`'te yayınlanabilir, `egitim-5`'te değil (Viva La Vida, Gasolina):
+tek tohumun tek dinlemesi gürültülü; kararlar çok şarkıda ve tercih sayısıyla verilir.
+
+## Araştırma (2026-10-14)
+
+- ACE-Step: 2026-08-29'dan sonra yeni checkpoint/sürüm yok (son tag v0.1.8, 18 May; HF kartı xl-sft MIT). SFT-stems,
+  fix-inst, 1.6/2 için kaynak yok.
+- Çıkarım: INFERENCE.md "en iyi kalite" için ADG, CFG 7–9, shift 3; issue #1019 (topluluk) SFT'de CFG 7 "agresif beat",
+  2 daha iyi; discussion #1268 shift 1 ↔ 3 tohum farkından küçük. DCW 28 Ağu'dan beri non-turbo'da varsayılan kapalı.
+- Eğitim: Side-Step rehberi 50+ şarkıda 50–100 epoch, rank 128 "azami kalite". **Bizim eğitimlerin hepsi Side-Step
+  varsayılanı `--target-modules q_proj k_proj v_proj o_proj` ile: LoRA yalnız dikkat katmanlarında**
+  (`adapter_config.json`), DiT'in MLP'sine (gate/up/down_proj) hiç dokunulmadı. Ek eğitimin kazanmaması ve kaybın
+  yataylaşması bununla tutarlı; tını/enstrüman dokusu MLP'de.
+- Başka modeller: YuE2 (Eyl 2026, 3,58B, 24 GB) yazarlarının WildSongBench tablosunda ACE-Step 1.5'i geçiyor
+  (SongBench 6,73 / 6,01); cover'ı nota + ASR üzerinden sıfırdan kuruyor; ağırlıklar CC BY-NC 4.0 + bireysel yaratıcıya
+  gelir izni. MuLaCover (HeartMuLa, cover; ticari kullanım yazılı izin), LeVo 2 (lisans bulunamadı). Bağımsız insan
+  tercihi bulunamadı.
+
+## S33 — örnekleme ayarları (eğitimsiz; 2026-10-14, `spikes/s33_ornekleme.py`)
+
+ep20, üretim tarifi, tohum 42, aynı 17 şarkı; tek ayar değişir. A taban (aynı koşunun betiğiyle), D DCW, H heun, S sde,
+G CFG 10; ikinci tur J ADG, L CFG 3, K güç 0,5. Ölçüm `spikes/s33_olcum.py` (kapılar, S22 beat, S32 parça seviyeleri);
+umut veren kollar kör teste. İlk koşu evdeki ağ ~10 dk kopunca yerelde düştü, pod çalışmaya devam etti; çıktılar
+yeniden bağlanarak alındı (`uzak.isci_kos` artık kopuk yoklamada düşmüyor).
+
+## S34 — dikkat + MLP LoRA (hazır, bakiye bekliyor)
+
+Sıfırdan (katman kümesi değişti), aynı 175 şarkı, rank 64, lr 1e-4, 20 epoch, ara kayıt 10; `config/egitim.toml`
+`hedef_moduller`. Kör testte ep20'ye karşı.

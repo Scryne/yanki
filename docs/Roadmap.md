@@ -733,6 +733,13 @@ baladına). Yüklenen 22 şarkıda beat: orijinalden döngüsel (+0,11), groove'
 - **Beşinci eğitim (2026-10-13, S31b):** ep20'den devam, 52 şarkı daha, 12 epoch (3,31 $). Side-Step devam
   yüklemesi hiçbir ağırlığı yüklemiyordu (PEFT anahtar adı), yamalandı. Kayıp yatay; kör testte ep20 13/17 kazandı,
   **ep20 üretimde kalır**. Scryne: vokal yeterli, beat eksik ve kötü → beat ayrı ele alınıyor (S32).
+- **Beat kör testi (S32, 2026-10-14, set `beat-1`):** A (şu anki çıktı) 13/17, B ton eşleme 3, E ayrı beat 1, C
+  complete 0: beat'i sonradan işlemek kazanmadı. Tür sonucu belirlemiyor (aynı türde iyi ve kötü var); aynı ep20
+  dosyası iki testte farklı not aldı (Viva La Vida, Gasolina, How to Save a Life): tek tohum, tek dinleme gürültülü.
+  **Scryne: "model en iyi halinde değil, üretime geçmiyoruz; daha çok eğitip en iyi haline gelince üret ve paylaş."**
+  Üretim duraklatıldı. Sıra: S33 örnekleme ayarları (DCW, heun, sde, CFG 10/3, ADG, güç 0,5; eğitimsiz) → S34
+  dikkat + MLP LoRA (bütün eğitimler yalnız q/k/v/o_proj'daydı; `hedef_moduller`) → ikisi de kazanmazsa YuE2 denemesi
+  (`docs/arastirma/07`, S33–S34).
 - **Ağ ve eğitim çakışması (2026-10-13):** ZIYARETCI Wi-Fi dışarıya yalnız 80/443 açıyordu; üç pod SSH'sız ~15'er dk
   yandı (~0,6 $). Pod açılmadan önce port denemesi (`runpod.ssh_engeli`: github.com:22, portquiz.net:22100); kapalıysa
   sunucu atlanır, günde bir bildirim. Popüler keşif eğitim verisindeki 14 sanatçıyı listeye almıştı, ikisi eğitimdeki
