@@ -325,7 +325,18 @@ G CFG 10; ikinci tur J ADG, L CFG 3, K güç 0,5. Ölçüm `spikes/s33_olcum.py`
 umut veren kollar kör teste. İlk koşu evdeki ağ ~10 dk kopunca yerelde düştü, pod çalışmaya devam etti; çıktılar
 yeniden bağlanarak alındı (`uzak.isci_kos` artık kopuk yoklamada düşmüyor).
 
+**İlk tur durumu (14:37, kısmi):** hesap 1'in bakiyesi koşuya yetmedi ve Scryne bilgisayarı kapattı; biten 77/85 iş
+indirildi (`calisma/dinleme/s33/<şarkı>/<kol>.flac`, `sonuc.json`), pod kapatıldı. 15 şarkıda beş kolun hepsi var,
+16. şarkıda yalnız A ve D, 17. şarkı yok. Hesaplar: 0,12 $ / 1,78 $. Sıradaki adımlar:
+1. Ölçüm: `uv run --no-sync python spikes/s33_olcum.py kapilar`, sonra
+   `motor/ACE-Step-1.5/.venv/Scripts/python.exe spikes/s33_olcum.py beat`, sonra `... s33_olcum.py ozet`.
+2. İkinci tur hesap 2'yle: `uv run --no-sync python spikes/s33_ornekleme.py J L` (17 × 2 kol ≈ 1,1 $; üç kol 1,78 $'a sığmayabilir, K bakiye
+   gelince). Not: koşu bir kolun bütün şarkılarını üretir; ilk turun eksik 8 işi (16. şarkı H S G, 17. şarkı hepsi)
+   şimdilik eksik kalır.
+3. Umut veren kollar `yanki/kulak.py` SETLER'e yeni set (`ornekleme-1`), Scryne dinleme odasında kör oylar.
+
 ## S34 — dikkat + MLP LoRA (hazır, bakiye bekliyor)
 
 Sıfırdan (katman kümesi değişti), aynı 175 şarkı, rank 64, lr 1e-4, 20 epoch, ara kayıt 10; `config/egitim.toml`
-`hedef_moduller`. Kör testte ep20'ye karşı.
+`hedef_moduller`. Kör testte ep20'ye karşı. Gereken: tek hesapta ≥ 8,25 $; Scryne'a ~15 $ yükleyip `aylik_butce`'yi
+30'dan 45'e çekmek önerildi (cevap bekleniyor). Başlatma: `yanki egit`. S33 ve S34 kazanmazsa YuE2 10 şarkıda denenir.
