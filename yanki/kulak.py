@@ -45,6 +45,11 @@ S20_S29 = ("bruno-mars-when-i-was-your-man", "coldplay-viva-la-vida", "passenger
            "daddy-yankee-gasolina", "blackpink-how-you-like-that", "burna-boy-last-last", "central-cee-doja")
 
 SETLER = (
+    Set("ornekleme-1", "Örnekleme ayarı · 15 şarkı",
+        "Aynı model (ep20), aynı tohum ve tarif; yalnız üretimin örnekleme ayarı değişir: şu anki ayar, daha yüksek "
+        "yönlendirme (CFG 10), ikinci dereceden örnekleyici (heun). Hepsi yayın mastering'inden geçti, aynı ses "
+        "yüksekliğinde.",
+        "dinleme/s33k", {"A": "şu anki ayar", "G": "CFG 10", "H": "heun örnekleyici"}),
     Set("beat-1", "Beat · 17 şarkı",
         "Aynı 17 şarkı, vokal hep şu anki modelin (ep20) vokali. Kollar: şu anki çıktı; aynı çıktının davul, bas ve "
         "diğer parçaları orijinalin parçalarına göre yeniden karışmış hali; orijinalin vokalsiz eşliğinden ayrı "

@@ -27,8 +27,11 @@ from yanki import kulak  # noqa: E402
 
 CALISMA = KOK / "calisma"
 KLASOR = CALISMA / "_spike" / "s32"
+# torch sabit + CUDA dizini: sabitsiz `--with demucs` PyPI'dan CPU torch çekiyor ("Torch not compiled with CUDA")
 DEMUCS = ["uv", "run", "--no-project", "--python", "3.11", "--with", "demucs", "--with", "soundfile",
-          "--with", "torchaudio<2.9", "python", "-m", "demucs"]
+          "--with", "torch==2.7.1+cu128", "--with", "torchaudio==2.7.1+cu128",
+          "--index", "https://download.pytorch.org/whl/cu128", "--index-strategy", "unsafe-best-match",
+          "python", "-m", "demucs"]
 PARCALAR = ("vocals", "drums", "bass", "other")
 
 

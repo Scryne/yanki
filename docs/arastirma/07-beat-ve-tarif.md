@@ -335,6 +335,29 @@ indirildi (`calisma/dinleme/s33/<şarkı>/<kol>.flac`, `sonuc.json`), pod kapat�
    şimdilik eksik kalır.
 3. Umut veren kollar `yanki/kulak.py` SETLER'e yeni set (`ornekleme-1`), Scryne dinleme odasında kör oylar.
 
+**İlk tur ölçümü (16 şarkı, medyan; parça seviyeleri vokale göre dB, cover − orijinal):**
+
+| Kol | Kapı | Söz WER | Groove | Bas | Diğer | Davul |
+|---|---|---|---|---|---|---|
+| A taban | 12/16 | 0,216 | 0,633 | −4,39 | −2,49 | −0,67 |
+| D DCW | 0/16 | 1,000 | −0,008 | +4,01 | +16,47 | +3,82 |
+| H heun | 15/15 | 0,174 | 0,579 | −4,89 | −5,10 | −2,22 |
+| S sde | 5/15 | 0,738 | 0,512 | −7,69 | −0,40 | −1,16 |
+| G CFG 10 | 13/15 | 0,147 | 0,593 | −3,25 | −3,33 | −0,97 |
+
+- **D elendi:** hiçbir şarkıda anlaşılır söz yok (WER ≥ 0,99), groove ~0; dalga ve süre kapısı geçiyor. Parça
+  seviyelerinin artısı vokal olmadığından (vokale göre ölçü). Bu modelde DCW vokali bozuyor.
+- **S elendi:** söz kapısı 5/15, bas −7,7 dB (A'dan da ince).
+- **H:** söz en temiz (A'nın kaldığı Walking on Air, Thrill Is Gone, All the Small Things'te geçiyor), ama eşlik
+  vokale göre daha ince (diğer −5,1, davul −2,2) ve groove A'dan düşük. Vokalin netleşmesi göreli eşliği düşürmüş
+  olabilir; mutlak seviye ayrı ölçülmedi.
+- **G:** bası A'dan 1,1 dB toparlayan tek kol, söz WER en düşük; diğer parça 0,8 dB daha ince, groove biraz düşük.
+  Issue #1019'un "SFT'de yüksek CFG beat'i bozar" iddiası bizde bas için tersine, groove için hafifçe doğru çıktı.
+- Sonuç: örnekleme ayarı beat'in asıl sorununu (bas −4 dB, ince eşlik) çözmüyor; kazanç en çok G'de ~1 dB. Kör test
+  `ornekleme-1` (A/G/H, 15 şarkı; Last Last ve Doja eksik) `spikes/s33_karisim.py` ile yayın mastering'inden geçti,
+  `calisma/dinleme/s33k/`. Demucs `uv --with demucs` ile CPU torch çekiyordu; `s32_beat_olcum.DEMUCS` torch
+  `2.7.1+cu128`'e sabitlendi (dosya başı ~40 sn, RTX 4060).
+
 ## S34 — dikkat + MLP LoRA (hazır, bakiye bekliyor)
 
 Sıfırdan (katman kümesi değişti), aynı 175 şarkı, rank 64, lr 1e-4, 20 epoch, ara kayıt 10; `config/egitim.toml`
