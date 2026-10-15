@@ -64,6 +64,16 @@ class EleIstegi(BaseModel):
     elendi: bool = True
 
 
+class SanatciAyari(BaseModel):
+    gece: bool | None = None
+    spotify_sanatci_id: str | None = Field(default=None, max_length=40)
+    yayin_on_gun: int | None = Field(default=None, ge=1, le=120)
+
+
+class GonderOnayi(BaseModel):
+    onay: str = Field(max_length=300)  # şarkının adı, elle yazılır: geri alınamaz gönderimin onayı
+
+
 class KulakOyu(BaseModel):
     en_iyi: str | None = Field(default=None, max_length=40)
     yayinlanir: bool | None = None
@@ -538,6 +548,79 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None) -> FastA
         sarkilar.sort(key=lambda s: s["yayin_tarihi"] or "")
         return {"sarkilar": sarkilar, "kota": _kota(a.kok), "profiller": sorted(takip.profil_kimlikleri(calisma)),
                 "takvim": _takvim(a.kok, calisma), "olaylar": olay.oku(calisma, son=8)[::-1]}
+
+    # ---- sanatçı (yanki/sanatci.py) ----
+    from yanki import sanatci
+
+    isci = sanatci.Isci(a.kok, calisma)
+
+    @app.get("/api/sanatci")
+    def sanatci_ozet():
+        """Orvane: katalog dağıtımdaki haliyle, dağıtım ayarları, RouteNote oturumu (diskten), son iş."""
+        from yanki import paket, takip
+
+        yayin_yolu = a.kok / "config" / "yayin.toml"
+        y = paket.yayin_ayarlari(yayin_yolu)
+        return {"ad": y.sanatci_adi, "dagitimci": y.dagitimci, "ayar": sanatci.ayar_oku(a.kok),
+                "katalog": sanatci.katalog(calisma, _kapak_url, sanatci.guncel_tarif(a)),
+                "profiller": sorted(takip.profil_kimlikleri(calisma)), "oturum": sanatci.oturum(calisma),
+                "is": isci.durum(), "takvim": _takvim(a.kok, calisma),
+                "yeni_yayin_tarihi": sanatci.yeni_yayin_tarihi(a.kok).isoformat()}
+
+    @app.get("/api/sanatci/kapak/{upc}")
+    def sanatci_kapak(upc: str, boyut: int = 96):
+        """Arşivdeki (dağıtımcıda yaşayan) yayının kapağı."""
+        if not re.fullmatch(r"\d{12,13}", upc) or boyut not in KAPAK_BOYUTLARI:
+            raise HTTPException(404, "kapak yok")
+        kaynak = sanatci.arsiv_kapak(calisma, upc)
+        if kaynak is None:
+            raise HTTPException(404, "kapak yok")
+        return FileResponse(kapak_kucuk(calisma, f"arsiv-{upc}", kaynak, boyut),
+                            headers={"Cache-Control": "max-age=86400"})
+
+    @app.post("/api/sanatci/ayar")
+    def sanatci_ayar(istek: SanatciAyari):
+        degisiklik = {k: v for k, v in istek.model_dump().items() if v is not None}
+        if not degisiklik:
+            raise HTTPException(422, "değişiklik yok")
+        try:
+            return sanatci.ayar_yaz(a.kok, degisiklik)
+        except ValueError as e:
+            raise HTTPException(422, str(e)) from e
+
+    def is_baslat(ad: str, kimlik: str | None = None) -> dict:
+        try:
+            return isci.baslat(ad, kimlik)
+        except RuntimeError as e:
+            raise HTTPException(409, str(e)) from e
+
+    @app.post("/api/sanatci/{kimlik}/taslak")
+    def sanatci_taslak(kimlik: str):
+        """RouteNote taslağı: dört adım doldurulur, gönderilmez (`yanki yukle --taslak`)."""
+        d = oku(kimlik)
+        if d.asama != "paketlendi":
+            raise HTTPException(409, f"yalnız paketlenmiş şarkı (aşama: {d.asama})")
+        return is_baslat("taslak", kimlik)
+
+    @app.post("/api/sanatci/{kimlik}/gonder")
+    def sanatci_gonder(kimlik: str, istek: GonderOnayi):
+        """Geri alınamaz: şartlar kabul edilir, "Distribute Free" (`yanki yukle`). Onay için şarkının adı elle yazılır;
+        gece koşusunun kapısı (`[routenote] gece`) burada aranmaz, Scryne'ın kendi tıklaması."""
+        d = oku(kimlik)
+        if d.asama != "paketlendi":
+            raise HTTPException(409, f"yalnız paketlenmiş şarkı (aşama: {d.asama})")
+        if istek.onay.strip().casefold() != d.ad.strip().casefold():
+            raise HTTPException(422, "onay için şarkının adını aynen yaz")
+        return is_baslat("gonder", kimlik)
+
+    @app.post("/api/sanatci/giris")
+    def sanatci_giris():
+        """RouteNote girişi: tarayıcı penceresi açılır, Scryne girer (şifre hatta tutulmaz)."""
+        return is_baslat("giris")
+
+    @app.get("/api/sanatci/is")
+    def sanatci_is():
+        return isci.durum() or {}
 
     # ---- pano ----
     @app.get("/api/pano")

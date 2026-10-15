@@ -95,6 +95,11 @@ duraklarında): rakamlar sütun sütun hizalanır, kaymaz.
   şarkılar hap biçiminde); asimetrik iki sütun — geniş sol "Senden beklenen", "Dağıtımda" kapak duvarı, "Yükleme
   sırası", bildirimler (iki satır, tıklayınca açılır); dar sağ "Kazanç", "Üretim tarifi", "Son gece koşusu",
   "Otomasyon" (GPU bütçe çubuğu).
+- **Sanatçı** (`#_sanatci`, 2026-10-15): üstte kataloğun kapaklarından 3 × 2 mozaik + gümüş gradyan sanatçı adı (marka
+  sayılır); altında dört duraklı katalog zinciri (Kuyruk → Taslak → İnceleme → Yayında, pano zincirinin kısa hali);
+  solda katalog defteri hal gruplarında (Gönderime hazır, Yarım taslak, Kuyrukta, İncelemede, Yayında), sağda cam yan
+  paneller: Son iş (canlı günlük), RouteNote oturumu, Dağıtım (gece yüklemesi anahtarı, yayın günü, Spotify kimliği).
+  Geri alınamaz "Gönder" mercan tehlike düğmesi; pencerede şarkının adı elle yazılmadan açılmaz.
 - **Şarkı ekranı:** başlıkta 168 px kapak; kapağın kendisi bulanık bir ışık olarak başlığın arkasında (statik, 64 px
   blur, %32). Yanında aşama, ad (34 px), sanatçı, bilgi çipleri (dil, süre, tempo, yazarlar…) ve katlanır betim.
   Altında iki sütun: solda hızlı karşılaştırma + orijinal + aday şeritleri (yeni hatla üretilenler üstte, öncekiler

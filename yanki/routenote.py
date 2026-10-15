@@ -13,7 +13,7 @@ Oturum: `calisma/.routenote_profil` kalıcı Chrome profili (Scryne'ın asıl Ch
 import json
 import re
 import time
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
 GIRIS_URL = "https://www.routenote.com/rn/login"
@@ -321,6 +321,21 @@ def _bekle_adres(s, parca: str, ne: str) -> None:
         raise RuntimeError(f"RouteNote {ne} kaydetmedi ({s.url}): {hata}")
 
 
+YAYIN_ASGARI_GUN = 10  # RouteNote incelemesi 5–10 iş günü (form uyarısı); daha yakın tarih incelemede geçer
+
+
+def tarihleri_guncelle(s, upc: str, gun: date) -> None:
+    """Bekleyen taslağın "Originally Released" ve "Sales Start Date"i (ikisi aynı gün). Albüm sayfası yeniden
+    kaydedilir; diğer alanlar sayfada kayıtlı halleriyle gider."""
+    s.goto(f"{RN}/editalbum/{upc}")
+    s.wait_for_load_state("networkidle")
+    _sohbeti_kapat(s)
+    _tarih(s, "#edit_album_info_org_date", gun)
+    _tarih(s, "#edit_album_info_sale_date", gun)
+    s.click("#edit-album-save-image")
+    _bekle_adres(s, "/edit_album/", "yeni yayın tarihini")
+
+
 def dagit(s, upc: str) -> None:
     """Son adım: şartları kabul (`#submit_chk`) + "Distribute Free". Geri alınamaz: ses ve playlist değişikliği
     bundan sonra yapılamıyor. Henüz canlıda sınanmadı (ilk gerçek gönderim Scryne'ın onayıyla); düğmeden sonra
@@ -426,6 +441,10 @@ class RouteNote:
                 if not kayit.get("isrc"):
                     isle(isrc=yayin_isrc(s, upc))
                 if gonder and kayit.get("adim") == "hazir":
+                    eski = date.fromisoformat(kayit.get("yayin_tarihi") or "2000-01-01")
+                    if eski < date.today() + timedelta(days=YAYIN_ASGARI_GUN):  # taslak beklerken tarih yaklaştı
+                        tarihleri_guncelle(s, upc, yayin_tarihi)
+                        isle(yayin_tarihi=yayin_tarihi.isoformat())
                     dagit(s, upc)
                     isle(adim="gonderildi", gonderim=date.today().isoformat())
             finally:

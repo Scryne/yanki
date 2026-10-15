@@ -350,8 +350,8 @@ def uret(a: Ayarlar, calisma: Path, kimlikler: list[str] | None = None,
         return {r.id: r for r in calistir(a, isler, calisma / "_motor" / ad, ZAMAN_ASIMI_SN_IS_BASI * len(isler))}
 
     planlar, tur1, pencere_bas, islenen, notlar = {}, [], {}, [], {}
-    tarif = {"model": a.motor.model, "lora": lora_adi(a.motor.lora),
-             "tarih": datetime.now().isoformat(timespec="minutes")}
+    tarif = {"model": a.motor.model, "lora": lora_adi(a.motor.lora), "ek": dict(a.cover.ek),
+             "tarih": datetime.now().isoformat(timespec="minutes")}  # ek: CFG vb. (Sanatçı görünümü eski tarifi ayırır)
     elle_stil = _elle_stil(a.kok) if betimle else set()
     for d in hedef:
         n0 = len(d.notlar)
