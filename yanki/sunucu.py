@@ -66,7 +66,8 @@ class EleIstegi(BaseModel):
 class SanatciAyari(BaseModel):
     gece: bool | None = None
     spotify_sanatci_id: str | None = Field(default=None, max_length=40)
-    yayin_on_gun: int | None = Field(default=None, ge=10, le=120)  # RouteNote incelemesi 5–10 iş günü
+    # 0: onaylanınca yayında; yoksa en az 10 (RouteNote incelemesi 5–10 iş günü; 1–9'u sanatci.ayar_yaz reddeder)
+    yayin_on_gun: int | None = Field(default=None, ge=0, le=120)
     onay: str | None = Field(default=None, max_length=100)  # gece yüklemesini açmak: sanatçı adı elle yazılır
 
 
@@ -114,7 +115,9 @@ def _takvim(kok: Path, calisma: Path) -> dict:
     yazarsiz = [_ozet(d, calisma) for k in p.yazarsiz if (d := durum.oku(calisma, k))]
     return {"beklemede": p.beklemede, "duzeltme": p.duzeltme, "yazarsiz": yazarsiz,
             "sira": [{"kimlik": x.kimlik, "sanatci": x.sanatci, "ad": x.ad, "yukleme": x.yukleme.isoformat(),
-                      "yayin_tarihi": x.yayin_tarihi.isoformat(), "kesif": x.puan > 0,
+                      # yükleme günü ya da önce: tarihsiz (yayin_on_gun = 0), RouteNote onaylayınca yayında
+                      "yayin_tarihi": x.yayin_tarihi.isoformat() if x.yayin_tarihi > x.yukleme else None,
+                      "kesif": x.puan > 0,
                       "kapak": _kapak_url(calisma, x.kimlik)} for x in p.sira]}
 
 
@@ -593,7 +596,7 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None, gorev_ok
                 "katalog": sanatci.katalog(calisma, _kapak_url, sanatci.guncel_tarif(a)),
                 "profiller": sorted(takip.profil_kimlikleri(calisma)), "oturum": sanatci.oturum(calisma),
                 "is": isci.durum(), "takvim": _takvim(a.kok, calisma),
-                "yeni_yayin_tarihi": sanatci.yeni_yayin_tarihi(a.kok).isoformat()}
+                "yeni_yayin_tarihi": (t := sanatci.yeni_yayin_tarihi(a.kok)) and t.isoformat()}
 
     @app.get("/api/sanatci/kapak/{upc}")
     def sanatci_kapak(upc: str, boyut: int = 96):

@@ -1116,7 +1116,8 @@ def _takvim(args: argparse.Namespace) -> int:
         print("kuyruk boş: paketlenmiş şarkı yok")
     for i, x in enumerate(p.sira, 1):
         puan = f"keşif {x.puan:,.0f}" if x.puan else "liste"
-        print(f"{i:2}. {x.yukleme:%Y-%m-%d} yükle → {x.yayin_tarihi:%Y-%m-%d} yayın  {x.sanatci} — {x.ad}  ({puan})")
+        yayin = "onaylanınca" if x.yayin_tarihi <= x.yukleme else f"{x.yayin_tarihi:%Y-%m-%d}"  # yayin_on_gun = 0
+        print(f"{i:2}. {x.yukleme:%Y-%m-%d} yükle → {yayin} yayın  {x.sanatci} — {x.ad}  ({puan})")
     for kimlik in p.duzeltme:
         print(f"  ✗ {kimlik}: dağıtımcı reddetti; düzeltip `yanki paketle --yeniden` deyince kuyruğa döner")
     return 0

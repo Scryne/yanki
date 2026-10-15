@@ -93,7 +93,7 @@ class _Oge:
     def click(self):
         self.s.olaylar.append(("tik", self.secici))
         if self.secici == 'input[value="Distribute Free"]':
-            self.s.gorunen.add("#agree_terms")
+            self.s.gorunen.add(routenote.ONAY_PENCERESI)
 
     def wait_for(self, state="visible", timeout=None):
         if self.secici not in self.s.gorunen:
@@ -108,7 +108,7 @@ class _Sayfa:
 
     def __init__(self, pencere_metni="Release with Free Distribution. No further changes can be made"):
         self.olaylar, self.gorunen = [], {'input[value="Distribute Free"]'}
-        self.metinler = {"body": "Complete Complete Complete Complete", "#agree_terms": pencere_metni}
+        self.metinler = {"body": "Complete Complete Complete Complete", routenote.ONAY_PENCERESI: pencere_metni}
 
     def locator(self, secici):
         return _Oge(self, secici)
@@ -150,3 +150,23 @@ def test_dagit_beklenmeyen_pencerede_tiklamaz():
     with pytest.raises(RuntimeError, match="beklenmeyen"):
         routenote.dagit(s, "5064150700802", son_tiktan_once=lambda: pytest.fail("işaret yazıldı"))
     assert ("tik", "#agree_terms #rn_btn_ok") not in s.olaylar
+
+
+class _TarihSayfasi:
+    def __init__(self):
+        self.kutular = {}
+
+    def eval_on_selector(self, secici, _js, deger):
+        self.kutular[secici] = deger
+
+
+def test_tarihsiz_yayin_satis_tarihini_bos_birakir():
+    """yayin_on_gun = 0 (en erken): satış tarihi boş → RouteNote onaylar onaylamaz yayında; ilk yayın bugün."""
+    from datetime import date
+
+    s = _TarihSayfasi()
+    routenote._tarihler(s, None)
+    assert s.kutular == {"#edit_album_info_org_date": date.today().strftime("%Y/%m/%d"),
+                         "#edit_album_info_sale_date": ""}
+    routenote._tarihler(s, date(2026, 11, 5))
+    assert set(s.kutular.values()) == {"2026/11/05"}

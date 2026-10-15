@@ -18,7 +18,7 @@ from pathlib import Path
 from yanki import dosya, durum, sistem
 
 DURUM_SIRASI = ("kontrol", "taslak_hazir", "taslak_yarim", "kuyruk", "inceleme", "yayinda")
-YAYIN_ON_GUN_ASGARI = 10  # RouteNote incelemesi 5–10 iş günü; daha yakın tarih incelemede geçer
+YAYIN_ON_GUN_ASGARI = 10  # RouteNote incelemesi 5–10 iş günü; daha yakın tarih incelemede geçer (0: onaylanınca)
 
 
 def _meta(calisma: Path, kimlik: str) -> dict:
@@ -192,8 +192,8 @@ def ayar_yaz(kok: Path, degisiklik: dict) -> dict:
     metin = yol.read_text(encoding="utf-8")
     for ad, v in degisiklik.items():
         bolum, anahtar, tur = AYARLAR[ad]
-        if tur is int and not 1 <= int(v) <= 120:
-            raise ValueError(f"{ad} 1 ile 120 arasında olmalı")
+        if tur is int and not (int(v) == 0 or YAYIN_ON_GUN_ASGARI <= int(v) <= 120):
+            raise ValueError(f"{ad} 0 (onaylanınca) ya da {YAYIN_ON_GUN_ASGARI}–120 olmalı")
         if tur is str and not re.fullmatch(r"[A-Za-z0-9]{0,40}", str(v)):
             raise ValueError(f"{ad}: Spotify kimliği yalnız harf ve rakam")
         m = re.search(rf"(?ms)^\[{re.escape(bolum)}\]\s*$(.*?)(?=^\[|\Z)", metin)
@@ -213,9 +213,12 @@ def ayar_yaz(kok: Path, degisiklik: dict) -> dict:
     return ayar_oku(kok)
 
 
-def yeni_yayin_tarihi(kok: Path, bugun: date | None = None) -> date:
-    gun = max(int(ayar_oku(kok).get("yayin_on_gun") or 21), YAYIN_ON_GUN_ASGARI)
-    return (bugun or date.today()) + timedelta(days=gun)
+def yeni_yayin_tarihi(kok: Path, bugun: date | None = None) -> date | None:
+    """Şimdi gönderilecek yayının tarihi; None: tarihsiz, RouteNote onaylayınca yayında (`yayin_on_gun = 0`)."""
+    gun = ayar_oku(kok).get("yayin_on_gun")
+    if gun == 0:
+        return None
+    return (bugun or date.today()) + timedelta(days=max(int(gun or 21), YAYIN_ON_GUN_ASGARI))
 
 
 # ── odadan başlatılan işler ────────────────────────────────

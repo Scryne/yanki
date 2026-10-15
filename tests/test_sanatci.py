@@ -45,7 +45,7 @@ def test_ayar_yaz_yalniz_satiri_degistirir_yorumlari_korur(kok):
     assert sonra.count("gece = true") == 1
 
 
-@pytest.mark.parametrize("degisiklik", [{"yayin_on_gun": 0}, {"spotify_sanatci_id": "x/../y"}])
+@pytest.mark.parametrize("degisiklik", [{"yayin_on_gun": 5}, {"yayin_on_gun": -1}, {"spotify_sanatci_id": "x/../y"}])
 def test_ayar_yaz_bozuk_degeri_yazmaz(kok, degisiklik):
     once = (kok / "config" / "yayin.toml").read_text(encoding="utf-8")
     with pytest.raises(ValueError):
@@ -106,6 +106,9 @@ def test_odadan_ayar(oda, kok):
     assert istemci.post("/api/sanatci/ayar", json={"gece": False}).json()["gece"] is False  # kapatmak serbest
     assert istemci.post("/api/sanatci/ayar", json={"yayin_on_gun": 500}).status_code == 422
     assert istemci.post("/api/sanatci/ayar", json={"yayin_on_gun": 3}).status_code == 422  # inceleme 5–10 iş günü
+    # 0: tarihsiz, onaylanınca yayında (en erken)
+    assert istemci.post("/api/sanatci/ayar", json={"yayin_on_gun": 0}).json()["yayin_on_gun"] == 0
+    assert sanatci.yeni_yayin_tarihi(kok) is None and istemci.get("/api/sanatci").json()["yeni_yayin_tarihi"] is None
     assert sanatci.onay_tutar("ıce", "Ice") and sanatci.onay_tutar("İCE", "ice") and not sanatci.onay_tutar("", "")
 
 

@@ -70,8 +70,10 @@ haftada = 0
 # tarih incelemede geçerse parça onaylanınca çıkar. Orvane'de Spotify for Artists yok, pitch payının karşılığı yok.
 # Gönderilen yayının tarihi incelemedeyken değiştirilemiyor (409), bu yüzden en baştan kısa.
 # 2026-10-15: dağıtımcı yeniden RouteNote (inceleme 5–10 iş günü, sayfadaki uyarı) → 21.
-# RouteNote yükleyicisi 10 günden yakın tarihi 10'a çeker (routenote.YAYIN_ASGARI_GUN); oda 10'dan azını kabul etmez.
-yayin_on_gun = 21
+# RouteNote yükleyicisi 10 günden yakın tarihi 10'a çeker (routenote.YAYIN_ASGARI_GUN).
+# 0 = tarihsiz: "Sales Start Date" boş, RouteNote onaylar onaylamaz mağazalara gider (formdaki kural). Scryne
+# 2026-10-15: "şarkı yayınlanma takvimini en erken olarak ayarla" → 0.
+yayin_on_gun = 0
 # "surekli": kabul beklenmez, her gün yüklenir; dağıtımcı bir parçayı reddederse neden anlaşılıp düzeltilene kadar
 # yeni yükleme yok (reddedilen yayın aynı kayıtla düzeltilir, parça kotası yanmaz). "ilk_kabul": ilk kabule kadar
 # incelemede tek parça (Faz 7 kararı; Scryne 2026-10-10 "sürekli" deyince bırakıldı). "hemen": kapı yok.
@@ -84,7 +86,7 @@ baslangic = "surekli"
 # karar vermeden gitmesin diye kapalı başlar (2026-10-15).
 # 2026-10-15 açıldı (Scryne: "direkt olarak routenote da paylaşılsın"): otomatik onaylanan (24 sa veto penceresi)
 # ve paketlenen şarkı koşuda gönderilir. Oturum düşerse yükleme durur ve "RouteNote'a giriş yap" bildirilir.
-gece = true
+gece = false
 # Orvane'ın Spotify sanatçı kimliği (profil oluşunca): sanatçı aramasında bu profil seçilir. Boşsa "Create a new
 # profile"; hesapta aynı ada bağlı profil varsa RouteNote onu önerir ve o kullanılır.
 spotify_sanatci_id = ""

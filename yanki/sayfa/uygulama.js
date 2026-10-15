@@ -735,7 +735,7 @@ function takvimBolumu(t) {
     el("div", { class: "olculer" },
       el("span", { class: "rozet " + (i === 0 && !t.beklemede ? "ok" : "") }, i === 0 ? "sıradaki" : `${i + 1}.`),
       el("span", {}, "yükle ", el("b", {}, tarih(x.yukleme))),
-      el("span", {}, "yayın ", el("b", {}, tarih(x.yayin_tarihi))),
+      el("span", {}, "yayın ", el("b", {}, x.yayin_tarihi ? tarih(x.yayin_tarihi) : "onaylanınca")),
       x.kesif ? el("span", { class: "rozet ok", title: "Keşiften: Spotify'da kaldırılmış, hâlâ aranan şarkı" }, "keşif") : null),
     el("div", { class: "kayit-eylem" }))))
     : el("p", { class: "bos-kutu" }, "Kuyrukta paket yok. Onayladığın şarkılar paketlenince buraya girer.");
@@ -1221,14 +1221,16 @@ function gonderPenceresi(x, s) {
   // sunucuyla aynı kural (sanatci.onay_metni): I/İ/ı farkı ve büyük-küçük harf aranmaz
   const sade = (s) => s.trim().replace(/[Iİı]/g, "i").toLowerCase();
   kutu.addEventListener("input", () => { dugme.disabled = sade(kutu.value) !== sade(x.ad); });
-  const yakin = !x.yayin_tarihi || new Date(x.yayin_tarihi) < new Date(Date.now() + 10 * 864e5);
+  // yeni_yayin_tarihi boş: ayar "onaylanınca" (satış tarihi boş, RouteNote onaylar onaylamaz yayında)
+  const onaydaYayin = s.yeni_yayin_tarihi ? null : "RouteNote onaylayınca (5–10 iş günü)";
+  const yakin = onaydaYayin || !x.yayin_tarihi || new Date(x.yayin_tarihi) < new Date(Date.now() + 10 * 864e5);
   const dlg = pencere(`"${x.ad}" RouteNote'a gönderilsin mi?`, [
     el("p", {}, x.hal === "kuyruk" ? "Taslak açılır, dört adım doldurulur ve yayın incelemeye gönderilir." : "Hazır taslak incelemeye gönderilir.",
       " RouteNote'un şartları senin adına kabul edilir. Gönderdikten sonra ses ve playlist değiştirilemez; kaldırmak için panelden takedown gerekir."),
     el("dl", { class: "ayar-listesi gonder-ozet" },
       el("dt", {}, "Sanatçı"), el("dd", {}, s.ad),
       el("dt", {}, "Orijinali"), el("dd", {}, x.orijinal || "—"),
-      el("dt", {}, "Yayın tarihi"), el("dd", {}, yakin ? `${tarih(s.yeni_yayin_tarihi)} (yenilenecek)` : tarih(x.yayin_tarihi)),
+      el("dt", {}, "Yayın tarihi"), el("dd", {}, onaydaYayin || (yakin ? `${tarih(s.yeni_yayin_tarihi)} (yenilenecek)` : tarih(x.yayin_tarihi))),
       el("dt", {}, "Bölge"), el("dd", {}, "ABD, Kanada, Meksika, Hindistan, Pakistan hariç"),
       el("dt", {}, "Kapalı mağaza"), el("dd", {}, "Amazon, Kore mağazaları, YouTube Content ID")),
     x.eski_tarif ? el("p", { class: "uyari" }, "Bu paket bugünkü üretim tarifinden önce üretildi. Yeni modeli beklemek istiyorsan şimdilik gönderme.") : null,
@@ -1308,15 +1310,16 @@ function dagitimAyarPaneli(s) {
   const gece = el("button", { class: "anahtar", type: "button", role: "switch", "aria-checked": s.ayar.gece ? "true" : "false", "aria-labelledby": "gece-ad",
     onclick: () => s.ayar.gece ? kaydet({ gece: false }, "Gece yüklemesi kapandı: sırası gelen paket yalnız bildirilir.") : geceAcPenceresi(s, kaydet) },
     el("span", { "aria-hidden": "true" }));
-  const gun = el("input", { id: "yayin-gun", type: "number", min: 10, max: 120, value: s.ayar.yayin_on_gun ?? 21, inputmode: "numeric" });
+  const gun = el("input", { id: "yayin-gun", type: "number", min: 0, max: 120, value: s.ayar.yayin_on_gun ?? 21, inputmode: "numeric", "aria-describedby": "yayin-gun-ipucu" });
   const kimlik = el("input", { id: "spotify-kimlik", type: "text", value: s.ayar.spotify_sanatci_id || "", maxlength: 40, spellcheck: "false", autocomplete: "off", placeholder: "profil adresindeki kimlik" });
   return el("section", { class: "cam yan-panel", "aria-label": "Dağıtım ayarları" }, el("h2", {}, "Dağıtım"),
     el("div", { class: "ayar-satir" }, el("div", {}, el("b", { id: "gece-ad" }, "Gece yüklemesi"),
       el("p", { class: "ipucu" }, s.ayar.gece ? "Takvim sırası gelen paketi kendisi gönderir." : "Kapalı: sırası gelen paket yalnız bildirilir, gönderim senin tıklamanla.")), gece),
     s.takvim?.beklemede ? el("p", { class: "ipucu" }, `Takvim: ${s.takvim.beklemede}`) : null,
-    el("form", { class: "ayar-form", onsubmit: (e) => { e.preventDefault(); kaydet({ yayin_on_gun: +gun.value }, `Yayın tarihi artık yüklemeden ${gun.value} gün sonra.`); } },
+    el("form", { class: "ayar-form", onsubmit: (e) => { e.preventDefault(); kaydet({ yayin_on_gun: +gun.value }, +gun.value === 0 ? "Yayınlar artık RouteNote onaylar onaylamaz çıkar." : `Yayın tarihi artık yüklemeden ${gun.value} gün sonra.`); } },
       el("label", { for: "yayin-gun" }, "Yayın tarihi, yüklemeden"), el("div", { class: "satir-ici" }, gun, el("span", { class: "ipucu" }, "gün sonra"),
-        el("button", { class: "dugme kucuk", type: "submit" }, "Kaydet"))),
+        el("button", { class: "dugme kucuk", type: "submit" }, "Kaydet")),
+      el("p", { class: "ipucu", id: "yayin-gun-ipucu" }, s.ayar.yayin_on_gun === 0 ? "0: tarih yok, RouteNote onaylar onaylamaz yayında (en erken)." : "0 yazarsan onaylar onaylamaz yayında (en erken); tarih seçersen en az 10 gün.")),
     el("form", { class: "ayar-form", onsubmit: (e) => { e.preventDefault(); kaydet({ spotify_sanatci_id: kimlik.value.trim() }, kimlik.value.trim() ? "Spotify profili kaydedildi; yeni yüklemeler bu profile bağlanır." : "Spotify profili temizlendi."); } },
       el("label", { for: "spotify-kimlik" }, "Spotify sanatçı kimliği"), el("div", { class: "satir-ici" }, kimlik, el("button", { class: "dugme kucuk", type: "submit" }, "Kaydet")),
       el("p", { class: "ipucu" }, "İlk parça yayına girince profil adresindeki kimliği yaz; sonraki yüklemeler ayrı profil açmaz.")));

@@ -139,9 +139,19 @@ def _sanatci(s, kutu: str, ad: str, spotify_id: str | None) -> None:
         raise RuntimeError(f"sanatçı seçilemedi: kutuda '{s.input_value(kutu)}'")
 
 
-def _tarih(s, kutu: str, gun: date) -> None:
-    s.eval_on_selector(kutu, "(e, v) => { e.value = v; e.dispatchEvent(new Event('change', {bubbles: true})) }",
-                       gun.strftime("%Y/%m/%d"))
+def _tarih(s, kutu: str, gun: date | None) -> None:
+    # boş tarih sayfanın "Clear Date"i gibi olaysız yazılır: `change` sayfanın check_ssd'sini çağırıyor, o da boş
+    # değeri geçersiz tarih sayıp hata penceresi (#Comp_terms5) açıyor, pencere sonraki tıkları yutuyor (2026-10-16)
+    s.eval_on_selector(kutu, "(e, v) => { e.value = v; if (v) e.dispatchEvent(new Event('change', {bubbles: true})) }",
+                       gun.strftime("%Y/%m/%d") if gun else "")
+
+
+def _tarihler(s, yayin: date | None) -> None:
+    """"Originally Released" ve "Sales Start Date". `yayin` None: satış tarihi boş kalır, yayın onaylanınca mağazalara
+    gider (form: "If blank, your release is delivered immediately after approval"; Scryne 2026-10-15 "en erken"). Boş
+    satış tarihiyle ileri ilk yayın tarihi kabul edilmiyor, ilk yayın o zaman bugün."""
+    _tarih(s, "#edit_album_info_org_date", yayin or date.today())
+    _tarih(s, "#edit_album_info_sale_date", yayin)
 
 
 def kisi_adi(ad: str) -> str:
@@ -194,7 +204,7 @@ def on_kontrol(meta: dict, ses: Path, kapak: Path) -> None:
             raise ValueError(f"kapak RouteNote kuralına uymuyor: {im.size} {im.mode} {kapak.stat().st_size} B")
 
 
-def album_bilgisi(s, meta: dict, yayin_tarihi: date, tur: str, spotify_id: str | None = None) -> None:
+def album_bilgisi(s, meta: dict, yayin_tarihi: date | None, tur: str, spotify_id: str | None = None) -> None:
     """1. adım (Album Details), `paket._routenote_formu` 1–15 ile aynı sıra. Kaydetmez. Alanlar `on_kontrol`'den
     geçmiş olmalı."""
     sanatci = meta["sanatci"]
@@ -213,13 +223,12 @@ def album_bilgisi(s, meta: dict, yayin_tarihi: date, tur: str, spotify_id: str |
     s.select_option("#role_contrib", "Producer")
     s.fill("#edit_album_first_contributor", sanatci)
     _sec(s, "#edit_album_info_genre", tur)
-    s.fill("#cpy_year", str(meta.get("orijinal_yil") or yayin_tarihi.year))
+    s.fill("#cpy_year", str(meta.get("orijinal_yil") or (yayin_tarihi or date.today()).year))
     s.fill("#cpy_name", ", ".join(f"{a} {s_}" for a, s_ in yazarlar_))
     s.fill("#edit_album_info_pcopyyear", str(date.today().year))
     s.fill("#edit_album_info_pcopyname", sanatci)
     s.fill("#edit_album_info_label", meta.get("etiket") or sanatci)
-    _tarih(s, "#edit_album_info_org_date", yayin_tarihi)
-    _tarih(s, "#edit_album_info_sale_date", yayin_tarihi)
+    _tarihler(s, yayin_tarihi)
     _sec(s, "#edit_album_info_explicit", "Explicit" if meta.get("acik_icerik") is True else "Not Explicit")
 
 
@@ -368,16 +377,16 @@ def _bekle_adres(s, parca: str, ne: str) -> None:
 
 
 YAYIN_ASGARI_GUN = 10  # RouteNote incelemesi 5–10 iş günü (form uyarısı); daha yakın tarih incelemede geçer
+ONAY_EN_GEC_GUN = 14  # tarihsiz ("onaylanınca") yayın: 10 iş günü sonra hâlâ Spotify'da yoksa takip gecikme bildirir
 
 
-def tarihleri_guncelle(s, upc: str, gun: date) -> None:
-    """Bekleyen taslağın "Originally Released" ve "Sales Start Date"i (ikisi aynı gün). Albüm sayfası yeniden
-    kaydedilir; diğer alanlar sayfada kayıtlı halleriyle gider."""
+def tarihleri_guncelle(s, upc: str, gun: date | None) -> None:
+    """Bekleyen taslağın tarihleri (`_tarihler`; None: onaylanınca). Albüm sayfası yeniden kaydedilir; diğer alanlar
+    sayfada kayıtlı halleriyle gider."""
     s.goto(f"{RN}/editalbum/{upc}")
     s.wait_for_load_state("networkidle")
     _sohbeti_kapat(s)
-    _tarih(s, "#edit_album_info_org_date", gun)
-    _tarih(s, "#edit_album_info_sale_date", gun)
+    _tarihler(s, gun)
     s.click("#edit-album-save-image")
     _bekle_adres(s, "/edit_album/", "yeni yayın tarihini")
 
@@ -385,6 +394,9 @@ def tarihleri_guncelle(s, upc: str, gun: date) -> None:
 def _acik_pencereler(s) -> list[str]:
     return s.evaluate("""() => [...document.querySelectorAll('.rn-modal-container, [role=dialog], .modal')]
         .filter(e => e.offsetWidth).map(e => e.innerText.trim().slice(0, 300))""")
+
+
+ONAY_PENCERESI = "#agree_terms .rn-modal"
 
 
 def dagit(s, upc: str, son_tiktan_once=None) -> None:
@@ -402,7 +414,9 @@ def dagit(s, upc: str, son_tiktan_once=None) -> None:
         raise RuntimeError("yayının dört adımı tamamlanmamış, gönderilmedi")
     _isaretle(s, "#submit_chk")
     s.locator('input[value="Distribute Free"]').click()
-    onay = s.locator("#agree_terms")
+    # pencerenin kendisi beklenir: `#agree_terms` kabı görünür olsa da boyu sıfır (içi `position: fixed`), Playwright
+    # onu hiç "görünür" saymıyor; 2026-10-15 ilk canlı gönderim bu yüzden 15 sn bekleyip durdu
+    onay = s.locator(ONAY_PENCERESI)
     try:
         onay.wait_for(state="visible", timeout=15000)
     except Exception as e:  # noqa: BLE001 — Playwright zaman aşımı: başka bir pencere ya da hiçbir şey
@@ -458,8 +472,11 @@ class RouteNote:
                 f"routenote gonderildi {d.kimlik}`, taslakta duruyorsa `yanki routenote gonderilmedi {d.kimlik}`")
         if kayit.get("adim") not in ("hazir", "gonderildi"):
             on_kontrol(meta, ses, kapak)
-        # inceleme 5–10 iş günü: daha yakın tarih incelemede geçer (odadaki pencere de bu tabanı gösteriyor)
-        yayin_tarihi = max(yayin_tarihi, date.today() + timedelta(days=YAYIN_ASGARI_GUN))
+        # bugün ya da geçmiş tarih (takvim yayin_on_gun = 0): tarihsiz, onaylanınca yayında. İleri tarih en az
+        # YAYIN_ASGARI_GUN sonrası: inceleme 5–10 iş günü, daha yakın tarih incelemede geçer
+        hemen = yayin_tarihi <= date.today()
+        yayin_tarihi = None if hemen else max(yayin_tarihi, date.today() + timedelta(days=YAYIN_ASGARI_GUN))
+        iso = yayin_tarihi.isoformat() if yayin_tarihi else None
 
         def isle(**alan):
             kayit.update(alan)
@@ -490,7 +507,7 @@ class RouteNote:
                     album_bilgisi(s, meta, yayin_tarihi, tur, self.spotify_id)
                     s.click("#edit-album-save-image")
                     _bekle_adres(s, "/edit_album/", "albüm bilgisini")
-                    isle(adim="album", yayin_tarihi=yayin_tarihi.isoformat())
+                    isle(adim="album", yayin_tarihi=iso)
                 if kayit.get("adim") == "album":
                     ses_yukle(s, upc, ses, meta["baslik"])
                     s.click("#edit-submit")
@@ -515,15 +532,19 @@ class RouteNote:
                 if not kayit.get("isrc"):
                     isle(isrc=yayin_isrc(s, upc))
                 if gonder and kayit.get("adim") == "hazir":
-                    eski = date.fromisoformat(kayit.get("yayin_tarihi") or "2000-01-01")
-                    if eski < date.today() + timedelta(days=YAYIN_ASGARI_GUN):  # taslak beklerken tarih yaklaştı
+                    eski = kayit.get("yayin_tarihi")
+                    # taslak beklerken tarih yaklaştı ya da ayar değişti (tarihli ↔ onaylanınca)
+                    if (eski is not None if hemen else
+                            not eski or date.fromisoformat(eski) < date.today() + timedelta(days=YAYIN_ASGARI_GUN)):
                         tarihleri_guncelle(s, upc, yayin_tarihi)
-                        isle(yayin_tarihi=yayin_tarihi.isoformat())
+                        isle(yayin_tarihi=iso)
                     dagit(s, upc, son_tiktan_once=lambda: isle(adim="gonderiliyor"))
                     isle(adim="gonderildi", gonderim=date.today().isoformat())
             finally:
                 b.close()
+        tarihsiz = not kayit.get("yayin_tarihi")
         return {"upc": upc, "isrc": kayit.get("isrc"), "yayin_tarihi": kayit.get("yayin_tarihi"),
+                "en_gec_yayin": (date.today() + timedelta(days=ONAY_EN_GEC_GUN)).isoformat() if tarihsiz else None,
                 "onizleme": f"{int(meta['onizleme_sn']) // 60}:{int(meta['onizleme_sn']) % 60:02d}"
                 if meta.get("onizleme_sn") is not None else None, "dagitim_durumu": kayit.get("adim")}
 

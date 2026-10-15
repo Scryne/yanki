@@ -197,7 +197,7 @@ def olaylar(d: durum.Durum, onceki: dict, son: dict, bugun: date | None = None) 
     if son.get("kayip"):
         sonuc.append(("kayip", f"Spotify'dan kalktı: {d.ad}", "Önceden canlıydı, ISRC artık bulunmuyor; dağıtımcı "
                       "panelinden bak", f"kayip:{d.kimlik}:{son['zaman'][:10]}"))
-    tarih = son.get("yayin_tarihi")
+    tarih = son.get("yayin_tarihi") or son.get("en_gec_yayin")  # tarihsiz (onaylanınca) yayında incelemenin en geç sonu
     if not son["canli"] and tarih and bugun >= date.fromisoformat(tarih) + timedelta(days=GECIKME_GUN):
         if son.get("dagitimci") == "tunearo":  # red API'den kendiliğinden gelir; burada yalnız gecikme
             ne = (f"Tunearo durumu: {son.get('dagitim_durumu') or '?'}. İnceleme ya da mağazaya teslim uzamış "
@@ -253,7 +253,7 @@ def takip_et(sp, calisma: Path, sanatci_adi: str, pazarlar, kimlikler: list[str]
             continue
         son = kontrol_et(sp, d, y["isrc"].upper(), sanatci_adi, pazarlar, arama_limiti,
                          onceki=(d.yayin or {}).get("son"), istemci=istemci, web_gun=web_gun)
-        son.update(yayin_tarihi=y.get("yayin_tarihi"), dagitimci=y.get("dagitimci"),
+        son.update(yayin_tarihi=y.get("yayin_tarihi"), en_gec_yayin=y.get("en_gec_yayin"), dagitimci=y.get("dagitimci"),
                    dagitim_durumu=y.get("dagitim_durumu"))
         with durum.guncelle(calisma, d.kimlik) as taze:
             onceki = dict((taze.yayin or {}).get("son") or {})
