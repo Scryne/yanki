@@ -18,7 +18,11 @@ YERINE_KOYMA_DENEME = 40  # × 0,05 sn ≈ 2 sn: okuyucunun dosyayı bırakması
 def yaz(yol: Path, metin: str) -> Path:
     yol.parent.mkdir(parents=True, exist_ok=True)
     gecici = yol.with_name(f"{yol.name}.{os.getpid()}.{threading.get_ident()}.tmp")
-    gecici.write_text(metin, encoding="utf-8")
+    # içerik diske inmeden yeniden adlandırma kalıcı olursa güç kesintisinde dosya boş kalabilir (NTFS)
+    with open(gecici, "w", encoding="utf-8") as f:
+        f.write(metin)
+        f.flush()
+        os.fsync(f.fileno())
     for i in range(YERINE_KOYMA_DENEME):
         try:
             gecici.replace(yol)

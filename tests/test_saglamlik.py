@@ -342,10 +342,20 @@ def test_saglik_anahtar_ve_disk(tmp_path, monkeypatch):
         monkeypatch.delenv(k, raising=False)
     a = replace(ayarlar.yukle(), kok=tmp_path)
     (tmp_path / ".env").write_text("TUNEARO_API_KEY=tn_live_x\nSPOTIFY_CLIENT_ID=a\n", encoding="utf-8")
+    (tmp_path / "config").mkdir()
+    gercek = (ayarlar.KOK / "config" / "yayin.toml").read_text(encoding="utf-8")
+    (tmp_path / "config" / "yayin.toml").write_text(gercek.replace('dagitimci = "routenote"', 'dagitimci = "tunearo"'),
+                                                    encoding="utf-8")
     k = {x.ad: x for x in saglik.anahtar_kontrolleri(a)}
     assert k["Tunearo anahtarı"].tamam and not k["Spotify anahtarı"].tamam and not k["TypeSafe anahtarı"].tamam
     assert "tn_live" not in " ".join(x.ayrinti for x in k.values())  # değer yazılmaz
     assert saglik.disk_kontrolu(a).ad == "disk"
+    # RouteNote seçiliyken Tunearo anahtarı sorulmaz; kalıcı tarayıcı profili aranır
+    (tmp_path / "config" / "yayin.toml").write_text(gercek, encoding="utf-8")
+    k = {x.ad: x for x in saglik.anahtar_kontrolleri(a)}
+    assert "Tunearo anahtarı" not in k and not k["RouteNote oturumu"].tamam
+    (tmp_path / "calisma" / ".routenote_profil").mkdir(parents=True)
+    assert saglik.dagitimci_kontrolu(a).tamam
 
 
 # ── yedek: olay kaydı da yedekte ──

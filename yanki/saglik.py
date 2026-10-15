@@ -49,6 +49,10 @@ def kontroller(a: Ayarlar) -> list[Kontrol]:
         _arac_kontrol("ffprobe"),
         Kontrol("fpcalc", a.fpcalc.exists(), str(a.fpcalc)),
     ]
+    if a.motor.lora is not None:
+        yol = a.motor.lora.relative_to(a.kok) if a.motor.lora.is_relative_to(a.kok) else a.motor.lora
+        sonuc.append(Kontrol("LoRA", (a.motor.lora / "adapter_config.json").is_file(),
+                             f"{yol.as_posix()} (ölçek {a.motor.lora_olcek:g})"))
     sonuc += [*anahtar_kontrolleri(a), disk_kontrolu(a)]
     if a.uzak.acik:
         sonuc.append(uzak_kontrolu(a))
@@ -84,6 +88,27 @@ def uzak_kontrolu(a: Ayarlar) -> Kontrol:
                    f"bu ay {harcanan:.2f} $ / {a.uzak.aylik_butce:.2f} $ ({a.uzak.gpu.replace('NVIDIA ', '')})")
 
 
+def dagitimci_kontrolu(a: Ayarlar, tunearo_anahtari: bool = False) -> Kontrol:
+    """Seçili dağıtımcının ön koşulu (ağa çıkmaz). RouteNote: kalıcı tarayıcı profili var mı (oturum bir kez elle;
+    düşüp düşmediği ancak sayfa açılınca anlaşılır). Tunearo 2026-10-12'de kapandı: yalnız seçiliyse anahtarına
+    bakılır."""
+    from yanki import paket, routenote
+
+    try:
+        ad = paket.yayin_ayarlari(a.kok / "config" / "yayin.toml").dagitimci
+    except (OSError, ValueError, KeyError) as e:
+        return Kontrol("dağıtımcı", False, f"config/yayin.toml okunamadı: {e}")
+    if ad == "routenote":
+        profil = a.kok / "calisma" / routenote.PROFIL
+        return Kontrol("RouteNote oturumu", profil.is_dir(),
+                       "tarayıcı profili var (oturum düştüyse: yanki routenote giris)" if profil.is_dir()
+                       else "profil yok: bir kez `yanki routenote giris`")
+    if ad == "tunearo":
+        return Kontrol("Tunearo anahtarı", tunearo_anahtari, "yükleme ve durum yoklaması" if tunearo_anahtari
+                       else ".env → TUNEARO_API_KEY yok: yükleme otomatik değil")
+    return Kontrol("dağıtımcı", True, f"{ad or 'seçilmedi'}: yükleme elle (YUKLE.md)")
+
+
 def anahtar_kontrolleri(a: Ayarlar) -> list[Kontrol]:
     """Dış servis anahtarları yerinde mi (ağa çıkmaz; değer yazılmaz). Yoksa ilgili adım atlanır, hat yine çalışır."""
     import os
@@ -96,8 +121,7 @@ def anahtar_kontrolleri(a: Ayarlar) -> list[Kontrol]:
          **{k: v for k, v in os.environ.items() if k.startswith(("TUNEARO_", "TYPESAFE_", "RUNPOD_"))}}
     var = lambda *adlar: all(e.get(x) for x in adlar)  # noqa: E731
     return [
-        Kontrol("Tunearo anahtarı", var("TUNEARO_API_KEY"), "yükleme ve durum yoklaması" if var("TUNEARO_API_KEY")
-                else ".env → TUNEARO_API_KEY yok: yükleme otomatik değil"),
+        dagitimci_kontrolu(a, var("TUNEARO_API_KEY")),
         Kontrol("Spotify anahtarı", var("SPOTIFY_CLIENT_ID", "SPOTIFY_CLIENT_SECRET"),
                 "keşif doğrulaması ve takip" if var("SPOTIFY_CLIENT_ID", "SPOTIFY_CLIENT_SECRET")
                 else ".env → SPOTIFY_CLIENT_ID/SECRET yok: keşif doğrulanmaz, takip yok"),

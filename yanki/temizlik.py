@@ -56,15 +56,22 @@ def uygula(calisma: Path, d: durum.Durum, p: Plan) -> int:
     with durum.guncelle(calisma, d.kimlik) as taze:
         if taze.asama not in ("yuklendi", "yayinda") or taze.secilen != d.secilen:
             return 0  # plan yapıldıktan sonra şarkı değişti: silme
-        bayt = p.bayt
-        silinen = {f.resolve() for f in p.dosyalar}
+        bayt, silinen = 0, set()
         for f in p.dosyalar:
-            f.unlink(missing_ok=True)
+            # tek dosya silinemezse (Windows: dinleme odası o an çalıyor) diğerleri sürer; durum yine yazılır, silinen
+            # dosyalar adaylardan düşer (önce hata durumu yazmadan çıkıyor, silinmiş dosyayı gösteren aday kalıyordu)
+            try:
+                boyut = f.stat().st_size if f.exists() else 0
+                f.unlink(missing_ok=True)
+            except OSError:
+                continue
+            bayt += boyut
+            silinen.add(f.resolve())
         for a in taze.adaylar:
-            if a.dosya and (k / a.dosya).resolve() in silinen:
+            if a.dosya and ((k / a.dosya).resolve() in silinen or not (k / a.dosya).exists()):
                 a.dosya = ""
             for o in a.onarimlar:
-                if o.get("dosya") and (k / o["dosya"]).resolve() in silinen:
+                if o.get("dosya") and ((k / o["dosya"]).resolve() in silinen or not (k / o["dosya"]).exists()):
                     o["dosya"] = ""
         for alt in ARA_KLASORLER:  # boş kalan klasörler, en derinden üste (ara klasörün kendisi dahil)
             if not (k / alt).exists():
@@ -73,5 +80,5 @@ def uygula(calisma: Path, d: durum.Durum, p: Plan) -> int:
                 if klasor.is_dir() and not any(klasor.iterdir()):
                     klasor.rmdir()
         taze.notlar.append({"temizlik": {"zaman": datetime.now().isoformat(timespec="seconds"),
-                                         "dosya": len(p.dosyalar), "mb": round(bayt / 1e6)}})
+                                         "dosya": len(silinen), "mb": round(bayt / 1e6)}})
     return bayt

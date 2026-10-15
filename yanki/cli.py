@@ -122,7 +122,11 @@ def _yeniden(args: argparse.Namespace) -> int:
         k = durum.klasor(calisma, kimlik)
         if (k / "paket").exists():
             shutil.rmtree(k / "paket_onceki", ignore_errors=True)
-            (k / "paket").rename(k / "paket_onceki")
+            try:
+                (k / "paket").rename(k / "paket_onceki")
+            except OSError as e:  # dosya açık (oda kapağı gösteriyor): aşama değişti, paket elle kenara alınmalı
+                print(f"✗ {kimlik}: eski paket kenara alınamadı ({e.strerror or e}); paket/ klasörünü elle taşı")
+                kod = 1
         print(f"yeniden üretime alındı: {d.sanatci} — {d.ad} (sonraki `yanki uret` ya da gece görevi)")
     return kod
 
@@ -746,7 +750,9 @@ def _ozet(args: argparse.Namespace) -> int:
 ADIM_ARALIGI_SAAT = {"keşif": 24, "popüler keşif": 12, "takip": 24, "dağıtım durumu": 3, "temizlik": 24}
 # Bu çıktılar "yapılacak iş yoktu" demek: sürekli koşuda yalnız bunları üreten adım günlüğe yazılmaz
 BOS_CIKTI = ("üretilecek bir şey yok", "paketlenecek onaylı şarkı yok", "takvim: ", "yedek güncel",
-             "liste boş", "tunearo: izlenen yükleme yok", "takip edilecek yüklenmiş şarkı yok", "toplam 0 MB")
+             "liste boş", "tunearo: izlenen yükleme yok", "takip edilecek yüklenmiş şarkı yok", "toplam 0 MB",
+             # bilinen bekleme hâlleri: her 30 dk'da günlüğe aynı blok yazılmasın
+             "durum yoklaması yok", "üretim duraklatıldı")
 
 
 class _AdimCiktisi:
@@ -1472,8 +1478,8 @@ def _temizle(args: argparse.Namespace) -> int:
         if p is None:
             continue
         mb = p.bayt / 1e6
-        if args.uygula:
-            temizlik.uygula(calisma, d, p)
+        if args.uygula and not (mb := temizlik.uygula(calisma, d, p) / 1e6):
+            continue  # plan yapılınca şarkı değişti ya da hiçbir dosya silinemedi
         toplam += mb
         eylem = "silindi" if args.uygula else "silinecek"
         print(f"{eylem}: {d.sanatci} — {d.ad}: {len(p.dosyalar)} dosya, {mb:,.0f} MB")

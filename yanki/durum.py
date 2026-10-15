@@ -105,4 +105,13 @@ def guncelle(calisma: Path, kimlik: str, yoksa: Durum | None = None) -> Iterator
 
 
 def hepsi(calisma: Path) -> list[Durum]:
-    return [d for p in sorted(calisma.glob("*/durum.json")) if (d := oku(calisma, p.parent.name))]
+    """Bütün şarkılar. Okunamayan tek bir durum.json (güç kesintisinde boş kalmış dosya) atlanır ve yazılır: önce
+    bütün adımlar ve dinleme odasının listesi o tek dosya yüzünden düşüyordu."""
+    sonuc = []
+    for p in sorted(calisma.glob("*/durum.json")):
+        try:
+            if d := oku(calisma, p.parent.name):
+                sonuc.append(d)
+        except (ValueError, TypeError) as e:  # bozuk JSON ya da beklenmeyen alan
+            print(f"✗ {p.parent.name}/durum.json okunamadı, atlandı: {type(e).__name__}: {e}")
+    return sonuc

@@ -481,6 +481,8 @@ def test_aday_uretildigi_tarifi_tasir(tmp_path):
     c = tmp_path / "c"
     _sarki(c, "tarifli", 60)
     lora = tmp_path / "egitim" / "20261012-0808" / "final"
+    lora.mkdir(parents=True)
+    (lora / "adapter_config.json").write_text("{}", encoding="utf-8")
 
     class LoraliMotor(SahteMotor):
         def __call__(self, a, isler, klasor, zaman_asimi_sn):

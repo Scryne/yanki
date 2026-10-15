@@ -350,7 +350,8 @@ def test_uretim_kosusu_egitim_podunu_artik_saymaz(tmp_path, monkeypatch):
 
     def gql(_k, sorgu, degisken=None, deneme=3):
         if "pods" in sorgu:
-            return {"myself": {"pods": [{"id": "e1", "name": egitim.POD_AD}, {"id": "m1", "name": "yanki-motor", "runtime": {"uptimeInSeconds": 1200}}]}}
+            return {"myself": {"pods": [{"id": "e1", "name": egitim.POD_AD}, {"id": "m1", "name": "yanki-motor",
+                                                                       "runtime": {"uptimeInSeconds": 1200}}]}}
         silinen.append(degisken["id"])
         return {}
 
@@ -372,8 +373,9 @@ def test_lora_uretime_baglanir_yalniz_nicelemesiz_motorda(tmp_path):
     toml = re.sub(r"(?m)^lora = .*\n", "", (KOK / "config" / "motor.toml").read_text(encoding="utf-8")).replace(
         "[motor]\n", f'[motor]\nlora = "{tmp_path.as_posix()}/yok"\n', 1)
     (tmp_path / "motor.toml").write_text(toml, encoding="utf-8")
+    eksik = ayarlar.yukle(tmp_path / "motor.toml")  # eksik klasör hattın geri kalanını durdurmaz
     with pytest.raises(ValueError, match="LoRA klasörü değil"):
-        ayarlar.yukle(tmp_path / "motor.toml")
+        ayarlar.lora_denetle(eksik)
 
 
 def test_onbellekteki_eski_bicimli_soz_yenilenir(tmp_path):

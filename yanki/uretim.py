@@ -349,6 +349,9 @@ def uret(a: Ayarlar, calisma: Path, kimlikler: list[str] | None = None,
     hedef = [d for d in uretilecek(a, calisma) if kimlikler is None or d.kimlik in kimlikler]
     if not hedef:
         return []
+    from yanki import ayarlar
+
+    ayarlar.lora_denetle(a)  # bağdaştırıcısız üretim sessizce başka tarif olurdu
 
     def motor_turu(isler: list[motor.Is], ad: str) -> dict[str, motor.Sonuc]:
         if not isler:

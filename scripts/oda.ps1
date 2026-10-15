@@ -22,7 +22,7 @@ $adres = "http://127.0.0.1:$Port/"
 . (Join-Path $PSScriptRoot "bildirim.ps1")  # Bildir: ortak Windows bildirimi
 
 $acik = $false
-try { $acik = (Invoke-WebRequest "$adres`api/sarkilar" -UseBasicParsing -TimeoutSec 3).StatusCode -eq 200 } catch {}
+try { $acik = (Invoke-WebRequest "${adres}api/sarkilar" -UseBasicParsing -TimeoutSec 3).StatusCode -eq 200 } catch {}
 $ozet = (& $uv run --no-sync python -m yanki ozet 2>$null) -join " "
 Yaz "özet: $ozet"
 Bildir "Yanki" $ozet

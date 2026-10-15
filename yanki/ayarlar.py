@@ -87,6 +87,13 @@ class Ayarlar:
     uzak: Uzak = Uzak()
 
 
+def lora_denetle(a: "Ayarlar") -> None:
+    """Üretimden önce: `motor.lora` gerçekten bir bağdaştırıcı mı. Önce `yukle` denetliyordu: eğitim klasörü taşınınca
+    ya da silinince dinleme odası, oturum özeti ve gece koşusunun bütün adımları (paket, takvim, yedek) düşüyordu."""
+    if a.motor.lora is not None and not (a.motor.lora / "adapter_config.json").is_file():
+        raise ValueError(f"motor.lora bir LoRA klasörü değil (adapter_config.json yok): {a.motor.lora}")
+
+
 def yukle(yol: Path | None = None, kok: Path = KOK) -> Ayarlar:
     yol = yol or kok / "config" / "motor.toml"
     with open(yol, "rb") as f:
@@ -101,8 +108,6 @@ def yukle(yol: Path | None = None, kok: Path = KOK) -> Ayarlar:
     lora = Path(m["lora"]) if m.get("lora") else None
     if lora is not None and not lora.is_absolute():
         lora = kok / lora
-    if lora is not None and not (lora / "adapter_config.json").is_file():
-        raise ValueError(f"motor.lora bir LoRA klasörü değil (adapter_config.json yok): {lora}")
     if not 0.0 <= float(m.get("lora_olcek", 1.0)) <= 1.0:
         raise ValueError(f"motor.lora_olcek 0 ile 1 arasında olmalı: {m['lora_olcek']}")
     return Ayarlar(
