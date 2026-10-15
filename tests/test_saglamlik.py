@@ -1007,3 +1007,59 @@ def test_runpod_ikinci_hesaba_bakiye_bitince_gecer(tmp_path, monkeypatch):
     assert runpod.anahtar(tmp_path, 3.0, bakiyeler.get) == "bir"
     bakiyeler.update(bir=1.0, iki=1.0)  # hiçbirinde yok: bütçe denetimi durdurur
     assert runpod.anahtar(tmp_path, 3.0, bakiyeler.get) in ("bir", "iki")
+
+
+def test_takip_kota_pazar_dongusunde_dolarsa_canlilik_yine_yazilir():
+    """Keşif günlük tavanı doldurduysa ad araması `KotaDoldu` verir: canlılık (istemciden) yine kaydedilir, kalan
+    pazarların önceki sırası taşınır, haftalık Web API zamanı ilerlemez."""
+    from yanki import spotify
+
+    class KotasizSp(_SahteSp):
+        def ara(self, sorgu, market, adet=20):
+            raise spotify.KotaDoldu(3600, "günlük tavan")
+
+    d = durum.Durum("fix", "Coldplay", "Fix You")
+    onceki = {"siralar": {"GB": 3, "DE": 5, "TR": 1}, "web_kontrol": "2026-10-01T03:00:00"}
+    son = takip.kontrol_et(KotasizSp(), d, "QZABC2600001", "Orvane", ("GB", "DE", "TR"), onceki=onceki,
+                           istemci=_SahteIstemci([_parca("bizim", "Fix You", "Orvane")]),
+                           simdi=datetime(2026, 10, 20, 3, 0))
+    assert son["canli"] and son["siralar"] == {"GB": 3, "DE": 5, "TR": 1}
+    assert son["web_kontrol"] == "2026-10-01T03:00:00"
+
+
+def test_virgullu_sanatci_bolunmez():
+    from yanki import kesif
+
+    assert kesif.ilk_sanatci("Earth, Wind & Fire") == "Earth, Wind & Fire"
+    assert kesif.ilk_sanatci("Tyler, The Creator, Kali Uchis") == "Tyler, The Creator"
+    assert kesif.ilk_sanatci("Calvin Harris, The Weeknd") == "Calvin Harris"
+
+
+def test_cdp_hata_cevabi_sessizce_bos_sayilmaz():
+    import json as json_
+
+    import pytest
+
+    from yanki import stillmore
+
+    class Ws:
+        def __init__(self):
+            self.gelen = None
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            return False
+
+        def send(self, m):
+            self.gelen = json_.loads(m)
+
+        def recv(self, timeout=None):
+            return json_.dumps({"id": self.gelen["id"], "error": {"code": -32000,
+                                                                  "message": "Execution context was destroyed."}})
+
+    k = stillmore.Kopru.__new__(stillmore.Kopru)
+    k.ws_adres, k._id = "ws://x", 0
+    with pytest.raises(stillmore.StillmoreYok, match="CDP hatası"):
+        k._degerlendir(lambda *_a, **_k: Ws(), "1", 5)

@@ -104,10 +104,11 @@ class Spotify:
         return k
 
     def _kota_yaz(self, k: dict) -> None:
-        self.kota_yolu.parent.mkdir(parents=True, exist_ok=True)
-        gecici = self.kota_yolu.with_suffix(".tmp")
-        gecici.write_text(json.dumps(k), encoding="utf-8")
-        gecici.replace(self.kota_yolu)
+        # sabit adlı .tmp + yalın replace, dinleme odası dosyayı okurken Windows'ta PermissionError veriyordu ve keşfi
+        # ölçümleri kaydedilmeden düşürüyordu
+        from yanki import dosya
+
+        dosya.json_yaz(self.kota_yolu, k, None)
 
     def kilitle(self, sn: int, neden: str = "") -> None:
         k = self.kota()

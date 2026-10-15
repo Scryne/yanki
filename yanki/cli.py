@@ -666,7 +666,11 @@ def _istemciyle(sp, fn, yeniden_baslat: bool):
         print(f"takip Spotify uygulaması olmadan (Web API): {e}")
         return fn(None)
     try:
-        istemci = stillmore.IstemciArama(kopru, sp)
+        try:
+            istemci = stillmore.IstemciArama(kopru, sp)
+        except stillmore.StillmoreYok as e:  # uygulama açıldı ama ülke sorgusu cevapsız: Web API'yle
+            print(f"takip Spotify uygulaması olmadan (Web API): {e}")
+            return fn(None)
         sonuc = fn(istemci)
         print(f"takip: Spotify uygulamasıyla {istemci.istek_sayisi} arama ({istemci.ulke}), Web API {sp.istek_sayisi}")
         return sonuc

@@ -50,8 +50,16 @@ def calisiyor_mu() -> bool:
 
 
 def caliyor_mu() -> bool:
-    """Çalarken pencere başlığı "Sanatçı - Şarkı", dururken "Spotify" / "Spotify Premium" / "Spotify Free"."""
-    return any(not b.startswith("Spotify") for b in _pencere_basliklari())
+    """Çalarken pencere başlığı "Sanatçı - Şarkı", dururken "Spotify" / "Spotify Premium" / "Spotify Free". Spotify
+    açık ama başlık okunamıyorsa (tepsiye küçültülmüş, sorgu düştü) bilinmiyor: çalıyor sayılır, gece koşusu müziği
+    kesmesin."""
+    try:
+        basliklar = _pencere_basliklari()
+    except (OSError, subprocess.SubprocessError):
+        return True
+    if not basliklar:
+        return calisiyor_mu()
+    return any(not b.startswith("Spotify") for b in basliklar)
 
 
 def kapat() -> None:
@@ -168,6 +176,8 @@ class Kopru:
                 m = json.loads(ws.recv(timeout=zaman_asimi + 10))
                 if m.get("id") != self._id:
                     continue
+                if "error" in m:  # CDP'nin kendi hatası (sayfa yeniden yüklendi: "Execution context was destroyed")
+                    raise StillmoreYok(f"CDP hatası: {str(m['error'])[:300]}")
                 r = m.get("result", {})
                 if "exceptionDetails" in r:
                     hata = r["exceptionDetails"].get("exception", {}).get("description") or r["exceptionDetails"]
@@ -270,14 +280,14 @@ class IstemciArama:
 
 def adaylara(satirlar: list[dict], playlist_id: str):
     """STILLMORE satırları → keşif adayları. Aynı ISRC'nin çalınabilir yeniden yüklemesi varsa boşluk yok, atlanır."""
-    from yanki.kesif import Aday
+    from yanki.kesif import Aday, ilk_sanatci
 
     adaylar = []
     for x in satirlar:
         if x.get("reuploads") or not x.get("name") or not x.get("artist"):
             continue
         adaylar.append(Aday(
-            sanatci=x["artist"].split(",")[0].strip(), ad=x["name"].strip(), kaynak=f"stillmore:{playlist_id}",
+            sanatci=ilk_sanatci(x["artist"]), ad=x["name"].strip(), kaynak=f"stillmore:{playlist_id}",
             spotify_id=x.get("trackId"), isrc=(x.get("isrc") or "").upper() or None, album=x.get("album") or None,
             cikis=x.get("releaseDate") or None, neden="kismi" if x.get("reason") == "country" else "kaldirildi",
             spotify_dinlenme=x.get("plays") if isinstance(x.get("plays"), int) else None,

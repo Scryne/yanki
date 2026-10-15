@@ -182,6 +182,27 @@ def _sayi(s: str | None) -> int | None:
     return int(s) if s else None
 
 
+# Adında virgül olan sanatçılar: STILLMORE birden çok sanatçıyı ", " ile birleştiriyor, ilk parça bunlarda sanatçının
+# yarısı oluyordu ("Earth, Wind & Fire" → "Earth"; çalınabilir sürüm geri gelmiş değil rakip cover sayılıyordu).
+VIRGULLU_SANATCILAR = ("Earth, Wind & Fire", "Tyler, The Creator", "Crosby, Stills, Nash & Young",
+                       "Crosby, Stills & Nash", "Emerson, Lake & Palmer", "Blood, Sweat & Tears",
+                       "Peter, Paul and Mary", "Now, Now", "Hello, Goodbye", "Bell, Book & Candle",
+                       "Me, Myself and I", "Up, Bustle and Out", "Black, White & Blue")
+
+
+def _ilk_ad(t: dict) -> str:
+    return ((t.get("artists") or [{}])[0]).get("name", "")
+
+
+def ilk_sanatci(metin: str) -> str:
+    """", " ile birleşmiş sanatçı listesinin ilki; adında virgül olan bilinen sanatçı bölünmez."""
+    metin = (metin or "").strip()
+    for ad in VIRGULLU_SANATCILAR:
+        if metin.casefold() == ad.casefold() or metin.casefold().startswith(ad.casefold() + ", "):
+            return metin[:len(ad)]
+    return metin.split(",")[0].strip()
+
+
 def stillmore_csv(yol: Path) -> list[Aday]:
     """STILLMORE playlist taraması CSV'si (`Kaldırılmış şarkılar → CSV indir` ya da tam liste). Yalnız
     çalınamayanlar alınır. Sütunlar `spicetify/stillmore-finder.js` → `csv.playlist` (v12.1)."""
@@ -194,7 +215,7 @@ def stillmore_csv(yol: Path) -> list[Aday]:
             continue  # STILLMORE aynı ISRC'nin çalınabilir kopyasını buldu: boşluk yok
         durum = (r.get("Durum") or "").strip()
         adaylar.append(Aday(
-            sanatci=(r.get("Sanatçı") or "").split(",")[0].strip(), ad=r["Parça"].strip(),
+            sanatci=ilk_sanatci(r.get("Sanatçı") or ""), ad=r["Parça"].strip(),
             kaynak=f"stillmore:{yol.name}", spotify_id=(r.get("Spotify ID") or "").strip() or None,
             isrc=(r.get("ISRC") or "").strip().upper() or None, cikis=(r.get("Çıkış") or "").strip() or None,
             neden="kismi" if durum.startswith("Ülkende kapalı") else "kaldirildi",
@@ -288,16 +309,16 @@ def bosluk_dogrula(sp, a: Aday, pazarlar, kendi_sanatci: str = "") -> Aday:
     if a.isrc:
         for t in sp.isrc_ara(a.isrc, market):
             if t.get("id") != a.spotify_id and t.get("is_playable") is not False:
-                geri.append({"id": t["id"], "sanatci": t["artists"][0]["name"], "ad": t["name"], "neden": "isrc"})
+                geri.append({"id": t["id"], "sanatci": _ilk_ad(t), "ad": t["name"], "neden": "isrc"})
     sonuclar = sp.ara(f'track:"{sade_ad_gorunur(a.ad)}"', market, adet=10)  # aramada özgün ad, karşılaştırmada sade
     rakip = 0
     for t in sonuclar:
         if t.get("is_playable") is False or sade_ad(t.get("name") or "") != sade or t.get("id") == a.spotify_id:
             continue
         sanatcilar = [x.get("name", "").casefold() for x in t.get("artists") or []]
-        if sanatci in sanatcilar:
+        if sanatci in sanatcilar or ", ".join(sanatcilar).startswith(sanatci + ","):  # virgüllü ad bölünmüş olabilir
             if not any(x["id"] == t["id"] for x in geri):
-                geri.append({"id": t["id"], "sanatci": t["artists"][0]["name"], "ad": t["name"], "neden": "ad"})
+                geri.append({"id": t["id"], "sanatci": _ilk_ad(t), "ad": t["name"], "neden": "ad"})
         elif not (kendi_sanatci and kendi_sanatci.casefold() in sanatcilar):
             rakip += 1
     a.geri_gelen, a.geri_geldi, a.rakip_cover = geri, bool(geri), rakip
@@ -530,17 +551,24 @@ def listeye_yaz(secilen: list[Aday], liste_yolu: Path, not_: str = "yanki kesif"
 
     if not secilen:
         return []
-    ne = ("popüler şarkılar" if all(a.populer for a in secilen) else "Spotify'da kaldırılmış şarkılar"
-          if not any(a.populer for a in secilen) else "kaldırılmış ve popüler şarkılar")
-    bloklar = [f"\n# kesif {datetime.now():%Y-%m-%d}: {ne} ({not_})"]
-    for a in secilen:
-        ek = f", rakip cover {a.rakip_cover}" if a.rakip_cover else ""
-        izlenme = f"YouTube {a.youtube_izlenme:,} izlenme" if a.youtube_izlenme is not None else "YouTube ölçülmedi"
-        bloklar.append(f"\n[[sarki]]  # {izlenme}{ek}; {a.kaynak}\n"
-                       f"sanatci = {json.dumps(a.sanatci, ensure_ascii=False)}\n"
-                       f"ad = {json.dumps(sade_ad_gorunur(a.ad), ensure_ascii=False)}\n")
     with liste_kilidi(liste_yolu):
         eski = liste_yolu.read_text(encoding="utf-8-sig") if liste_yolu.exists() else ""
+        # seçim kilidin dışında yapıldı: arada (gece eklemesi ile odadaki "Listeye ekle") aynı şarkı eklendiyse
+        # o atlanır; yoksa yinelenen kimlik bütün partiyi düşürüyordu
+        var = {s.kimlik for s in liste.coz(eski, liste_yolu.name)} if eski.strip() else set()
+        secilen = [a for a in secilen if a.kimlik not in var]
+        if not secilen:
+            return []
+        ne = ("popüler şarkılar" if all(a.populer for a in secilen) else "Spotify'da kaldırılmış şarkılar"
+              if not any(a.populer for a in secilen) else "kaldırılmış ve popüler şarkılar")
+        bloklar = [f"\n# kesif {datetime.now():%Y-%m-%d}: {ne} ({not_})"]
+        for a in secilen:
+            ek = f", rakip cover {a.rakip_cover}" if a.rakip_cover else ""
+            izlenme = (f"YouTube {a.youtube_izlenme:,} izlenme" if a.youtube_izlenme is not None
+                       else "YouTube ölçülmedi")
+            bloklar.append(f"\n[[sarki]]  # {izlenme}{ek}; {a.kaynak}\n"
+                           f"sanatci = {json.dumps(a.sanatci, ensure_ascii=False)}\n"
+                           f"ad = {json.dumps(sade_ad_gorunur(a.ad), ensure_ascii=False)}\n")
         yeni = eski + ("" if not eski or eski.endswith("\n") else "\n") + "".join(bloklar)
         liste.coz(yeni, liste_yolu.name)
         dosya.yaz(liste_yolu, yeni)

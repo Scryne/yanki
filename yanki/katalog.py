@@ -164,12 +164,9 @@ def onbellek_oku(calisma: Path) -> dict[str, Kontrol]:
 
 
 def onbellek_yaz(calisma: Path, kayit: dict[str, Kontrol]) -> None:
-    yol = onbellek_yolu(calisma)
-    yol.parent.mkdir(parents=True, exist_ok=True)
-    gecici = yol.with_suffix(".tmp")
-    gecici.write_text(json.dumps({k: asdict(v) for k, v in kayit.items()}, ensure_ascii=False, indent=1),
-                      encoding="utf-8")
-    gecici.replace(yol)
+    from yanki import dosya
+
+    dosya.json_yaz(onbellek_yolu(calisma), {k: asdict(v) for k, v in kayit.items()}, indent=1)
 
 
 def taze_mi(k: Kontrol, gun: int, simdi: datetime) -> bool:
@@ -250,7 +247,8 @@ def tara(sp, calisma: Path, pazarlar, ayar: Ayar, ek_adlar: list[str] | None = N
         bildir(f"✗ {e}; o ana kadarki sonuçlar kaydedildi")
     except SpotifyHatasi as e:  # tek parçanın 404'ü / art arda 5xx: o ana kadarki istekler boşa gitmesin
         bildir(f"✗ Spotify: {e}; o ana kadarki sonuçlar kaydedildi")
-    onbellek_yaz(calisma, kayit)
+    finally:  # Deezer'ın ağ/kota hatası da yükselir: harcanan Spotify istekleri yine kayda geçsin
+        onbellek_yaz(calisma, kayit)
     from yanki.kesif import neden_sec
 
     adaylar = []

@@ -17,7 +17,7 @@ import re
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
-from yanki import dosya, durum
+from yanki import dosya, durum, spotify
 from yanki.kesif import sade_ad
 
 GECMIS_SINIRI = 60
@@ -135,7 +135,17 @@ def kontrol_et(sp, d: durum.Durum, isrc: str, sanatci_adi: str, pazarlar, arama_
             son["siralar"][m] = ((onceki or {}).get("siralar") or {}).get(m)  # haftalık: önceki ölçüm taşınır
             continue
         son["siralar"][m] = None
-        for i, t in enumerate(kaynak.ara(d.ad, m, adet=arama_limiti), 1):
+        try:
+            bulunan_ = kaynak.ara(d.ad, m, adet=arama_limiti)
+        except spotify.Sinirli:
+            # kota pazar döngüsünde doldu: canlılık zaten bulundu, kaydedilsin (önce bütün takip düşüyordu: hiçbir
+            # şarkının yayına çıkışı ya da kalkışı yazılmıyordu); kalan pazarların önceki sırası taşınır
+            for k in pazarlar[pazarlar.index(m):]:
+                son["siralar"].setdefault(k, ((onceki or {}).get("siralar") or {}).get(k))
+            son["siralar"][m] = ((onceki or {}).get("siralar") or {}).get(m)
+            web_zamani = False
+            break
+        for i, t in enumerate(bulunan_, 1):
             if t.get("id") == bizim["id"] or (sade_ad(t.get("name") or "") == sade and bizim_sanatci(t)):
                 son["siralar"][m] = i
                 break
