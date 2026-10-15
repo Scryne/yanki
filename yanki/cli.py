@@ -120,6 +120,8 @@ def _yeniden(args: argparse.Namespace) -> int:
         # eski paket yeni seçim yapılana kadar yüklenmesin: kenara alınır (yeni onayda paket yeniden üretilir)
         k = durum.klasor(calisma, kimlik)
         if (k / "paket").exists():
+            if taslak := paket.acik_taslak(k / "paket"):  # eski sesle açılmış taslak: yeni paket yeni taslak açar
+                print(f"  ! {kimlik}: RouteNote'ta eski paketin taslağı kaldı (UPC {taslak.get('upc')}); panelden sil")
             shutil.rmtree(k / "paket_onceki", ignore_errors=True)
             try:
                 (k / "paket").rename(k / "paket_onceki")
@@ -918,8 +920,10 @@ def _uret_surekli(kok: Path, op) -> int:
 
     a = ayarlar.yukle()
     calisma = a.kok / "calisma"
+    # sıra: bekleyen onarım, yeniden üretime alınmış (Scryne'ın onayladığı, güncel tarifle yenilenen) şarkı, en eskisi
     hedef = sorted(uretim.uretilecek(a, calisma),
-                   key=lambda d: (d.asama != "onarim", d.gecmis[-1]["zaman"] if d.gecmis else ""))
+                   key=lambda d: (d.asama != "onarim", not any("yeniden_uretim" in n for n in d.notlar),
+                                  d.gecmis[-1]["zaman"] if d.gecmis else ""))
     if not hedef:
         print("üretilecek bir şey yok (analiz ya da onarım bekleyen şarkı yok)")
         return 0
@@ -1388,8 +1392,10 @@ def _gunduz(args: argparse.Namespace) -> int:
         return print(f"GPU boş değil ({kullanilan} MiB)") or 0
     args.yeniden, args.analizsiz = False, False
     _hazirla(args)
+    # sıra: bekleyen onarım, yeniden üretime alınmış (Scryne'ın onayladığı, güncel tarifle yenilenen) şarkı, en eskisi
     hedef = sorted(uretim.uretilecek(a, calisma),
-                   key=lambda d: (d.asama != "onarim", d.gecmis[-1]["zaman"] if d.gecmis else ""))[: op.gunduz_sarki]
+                   key=lambda d: (d.asama != "onarim", not any("yeniden_uretim" in n for n in d.notlar),
+                                  d.gecmis[-1]["zaman"] if d.gecmis else ""))[: op.gunduz_sarki]
     if not hedef:
         return print("üretilecek şarkı yok") or 0
     print(f"gündüz üretimi ({simdi:%H:%M}): " + ", ".join(f"{d.sanatci} — {d.ad}" for d in hedef), flush=True)

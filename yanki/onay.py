@@ -79,11 +79,21 @@ def engel(d: durum.Durum, ayar: Ayar) -> str | None:
     return None
 
 
+def _tarif_imzasi(a: durum.Aday) -> tuple:
+    t = a.tarif or {}
+    return (t.get("model"), t.get("lora"), tuple(sorted((t.get("ek") or {}).items())))
+
+
 def oneri(d: durum.Durum) -> durum.Aday | None:
     adaylar = [a for a in d.adaylar if a.gecti and a.dosya
                and not any(o.get("durum") == "bekliyor" for o in a.onarimlar)]
     if not adaylar:
         return None
+    # yeniden üretilen şarkıda yalnız en yeni tarifin adayları (2026-10-15: CFG 10 kör testte 9'a 3 kazandı; eski
+    # adaylar dosyada kalıyor, söz WER'i düşük diye eski tarif seçilmesin). Dinleme odası da yalnız onları sıralıyor.
+    if tarifli := [a for a in adaylar if a.tarif]:
+        son = max(tarifli, key=lambda a: a.tarif.get("tarih") or "")
+        adaylar = [a for a in tarifli if _tarif_imzasi(a) == _tarif_imzasi(son)]
     # Söz WER'i en düşük iki aday arasından ACE-Step söz hizalama puanı yüksek olan (S27, 2026-10-12: Scryne'ın 21
     # şarkıdaki seçimini 14 tuttu; yalnız WER 11, yalnız hizalama 9, rastgele 7,2). Puanı olmayan adayda yalnız WER.
     sirali = sorted(adaylar, key=lambda a: (_wer(a) if _wer(a) is not None else float("inf"), a.no))

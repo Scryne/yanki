@@ -29,7 +29,10 @@ saatler = [8, 1]  # 08:00'den 01:00'e
 # testte yayınlanabilir 4/17 → 9/17 (docs/arastirma/07, S31). Deneyler (spikes, eğitim) bundan etkilenmez.
 # 2026-10-13 akşam duraklatıldı: beşinci eğitim (tür verisi) ve kör testi bitene kadar; sıradaki şarkılar kazanan
 # modelle üretilsin, ep20 ile üretilip boşa harcanmasın (Scryne: "modeli en iyi hale getirmeliyiz").
-uretim = false
+# 2026-10-15 açıldı (Scryne: "sistemi en güncel, en iyi şekilde sonuç veren haliyle başlat; müzik üretiminin en iyi
+# olduğu türlerde üretsin, direkt RouteNote'ta paylaşılsın"; S34 Scryne söyleyince). Tarif ep20 + CFG 10; tür dışı
+# şarkılar üretilmez (uretim.tur_disi).
+uretim = true
 # Sürekli koşu (\Yanki\Surekli, bilgisayar açıkken her 30 dk; Scryne 2026-10-10: "açıkken hep çalışsın").
 # Bir koşuda en çok kaç şarkı üretilsin: uzun üretim (şarkı başı ~30 dk) yüklemeyi ve yoklamayı saatlerce kilitlemesin
 uretim_sarki = 2

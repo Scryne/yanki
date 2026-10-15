@@ -45,10 +45,13 @@ sure_saat = 24
 diller = ["en"]
 en_yuksek_wer = 0.15
 # Kulaktan geçmeden onaylanmayan türler (stilde aranır). Tür, tarifi dinlenip doğrulandıkça çıkar (2026-10-12).
+# 2026-10-15: metal (Enter Sandman üç kör testte yayınlanabilir), pop-punk (All the Small Things iki testte) ve
+# dance-pop (Walking on Air iki testte), country (You're Still the One üç testte) çıktı; punk/dance'in diğer biçimleri ve nu
+# metal kulakta.
 denenmemis_turler = [
-  "rap", "hip[ -]?hop", "trap", "drill", "metal", "punk", "grunge", "hardcore", "edm", "techno", "house", "dubstep",
-  "trance", "electro", "dance", "reggae", "reggaeton", "latin", "salsa", "mexicano", "brazilian", "sertanejo",
-  "forr[oó]", "african", "afrobeats?", "asian", "indian", "bollywood", "country", "jazz", "blues", "gospel", "opera",
+  "rap", "hip[ -]?hop", "trap", "drill", "nu[ -]?metal", "(?<!pop[ -])punk", "grunge", "hardcore", "edm", "techno",
+  "house", "dubstep", "trance", "electro", "(?<!pop[ -])dance(?![ -]?pop)", "reggae", "reggaeton", "latin", "salsa", "mexicano", "brazilian", "sertanejo",
+  "forr[oó]", "african", "afrobeats?", "asian", "indian", "bollywood", "jazz", "blues", "gospel", "opera",
   "classical", "kids", "films", "games", "k-?pop", "j-?pop", "anime",
 ]
 
@@ -79,7 +82,9 @@ baslangic = "surekli"
 # gece: takvim (gece/sürekli koşu) sırası gelen paketi kendisi yükleyip göndersin mi. Kapalıyken yalnız bildirir;
 # yükleme `yanki yukle <kimlik>` (--taslak: gönderme) ile. Kuyruktaki eski paketler (10-13, ep20 öncesi tarif) Scryne
 # karar vermeden gitmesin diye kapalı başlar (2026-10-15).
-gece = false
+# 2026-10-15 açıldı (Scryne: "direkt olarak routenote da paylaşılsın"): otomatik onaylanan (24 sa veto penceresi)
+# ve paketlenen şarkı koşuda gönderilir. Oturum düşerse yükleme durur ve "RouteNote'a giriş yap" bildirilir.
+gece = true
 # Orvane'ın Spotify sanatçı kimliği (profil oluşunca): sanatçı aramasında bu profil seçilir. Boşsa "Create a new
 # profile"; hesapta aynı ada bağlı profil varsa RouteNote onu önerir ve o kullanılır.
 spotify_sanatci_id = ""

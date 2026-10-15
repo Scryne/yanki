@@ -72,7 +72,9 @@ bekleme_sn = 20
 acik = true
 gpu = "NVIDIA A40"
 # Bakiye bunun altındaysa ya da bu ayki harcama sınırdaysa sunucu açılmaz (USD)
-en_az_bakiye = 3.0
+# 3 → 1 (2026-10-15): hesaplarda 0,09 $ ve 1,78 $ kaldı; 8 şarkılık koşu ~0,9 $ (2026-10-13 ölçümü), bakiye bir koşuya
+# yeter. Bakiye yüklenince 3'e dönülebilir (koşu ortasında bakiye biterse pod durur, iş yarım kalır).
+en_az_bakiye = 1.0
 # 15 → 25 (2026-10-12): ikinci RunPod hesabı (~10 $, .env → RUNPOD_API_KEY_2); ilkinin bakiyesi en_az_bakiye altına
 # inince hat kendiliğinden ikinciye geçer (yanki/runpod.py → anahtar). 25 → 30 (2026-10-13, Scryne): beşinci eğitim
 # ve kalan üretim aynı aya sığsın

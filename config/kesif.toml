@@ -32,7 +32,9 @@ gece_ekle = 10
 # 2026-10-13: kör test (S31, en iyi model bile yayınlanamaz dedi; iki testte de): caz, blues, reggae (reggaeton
 # açık: Gasolina yayınlanabilir), afrobeats, K-pop, grunge.
 haric_turler = [
-  "jazz", "blues", "reggae", "afro ?beats?", "afropop", "k-?pop", "grunge",
+  # 2026-10-15: folk (Let Her Go beş kör testin beşinde kötü: akustik gitar taşıyıcı, eşlik ince), reggaeton/Latin
+  # (Gasolina iki testte bir yayınlanabilir; İspanyolca söz cover'da belirgin az anlaşılır), EDM (dinlenmedi)
+  "jazz", "blues", "reggae", "afro ?beats?", "afropop", "k-?pop", "grunge", "folk", "reggaeton", "latin", "edm",
   "rap", "hip[ -]?hop", "trap", "drill", "hardcore", "techno", "dubstep", "trance", "brazilian", "sertanejo", "forr[oó]", "mexicano", "salsa", "asian",
   "indian", "bollywood", "j-?pop", "anime", "gospel", "opera", "classical", "kids", "films", "games",
 ]
@@ -48,7 +50,7 @@ sorgular = [
   "10s Pop", "00s Pop", "90s Pop", "Pop Essentials", "Singer Songwriter", "Sad Songs", "Breakup Songs",
   "Rock Essentials", "2000s Rock", "90s Rock", "80s Pop Rock", "Brit Rock Essentials", "Indie Rock Essentials",
   "Pop Punk Essentials", "Emo Essentials", "Metal Essentials", "Country Hits", "Country Essentials",
-  "Soft Rock", "Power Ballads", "Folk Pop",
+  "Soft Rock", "Power Ballads",
 ]
 # Her sorgudan kaç liste
 liste_basina = 2
@@ -74,9 +76,9 @@ playlistler = [
 # 2026-10-12: tek tür değil (Scryne) → rap/R&B/dans/rock sorguları da (açılan türler; haric_turler süzer)
 arama = [
   "sad songs", "piano ballads", "acoustic love songs", "2000s ballads", "2010s hits", "throwback hits",
-  "breakup songs", "emotional songs", "indie folk", "old love songs", "emo 2000s", "singer songwriter",
-  "rnb hits", "dance hits", "edm anthems", "rock anthems", "2000s rnb",
-  "country hits", "reggaeton hits", "metal classics", "pop punk",
+  "breakup songs", "emotional songs", "old love songs", "emo 2000s", "singer songwriter",
+  "dance hits", "rock anthems", "power ballads",
+  "country hits", "metal classics", "pop punk",
 ]
 arama_gece = 2
 min_parca = 100

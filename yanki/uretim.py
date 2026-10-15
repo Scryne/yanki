@@ -331,10 +331,24 @@ def egitimde(kok: Path) -> set[str]:
     return {s.kimlik for s in egitim.veri(kok)}
 
 
+def tur_disi(d: durum.Durum) -> str | None:
+    """Şarkının stili keşfin dışladığı türdense (`config/kesif.toml` → `haric_turler`: kör testlerde en iyi aday bile
+    yayınlanamaz bulunan caz, blues, reggae, rap, drill, grunge, folk…) o tür. Stili Scryne yazdıysa (elle) üretilir."""
+    from yanki import kesif
+
+    if d.analiz.get("stil_kaynak") == "elle" or not (kalip := kesif.haric_kalip()):
+        return None
+    m = kalip.search(d.analiz.get("stil") or "")
+    return m.group(0) if m else None
+
+
 def uretilecek(a: Ayarlar, calisma: Path) -> list[durum.Durum]:
-    """Üretim sırası: analiz ve onarım bekleyenler, eğitim verisindeki şarkılar hariç."""
+    """Üretim sırası: analiz ve onarım bekleyenler; eğitim verisindeki şarkılar ve hattın iyi yapmadığı türler hariç
+    (Scryne, 2026-10-15: "müzik üretiminin en iyi olduğu türlerde üretsin"; keşif bu türleri süzüyordu ama listeye
+    önceden girenler üretiliyordu)."""
     haric = egitimde(a.kok)
-    return [d for d in durum.hepsi(calisma) if d.asama == "onarim" or (d.asama == "analiz" and d.kimlik not in haric)]
+    return [d for d in durum.hepsi(calisma) if d.asama == "onarim" or (
+        d.asama == "analiz" and d.kimlik not in haric and not tur_disi(d))]
 
 
 def uret(a: Ayarlar, calisma: Path, kimlikler: list[str] | None = None,

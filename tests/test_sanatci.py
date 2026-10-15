@@ -16,6 +16,9 @@ ODA = "http://127.0.0.1:8765"
 def kok(tmp_path):
     (tmp_path / "config").mkdir()
     shutil.copy(KOK / "config" / "yayin.toml", tmp_path / "config" / "yayin.toml")
+    # testler gece yüklemesi kapalıyken başlar (gerçek config'teki seçim değişebilir)
+    yol = tmp_path / "config" / "yayin.toml"
+    yol.write_text(yol.read_text(encoding="utf-8").replace("\ngece = true\n", "\ngece = false\n"), encoding="utf-8")
     return tmp_path
 
 

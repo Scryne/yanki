@@ -523,3 +523,26 @@ def test_onarim_kabulu_onceki_kabulu_geri_almaz():
     with pytest.raises(ValueError, match="yeniden işaretle"):
         uretim.onarim_kabul(d, 1, "1-2")
     assert aday.dosya == "adaylar/1/onarim_1.flac"
+
+
+def test_oneri_yalniz_en_yeni_tarif_ve_tur_disi_uretilmez(tmp_path):
+    """Yeniden üretilen şarkıda eski tarifin (CFG 7) düşük WER'li adayı önerilmez; kör testte hep kötü çıkan türdeki
+    şarkı üretim sırasına girmez, Scryne'ın elle yazdığı stil girer."""
+    from yanki import ayarlar, durum, onay, uretim
+
+    def aday(no, wer, tarif):
+        return durum.Aday(no, f"adaylar/{no}.flac", 42, {"soz_wer": {"gecti": True, "deger": wer}}, True, tarif=tarif)
+
+    eski = {"model": "xl", "lora": "ep20", "tarih": "2026-10-13T03:40"}
+    yeni = {"model": "xl", "lora": "ep20", "ek": {"guidance_scale": 10.0}, "tarih": "2026-10-15T20:00"}
+    d = durum.Durum("a-b", "A", "B")
+    d.adaylar = [aday(1, 0.02, eski), aday(5, 0.09, yeni), aday(6, 0.05, yeni)]
+    assert onay.oneri(d).no == 6
+    c = tmp_path / "c"
+    for kimlik, stil, kaynak in (("iyi", "pop, piano ballad", "musicbrainz"),
+                                 ("kotu", "hip hop, pop rap song", "musicbrainz"),
+                                 ("elle", "hip hop, pop rap song", "elle")):
+        s = durum.Durum(kimlik, "A", kimlik, analiz={"stil": stil, "stil_kaynak": kaynak})
+        s.gec("analiz")
+        durum.yaz(c, s)
+    assert sorted(x.kimlik for x in uretim.uretilecek(ayarlar.yukle(), c)) == ["elle", "iyi"]
