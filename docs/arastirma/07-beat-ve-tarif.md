@@ -364,6 +364,21 @@ alması ~%0,4. **Karar:** üretim tarifine CFG 10 (`config/motor.toml` → `[cov
 kalmaya devam ediyor. S33 betiğinin A kolu tarifi okumaz, CFG 7 tabanı olarak kalır. İkinci tur (J ADG, L CFG 3)
 bekliyor; öneri yapmamak: ölçüde CFG yükselince bas toparlandı, CFG 3 ters yönde, ~1,1 $ S34'e kalsın (Scryne'ın kararı).
 
+**Mutlak seviye (2026-10-15, `spikes/s33_mutlak_seviye.py`; parça seviyesi dört parçanın toplamına göre, G −
+orijinal, 15 şarkı medyan):** vokal **+2,4 dB**, bas −1,4, diğer −1,5, davul +0,7. Vokale göre ölçülen "bas −3,3"ün
+yarıdan fazlası vokalin öne çıkmasından; eşliğin kendi eksiği ~1,5 dB. Bu S32'nin B kolunu (parça parça seviye/EQ
+eşleme) haklı çıkarmıyor: B bunu zaten düzeltiyordu ve 13'e 3 kaybetti. Kulağın "ince" dediği şey seviye değil doku.
+
+**Let Her Go neden hep kötü (2026-10-15):** beş testin dördünde "hepsi kötü" (S30 `lora-balad`, `egitim-4` not:
+"vokal", `egitim-5`, `ornekleme-1`), `beat-1`'de A en iyi ama yayınlanamaz. LoRA'sız taban da S30'da kötüydü, yani
+LoRA bozmuyor. Girdi sağlam: söz WER 0,02 (G), kaynak süresi LRCLIB'le 1 sn içinde, betim doğru (akustik gitar intro,
+nakaratta tam grup). Ölçüde sorunun en uç örneği: mutlak bas −5,8 dB (15 şarkıda üçüncü en düşük), vokale göre
+"diğer" −6,7 dB (en düşük; bu şarkıda diğer = akustik gitar, şarkının taşıyıcısı), vokal +2,5 dB önde. Kısacası
+genel ince eşlik sorunu, enstrümanı şarkının kendisi olan bir folk şarkıda en çok duyuluyor; ayrı bir hata yok.
+Düzeltme yolu S34 (tını/doku MLP'de). S34'ün kör testinde Let Her Go göstergedir: geçerse doku sorunu çözülmüştür.
+Not: MusicBrainz'in sanatçı türlerine aynı adlı metal grubunun türleri karışmış (11 tür, "melodic death metal" dahil);
+yalnız ilk ikisi (indie folk, folk) kullanıldığı için etkisi yok.
+
 ## S34 — dikkat + MLP LoRA (hazır, bakiye bekliyor)
 
 Sıfırdan (katman kümesi değişti), aynı 175 şarkı, rank 64, lr 1e-4, 20 epoch, ara kayıt 10; `config/egitim.toml`
