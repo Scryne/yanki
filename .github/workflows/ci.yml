@@ -12,4 +12,7 @@ jobs:
       - uses: astral-sh/setup-uv@v7
       - run: uv sync --locked
       - run: uv run ruff check .
+      # config/motor.toml eğitilmiş LoRA'yı gösteriyor (calisma/, repoda yok); ayarlar.yukle() klasörü denetliyor
+      - name: LoRA yer tutucusu
+        run: uv run python -c "import tomllib, pathlib; l = tomllib.load(open('config/motor.toml', 'rb'))['motor'].get('lora'); p = pathlib.Path(l) if l else None; p and p.mkdir(parents=True, exist_ok=True); p and (p / 'adapter_config.json').write_text('{}')"
       - run: uv run pytest -q
