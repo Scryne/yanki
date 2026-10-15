@@ -38,13 +38,6 @@ class Dagitimci(Protocol):
         ...
 
 
-class ElleRouteNote:
-    ad, otomatik = "routenote", False
-
-    def yukle(self, calisma: Path, d: durum.Durum, yayin_tarihi: date, gonder: bool = True) -> dict:
-        raise NotImplementedError("RouteNote'ta API yok: YUKLE.md ile elle yükle, sonra `yanki yuklendi`")
-
-
 class Elle:
     """Formu insanın doldurduğu herhangi bir dağıtımcı (DistroKid, boş ayar)."""
     otomatik = False
@@ -61,7 +54,11 @@ def sec(ad: str, kok: Path | None = None) -> Dagitimci:
         from yanki import ayarlar, tunearo
 
         return tunearo.Tunearo(kok or ayarlar.KOK)
-    return ElleRouteNote() if ad == "routenote" else Elle(ad)
+    if ad == "routenote":
+        from yanki import ayarlar, routenote
+
+        return routenote.RouteNote.ayardan(kok or ayarlar.KOK)
+    return Elle(ad)
 
 
 def otomatik_yukle(calisma: Path, dagitimci: Dagitimci, kimlik: str, yayin_tarihi: date,
@@ -339,7 +336,7 @@ def geri_cek(calisma: Path, kimlik: str, neden: str, kok: Path | None = None, ka
         raise ValueError(f"yüklenmiş bir şarkı değil (aşama: {d.asama})")
     ad = (takip.yukleme_bilgisi(calisma, kimlik) or {}).get("dagitimci") or "routenote"
     dagitimci = sec(ad, kok)
-    if dagitimci.otomatik:
+    if hasattr(dagitimci, "geri_cek"):  # Tunearo; RouteNote'ta kaldırma panelden (insan)
         return dagitimci.geri_cek(calisma, d, neden, bastan=bastan)
     if not kaldirildi:
         raise ValueError(f"{ad} için API yok: yayını panelden kaldır, sonra aynı komutu --kaldirildi ile ver")

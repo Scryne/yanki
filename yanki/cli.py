@@ -985,7 +985,7 @@ def _takvim_hatirlat(kok: Path) -> int:
         print(f"takvim: sıradaki yükleme {ilk.yukleme:%d.%m} ({ilk.ad})" if ilk else "takvim: kuyruk boş")
         return 0
     d = dagitim.sec(ad, kok)
-    if not d.otomatik:
+    if not d.otomatik or not getattr(d, "gece", True):  # RouteNote: takvimde yükleme açık değilse yalnız bildir
         s = sirasi_gelen[0]
         bildir("takvim", f"yükleme sırası: {s.ad}",
                f"{s.sanatci} — {s.ad}: calisma/{s.kimlik}/paket/YUKLE.md hazır; önerilen yayın tarihi "
@@ -1084,8 +1084,8 @@ def _yukle(args: argparse.Namespace) -> int:
         print(f"taslak hazır ({d.ad}): kapak, parça ve ses yüklendi, gönderilmedi. "
               f"Göndermek: yanki yukle {args.kimlik}")
     else:
-        print(f"gönderildi ({d.ad}): yayın {bilgi.get('release_id')}, durum {bilgi.get('dagitim_durumu')}, "
-              f"yayın tarihi {bilgi.get('yayin_tarihi')}")
+        print(f"gönderildi ({d.ad}): yayın {bilgi.get('release_id') or bilgi.get('upc')}, "
+              f"durum {bilgi.get('dagitim_durumu')}, yayın tarihi {bilgi.get('yayin_tarihi')}")
     return 0
 
 
@@ -1132,8 +1132,8 @@ def _dagitim_durum(args: argparse.Namespace) -> int:
 
     a = ayarlar.yukle()
     d = dagitim.sec(paket.yayin_ayarlari(a.kok / "config" / "yayin.toml").dagitimci, a.kok)
-    if not d.otomatik:
-        print(f"{d.ad or 'dağıtımcı'}: API yok, durum dağıtımcı panelinde")
+    if not hasattr(d, "yokla"):  # RouteNote: yayın listesi okunmaz (şartlar: botla veri toplama yok)
+        print(f"{d.ad or 'dağıtımcı'}: durum yoklaması yok, durum dağıtımcı panelinde")
         return 0
     from yanki import tunearo
 
@@ -1279,7 +1279,7 @@ def _seyrek_yokla(kok: Path, simdi=None) -> None:
     except (OSError, ValueError, KeyError) as e:
         print(f"dağıtım yoklaması yapılamadı: {e}")
         return
-    if ad not in yuklu or not d.otomatik:
+    if ad not in yuklu or not hasattr(d, "yokla"):
         return
     isaret.parent.mkdir(parents=True, exist_ok=True)
     isaret.touch()
@@ -1578,7 +1578,7 @@ def main(argv: list[str] | None = None) -> int:
     tm.set_defaults(fn=_temizle)
     tv = alt.add_parser("takvim", help="paketlenmiş şarkıların yükleme sırası ve önerilen yayın tarihleri")
     tv.set_defaults(fn=_takvim)
-    yk = alt.add_parser("yukle", help="paketi API'li dağıtımcıya (Tunearo) şimdi yükle ve incelemeye gönder")
+    yk = alt.add_parser("yukle", help="paketi dağıtımcıya (RouteNote: tarayıcıyla) şimdi yükle ve incelemeye gönder")
     yk.add_argument("kimlik")
     yk.add_argument("--taslak", action="store_true", help="her şeyi yükle ama gönderme (yayın taslakta kalır)")
     yk.add_argument("--yayin-tarihi", help="YYYY-AA-GG (varsayılan bugün + takvim.yayin_on_gun)")

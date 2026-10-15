@@ -66,11 +66,24 @@ haftada = 0
 # (Scryne, 2026-10-10): hesaptaki canlı yayınlar açılıştan 1–5 gün sonrasına tarihli ve 2–5 gün sonra canlıya çıkmış;
 # tarih incelemede geçerse parça onaylanınca çıkar. Orvane'de Spotify for Artists yok, pitch payının karşılığı yok.
 # Gönderilen yayının tarihi incelemedeyken değiştirilemiyor (409), bu yüzden en baştan kısa.
-yayin_on_gun = 1
+# 2026-10-15: dağıtımcı yeniden RouteNote (inceleme 5–10 iş günü, sayfadaki uyarı) → 21.
+yayin_on_gun = 21
 # "surekli": kabul beklenmez, her gün yüklenir; dağıtımcı bir parçayı reddederse neden anlaşılıp düzeltilene kadar
 # yeni yükleme yok (reddedilen yayın aynı kayıtla düzeltilir, parça kotası yanmaz). "ilk_kabul": ilk kabule kadar
 # incelemede tek parça (Faz 7 kararı; Scryne 2026-10-10 "sürekli" deyince bırakıldı). "hemen": kapı yok.
 baslangic = "surekli"
+
+[routenote]
+# Tarayıcıyla yükleme (yanki/routenote.py; oturum: yanki routenote giris).
+# gece: takvim (gece/sürekli koşu) sırası gelen paketi kendisi yükleyip göndersin mi. Kapalıyken yalnız bildirir;
+# yükleme `yanki yukle <kimlik>` (--taslak: gönderme) ile. Kuyruktaki eski paketler (10-13, ep20 öncesi tarif) Scryne
+# karar vermeden gitmesin diye kapalı başlar (2026-10-15).
+gece = false
+# Orvane'ın Spotify sanatçı kimliği (profil oluşunca): sanatçı aramasında bu profil seçilir. Boşsa "Create a new
+# profile"; hesapta aynı ada bağlı profil varsa RouteNote onu önerir ve o kullanılır.
+spotify_sanatci_id = ""
+# false: tarayıcı görünmeden çalışır (gece koşusu). Giriş sayfası Cloudflare arkasında; görünmezde sınanmadı.
+gorunur = true
 
 [tunearo]
 # Tunearo API (yanki/tunearo.py; anahtar .env → TUNEARO_API_KEY). Doküman: https://api.tunearo.com/

@@ -79,7 +79,23 @@ Form (Drupal, sunucu taraflı; seçici kayıtları `calisma/_spike/routenote/`):
   gelir, "Change" ile boşaltılır; tarihler `%Y/%m/%d`. **Uçtan uca dolduruldu ve kaydedildi** (Numb taslağı).
 - Add Audio: dosya `rn/cloud_upload/<oturum anahtarı>/` adresine XHR ile gider; sayfa cevapta `…,success,…` bekler.
 
-**Engel (2026-10-15):** `cloud_upload` her yüklemede 200 + **boş gövde** dönüyor; sayfa %99 "Finalizing upload"da
-kalıyor, taslak %20'de. Tam dosya (21 MB), 15 sn kesit, `audio/flac` MIME, hiç doldurulmamış yeni taslak ve
-**Scryne'ın elle yüklemesi** aynı sonucu verdi → sorun RouteNote tarafında (servis ya da hesap), otomasyonda değil.
-Ses adımı geçmeden Add Artwork / Manage Stores açılmıyor; o adımların seçicileri yükleme düzelince çıkarılacak.
+**Ses yükleme iki sorundan takıldı (2026-10-15):** önce `cloud_upload` her yüklemede 200 + **boş gövde** döndü (elle
+yüklemede de; RouteNote tarafı, birkaç saat sonra düzeldi). Sonra sunucu dosyayı `wrong file` ("MP3 320 kbps olmalı")
+diye reddetti: Playwright FLAC'ı `audio/x-flac` türüyle veriyor, sunucu `audio/flac` bekliyor. Tür açıkça
+`audio/flac` verilince `edit-Origin1,success`.
+
+Sonraki sayfalar:
+- **Audio Metadata** (`rn/?q=trackmetadata/form/<upc>`): yazar/söz/katkıcı ve RouteNote'un atadığı ISRC albümden
+  dolu gelir. Elle: cover `#Yes0` (varsayılan No) → mekanik lisans No (`#dflt0`), önizleme `#numOnly0`/`#numOnlysec0`.
+  Sonra "I'm Finished" (parça eklemeyi bitirir; gönderim değil).
+- **Add Artwork**: `#audio_images` → sayfa `colortype.php`'ye renk uzayını sorar (`rgb,image/jpeg`) → `#addart_savbtn`.
+- **Manage Stores**: mağaza kutuları `#edit-did<n>` (Amazon 12, Melon 34, Bugs! 38, FLO 49, Genie 53, Content ID
+  22; Twitch, Beatport, Hungama RouteNote'ta varsayılan kapalı). Bölge: "Exclude" etiketi `#excluds`, MagicSuggest
+  `#ms1` (ülke adları ISO: "United States (the)"). → `#album_save`.
+- **Finish: Distribute**: `#submit_chk` (şartlar) + "Distribute Free". Geri alınamaz; ilk gerçek gönderim Scryne'ın
+  onayıyla (bu adım henüz canlıda sınanmadı).
+
+**Uçtan uca (2026-10-15):** `yanki yukle nirvana-smells-like-teen-spirit --taslak` 2 dk 42 sn'de dört adımı
+tamamladı (UPC 5064150100534, ISRC ZZA192606238); RouteNote sayfalarından geri okunarak doğrulandı. Hattaki yeri:
+`dagitim.sec("routenote")` → `routenote.RouteNote`; takvim yalnız `[routenote] gece = true` iken kendisi yükler.
+Yarıda kalan yükleme `metadata.json` → `routenote` (UPC + son adım) kaydından aynı taslakla sürer.

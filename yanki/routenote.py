@@ -88,7 +88,7 @@ def kesif(calisma: Path, url: str, ad: str) -> Path:
 
 def _sohbeti_kapat(s) -> None:
     """RouteNote'un "Luna" sohbet penceresi kendiliğinden açılıp alanların üstünü örtebiliyor."""
-    s.add_style_tag(content="[id*='luna' i], [class*='luna' i], iframe[src*='chat' i] {display: none !important}")
+    s.add_style_tag(content="df-messenger {display: none !important}")  # Dialogflow Messenger
 
 
 def _sec(s, kutu: str, secenek: str) -> None:
@@ -178,3 +178,258 @@ def album_bilgisi(s, meta: dict, yayin_tarihi: date, tur: str, spotify_id: str |
     _tarih(s, "#edit_album_info_org_date", yayin_tarihi)
     _tarih(s, "#edit_album_info_sale_date", yayin_tarihi)
     _sec(s, "#edit_album_info_explicit", "Explicit" if meta.get("acik_icerik") is True else "Not Explicit")
+
+
+def ses_yukle(s, upc: str, dosya: Path, baslik: str, bekle_sn: int = 600) -> None:
+    """2. adım (Add Audio): dosya `cloud_upload`'a XHR ile gider; sayfa cevapta `…,success` görünce %100 yazar. Tür
+    açıkça `audio/flac`: Playwright'ın verdiği `audio/x-flac`'ı sunucu MP3 sanıp reddediyor ("wrong file",
+    2026-10-15). Kaydetmez."""
+    cevap = []
+
+    def yakala(route):
+        cevap.append(f := route.fetch(timeout=bekle_sn * 1000))
+        route.fulfill(response=f)
+
+    s.route("**/cloud_upload/**", yakala)
+    try:
+        s.goto(f"{RN}/addaudiomp3/form/{upc}")
+        s.wait_for_load_state("networkidle")
+        _sohbeti_kapat(s)
+        s.fill("#edit-tracknio1", baslik)
+        tur = {".flac": "audio/flac", ".mp3": "audio/mpeg"}[dosya.suffix.lower()]
+        s.set_input_files("#edit-Origin1", files=[{"name": dosya.name, "mimeType": tur, "buffer": dosya.read_bytes()}])
+        son = time.time() + bekle_sn
+        while not cevap and time.time() < son:
+            s.wait_for_timeout(1000)
+        if not cevap:
+            raise RuntimeError(f"ses yüklemesi {bekle_sn} sn'de cevap almadı")
+        govde = cevap[0].text()
+        if cevap[0].status != 200 or not govde.rstrip(",").endswith("success"):
+            raise RuntimeError(f"RouteNote sesi kabul etmedi: {cevap[0].status} {govde[:120]!r}")
+        s.wait_for_function("document.getElementById('progressBar1').value == 100", timeout=30000)
+    finally:
+        s.unroute("**/cloud_upload/**")
+
+
+def parca_bilgisi(s, upc: str, meta: dict) -> None:
+    """3. sayfa (Audio Metadata, ses kaydedilince açılır): yazar/söz/katkıcı ve ISRC albümden dolu gelir (ISRC
+    RouteNote'un atadığı kalır). Elle: cover = Yes (varsayılan No!) → mekanik lisans = No (`dflt0`), önizleme
+    başlangıcı (nakarat, `onizleme_sn`). Kaydetmez."""
+    if "trackmetadata" not in s.url:
+        s.goto(f"{RN}/?q=trackmetadata/form/{upc}")
+        s.wait_for_load_state("networkidle")
+    _sohbeti_kapat(s)
+    s.fill("#edit-audio-tags0-title", meta["baslik"])
+    _isaretle(s, "#Yes0")
+    _isaretle(s, "#dflt0")  # mekanik lisans yok (Scryne 2026-10-07)
+    if s.is_checked("#cnfrm0"):
+        raise RuntimeError("mekanik lisans 'Yes' işaretli kaldı")
+    if (on := meta.get("onizleme_sn")) is not None:
+        dk, sn = divmod(int(on), 60)
+        s.fill("#numOnly0", f"{dk:02d}")
+        s.fill("#numOnlysec0", f"{sn:02d}")
+    s.select_option("#edit_album_info_explicit0", "Explicit" if meta.get("acik_icerik") is True else "Not Explicit")
+    if s.input_value("#edit-audio-tags0-artist") != meta["sanatci"]:
+        raise RuntimeError(f"parçanın sanatçısı albümden gelmedi: {s.input_value('#edit-audio-tags0-artist')!r}")
+
+
+def isrc(s) -> str:
+    return s.input_value("#edit-audio-tags0-isrc")
+
+
+def kapak_yukle(s, upc: str, kapak: Path) -> None:
+    """4. sayfa (Add Artwork): dosya seçilince sayfa renk uzayını sorar (`colortype.php` → `rgb,image/jpeg`), önizleme
+    gösterir; "Save and Continue" (`#addart_savbtn`) kaydeder. Kurallar: 3000×3000, RGB JPG, < 25 MB."""
+    from PIL import Image
+
+    with Image.open(kapak) as im:
+        if im.size != (3000, 3000) or im.mode != "RGB" or kapak.stat().st_size >= 25 * 2**20:
+            raise ValueError(f"kapak RouteNote kuralına uymuyor: {im.size} {im.mode} {kapak.stat().st_size} B")
+    s.goto(f"{RN}/addart/form/{upc}")
+    s.wait_for_load_state("networkidle")
+    _sohbeti_kapat(s)
+    with s.expect_response(lambda r: "colortype" in r.url, timeout=60000) as renk:
+        s.set_input_files("#audio_images", files=[{"name": kapak.name, "mimeType": "image/jpeg",
+                                                   "buffer": kapak.read_bytes()}])
+    if not renk.value.text().startswith("rgb"):
+        raise RuntimeError(f"RouteNote kapağın renk uzayını kabul etmedi: {renk.value.text()[:80]!r}")
+    s.click("#addart_savbtn")
+    s.wait_for_load_state("networkidle")
+
+
+# Mağaza kutuları (`#edit-did<n>`, 2026-10-15). Kapatılanlar `paket._routenote_formu` 24 ile aynı gerekçe: Amazon ve
+# Kore mağazaları yapay zekâ içeriği almıyor (Kore cover için ayrıca yazılı sanatçı izni), Content ID cover'ı
+# orijinalle eşleştirir. VIBE bu listede yok.
+KAPALI_MAGAZALAR = {"Amazon": 12, "Melon": 34, "Bugs!": 38, "FLO": 49, "Genie Music": 53, "YouTube Content ID": 22}
+HARIC_BOLGELER = ("United States", "Canada", "Mexico", "India", "Pakistan")  # mekanik lisans yok (Scryne 2026-10-07)
+
+
+def _secili_bolgeler(s) -> list[str]:
+    return [x.strip() for x in s.locator("#ms1 .ms-sel-item").all_inner_texts()]
+
+
+def magazalar(s, upc: str) -> None:
+    """5. sayfa (Manage Stores): mağazaları kapat, fiyat Standard (varsayılan), bölge: Exclude + beş ülke. Bölge kutusu
+    MagicSuggest (`#ms1`; gizli alan ülke kimliklerini tutar). Kaydetmez."""
+    s.goto(f"{RN}/addstore/form/{upc}")
+    s.wait_for_load_state("networkidle")
+    _sohbeti_kapat(s)
+    for no in KAPALI_MAGAZALAR.values():
+        if s.is_checked(f"#edit-did{no}"):
+            s.click(f"#edit-did{no}")
+    if acik := [ad for ad, no in KAPALI_MAGAZALAR.items() if s.is_checked(f"#edit-did{no}")]:
+        raise RuntimeError(f"mağaza kapatılamadı: {acik}")
+    if not s.is_checked("#exclud"):
+        s.click("#excluds")  # kutu gizli, etiketi düğme
+    for ulke in HARIC_BOLGELER:
+        if any(x.startswith(ulke) for x in _secili_bolgeler(s)):
+            continue
+        s.click("#ms-input-0")
+        s.type("#ms-input-0", ulke, delay=40)
+        oneri = s.locator(".ms-res-item").filter(visible=True)
+        oneri.filter(has_text=re.compile(rf"^{re.escape(ulke)}( \(the\))?$")).first.click()  # ISO adı: "… (the)"
+    secili = _secili_bolgeler(s)
+    if eksik := [u for u in HARIC_BOLGELER if not any(x.startswith(u) for x in secili)]:
+        raise RuntimeError(f"bölge seçilemedi: {eksik} (seçili: {secili})")
+
+
+# ── yükleyici (dagitim.Dagitimci) ──────────────────────────
+
+
+ISRC = re.compile(r"\b[A-Z]{2}[A-Z0-9]{3}\d{7}\b")
+
+
+def yayin_isrc(s, upc: str) -> str | None:
+    """RouteNote'un atadığı ISRC, yayın sayfasının "Track Data" tablosundan. Sayfa doğrudan açılınca boş gelebiliyor
+    (yalnız bir adımın kaydından sonra dolu); o zaman adım sayfasından yönlendirmeyle açılır."""
+    if "/edit_album/" not in s.url or not s.locator("body").inner_text().strip():
+        s.goto(f"{RN}/edit_album/{upc}", referer=f"{RN}/editalbum/{upc}")
+        s.wait_for_load_state("networkidle")
+    metin = s.locator("body").inner_text()
+    i = metin.find("Track Data")
+    bulunan = ISRC.findall(metin[i:]) if i >= 0 else []
+    return bulunan[0] if bulunan else None
+
+
+def _bekle_adres(s, parca: str, ne: str) -> None:
+    """Kayıttan sonra beklenen sayfa gelmezse sayfadaki hata yazısıyla dur (form doğrulaması)."""
+    s.wait_for_load_state("networkidle")
+    if parca not in s.url:
+        hata = s.evaluate("""() => [...document.querySelectorAll('div,span,li')].filter(e => e.offsetWidth &&
+            e.children.length == 0 && /error|required|invalid|oops|please (enter|select)/i.test(e.innerText))
+            .map(e => e.innerText.trim().slice(0, 160)).slice(0, 5)""")
+        raise RuntimeError(f"RouteNote {ne} kaydetmedi ({s.url}): {hata}")
+
+
+def dagit(s, upc: str) -> None:
+    """Son adım: şartları kabul (`#submit_chk`) + "Distribute Free". Geri alınamaz: ses ve playlist değişikliği
+    bundan sonra yapılamıyor. Henüz canlıda sınanmadı (ilk gerçek gönderim Scryne'ın onayıyla); düğmeden sonra
+    beklenmeyen bir onay penceresi çıkarsa tıklamaz, durur."""
+    if "/edit_album/" not in s.url or not s.locator("#submit_chk").count():
+        s.goto(f"{RN}/edit_album/{upc}", referer=f"{RN}/editalbum/{upc}")
+        s.wait_for_load_state("networkidle")
+    _sohbeti_kapat(s)
+    metin = s.locator("body").inner_text()
+    if metin.count("Complete") < 4 or "Incomplete" in metin:
+        raise RuntimeError("yayının dört adımı tamamlanmamış, gönderilmedi")
+    _isaretle(s, "#submit_chk")
+    s.locator('input[value="Distribute Free"]').click()
+    s.wait_for_load_state("networkidle")
+    s.wait_for_timeout(3000)
+    if s.locator('input[value="Distribute Free"]').is_visible():
+        pencere = s.evaluate("""() => [...document.querySelectorAll('.rn-modal-container, [role=dialog], .modal')]
+            .filter(e => e.offsetWidth).map(e => e.innerText.trim().slice(0, 300))""")
+        raise RuntimeError(f"Distribute sonrası sayfa değişmedi; onay penceresi: {pencere}")
+
+
+class RouteNote:
+    """Formu tarayıcıyla dolduran dağıtımcı. Adım adım ilerler, her adımın sonunda RouteNote kaydeder; yarıda kalırsa
+    taslağın UPC'si `metadata.json` → `routenote`'ta durur ve sonraki deneme aynı taslaktan sürer (yeni taslak
+    açılmaz). `gonder=False`: dört adım tamamlanır, "Distribute" basılmaz (taslak, insan kontrol eder)."""
+
+    ad, otomatik = "routenote", True
+
+    def __init__(self, kok: Path, gorunur: bool = True, spotify_id: str | None = None, gece: bool = False):
+        self.kok, self.gorunur, self.spotify_id, self.gece = kok, gorunur, spotify_id, gece
+
+    @classmethod
+    def ayardan(cls, kok: Path) -> "RouteNote":
+        """`config/yayin.toml` → `[routenote]`. `gece`: takvim (gece/sürekli koşu) sırası geleni kendisi yüklesin mi;
+        kapalıyken yalnız bildirir, yükleme `yanki yukle` ile elle tetiklenir."""
+        import tomllib
+
+        with open(kok / "config" / "yayin.toml", "rb") as f:
+            r = tomllib.load(f).get("routenote", {})
+        return cls(kok, bool(r.get("gorunur", True)), r.get("spotify_sanatci_id") or None, bool(r.get("gece", False)))
+
+    def yukle(self, calisma: Path, d, yayin_tarihi: date, gonder: bool = True) -> dict:
+        from playwright.sync_api import sync_playwright
+
+        from yanki import durum, tunearo
+
+        p = durum.klasor(calisma, d.kimlik) / "paket"
+        meta_yolu = p / "metadata.json"
+        meta = json.loads(meta_yolu.read_text(encoding="utf-8"))
+        ses = next(p.glob("*.flac"), None)
+        kapak = next(p.glob("*.jpg"), None)
+        if ses is None or kapak is None:
+            raise ValueError(f"pakette FLAC ya da kapak yok ({p}); RouteNote WAV almıyor: yanki paketle --yeniden")
+        kayit = meta.get("routenote") or {}
+
+        def isle(**alan):
+            kayit.update(alan)
+            meta["routenote"] = kayit
+            meta_yolu.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
+
+        tur = tunearo.tur_sec(d.analiz.get("stil", ""), (d.kunye or {}).get("sanatci_turleri"))
+        with sync_playwright() as pw:
+            b = baglam(calisma, pw, self.gorunur)
+            try:
+                s = b.pages[0] if b.pages else b.new_page()
+                s.set_default_timeout(45000)
+                s.goto(ANA_URL)
+                if giris_sayfasinda(s):
+                    raise OturumYok("RouteNote oturumu yok: `yanki routenote giris`")
+                if not (upc := kayit.get("upc")):
+                    s.goto(f"{RN}/create_album")
+                    s.fill("#edit_album_info_release", meta["baslik"])
+                    s.click("#edit-album-save-image")
+                    _bekle_adres(s, "/edit_album/", "yeni yayını")
+                    upc = s.url.rstrip("/").split("/")[-1]
+                    isle(upc=upc, adim="olusturuldu", tarih=date.today().isoformat())
+                if kayit.get("adim") == "olusturuldu":
+                    s.goto(f"{RN}/editalbum/{upc}")
+                    s.wait_for_load_state("networkidle")
+                    album_bilgisi(s, meta, yayin_tarihi, tur, self.spotify_id)
+                    s.click("#edit-album-save-image")
+                    _bekle_adres(s, "/edit_album/", "albüm bilgisini")
+                    isle(adim="album", yayin_tarihi=yayin_tarihi.isoformat())
+                if kayit.get("adim") == "album":
+                    ses_yukle(s, upc, ses, meta["baslik"])
+                    s.click("#edit-submit")
+                    _bekle_adres(s, "trackmetadata", "sesi")
+                    parca_bilgisi(s, upc, meta)
+                    s.click("#edit-submit")
+                    _bekle_adres(s, "confirm_upload", "parça bilgisini")
+                    s.click("#edit-Im-Finished")
+                    _bekle_adres(s, "/edit_album/", "parça listesini")
+                    isle(adim="ses")
+                if kayit.get("adim") == "ses":
+                    kapak_yukle(s, upc, kapak)
+                    _bekle_adres(s, "/edit_album/", "kapağı")
+                    isle(adim="kapak")
+                if kayit.get("adim") == "kapak":
+                    magazalar(s, upc)
+                    s.click("#album_save")
+                    _bekle_adres(s, "/edit_album/", "mağazaları")
+                    isle(adim="hazir")
+                if not kayit.get("isrc"):
+                    isle(isrc=yayin_isrc(s, upc))
+                if gonder and kayit.get("adim") == "hazir":
+                    dagit(s, upc)
+                    isle(adim="gonderildi", gonderim=date.today().isoformat())
+            finally:
+                b.close()
+        return {"upc": upc, "isrc": kayit.get("isrc"), "yayin_tarihi": kayit.get("yayin_tarihi"),
+                "onizleme": f"{int(meta['onizleme_sn']) // 60}:{int(meta['onizleme_sn']) % 60:02d}"
+                if meta.get("onizleme_sn") is not None else None, "dagitim_durumu": kayit.get("adim")}

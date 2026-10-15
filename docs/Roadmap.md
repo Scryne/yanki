@@ -264,6 +264,11 @@ Durum sütunu session-start hook'u tarafından otomatik okunur — format bozulm
   ile çalışır: `yanki.exe` açıkken kilitleniyor, bağımlılık değişince `uv` senkronu düşüyordu (bulundu, düzeltildi).
 
 ### Faz 10: Tam otomatik yayın (dağıtım API'si) ⛔
+- **RouteNote tarayıcıyla (2026-10-15, Scryne: "RouteNote'a otomatik yüklemeyi yapmanı istiyorum"):**
+  `yanki/routenote.py` formun dört adımını dolduruyor (`yanki yukle <kimlik> [--taslak]`), uçtan uca taslakla
+  doğrulandı; son "Distribute" adımı Scryne'ın onayıyla ilk kez sınanacak. Takvim `[routenote] gece = false` ile
+  yalnız bildiriyor. Durum yoklaması yok (şart: botla veri toplama yasak); kabul Spotify takibinden. Ayrıntı:
+  `docs/arastirma/08`.
 - **Yerine geçecek API araştırması (2026-10-15, `docs/arastirma/08`):** bireysel hesaba açık, belgelenmiş tek yükleme
   API'si LabelGrid ($139/ay'dan, aylık GPU bütçesinin 4 katı); diğerleri satış/başvuru kapısında ya da API'siz.
   DistroKid ve TuneCore şartları bot/script erişimini yasaklıyor; RouteNote'un şart metni okunamadı, Playwright ancak
