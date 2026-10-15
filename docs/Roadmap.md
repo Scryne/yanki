@@ -264,6 +264,10 @@ Durum sütunu session-start hook'u tarafından otomatik okunur — format bozulm
   ile çalışır: `yanki.exe` açıkken kilitleniyor, bağımlılık değişince `uv` senkronu düşüyordu (bulundu, düzeltildi).
 
 ### Faz 10: Tam otomatik yayın (dağıtım API'si) ⛔
+- **Yerine geçecek API araştırması (2026-10-15, `docs/arastirma/08`):** bireysel hesaba açık, belgelenmiş tek yükleme
+  API'si LabelGrid ($139/ay'dan, aylık GPU bütçesinin 4 katı); diğerleri satış/başvuru kapısında ya da API'siz.
+  DistroKid ve TuneCore şartları bot/script erişimini yasaklıyor; RouteNote'un şart metni okunamadı, Playwright ancak
+  yazılı teyitle. Öneri: hacim artana kadar RouteNote elle; seçim Scryne'ın.
 - **Tunearo kapandı (2026-10-12, Scryne):** API artık yok, yüklenen 21 şarkı reddedildi. Yayınlananlar silindi: klasörleri
   `calisma/_arsiv/2026-10-12-yayin-silindi/`'e, liste kayıtları oradaki `liste_onceki.toml`'a (geri alınabilir);
   `dagitimci = ""` (otomatik yükleme yok). Üretim en iyi haline gelince keşiften yayına baştan kurulacak; dağıtımcı
