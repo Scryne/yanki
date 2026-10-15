@@ -808,3 +808,18 @@ genişlik × 2 tema) bir hata daha buldu.
   kapattığı kayıtta yok. Pano ve `yanki durum` artık bunu söylüyor; açmak Scryne'ın kararı.
 - **Kalan (karar Scryne'da):** S34 için bakiye (~8,25 $, `aylik_butce` 30 → 45 önerisi); kuyruktaki 8 paketin (eski
   tarif) gönderilip gönderilmeyeceği; görevlerin yeniden açılması.
+
+## Sistem açıldı (2026-10-15 akşam, Scryne: "S34'ü ben söyleyince; sistemi en güncel, en iyi sonuç veren haliyle başlat; müzik üretiminin en iyi olduğu türlerde üretsin, direkt RouteNote'ta paylaşılsın")
+
+- **Türler (kör testlerden):** ep20'de tutarlı yayınlanabilir: When I Was Your Man, Jar of Hearts (balad), Enter
+  Sandman (metal), All the Small Things (pop-punk), You're Still the One (country), Walking on Air (dance-pop). Hep kötü:
+  Let Her Go (folk), Smells Like Teen Spirit (grunge), How You Like That (K-pop), Doja (drill). Keşfe folk,
+  reggaeton/Latin, EDM dışlaması eklendi; tür dışı şarkı artık üretilmiyor (önce keşif süzüyordu ama listeye önceden
+  girenler üretiliyordu). Otomatik onaya metal, pop-punk, dance-pop, country açıldı.
+- **Kuyruk:** paketli 8 şarkı CFG 7 ile üretilmişti (kör testte CFG 10'a 9–3 kaybeden ayar). İyi türdeki 6'sı ve
+  süresi dolmuş otomatik onaylı 2 şarkı (Call Me Maybe, Just Give Me a Reason) güncel tarifle yeniden üretime;
+  Smells Like Teen Spirit (grunge) ve Starboy (trap) reddedildi (geri alınabilir). RouteNote'ta eski sesle açılmış iki
+  taslak (Numb 5064149827466, Smells 5064150100534) panelden silinmeli. Otomatik öneri yalnız en yeni tarifin adayları.
+- **Bütçe:** RunPod bakiyesi 0,09 $ + 1,78 $, ayın harcaması 27,55 / 30 $. `en_az_bakiye` 3 → 1: bir 8 şarkılık koşu
+  (~0,9 $). Sürekli üretim için bakiye yüklemesi gerekiyor.
+- `\Yanki\Surekli` ve `\Yanki\Gece` yeniden açıldı; ilk koşu 18:40.

@@ -6,9 +6,10 @@ onaylananı paketler ve RouteNote'a tarayıcıyla yükler (son "Distribute" Scry
 kaldırılmış, hâlâ aranan şarkılar ve hattın iyi yaptığı türlerde popüler şarkılar (`yanki kesif`); yüklenen parçanın
 Spotify'da çıkıp çıkmadığını ve adı arandığında kaçıncı sırada olduğunu `yanki takip` izler.
 
-**Şu an (2026-10-15):** üretim duraklatıldı (`config/operasyon.toml` → `[surekli] uretim = false`; model en iyi hâline
-gelene kadar, `docs/arastirma/07` S33–S34). Dağıtımcı RouteNote, gece yüklemesi kapalı (`[routenote] gece = false`):
-sırası gelen paket bildirilir, gönderim odadan. Tunearo API'si 2026-10-12'de kapandı; kodu yalnız geçmiş kayıtlar için.
+**Şu an (2026-10-15 akşam):** üretim açık, tarif ep20 + CFG 10, yalnız kör testlerde yayınlanabilir çıkan türlerde
+(balad, pop, rock, metal, pop-punk, country, dance-pop; tür dışı şarkı üretilmez, `uretim.tur_disi`). Otomatik onay
+(24 saat veto) ve RouteNote'a otomatik gönderim açık (`[routenote] gece = true`); RouteNote oturumu düşünce gönderim
+durur ve "giriş yap" bildirilir. S34 (dikkat + MLP LoRA) Scryne söyleyince. Tunearo API'si 2026-10-12'de kapandı.
 
 ## Günlük akış
 
