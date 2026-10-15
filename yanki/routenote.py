@@ -526,3 +526,52 @@ class RouteNote:
         return {"upc": upc, "isrc": kayit.get("isrc"), "yayin_tarihi": kayit.get("yayin_tarihi"),
                 "onizleme": f"{int(meta['onizleme_sn']) // 60}:{int(meta['onizleme_sn']) % 60:02d}"
                 if meta.get("onizleme_sn") is not None else None, "dagitim_durumu": kayit.get("adim")}
+
+
+# ── insanın panelde gördüğünün kaydı ────────────────────────
+def _meta(calisma: Path, kimlik: str) -> tuple[Path, dict]:
+    from yanki import durum
+
+    yol = durum.klasor(calisma, kimlik) / "paket" / "metadata.json"
+    try:
+        return yol, json.loads(yol.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as e:
+        raise ValueError(f"{kimlik}: paket yok") from e
+
+
+def gonderim_sonucu(calisma: Path, kimlik: str, gonderildi: bool) -> str:
+    """Son tıktan sonra süreç düştüyse (`adim = gonderiliyor`) hat yeniden denemez; Scryne RouteNote panelinde
+    (Discography) bakar ve sonucu söyler. Gönderildiyse yükleme kaydedilir ve şarkı `yuklendi`; gönderilmediyse
+    taslak yeniden gönderime hazır."""
+    from yanki import dosya, durum, takip
+
+    yol, meta = _meta(calisma, kimlik)
+    rn = meta.get("routenote") or {}
+    if rn.get("adim") != "gonderiliyor":
+        raise ValueError(f"{kimlik}: yarıda kalan gönderim yok (adım: {rn.get('adim') or '—'})")
+    if not gonderildi:
+        rn["adim"] = "hazir"
+        dosya.json_yaz(yol, {**meta, "routenote": rn})
+        return f"{kimlik}: taslak gönderime hazır olarak işaretlendi"
+    rn.update(adim="gonderildi", gonderim=rn.get("gonderim") or date.today().isoformat())
+    dosya.json_yaz(yol, {**meta, "routenote": rn})
+    takip.yukleme_kaydet(calisma, kimlik, {"upc": rn.get("upc"), "isrc": rn.get("isrc"),
+                                           "yayin_tarihi": rn.get("yayin_tarihi"), "dagitimci": "routenote"},
+                         "routenote")
+    with durum.guncelle(calisma, kimlik) as d:
+        if d.asama == "paketlendi":
+            d.gec("yuklendi")
+    return f"{kimlik}: gönderildi olarak kaydedildi (UPC {rn.get('upc')}), şarkı incelemede"
+
+
+def taslak_silindi(calisma: Path, kimlik: str) -> str:
+    """Panelden silinen taslağın kaydı geçmişe: paket yeniden hazırlanabilir, sonraki yükleme yeni taslak açar."""
+    from yanki import dosya
+
+    yol, meta = _meta(calisma, kimlik)
+    rn = meta.get("routenote") or {}
+    if not rn.get("adim") or rn.get("adim") == "gonderildi":
+        raise ValueError(f"{kimlik}: açık taslak kaydı yok (adım: {rn.get('adim') or '—'})")
+    meta.setdefault("routenote_gecmisi", []).append({**meta.pop("routenote"), "silindi": date.today().isoformat()})
+    dosya.json_yaz(yol, meta)
+    return f"{kimlik}: taslak kaydı geçmişe alındı; sonraki yükleme yeni taslak açar"

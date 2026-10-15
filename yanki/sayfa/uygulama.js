@@ -986,26 +986,31 @@ async function panoGoster() {
 
 function simdiBolumu(s) {
   if (!s || (!s.suruyor && !s.pod && !s.uretimde?.length)) return null;
-  const durumYazi = s.pod ? `Kiralık GPU açık · ${s.pod.dakika} dk` : s.suruyor ? "Koşu sürüyor" : "Sırada, sonraki koşuyu bekliyor";
+  const durumYazi = s.pod ? `Kiralık GPU açık · ${s.pod.dakika} dk` : s.suruyor ? "Koşu sürüyor"
+    : s.uretim_acik === false ? "Üretim duraklatıldı; sırada bekliyor" : s.otomatik_kapali ? "Sırada; otomatik koşu kapalı" : "Sırada, sonraki koşuyu bekliyor";
+  const bekliyor = s.uretim_acik === false && !s.suruyor && !s.pod;
   return el("section", { class: "simdi-serit" + (s.suruyor || s.pod ? " canli" : ""), "aria-label": "Şu an" },
     el("div", { class: "simdi-baslik" }, s.suruyor || s.pod ? el("span", { class: "nabiz", "aria-hidden": "true" }) : el("span", { class: "nokta" }),
       el("div", {}, el("b", {}, "Şu an"), el("span", { class: "ipucu" }, durumYazi))),
     s.uretimde?.length ? el("ul", { class: "simdi-liste" }, ...s.uretimde.map((x) => el("li", {},
       el("a", { href: `#${x.kimlik}` }, kapakImg(x.kapak), el("span", { class: "ad" }, x.ad),
-        el("span", { class: "ipucu" }, x.asama === "onarim" ? "onarım" : x.gecen_aday ? "yeni adaylar üretiliyor" : "adaylar üretiliyor"))))) : null);
+        el("span", { class: "ipucu" }, x.asama === "onarim" ? (bekliyor ? "onarım sırada" : "onarım")
+          : bekliyor ? "sırada" : x.gecen_aday ? "yeni adaylar üretiliyor" : "adaylar üretiliyor"))))) : null);
 }
 
 function beklenenBolumu(p) {
   const satirlar = [
     ...p.kulak.map((s) => ({ s, rozet: ["dinlemen gerekiyor", "amber"], metin: s.neden })),
     ...p.hatada.map((s) => ({ s, rozet: ["hata", "no"], metin: s.hata })),
-    ...p.yakinda.map((s) => ({ s, rozet: ["kendiliğinden onaylanacak", "gumus"], metin: saatDakika(s.zaman) })),
+    // süre dolmuş ama koşu olmamışsa (otomatik koşu kapalı) geçmiş saat yazmak yanıltıyordu
+    ...p.yakinda.map((s) => ({ s, rozet: ["kendiliğinden onaylanacak", "gumus"],
+      metin: new Date(s.zaman) <= new Date() ? "süre doldu; ilk koşuda onaylanır" : saatDakika(s.zaman) })),
     ...(p.takvim?.yazarsiz || []).map((s) => ({ s, rozet: ["yazar gerekli", "amber"],
       metin: "Orijinal söz yazarı bulunamadı; dağıtımcılar yazarsız cover almıyor. girdi/liste.toml'da şarkıya yazarlar = [\"Ad Soyad\"] ekle, paket sonraki koşuda yenilenip sıraya girer." })),
   ];
   const uyarilar = (p.uyarilar || []).map((u) => el("li", { class: "kayit uyari-kayit" },
     el("div", { class: "kayit-ad" }, el("span", { class: "ad" }, u.baslik)),
-    el("div", { class: "olculer" }, el("span", { class: "rozet amber" }, "dağıtım"), el("span", { class: "duz" }, u.metin))));
+    el("div", { class: "olculer" }, el("span", { class: "rozet amber" }, u.etiket || "hat"), el("span", { class: "duz" }, u.metin))));
   const sayi = satirlar.length + uyarilar.length;
   return el("section", { class: "bolum", "aria-label": "Senden beklenen" },
     el("h2", { class: "bolum-baslik" }, "Senden beklenen", sayi ? el("span", { class: "g-sayi dikkat" }, String(sayi)) : null),
@@ -1104,13 +1109,14 @@ function ayarPaneli(a, kota) {
 // ---- Sanatçı (#_sanatci): Orvane'ın kataloğu dağıtımda, dağıtım ayarları, odadan başlatılan işler ----
 const RN = "https://www.routenote.com/rn";
 const HAL = {
+  kontrol: { ad: "Kontrol et", rozet: ["gönderim yarıda", "amber"], aciklama: "Son tıktan sonra iş yarıda kaldı. RouteNote panelinde yayına bak ve ne gördüğünü seç; hat yeniden göndermez." },
   taslak_hazir: { ad: "Gönderime hazır", rozet: ["taslak hazır", "gumus"], aciklama: "RouteNote'ta dört adımı tamam; \"Gönder\" ile incelemeye gider. Geri alınamaz." },
   taslak_yarim: { ad: "Yarım taslak", rozet: ["yarım", "amber"], aciklama: "Bir adımda kaldı; tamamlayınca aynı taslaktan sürer, yeni taslak açılmaz." },
   kuyruk: { ad: "Kuyrukta", rozet: ["paket hazır", ""], aciklama: "Paketlendi, RouteNote'a dokunulmadı." },
   inceleme: { ad: "İncelemede", rozet: ["incelemede", ""], aciklama: "RouteNote'a gönderildi; yayın tarihinde mağazalara çıkar." },
   yayinda: { ad: "Yayında", rozet: ["yayında", "ok"], aciklama: "Spotify'da dinlenebilir." },
 };
-const ADIM = { olusturuldu: "taslak açıldı", album: "albüm bilgisi", ses: "ses ve parça", kapak: "kapak", hazir: "dört adım tamam", gonderildi: "gönderildi" };
+const ADIM = { olusturuldu: "taslak açıldı", album: "albüm bilgisi", ses_kaydedildi: "ses yüklendi", ses: "ses ve parça", kapak: "kapak", hazir: "dört adım tamam", gonderiliyor: "gönderiliyor", gonderildi: "gönderildi" };
 const IS_ADI = { taslak: "Taslak", gonder: "Gönderim", giris: "RouteNote girişi" };
 let isIzle = null;
 
@@ -1174,8 +1180,17 @@ function defterSatiri(x, s, isSuruyor) {
   if (x.kimlik && (x.hal === "taslak_hazir" || x.hal === "kuyruk"))
     eylem.push(el("button", { class: "dugme tehlike kucuk", type: "button", disabled: isSuruyor, onclick: () => gonderPenceresi(x, s) },
       x.hal === "kuyruk" ? "Yükle ve gönder…" : "Gönder…"));
+  if (x.kimlik && x.hal === "kontrol") {
+    const sonuc = (gonderildi) => async (e) => {
+      e.currentTarget.disabled = true;
+      try { const r = await api(`/api/sanatci/${x.kimlik}/gonderim-sonucu`, { gonderildi }); bildir(r.mesaj); } catch (err) { bildir(err.message, true); }
+      sanatciGoster();
+    };
+    eylem.push(el("button", { class: "dugme kucuk", type: "button", onclick: sonuc(true), title: "Panelde incelemede görünüyor" }, "Gönderilmiş"),
+      el("button", { class: "dugme ikincil kucuk", type: "button", onclick: sonuc(false), title: "Panelde hâlâ taslak" }, "Taslakta duruyor"));
+  }
   if (x.upc && x.hal !== "kuyruk")
-    eylem.push(el("a", { class: "dugme kucuk", href: x.hal.startsWith("taslak") ? `${RN}/editalbum/${x.upc}` : `${RN}/releases`, target: "_blank", rel: "noopener" }, "RouteNote"));
+    eylem.push(el("a", { class: "dugme kucuk", href: x.hal.startsWith("taslak") || x.hal === "kontrol" ? `${RN}/editalbum/${x.upc}` : `${RN}/releases`, target: "_blank", rel: "noopener" }, "RouteNote"));
   if (x.spotify_id)
     eylem.push(el("a", { class: "dugme kucuk", href: `https://open.spotify.com/track/${x.spotify_id}`, target: "_blank", rel: "noopener" }, "Spotify"));
   return el("li", { class: "kayit kapakli" + (x.uyari ? " uyarili" : "") },
@@ -1228,7 +1243,7 @@ function isPaneli(is) {
   const hata = is.kod != null && is.kod !== 0;
   const oturumYok = (is.gunluk_son || []).some((x) => /oturumu yok|OturumYok/.test(x));
   const hal = is.suruyor ? ["sürüyor", "suruyor"] : is.sahipsiz ? ["bitti (sonuç günlükte)", ""] : hata ? ["hata", "sorun"] : ["bitti", ""];
-  panel.append(
+  doldur(panel, el("h2", {}, "Son iş"),  // yerel append boş parçayı "null" metni yazıyordu ("nullnull")
     el("p", { class: "gece-satir" }, is.suruyor ? el("span", { class: "nabiz", "aria-hidden": "true" }) : el("span", { class: `nokta ${hal[1]}` }),
       el("b", {}, `${IS_ADI[is.ad] || is.ad}${is.kimlik ? ` · ${is.kimlik}` : ""}`), el("span", { class: "ipucu" }, `${hal[0]} · ${saatDakika(is.baslangic)}`)),
     oturumYok ? el("p", { class: "uyari" }, "RouteNote oturumu düşmüş. Aşağıdan giriş yap, sonra işi yeniden başlat; taslak kaldığı adımdan sürer.") : null,
@@ -1265,13 +1280,33 @@ function oturumPaneli(o, isSuruyor) {
     } }, "RouteNote'a giriş yap"));
 }
 
+// gece yüklemesi açıkken takvim her gece sıradaki paketleri kendisi gönderir (geri alınamaz): şarkı gönderimi gibi ad
+// yazdırılır, sunucu da aynısını ister
+function geceAcPenceresi(s, kaydet) {
+  const kutu = el("input", { id: "gece-onay", type: "text", autocomplete: "off", spellcheck: "false", placeholder: s.ad });
+  const sade = (m) => m.trim().replace(/[Iİı]/g, "i").toLowerCase();
+  const dugme = el("button", { class: "dugme tehlike dolu", type: "button", disabled: true, onclick: async () => {
+    dugme.disabled = true; dlg.close();
+    await kaydet({ gece: true, onay: kutu.value }, "Gece yüklemesi açıldı: takvim sırası geleni kendisi gönderir.");
+  } }, "Gece yüklemesini aç");
+  kutu.addEventListener("input", () => { dugme.disabled = sade(kutu.value) !== sade(s.ad); });
+  const sira = s.katalog.filter((x) => x.hal === "kuyruk" || x.hal === "taslak_hazir").length;
+  const eski = s.katalog.filter((x) => (x.hal === "kuyruk" || x.hal === "taslak_hazir") && x.eski_tarif).length;
+  const dlg = pencere("Gece yüklemesi açılsın mı?", [
+    el("p", {}, `Her gece takvimde sırası gelen paket RouteNote'a senin tıklaman olmadan gönderilir; şartlar senin adına kabul edilir. Şu an ${sira} paket sırada`,
+      eski ? `, ${eski} tanesi bugünkü tariften önce üretildi.` : "."),
+    el("label", { for: "gece-onay" }, "Onaylamak için sanatçı adını yaz: ", el("b", {}, s.ad)), kutu],
+    [el("button", { class: "dugme ikincil", type: "button", onclick: () => dlg.close() }, "Vazgeç"), dugme], "gonder-pencere");
+  kutu.focus();
+}
+
 function dagitimAyarPaneli(s) {
   const kaydet = async (degisiklik, mesaj) => {
     try { await api("/api/sanatci/ayar", degisiklik); bildir(mesaj); } catch (e) { bildir(e.message, true); }
     sanatciGoster();
   };
   const gece = el("button", { class: "anahtar", type: "button", role: "switch", "aria-checked": s.ayar.gece ? "true" : "false", "aria-labelledby": "gece-ad",
-    onclick: () => kaydet({ gece: !s.ayar.gece }, s.ayar.gece ? "Gece yüklemesi kapandı: sırası gelen paket yalnız bildirilir." : "Gece yüklemesi açıldı: takvim sırası geleni kendisi gönderir.") },
+    onclick: () => s.ayar.gece ? kaydet({ gece: false }, "Gece yüklemesi kapandı: sırası gelen paket yalnız bildirilir.") : geceAcPenceresi(s, kaydet) },
     el("span", { "aria-hidden": "true" }));
   const gun = el("input", { id: "yayin-gun", type: "number", min: 10, max: 120, value: s.ayar.yayin_on_gun ?? 21, inputmode: "numeric" });
   const kimlik = el("input", { id: "spotify-kimlik", type: "text", value: s.ayar.spotify_sanatci_id || "", maxlength: 40, spellcheck: "false", autocomplete: "off", placeholder: "profil adresindeki kimlik" });

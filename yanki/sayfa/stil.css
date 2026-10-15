@@ -538,6 +538,7 @@ a.durak:hover .durak-ad { color: var(--metin); text-decoration: underline; text-
 .ayar-form input[type="number"] { width: 5.5rem; }
 .ayar-form input[type="text"] { flex: 1; }
 .ayar-form input:focus, .gonder-pencere input:focus { border-color: var(--cizgi-gumus); outline: none; }
+.ayar-form input:focus-visible, .gonder-pencere input:focus-visible { outline: 2px solid var(--oynatma); outline-offset: 1px; }
 .gonder-pencere input { width: 100%; margin-top: var(--s1); }
 .gonder-ozet { margin: var(--s3) 0; }
 .onay-etiket { display: block; margin-top: var(--s3); font-size: 13px; }
@@ -572,3 +573,4 @@ a.durak:hover .durak-ad { color: var(--metin); text-decoration: underline; text-
 .kulak-not { font: inherit; font-size: 13px; color: var(--metin); background: rgba(0, 0, 0, .28); border: 1px solid var(--cizgi);
   border-radius: var(--r-kucuk); padding: 6px var(--s3); width: 100%; }
 .kulak-not:focus { border-color: var(--cizgi-gumus); outline: none; }
+.kulak-not:focus-visible { outline: 2px solid var(--oynatma); outline-offset: 1px; }

@@ -50,3 +50,11 @@ def _lora_klasorsuz(monkeypatch):
     from yanki import ayarlar
 
     monkeypatch.setattr(ayarlar, "lora_denetle", lambda a: None)
+
+
+@pytest.fixture(autouse=True)
+def _gorevsiz(monkeypatch):
+    # dinleme odası zamanlanmış görevlerin hâlini PowerShell'le soruyor: testte makinenin görevlerine bakılmaz
+    from yanki import sistem
+
+    monkeypatch.setattr(sistem, "gorev_durumlari", lambda *_a, **_k: {})

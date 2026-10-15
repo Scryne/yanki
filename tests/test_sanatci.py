@@ -94,9 +94,28 @@ def test_gonderim_baska_siteden_gelemez(oda):
 
 def test_odadan_ayar(oda, kok):
     istemci, _ = oda
-    assert istemci.post("/api/sanatci/ayar", json={"gece": True}).json()["gece"] is True
+    # gece yüklemesi geri alınamaz gönderim yapar: tek tıkla açılmaz, sanatçı adı yazılır (Türkçe klavye "ı" da tutar)
+    assert istemci.post("/api/sanatci/ayar", json={"gece": True}).status_code == 422
+    assert istemci.post("/api/sanatci/ayar", json={"gece": True, "onay": "orvane x"}).status_code == 422
+    assert "gece = false" in (kok / "config" / "yayin.toml").read_text(encoding="utf-8")
+    assert istemci.post("/api/sanatci/ayar", json={"gece": True, "onay": " orvane "}).json()["gece"] is True
     assert "gece = true" in (kok / "config" / "yayin.toml").read_text(encoding="utf-8")
+    assert istemci.post("/api/sanatci/ayar", json={"gece": False}).json()["gece"] is False  # kapatmak serbest
     assert istemci.post("/api/sanatci/ayar", json={"yayin_on_gun": 500}).status_code == 422
+    assert istemci.post("/api/sanatci/ayar", json={"yayin_on_gun": 3}).status_code == 422  # inceleme 5–10 iş günü
+    assert sanatci.onay_tutar("ıce", "Ice") and sanatci.onay_tutar("İCE", "ice") and not sanatci.onay_tutar("", "")
+
+
+def test_yarida_kalan_gonderim_odadan_kaydedilir(oda, tmp_path):
+    istemci, _ = oda
+    meta_yolu = tmp_path / "calisma" / "numb" / "paket" / "metadata.json"
+    meta = json.loads(meta_yolu.read_text(encoding="utf-8"))
+    meta["routenote"] = {"upc": "5064150700802", "adim": "gonderiliyor", "yayin_tarihi": "2026-11-01"}
+    meta_yolu.write_text(json.dumps(meta), encoding="utf-8")
+    assert [x["hal"] for x in istemci.get("/api/sanatci").json()["katalog"]] == ["kontrol"]
+    r = istemci.post("/api/sanatci/numb/gonderim-sonucu", json={"gonderildi": False})
+    assert r.status_code == 200 and json.loads(meta_yolu.read_text(encoding="utf-8"))["routenote"]["adim"] == "hazir"
+    assert istemci.post("/api/sanatci/numb/gonderim-sonucu", json={"gonderildi": True}).status_code == 409
 
 
 def test_isci_tek_is_ve_gunluk(tmp_path, monkeypatch):

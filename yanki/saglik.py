@@ -54,6 +54,12 @@ def kontroller(a: Ayarlar) -> list[Kontrol]:
         sonuc.append(Kontrol("LoRA", (a.motor.lora / "adapter_config.json").is_file(),
                              f"{yol.as_posix()} (ölçek {a.motor.lora_olcek:g})"))
     sonuc += [*anahtar_kontrolleri(a), disk_kontrolu(a)]
+    from yanki import sistem
+
+    if gorevler := sistem.gorev_durumlari():  # kurulu değilse (CI, başka makine) satır yok
+        kapali = sistem.kapali_gorevler(gorevler)
+        sonuc.append(Kontrol("otomatik koşu", not kapali, f"{', '.join(kapali)} devre dışı (Görev Zamanlayıcı → Yanki)"
+                             if kapali else ", ".join(f"{k} {v}" for k, v in sorted(gorevler.items()))))
     if a.uzak.acik:
         sonuc.append(uzak_kontrolu(a))
     kullanilan = gpu_kullanilan_mib()

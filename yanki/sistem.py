@@ -48,3 +48,27 @@ def surec_yasiyor(pid: int | None) -> bool:
         return kod.value == still_active
     finally:
         k32.CloseHandle(tanitici)
+
+
+GOREVLER = ("Surekli", "Gece", "Oda")  # scripts/gorev_kur.ps1
+
+
+def gorev_durumlari(klasor: str = "\\Yanki\\") -> dict[str, str]:
+    """Zamanlanmış görevlerin hâli (Ready | Running | Disabled …; dil ayarından bağımsız). Okunamazsa boş."""
+    import subprocess
+
+    try:
+        cikti = subprocess.run(
+            ["powershell", "-NoProfile", "-Command",
+             f"Get-ScheduledTask -TaskPath '{klasor}' -ErrorAction SilentlyContinue | "
+             "ForEach-Object { $_.TaskName + '=' + $_.State }"],
+            capture_output=True, text=True, encoding="utf-8", timeout=20,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0)).stdout
+    except (OSError, subprocess.SubprocessError):
+        return {}
+    return dict(x.strip().split("=", 1) for x in cikti.splitlines() if "=" in x)
+
+
+def kapali_gorevler(durumlar: dict[str, str]) -> list[str]:
+    """Kurulu ama kapatılmış (Disabled) hat görevleri. Hiç kurulmamışsa (CI, başka makine) uyarı yok."""
+    return [ad for ad in ("Surekli", "Gece") if durumlar.get(ad) == "Disabled"]

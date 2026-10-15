@@ -17,7 +17,7 @@ from pathlib import Path
 
 from yanki import dosya, durum, sistem
 
-DURUM_SIRASI = ("taslak_hazir", "taslak_yarim", "kuyruk", "inceleme", "yayinda")
+DURUM_SIRASI = ("kontrol", "taslak_hazir", "taslak_yarim", "kuyruk", "inceleme", "yayinda")
 YAYIN_ON_GUN_ASGARI = 10  # RouteNote incelemesi 5–10 iş günü; daha yakın tarih incelemede geçer
 
 
@@ -30,7 +30,8 @@ def _meta(calisma: Path, kimlik: str) -> dict:
 
 def hal(d: durum.Durum, meta: dict) -> str:
     """Katalogdaki yer: kuyruk (paket hazır, RouteNote'a dokunulmadı) · taslak_yarim (bir adımda kaldı) ·
-    taslak_hazir (dört adım tamam, "Distribute" bekliyor) · inceleme · yayinda."""
+    taslak_hazir (dört adım tamam, "Distribute" bekliyor) · kontrol (son tıktan sonra iş yarıda kaldı: gönderilip
+    gönderilmediğini Scryne panelde görür) · inceleme · yayinda."""
     if d.asama == "yayinda" or ((d.yayin or {}).get("son") or {}).get("canli"):
         return "yayinda"
     if d.asama == "yuklendi":
@@ -38,7 +39,16 @@ def hal(d: durum.Durum, meta: dict) -> str:
     adim = (meta.get("routenote") or {}).get("adim")
     if adim == "hazir":
         return "taslak_hazir"
+    if adim == "gonderiliyor":
+        return "kontrol"
     return "taslak_yarim" if adim else "kuyruk"
+
+
+def onay_tutar(yazilan: str, beklenen: str) -> bool:
+    """Geri alınamaz işlemin elle yazılan onayı. I/İ/ı ve büyük-küçük harf farkı aranmaz (tarayıcı Türkçe klavyede
+    "ı" yazdırıyor, sunucu "i" bekliyordu); `uygulama.js → sade` ile aynı kural."""
+    sade = lambda s: s.strip().replace("I", "i").replace("İ", "i").replace("ı", "i").casefold()  # noqa: E731
+    return bool(beklenen.strip()) and sade(yazilan) == sade(beklenen)
 
 
 def guncel_tarif(a) -> dict:

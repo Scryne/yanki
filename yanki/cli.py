@@ -1,7 +1,6 @@
 """yanki komut satırı."""
 
 import argparse
-import json
 import shutil
 import sys
 from pathlib import Path
@@ -276,48 +275,21 @@ def _kesif_ayarlari(kok: Path) -> dict:
 
 
 def _routenote_gonderim(calisma: Path, args: argparse.Namespace) -> int:
-    """Son tıktan sonra süreç düştüyse (`adim = gonderiliyor`) hat yeniden denemez: Scryne panele bakar ve sonucu
-    söyler. `gonderildi`: yükleme kaydedilir, şarkı `yuklendi`; `gonderilmedi`: taslak `hazir`a döner.
-    `taslak-silindi`: panelden silinen taslağın kaydı geçmişe (paket yeniden hazırlanabilir, yeni taslak açılır)."""
-    from datetime import date
-
-    from yanki import dosya, takip
+    """`gonderildi`/`gonderilmedi`: yarıda kalan gönderimin paneldeki sonucu; `taslak-silindi`: panelden silinen
+    taslağın kaydı (`routenote.gonderim_sonucu`, `routenote.taslak_silindi`; odada da düğmesi var)."""
+    from yanki import routenote
 
     if not args.kimlik:
-        print("şarkı kimliği gerekli: yanki routenote gonderildi <kimlik>")
+        print(f"şarkı kimliği gerekli: yanki routenote {args.islem} <kimlik>")
         return 1
-    meta_yolu = durum.klasor(calisma, args.kimlik) / "paket" / "metadata.json"
     try:
-        meta = json.loads(meta_yolu.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        print(f"✗ {args.kimlik}: paket yok")
+        if args.islem == "taslak-silindi":
+            print(routenote.taslak_silindi(calisma, args.kimlik))
+        else:
+            print(routenote.gonderim_sonucu(calisma, args.kimlik, args.islem == "gonderildi"))
+    except ValueError as e:
+        print(f"✗ {e}")
         return 1
-    rn = meta.get("routenote") or {}
-    if args.islem == "taslak-silindi":
-        if not rn.get("adim") or rn.get("adim") == "gonderildi":
-            print(f"✗ {args.kimlik}: açık taslak kaydı yok (adım: {rn.get('adim') or '—'})")
-            return 1
-        meta.setdefault("routenote_gecmisi", []).append({**meta.pop("routenote"), "silindi": date.today().isoformat()})
-        dosya.json_yaz(meta_yolu, meta)
-        print(f"{args.kimlik}: taslak kaydı geçmişe alındı; sonraki yükleme yeni taslak açar")
-        return 0
-    if rn.get("adim") != "gonderiliyor":
-        print(f"✗ {args.kimlik}: yarıda kalan gönderim yok (adım: {rn.get('adim') or '—'})")
-        return 1
-    if args.islem == "gonderilmedi":
-        rn["adim"] = "hazir"
-        dosya.json_yaz(meta_yolu, {**meta, "routenote": rn})
-        print(f"{args.kimlik}: taslak gönderime hazır olarak işaretlendi")
-        return 0
-    rn.update(adim="gonderildi", gonderim=rn.get("gonderim") or date.today().isoformat())
-    dosya.json_yaz(meta_yolu, {**meta, "routenote": rn})
-    takip.yukleme_kaydet(calisma, args.kimlik, {"upc": rn.get("upc"), "isrc": rn.get("isrc"),
-                                                "yayin_tarihi": rn.get("yayin_tarihi"), "dagitimci": "routenote"},
-                         "routenote")
-    with durum.guncelle(calisma, args.kimlik) as d:
-        if d.asama == "paketlendi":
-            d.gec("yuklendi")
-    print(f"{args.kimlik}: gönderildi olarak kaydedildi (UPC {rn.get('upc')}), şarkı yuklendi")
     return 0
 
 

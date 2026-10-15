@@ -20,7 +20,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from yanki import durum, kesif, kilit, kulak, olay, sozler, uretim, yapi
+from yanki import durum, kesif, kilit, kulak, olay, sistem, sozler, uretim, yapi
 from yanki.ayarlar import Ayarlar
 
 SAYFA = Path(__file__).with_name("sayfa")
@@ -66,7 +66,12 @@ class EleIstegi(BaseModel):
 class SanatciAyari(BaseModel):
     gece: bool | None = None
     spotify_sanatci_id: str | None = Field(default=None, max_length=40)
-    yayin_on_gun: int | None = Field(default=None, ge=1, le=120)
+    yayin_on_gun: int | None = Field(default=None, ge=10, le=120)  # RouteNote incelemesi 5–10 iş günü
+    onay: str | None = Field(default=None, max_length=100)  # gece yüklemesini açmak: sanatçı adı elle yazılır
+
+
+class GonderimSonucu(BaseModel):
+    gonderildi: bool
 
 
 class GonderOnayi(BaseModel):
@@ -270,8 +275,20 @@ YEREL_HOSTLAR = ("127.0.0.1", "localhost", "::1")
 GUVENLI_YONTEMLER = ("GET", "HEAD", "OPTIONS")
 
 
-def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None) -> FastAPI:
+GOREV_ONBELLEK_SN = 600  # pano her 30 sn'de soruluyor; görev hâli PowerShell'le ~1 sn
+
+
+def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None, gorev_oku=None) -> FastAPI:
     app = FastAPI(title="Yanki dinleme", docs_url=None, redoc_url=None)
+    gorev_onbellek: dict = {}
+
+    def gorevler() -> dict[str, str]:
+        import time
+
+        if time.monotonic() - gorev_onbellek.get("zaman", -GOREV_ONBELLEK_SN) >= GOREV_ONBELLEK_SN:
+            gorev_onbellek.update(zaman=time.monotonic(), deger=(gorev_oku or sistem.gorev_durumlari)())
+        return gorev_onbellek["deger"]
+
     liste_yolu = liste_yolu or a.kok / "girdi" / "liste.toml"
 
     @app.middleware("http")
@@ -591,9 +608,17 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None) -> FastA
 
     @app.post("/api/sanatci/ayar")
     def sanatci_ayar(istek: SanatciAyari):
-        degisiklik = {k: v for k, v in istek.model_dump().items() if v is not None}
+        from yanki import paket
+
+        degisiklik = {k: v for k, v in istek.model_dump().items() if v is not None and k != "onay"}
         if not degisiklik:
             raise HTTPException(422, "değişiklik yok")
+        if degisiklik.get("gece") is True:
+            # gece yüklemesi her gece sıradaki paketleri kulaktan geçmeden geri alınamaz biçimde gönderir: tek tıkla
+            # açılmasın (şarkı gönderimindeki gibi ad yazılır)
+            ad = paket.yayin_ayarlari(a.kok / "config" / "yayin.toml").sanatci_adi
+            if not sanatci.onay_tutar(istek.onay or "", ad):
+                raise HTTPException(422, "gece yüklemesini açmak için sanatçı adını aynen yaz")
         try:
             return sanatci.ayar_yaz(a.kok, degisiklik)
         except ValueError as e:
@@ -625,9 +650,20 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None) -> FastA
         d = oku(kimlik)
         if d.asama != "paketlendi":
             raise HTTPException(409, f"yalnız paketlenmiş şarkı (aşama: {d.asama})")
-        if istek.onay.strip().casefold() != d.ad.strip().casefold():
+        if not sanatci.onay_tutar(istek.onay, d.ad):
             raise HTTPException(422, "onay için şarkının adını aynen yaz")
         return is_baslat("gonder", kimlik)
+
+    @app.post("/api/sanatci/{kimlik}/gonderim-sonucu")
+    def sanatci_gonderim_sonucu(kimlik: str, istek: GonderimSonucu):
+        """Yarıda kalan gönderim: Scryne RouteNote panelinde gördüğünü söyler (hat yeniden göndermez)."""
+        from yanki import routenote
+
+        oku(kimlik)
+        try:
+            return {"mesaj": routenote.gonderim_sonucu(calisma, kimlik, istek.gonderildi)}
+        except ValueError as e:
+            raise HTTPException(409, str(e)) from e
 
     @app.post("/api/sanatci/giris")
     def sanatci_giris():
@@ -684,9 +720,14 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None) -> FastA
         from yanki import paket, tunearo
 
         uyarilar = []
+        if kapali := sistem.kapali_gorevler(gorevler()):
+            uyarilar.append({"baslik": "Otomatik koşu kapalı", "etiket": "zamanlayıcı",
+                             "metin": f"Görev Zamanlayıcı'da {', '.join(f'Yanki\\{g}' for g in kapali)} devre dışı: "
+                                      "keşif, hazırlık, otomatik onay, paket, takip ve yedek koşmuyor. Açmak: "
+                                      "Görev Zamanlayıcı → Yanki → görev → Etkinleştir (ya da scripts/gorev_kur.ps1)."})
         if paket.yayin_ayarlari(a.kok / "config" / "yayin.toml").dagitimci == "tunearo" and \
                 (e := tunearo.erisim_durumu(calisma)):
-            uyarilar.append({"baslik": "Tunearo API erişimi kapalı",
+            uyarilar.append({"baslik": "Tunearo API erişimi kapalı", "etiket": "dağıtım",
                              "metin": f"{e.get('ilk', '')[:16].replace('T', ' ')}'dan beri her istek reddediliyor; "
                                       "yükleme ve durum yoklaması bekliyor. Hesap sahibi erişimi açınca hat sürer."})
         return {
@@ -706,7 +747,9 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None) -> FastA
             "dagitim": dagitimda, "takvim": _takvim(a.kok, calisma), "ayarlar": ayarlar,
             "olaylar": olay.oku(calisma, son=12)[::-1], "gece": _son_gece(calisma), "kota": _kota(a.kok),
             "simdi": {**kosu_durumu(calisma), "uretimde": [_ozet(d, calisma) for d in hepsi
-                                                           if d.asama in ("analiz", "onarim")]},
+                                                           if d.asama in ("analiz", "onarim")],
+                      "uretim_acik": ayarlar.get("uretim_acik", True),
+                      "otomatik_kapali": bool(sistem.kapali_gorevler(gorevler()))},
         }
 
     @app.get("/api/kazanc")

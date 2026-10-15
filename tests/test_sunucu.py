@@ -360,3 +360,17 @@ def test_yazan_istek_yalniz_odanin_kendi_kokeninden(ortam):
     kendi = {"Origin": ODA, "Sec-Fetch-Site": "same-origin"}
     assert istemci.post(yol, json={"neden": ""}, headers=kendi).status_code == 404  # korumadan geçti, şarkı yok
     assert istemci.post(yol, json={"neden": ""}).status_code == 404
+
+
+def test_pano_kapali_otomatik_kosuyu_soyler(tmp_path):
+    """2026-10-13'ten beri Yanki/Surekli ve Yanki/Gece görevleri kapalıydı; pano hiçbir şey söylemiyordu (son koşu "sorunsuz")."""
+    c = tmp_path / "calisma"
+    c.mkdir()
+    oda = TestClient(sunucu.uygulama(ayarlar.yukle(), c, gorev_oku=lambda: {"Surekli": "Disabled", "Gece": "Ready"}),
+                     base_url=ODA)
+    p = oda.get("/api/pano").json()
+    assert [u["baslik"] for u in p["uyarilar"]] == ["Otomatik koşu kapalı"]
+    assert "Yanki\\Surekli" in p["uyarilar"][0]["metin"] and "Gece" not in p["uyarilar"][0]["metin"]
+    assert p["simdi"]["otomatik_kapali"] is True
+    acik = TestClient(sunucu.uygulama(ayarlar.yukle(), c, gorev_oku=lambda: {"Surekli": "Ready"}), base_url=ODA)
+    assert acik.get("/api/pano").json()["uyarilar"] == []
