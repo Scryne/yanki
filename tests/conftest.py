@@ -41,3 +41,12 @@ def _tur_listesi_varsayilan(monkeypatch):
     from yanki import kesif, onay
 
     monkeypatch.setattr(kesif, "haric_kalip", lambda: onay.tur_kalibi(onay.DENENMEMIS_VARSAYILAN))
+
+
+@pytest.fixture(autouse=True)
+def _lora_klasorsuz(monkeypatch):
+    # config/motor.toml eğitilmiş LoRA'yı gösteriyor (calisma/, repoda yok): üretim testleri o klasöre bağlı olmasın.
+    # Denetimin kendisi test_egitim.py'de modül yüklenirken alınan asıl işlevle sınanıyor.
+    from yanki import ayarlar
+
+    monkeypatch.setattr(ayarlar, "lora_denetle", lambda a: None)

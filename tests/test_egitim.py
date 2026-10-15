@@ -10,6 +10,8 @@ import pytest
 
 from yanki import ayarlar, durum, egitim, kaynak, liste, motor, runpod, sozler, uzak
 
+GERCEK_LORA_DENETLE = ayarlar.lora_denetle  # conftest testlerde etkisizleştiriyor
+
 KOK = Path(__file__).resolve().parents[1]
 
 
@@ -375,7 +377,7 @@ def test_lora_uretime_baglanir_yalniz_nicelemesiz_motorda(tmp_path):
     (tmp_path / "motor.toml").write_text(toml, encoding="utf-8")
     eksik = ayarlar.yukle(tmp_path / "motor.toml")  # eksik klasör hattın geri kalanını durdurmaz
     with pytest.raises(ValueError, match="LoRA klasörü değil"):
-        ayarlar.lora_denetle(eksik)
+        GERCEK_LORA_DENETLE(eksik)
 
 
 def test_onbellekteki_eski_bicimli_soz_yenilenir(tmp_path):
