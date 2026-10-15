@@ -546,3 +546,12 @@ def test_oneri_yalniz_en_yeni_tarif_ve_tur_disi_uretilmez(tmp_path):
         s.gec("analiz")
         durum.yaz(c, s)
     assert sorted(x.kimlik for x in uretim.uretilecek(ayarlar.yukle(), c)) == ["elle", "iyi"]
+
+
+def test_kulakla_onaylanmis_sarki_tur_suzgecine_takilmaz():
+    from yanki import durum, uretim
+
+    d = durum.Durum("w", "Anise.K", "Walking on Air", analiz={"stil": "dance-pop with rap verses"})
+    assert uretim.tur_disi(d)
+    d.notlar.append({"yeniden_uretim": {"onceki_asama": "paketlendi", "onceki_secilen": 9}})
+    assert uretim.tur_disi(d) is None

@@ -338,6 +338,10 @@ def tur_disi(d: durum.Durum) -> str | None:
 
     if d.analiz.get("stil_kaynak") == "elle" or not (kalip := kesif.haric_kalip()):
         return None
+    # Scryne'ın kulakla onayladığı şarkı güncel tarifle yenilenirken tür kalıbına takılmaz (Walking on Air: betimde
+    # "rap" geçiyor, iki kör testte yayınlanabilir)
+    if any((n.get("yeniden_uretim") or {}).get("onceki_secilen") is not None for n in d.notlar):
+        return None
     m = kalip.search(d.analiz.get("stil") or "")
     return m.group(0) if m else None
 
