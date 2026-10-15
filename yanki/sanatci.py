@@ -112,6 +112,17 @@ def _routenote_yuklemesi(meta: dict, upc: str) -> dict:
     return next(y for y in [meta.get("yukleme"), *(meta.get("yukleme_gecmisi") or [])] if y and y.get("upc") == upc)
 
 
+def _arsiv_uyarisi(y: dict) -> str | None:
+    """2026-10-10'da kaldırma istendi (ticket); 2026-10-15'te Scryne vazgeçti: yayınlansınlar."""
+    if (iptal := y.get("takedown_iptal")):
+        return (f"Takedown talebi #{iptal['ticket']} geri alınıyor ({iptal['tarih']}): ticket'a iptal yanıtı yazıldı, "
+                f"RouteNote'un onayı bekleniyor. Onaylanırsa {y.get('yayin_tarihi')} tarihinde yayına girer.")
+    if y.get("geri_cekildi"):
+        return (f"Kayıtta geri çekildi ({y['geri_cekme_tarihi']}), ama RouteNote'ta kaldırılmadı: "
+                f"{y.get('yayin_tarihi')} tarihinde yayına girer. Kalsın mı, panelden kaldırılsın mı?")
+    return None
+
+
 def arsivdekiler(calisma: Path) -> list[dict]:
     satirlar = []
     for upc, p in arsiv_paketleri(calisma).items():
@@ -124,9 +135,7 @@ def arsivdekiler(calisma: Path) -> list[dict]:
             "hazirlanma": meta.get("hazirlanma"), "canli": False, "spotify_id": None, "arama_sirasi": None,
             "son_bakis": None, "eski_tarif": True, "arsiv": True,
             # hat 2026-10-10'da "panelden kaldırıldı" kaydetti; RouteNote 2026-10-15'te üçünü hâlâ incelemede gösteriyor
-            "uyari": (f"Kayıtta geri çekildi ({y['geri_cekme_tarihi']}), ama RouteNote'ta kaldırılmadı: "
-                      f"{y.get('yayin_tarihi')} tarihinde yayına girer. Kalsın mı, panelden kaldırılsın mı?")
-            if y.get("geri_cekildi") else None,
+            "uyari": _arsiv_uyarisi(y),
         })
     return satirlar
 
