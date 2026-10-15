@@ -60,3 +60,26 @@ Ditto: [AI](https://support.dittomusic.com/en/articles/13973284-can-i-release-ai
 [Symphonic](https://symphonic.com/terms-of-use/), [RouteNote](https://routenote.com/termsandconditions) ·
 [DistroKid kaldırmaları (DMN)](https://www.digitalmusicnews.com/2026/10/12/distrokid-v-umg-removals/) ·
 İkincil: [LabelGrid API karşılaştırması](https://labelgrid.com/compare/best-music-distribution-apis/)
+
+## RouteNote form otomasyonu (2026-10-15, Scryne: "RouteNote'a otomatik yüklemeyi yapmanı istiyorum")
+
+Şart metni okundu (routenote.com/termsandconditions, madde 2): yasak olan botla **veri toplamak** ve dinlenme
+şişirmek; hesap sahibinin kendi yayınını yüklemesine dair yasak yok. Bu yüzden yalnız yükleme formu otomatik, yayın
+listesi okunmaz. Uygulama `yanki/routenote.py` (Playwright, sistemdeki Chrome, kalıcı profil
+`calisma/.routenote_profil`; giriş bir kez elle: `yanki routenote giris`, şifre tutulmaz).
+
+Form (Drupal, sunucu taraflı; seçici kayıtları `calisma/_spike/routenote/`):
+- `rn/create_album`: başlık (`#edit_album_info_release`) → "Create Release" → taslak; adres UPC'yi taşır
+  (`rn/edit_album/<upc>`). Adımlar: `rn/editalbum/<upc>`, `rn/addaudiomp3/form/<upc>`, `rn/addart/form/<upc>`,
+  `rn/addstore/form/<upc>`.
+- Album Details: açılır listeler salt okunur kutu + `div#<değer>` (dil, tür, açık içerik); sanatçı Spotify
+  aramasından seçilir (`.autocomplete-suggestion[data-langartisturi]`, profil yoksa "Create a new profile"; hesapta
+  aynı ada bağlı profil varsa RouteNote "Use my existing profile" diye sorar); yazar/söz yazarı satırları "Add …"
+  ile, kimlikleri tutarsız (alan adının n'inci görünür kutusu); katkıcı alanı RouteNote'un koyduğu bir adla dolu
+  gelir, "Change" ile boşaltılır; tarihler `%Y/%m/%d`. **Uçtan uca dolduruldu ve kaydedildi** (Numb taslağı).
+- Add Audio: dosya `rn/cloud_upload/<oturum anahtarı>/` adresine XHR ile gider; sayfa cevapta `…,success,…` bekler.
+
+**Engel (2026-10-15):** `cloud_upload` her yüklemede 200 + **boş gövde** dönüyor; sayfa %99 "Finalizing upload"da
+kalıyor, taslak %20'de. Tam dosya (21 MB), 15 sn kesit, `audio/flac` MIME, hiç doldurulmamış yeni taslak ve
+**Scryne'ın elle yüklemesi** aynı sonucu verdi → sorun RouteNote tarafında (servis ya da hesap), otomasyonda değil.
+Ses adımı geçmeden Add Artwork / Manage Stores açılmıyor; o adımların seçicileri yükleme düzelince çıkarılacak.

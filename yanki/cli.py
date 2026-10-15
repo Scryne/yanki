@@ -270,6 +270,25 @@ def _kesif_ayarlari(kok: Path) -> dict:
         return tomllib.load(f)
 
 
+def _routenote(args: argparse.Namespace) -> int:
+    """RouteNote oturumu (`yanki/routenote.py`): `giris` tarayıcıyı açar, Scryne bir kez elle girer; `kesif` bir
+    sayfanın yapısını `calisma/_spike/routenote/`'a kaydeder (geliştirme)."""
+    from yanki import routenote
+
+    calisma = ayarlar.yukle().kok / "calisma"
+    if args.islem == "giris":
+        print("RouteNote açılıyor: giriş yap, sonra pencere kendiliğinden kapanır (en çok 10 dk).")
+        ok = routenote.giris(calisma)
+        print("oturum kaydedildi" if ok else "giriş yapılmadı (süre doldu)")
+        return 0 if ok else 1
+    try:
+        print(routenote.kesif(calisma, args.url or routenote.ANA_URL, args.ad))
+    except routenote.OturumYok as e:
+        print(e)
+        return 1
+    return 0
+
+
 def _spotify_baglan(_: argparse.Namespace) -> int:
     """Spotify hesabını bir kez bağla (PKCE): tarayıcıda izin → 127.0.0.1'e dönüş → token calisma/.spotify.json."""
     import http.server
@@ -1530,6 +1549,11 @@ def main(argv: list[str] | None = None) -> int:
     y.add_argument("--onizleme", help="önizleme başlangıcı, d:ss")
     y.add_argument("--dagitimci", help="varsayılan config/yayin.toml")
     y.set_defaults(fn=_yuklendi)
+    rn = alt.add_parser("routenote", help="RouteNote oturumu: bir kez elle giriş (otomatik yükleme bunu kullanır)")
+    rn.add_argument("islem", choices=("giris", "kesif"))
+    rn.add_argument("--url", help="kesif: sayfa adresi (varsayılan panel)")
+    rn.add_argument("--ad", default="panel", help="kesif: kayıt adı")
+    rn.set_defaults(fn=_routenote)
     sb = alt.add_parser("spotify-baglan", help="Spotify hesabını bir kez bağla (kendi playlist'lerini taramak için)")
     sb.set_defaults(fn=_spotify_baglan)
     ks = alt.add_parser("kesif", help="Spotify'dan kaldırılmış, hâlâ aranan şarkıları bul, doğrula, sırala")

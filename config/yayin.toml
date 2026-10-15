@@ -9,7 +9,9 @@ sanatci_adi = "Orvane"  # Scryne, 2026-10-07
 # 2026-10-12 (Scryne): Tunearo API'si yok, yüklenen şarkılar reddedildi; yayınlananlar silindi
 # (calisma/_arsiv/2026-10-12-yayin-silindi/). Yayın baştan kurulacak: dağıtımcı seçilene kadar boş (otomatik yükleme yok,
 # paketler YUKLE.md ile hazır bekler).
-dagitimci = ""
+# 2026-10-15 (Scryne: "RouteNote'a otomatik yüklemeyi yapmanı istiyorum"): RouteNote, formu hat dolduruyor
+# (yanki/routenote.py, tarayıcı; API yok, docs/arastirma/08).
+dagitimci = "routenote"
 # Kapakta ve metadata'da: plak şirketi yoksa sanatçı adı kullanılır
 etiket = ""
 
