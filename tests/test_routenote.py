@@ -152,6 +152,17 @@ def test_dagit_beklenmeyen_pencerede_tiklamaz():
     assert ("tik", "#agree_terms #rn_btn_ok") not in s.olaylar
 
 
+def test_dagit_bos_yayin_sayfasinda_ne_yapilacagini_soyler():
+    """Önceki oturumda hazırlanmış taslağın yayın sayfası boş gelir: hiçbir şeye tıklanmaz, çıkış yolu söylenir."""
+    import pytest
+
+    s = _Sayfa()
+    s.metinler["body"] = ""
+    with pytest.raises(RuntimeError, match="taslak-silindi"):
+        routenote.dagit(s, "5064150700802", son_tiktan_once=lambda: pytest.fail("işaret yazıldı"))
+    assert s.olaylar == []
+
+
 class _TarihSayfasi:
     def __init__(self):
         self.kutular = {}

@@ -410,6 +410,12 @@ def dagit(s, upc: str, son_tiktan_once=None) -> None:
         s.wait_for_load_state("networkidle")
     _sohbeti_kapat(s)
     metin = s.locator("body").inner_text()
+    if not metin.strip():
+        # RouteNote yayın sayfasını yalnız taslağı dolduran oturuma gösteriyor; başka oturumda (önceki koşuda
+        # hazırlanmış taslak) boş gövde dönüyor, Scryne'ın tarayıcısında açılıyor (2026-10-16, Shape of You, Lean On)
+        raise RuntimeError("RouteNote yayın sayfası bu oturumda boş (taslak önceki bir oturumda hazırlandı); "
+                           "gönderilmedi. Panelde taslağı sil ve `yanki routenote taslak-silindi <kimlik>`: sonraki "
+                           f"koşu yeniden açıp tek oturumda gönderir (ya da panelde kendin gönder; UPC {upc})")
     if metin.count("Complete") < 4 or "Incomplete" in metin:
         raise RuntimeError("yayının dört adımı tamamlanmamış, gönderilmedi")
     _isaretle(s, "#submit_chk")

@@ -86,7 +86,7 @@ baslangic = "surekli"
 # karar vermeden gitmesin diye kapalı başlar (2026-10-15).
 # 2026-10-15 açıldı (Scryne: "direkt olarak routenote da paylaşılsın"): otomatik onaylanan (24 sa veto penceresi)
 # ve paketlenen şarkı koşuda gönderilir. Oturum düşerse yükleme durur ve "RouteNote'a giriş yap" bildirilir.
-gece = false
+gece = true
 # Orvane'ın Spotify sanatçı kimliği (profil oluşunca): sanatçı aramasında bu profil seçilir. Boşsa "Create a new
 # profile"; hesapta aynı ada bağlı profil varsa RouteNote onu önerir ve o kullanılır.
 spotify_sanatci_id = ""
