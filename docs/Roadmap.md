@@ -1,7 +1,7 @@
 ---
 proje: Yanki
 created: 2026-10-06
-modified: 2026-10-11
+modified: 2026-10-15
 type: roadmap
 status: aktif
 ---
@@ -22,7 +22,7 @@ Durum sütunu session-start hook'u tarafından otomatik okunur — format bozulm
 | 7 | Gerçek kullanım | 🔄 Devam Ediyor | Scryne listeden bir şarkıyı yükledi, dağıtımcı kabul etti, parça Spotify'da dinlenebilir; bulgular roadmap'e işlendi |
 | 8 | Kalite ve düzenli yayın | 🔄 Devam Ediyor | En az 3 parça Spotify'da; yükleme takvimi işliyor; vokal son işlemi ve LoRA dinleme testiyle karara bağlandı; ≥ 10 onarım etiketiyle otomatik kusur işaretleme denendi (sonuç kayıtlı) |
 | 9 | Kaldırılmış şarkı keşfi ve yayın takibi | 🔄 Devam Ediyor | Spotify anahtarı bağlı; `yanki kesif` (STILLMORE CSV'si, kendi playlist ya da Deezer katalog farkı) ≥ 5 doğrulanmış (geri gelmemiş) aday buldu; en az biri üretilip yüklendi; `yanki takip` yüklenen parçaların canlılığını ve ad aramasındaki sırasını pazar pazar kaydetti |
-| 10 | Tam otomatik yayın (dağıtım API'si) | ⛔ Engelli | Arkadaşın API'siyle onaylı bir paket elle dokunmadan yüklendi; inceleme → kabul/red → canlı durumu kendiliğinden izlendi ve kayda düştü; yayın takvimi en az 2 hafta kesintisiz işledi; veto penceresi (otomatik onay) bir şarkıda uçtan uca çalıştı |
+| 10 | Tam otomatik yayın (dağıtım) | 🔄 Devam Ediyor | Hattın RouteNote'ta doldurduğu bir paket odadan (ad yazılarak) gönderildi, RouteNote kabul etti ve parça Spotify'da canlı; yayın takvimi en az 2 hafta kesintisiz işledi; veto penceresi (otomatik onay) bir şarkıda uçtan uca çalıştı. (Tunearo API'si 2026-10-12'de kapandı; ölçüt RouteNote'a çevrildi, 2026-10-15) |
 | 11 | Öğrenen şarkı seçimi | ⏳ Bekliyor | Puan formülü en az 10 yayının ölçülen arama sırası/dinlenmesiyle karşılaştırılıp güncellendi; tür/dil başına üretilebilirlik çarpanı Scryne'ın onay/ret verisinden; en az bir yeni keşif kaynağı (YouTube'da olup Spotify'da olmayan) canlı aday üretti |
 | 12 | Kalite otomasyonu | ⏳ Bekliyor | Otomatik aday seçimi Scryne'ın geçmiş seçimleriyle ölçüldü (isabet kayıtlı) ve ≥ %70 ise veto penceresinde varsayılan; rap ve İngilizce dışı en az bir dil için tarif dinleme testiyle karara bağlandı |
 | 13 | Operasyon ve dayanıklılık | 🔄 Devam Ediyor | Disk temizliği ve yedek işliyor; gece koşusu/Spotify kilidi/dağıtımcı reddi bildirim olarak geliyor; GPU boştayken gündüz üretimi kuyruğu eritiyor; bir haftalık kesintisiz otomatik koşu günlükte hatasız |
@@ -170,7 +170,7 @@ Durum sütunu session-start hook'u tarafından otomatik okunur — format bozulm
   başlık eşleşmesi tipografik kesme işaretini tanıyor (James Arthur paketinde yazar hiç yoktu, şimdi 7). `yanki kunye`
   ile 15 şarkı yenilendi, 12 bekleyen paket yeniden üretildi; hiçbirinde SOYAD?/EKSİK yok.
 
-### Faz 8: Kalite ve düzenli yayın ⏳
+### Faz 8: Kalite ve düzenli yayın 🔄
 - **S15–S16 (2026-10-08, RouteNote incelemesi beklenirken):** DCW çıktıyı bozuyor (elendi), SDE sözü bozuyor; CFG
   aralığı, hız EMA'sı ve kaynağın vokal/eşlik dengesi (Demucs) ölçüde tabandan ayrışmıyor → Scryne'ın dinlemesi:
   `calisma/dinleme/s15/`, `calisma/dinleme/s16/` (her kol iki tohum, `0_taban_t42/t7` ile).
@@ -263,7 +263,7 @@ Durum sütunu session-start hook'u tarafından otomatik okunur — format bozulm
   (127.0.0.1:8765) ve özeti Windows bildirimiyle gösterir (`yanki ozet`); elle tetiklenip doğrulandı. Oda `python -m`
   ile çalışır: `yanki.exe` açıkken kilitleniyor, bağımlılık değişince `uv` senkronu düşüyordu (bulundu, düzeltildi).
 
-### Faz 10: Tam otomatik yayın (dağıtım API'si) ⛔
+### Faz 10: Tam otomatik yayın (dağıtım) 🔄
 - **RouteNote tarayıcıyla (2026-10-15, Scryne: "RouteNote'a otomatik yüklemeyi yapmanı istiyorum"):**
   `yanki/routenote.py` formun dört adımını dolduruyor (`yanki yukle <kimlik> [--taslak]`), uçtan uca taslakla
   doğrulandı; son "Distribute" adımı Scryne'ın onayıyla ilk kez sınanacak. Takvim `[routenote] gece = false` ile
@@ -765,3 +765,46 @@ baladına). Yüklenen 22 şarkıda beat: orijinalden döngüsel (+0,11), groove'
 - **Söz kapısı belirli:** Whisper'ın tohumsuz sıcaklık geri düşüşü aynı dosyaya 0,37–0,73 veriyordu; tohumlu.
 - **Aday önerisi:** en düşük WER'li iki aday arasından ACE-Step söz hizalaması yüksek olan (S27: Scryne'ın 21
   seçiminden 14'ü; yalnız WER 11, rastgele 7). Aday sayısı 4.
+
+## Denetim 5 (2026-10-15, Scryne: "baştan sona incele, denetle, eksik ve hataların tamamını çöz, iyileştir, yeni şeyler ekle; her şey sende")
+
+Altı paralel inceleme (işletim/CLI, keşif/takip, üretim/kiralık GPU, paket/dağıtım, oda, günlükler) ~60 bulgu verdi;
+her biri kodla doğrulandı, düzeltmelerin testi var (458 → 475 test). Görsel doğrulama (Pano, Sanatçı, Yayın; 4
+genişlik × 2 tema) bir hata daha buldu.
+
+- **RouteNote yükleyicisi:** "Distribute Free" sayfanın kendi onay penceresini (`#agree_terms` → "Complete Release")
+  açıyor; hat bunu beklemeden "sayfa değişmedi" diye düşüyordu, hiçbir gönderim tamamlanamazdı (`son.html`'den). Son
+  tıktan önce `gonderiliyor` işareti: süreç o anda düşerse hat yeniden göndermez, Sanatçı'da **Kontrol et** çıkar.
+  Taslak açılmadan önce ön kontrol (yazar soyadı — `SOYAD?` denetimi hiç tutmuyordu —, açık içerik, RouteNote dil
+  listesi, 48 MB): yarım taslak kalmaz. Bölge modu Exclude'a geçmezse mağazalar kaydedilmez (Include kalsa yayın
+  yalnız ABD/CA/MX/IN/PK'de olurdu). Bilinen Spotify profili önerilerde gelmezse yeni profil açılmaz. Ses adımı ikiye
+  bölündü (yarıda kalınca ikinci parça yüklenmez). Yeniden paketleme RouteNote taslak kaydını siliyordu (ikinci taslak
+  açılırdı): kayıt kalır, açık taslağın üstüne paketlenmez. `yanki yukle` artık varsayılan taslak, gönderim `--gonder`.
+- **Kiralık GPU:** artık pod temizliği yalnız üretim işi varken ve bütçe yerindeyken yapılıyordu (bütçeyi dolduran artık
+  pod bakiye bitene kadar yanardı); şimdi her koşunun ilk adımı. Pod'lar sahibi olan sürecin kimliğiyle kaydedilir:
+  kilitsiz koşan deney ve eğitim pod'u silinmez, açılış cevabı kaybolan pod 15 dk sonra silinir, sayılmamış süre
+  bütçeye yazılır, silinemeyen pod bildirilir. Hazır olmayan pod'un maliyeti silinişinde durur. Takılan uzak işçi 30 dk
+  sonra durdurulur (önce 10 saate kadar boşta yanabilirdi). İkinci tur düşerse ilk turun ödenmiş sonuçları kalır.
+  Eğitimde aşamalar tek süreyi paylaşır (en kötü 55 saat yerine 11), çıkış kodu yarışı kapandı, deneme düşerse eğitim
+  yine kaydedilir.
+- **Keşif ve takip:** kota pazar döngüsünde dolunca bütün takip düşüyordu (yayına çıkış yazılmıyordu); CDP hata cevabı
+  "0 kaldırılmış" sayılıyordu; "Earth, Wind & Fire" "Earth"e bölünüp sahte boşluk oluşturuyordu; kota dosyası odanın
+  okumasıyla Windows'ta çakışıp keşfi ölçümleri kaydetmeden düşürüyordu; Deezer hatasında Spotify sonuçları
+  kaydedilmiyordu; listeye eklemede yarış partiyi düşürüyordu; pencere başlığı okunamayınca çalan Spotify kapatılıyordu.
+- **Kaynak ses:** LRCLIB `/get` başka sürümün süresini veriyordu (Dark Horse 297 sn, kayıt 216): 6 şarkı `hata`daydı.
+  Sürüm listesiyle eşleşme (eğitim hattında zaten vardı); 4'ü canlıda kurtuldu, 2'si LRCLIB 429 geçince.
+- **İşletim:** eksik LoRA klasörü bütün komutları (oda, özet, paket) düşürüyordu, artık yalnız üretimi; tek bozuk
+  `durum.json` her şeyi düşürüyordu; atomik yazımda fsync; adım zamanı adım bitince ve yalnız başarıda (yarıda kalan
+  koşudan sonra keşif 4,5 saatte yeniden koşup 174 Spotify isteği yakmıştı); `oda.ps1`'deki `` `a `` (BEL) yüzünden "oda
+  açık mı" denetimi hiç çalışmıyordu; 03:00'te sürekli koşu kilitliyken gece "bitti" bildirimi yanıltıyordu; onarım
+  kabulü önceki kabulü sessizce geri alabiliyordu; temizlik yarım silmede durumu yazmıyordu.
+- **Oda:** önceki şarkının hızlı karşılaştırma kısayolu başka görünümde Enter'la aday onaylıyordu; yazan istekler
+  yalnız odanın kendi kökeninden (başka yerel port da reddedilir); koşu sürerken iş başlamaz; sahipsiz iş PID ile;
+  gece yüklemesini açmak ad yazdırır; yarım taslaklı paket reddedilemez, kapağı değişmez; "Son iş" panelinde
+  "nullnull" (görsel doğrulamada bulundu). `yanki durum`: Tunearo anahtarı yerine dağıtımcıya göre (RouteNote
+  profili), LoRA ve zamanlanmış görevler.
+- **Bulunan durum:** `\Yanki\Surekli` ve `\Yanki\Gece` 2026-10-13'ten beri Görev Zamanlayıcı'da **devre dışı**; o
+  günden beri keşif, otomatik onay, takip ve yedek koşmadı (üretim zaten `uretim = false` ile duraklatılmıştı). Kimin
+  kapattığı kayıtta yok. Pano ve `yanki durum` artık bunu söylüyor; açmak Scryne'ın kararı.
+- **Kalan (karar Scryne'da):** S34 için bakiye (~8,25 $, `aylik_butce` 30 → 45 önerisi); kuyruktaki 8 paketin (eski
+  tarif) gönderilip gönderilmeyeceği; görevlerin yeniden açılması.

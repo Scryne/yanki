@@ -53,8 +53,8 @@ denenmemis_turler = [
 ]
 
 [takvim]
-# Yayın takvimi (yanki/dagitim.py): paketlenmiş şarkılar kuyruk, sıra keşif puanı sonra onay sırası. Sırası gelen paketi
-# Tunearo'ya gece koşusu kendisi yükler; elle dağıtımcıda (RouteNote) bildirilir.
+# Yayın takvimi (yanki/dagitim.py): paketlenmiş şarkılar kuyruk, sıra keşif puanı sonra onay sırası. Sırası gelen paket
+# [routenote] gece yüklemesi açıksa gece koşusunda RouteNote'a gönderilir, değilse yalnız bildirilir (2026-10-15).
 # Açık (Scryne, 2026-10-10: önce "şimdilik yayınlamayalım", sonra "devam et, her şey otomatik çalışsın"). ilk_kabul
 # kapısı When We Were Young kabul edilene kadar yeni gönderimi zaten bekletir; red gelirse durur.
 acik = true
@@ -67,6 +67,7 @@ haftada = 0
 # tarih incelemede geçerse parça onaylanınca çıkar. Orvane'de Spotify for Artists yok, pitch payının karşılığı yok.
 # Gönderilen yayının tarihi incelemedeyken değiştirilemiyor (409), bu yüzden en baştan kısa.
 # 2026-10-15: dağıtımcı yeniden RouteNote (inceleme 5–10 iş günü, sayfadaki uyarı) → 21.
+# RouteNote yükleyicisi 10 günden yakın tarihi 10'a çeker (routenote.YAYIN_ASGARI_GUN); oda 10'dan azını kabul etmez.
 yayin_on_gun = 21
 # "surekli": kabul beklenmez, her gün yüklenir; dağıtımcı bir parçayı reddederse neden anlaşılıp düzeltilene kadar
 # yeni yükleme yok (reddedilen yayın aynı kayıtla düzeltilir, parça kotası yanmaz). "ilk_kabul": ilk kabule kadar

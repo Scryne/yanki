@@ -1,10 +1,14 @@
 # Yanki
 
-Listeye yazılan yabancı şarkıların cover'ını yerel GPU'da [ACE-Step 1.5](https://github.com/ace-step/ACE-Step-1.5)
-ile üretir, yayınlanamayacak adayları otomatik eler, dinleme sayfasında onaya sunar ve onaylananı Spotify dağıtımcısına
-yüklenmeye hazır bir pakete çevirir. Şarkı kaynağı Spotify'dan kaldırılmış, hâlâ aranan şarkılar (`yanki kesif`);
-yüklenen parçanın Spotify'da çıkıp çıkmadığını ve adı arandığında kaçıncı sırada olduğunu `yanki takip` izler. Yükleme
-şimdilik insanda; arkadaşın dağıtım API'si gelince otomatikleşecek.
+Listeye yazılan yabancı şarkıların cover'ını kiralık GPU'da [ACE-Step 1.5](https://github.com/ace-step/ACE-Step-1.5)
+ile (kendi eğittiğimiz cover LoRA'sıyla) üretir, yayınlanamayacak adayları otomatik eler, dinleme odasında onaya sunar,
+onaylananı paketler ve RouteNote'a tarayıcıyla yükler (son "Distribute" Scryne'ın tıklaması). Şarkı kaynağı Spotify'dan
+kaldırılmış, hâlâ aranan şarkılar ve hattın iyi yaptığı türlerde popüler şarkılar (`yanki kesif`); yüklenen parçanın
+Spotify'da çıkıp çıkmadığını ve adı arandığında kaçıncı sırada olduğunu `yanki takip` izler.
+
+**Şu an (2026-10-15):** üretim duraklatıldı (`config/operasyon.toml` → `[surekli] uretim = false`; model en iyi hâline
+gelene kadar, `docs/arastirma/07` S33–S34). Dağıtımcı RouteNote, gece yüklemesi kapalı (`[routenote] gece = false`):
+sırası gelen paket bildirilir, gönderim odadan. Tunearo API'si 2026-10-12'de kapandı; kodu yalnız geçmiş kayıtlar için.
 
 ## Günlük akış
 
@@ -16,10 +20,11 @@ yüklenen parçanın Spotify'da çıkıp çıkmadığını ve adı arandığınd
 1. `girdi/liste.toml`'a şarkı ekle (sanatçı + şarkı adı yeter) ya da 0. adımdaki gibi keşiften.
 2. **Sürekli koşu:** bilgisayar açıkken her 30 dk `\Yanki\Surekli` (`scripts/surekli.ps1`) `yanki calistir`
    koşar (Scryne, 2026-10-10: "gece 3'ü beklemeye gerek yok"); `\Yanki\Gece` 03:00'te bilgisayarı uykudan uyandırıp
-   aynısını koşar ve özet bildirimi gösterir. Her koşuda: hazırlık (kaynak ses YouTube, sözler LRCLIB, künye ve stil
+   aynısını koşar ve özet bildirimi gösterir (o an sürekli koşu sürüyorsa bildirim göstermeden çıkar). Görevler Görev
+   Zamanlayıcı'da kapatılırsa pano ve `yanki durum` söyler. Her koşuda: hazırlık (kaynak ses YouTube, sözler LRCLIB, künye ve stil
    MusicBrainz), üretim, veto penceresi, paket, yükleme sırası. Üretim prizde ve GPU boşken, kullanıcı etkinken de,
-   koşu başına en çok 2 şarkı (bekleyen onarımlar önce; şarkı başı ~30 dk); GPU doluysa (oyun, başka iş) sonraki
-   koşuya kalır. Tunearo durumu 3 saatte bir; keşif, takip ve disk temizliği günde bir. Keşif ve takip Spotify
+   koşu başına en çok 2 şarkı evde, kiralık GPU'da `[uzak] sarki` (bekleyen onarımlar önce). Her koşunun ilk adımı açık
+   kalmış kiralık GPU'yu siler (iş olmasa da). Keşif, takip ve disk temizliği günde bir. Keşif ve takip Spotify
    uygulamasını kullanır: uygulama kapalıysa ya da bilgisayar 20 dk'dır kullanılmıyorsa, bir şey çalmıyorsa; Spotify
    API'si kilitliyken keşif kilit kalkana kadar bekler. Hazırlıkta düşen şarkı (söz/kaynak yok) en erken 4 saat sonra
    yeniden denenir; `girdi/`'ye söz ya da ses bırakılırsa hemen. Adımlar birbirinden yalıtılmış: biri düşerse hatası
@@ -32,28 +37,28 @@ yüklenen parçanın Spotify'da çıkıp çıkmadığını ve adı arandığınd
    **Bu aralığı onar**; iyi olanı **Bu adayı onayla**. Yanlışlıkla reddedilen şarkı **Reddi geri al** ile döner.
 4. Onarım istendiyse bir sonraki `yanki calistir` (ya da `yanki uret`) iki onarım sürümü üretir; dinleme odasında iyisini
    **Bunu kabul et**.
-5. Onaylanan şarkı paketlenir: `calisma/<kimlik>/paket/`. **Tunearo (varsayılan, 2026-10-10):** yüklemeyi hat yapar,
-   takvimde sırası gelince gece koşusu paketi API ile yükleyip incelemeye gönderir; elle hemen yüklemek için
-   `yanki yukle <kimlik>` (`--taslak`: her şeyi yükler, göndermez). Kapak şarkının moduna göre Pinterest'ten
-   (insansız, yazısız; her yeni kapak bildirilir); beğenmezsen `yanki kapak <kimlik> --yeni`, kendi görselin için
-   şarkı klasörüne `kapak_ozel.jpg`. Durum gece yoklanır (`yanki dagitim-durum`): kabulde
-   UPC/ISRC kaydedilir, red gelirse şarkı `paketlendi`ye döner ve neden bildirilir. **Elle dağıtımcıda (RouteNote):**
-   `YUKLE.md`'yi açıp formu doldur, ses dosyasını (FLAC) ve JPG'yi yükle, sonra 6. adım.
-6. Yalnız elle dağıtımcıda: `yanki yuklendi <kimlik> --isrc <ISRC> --upc <UPC> --yayin-tarihi YYYY-AA-GG`: aşama `yuklendi`, formdaki
-   bilgiler paketin `metadata.json` → `yukleme`'sine (takip ISRC'yle çalışır). ISRC sonradan belli olursa aynı
-   komut yalnız `--isrc` ile.
+5. Onaylanan şarkı paketlenir: `calisma/<kimlik>/paket/` (FLAC, 3000×3000 JPG, `metadata.json`, `YUKLE.md`). Kapak
+   şarkının moduna göre Pinterest'ten (insansız, yazısız; her yeni kapak bildirilir); beğenmezsen `yanki kapak
+   <kimlik> --yeni`, kendi görselin için şarkı klasörüne `kapak_ozel.jpg`.
+6. **RouteNote'a yükleme (`yanki/routenote.py`, tarayıcıyla; API yok):** dinleme odası → **Sanatçı**: "Taslağı
+   hazırla" formun dört adımını (albüm, ses + parça, kapak, mağaza/bölge) doldurur, göndermez; "Gönder…" şarkının adı
+   yazılınca "Distribute"a basar (geri alınamaz). Elle: `yanki yukle <kimlik>` (taslak), `--gonder` (gönderim).
+   Taslak açılmadan önce yazar ad/soyadı, açık içerik, dil ve dosya boyutu denetlenir; yarıda kalan taslak kaldığı
+   adımdan sürer. Oturum birkaç saatte düşer: odada "RouteNote'a giriş yap" ya da `yanki routenote giris` (şifre
+   tutulmaz). Son tıktan sonra iş düşerse hat yeniden göndermez; Sanatçı'da **Kontrol et** çıkar, panelde gördüğünü
+   seç (ya da `yanki routenote gonderildi|gonderilmedi <kimlik>`). Panelden silinen taslak: `yanki routenote
+   taslak-silindi <kimlik>`. Başka bir dağıtımcıya elle yüklendiyse `yanki yuklendi <kimlik> --isrc … --upc …
+   --yayin-tarihi …`.
 7. Gece koşusu ya da `uv run yanki takip`: parça Spotify'da çıkınca aşama `yayinda`; dinleme odasında **Yayın**
    pazar pazar arama sırasını gösterir. Bildirim gelir: yayına çıktı, en iyi arama sırası değişti, Spotify'dan kalktı,
    yayın tarihinin üstünden 3 gün geçtiği halde yok (dağıtımcı reddi şüphesi). Reddedildiyse
    `yanki dagitim-red <kimlik> --neden "…"`: şarkı `paketlendi`ye döner, düzeltip `yanki paketle --yeniden`.
-8. **Takvim:** `yanki takvim` paketleri yükleme sırasıyla gösterir (keşif puanı önce, sınırsız: paketlenen her şarkı
-   ilk koşuda yüklenir, Tunearo parça kotası dolarsa durur; yayın tarihi yüklemeden 1 gün sonra; `config/yayin.toml` → `[takvim]`). Kabul beklenmez; dağıtımcı bir parçayı reddederse neden
-   anlaşılıp düzeltilene kadar yeni yükleme yok. Sırası gelen paketler Tunearo'ya koşuda yüklenir (elle dağıtımcıda
-   bildirilir). Dinleme odası **Yayın**'da da görünür.
-9. **Geri çekme:** `yanki geri-cek [kimlik…]` yüklenmiş şarkıyı dağıtımcıdan kaldırır, şarkı `onaylandi`ya döner ve
-   gece güncel ayarlarla yeniden paketlenip kuyruğa girer. Tunearo'da taslak silinir, canlı yayına takedown istenir;
-   incelemedeki yayın API'den geri çekilemiyor: işaretlenir, sonuç gelince gece yoklaması bitirir. Elle dağıtımcıda
-   (RouteNote) önce panelden kaldır, sonra `--kaldirildi`.
+8. **Takvim:** `yanki takvim` paketleri yükleme sırasıyla gösterir (keşif puanı önce; yayın tarihi yüklemeden
+   `yayin_on_gun` gün sonra, RouteNote incelemesi için en az 10; `config/yayin.toml` → `[takvim]`). Dağıtımcı bir
+   parçayı reddederse neden anlaşılıp düzeltilene kadar yeni yükleme yok. `[routenote] gece = false` iken sırası gelen
+   paket yalnız bildirilir; odadan açmak sanatçı adını yazdırır. Dinleme odası **Yayın** ve **Sanatçı**'da da görünür.
+9. **Geri çekme:** RouteNote'ta önce panelden kaldır, sonra `yanki geri-cek <kimlik> --kaldirildi`: şarkı `onaylandi`ya
+   döner, RouteNote kaydı geçmişe taşınır, gece güncel ayarlarla yeniden paketlenip kuyruğa girer.
 
 Spotify kotası dar (geliştirici API'si, 2026-10-09'da ~1.000 istekte 23 saatlik ceza): uzun 429 alınırsa kilit
 `calisma/.spotify_kota.json`'a yazılır ve süresi dolana kadar hiçbir komut API'ye istek atmaz; günlük tavan 400
@@ -65,25 +70,28 @@ odası Spotify'a hiç istek atmaz.
 Bildirimler `calisma/olaylar.jsonl`'a da yazılır (aynı olay bir kez). Gece koşusu sonunda dış servislerin (YouTube,
 LRCLIB, MusicBrainz, Deezer, Spotify) istek/hata sayısı günlüğe, günlük toplamı `calisma/gunluk/servisler.json`'a.
 
-**Sanatçı hesabı:** tek dağıtımcı Tunearo, tek Orvane kaydı. Spotify ve Apple Music profilleri ilk canlı yayından
-sonra Tunearo'daki sanatçıya kendiliğinden bağlanır (Spotify takipten, Apple yayının UPC'siyle); profil bölünürse
-bildirilir. İlk parça Spotify'da görülünce "profili sahiplen" (Spotify for Artists), iki canlı yayından sonra
-"YouTube resmi sanatçı kanalı" bildirimi gelir; kanalı açınca `yanki oac --ana <kanal> --konu <Topic kanalı>`.
+**Sanatçı hesabı:** tek dağıtımcı RouteNote, tek Orvane. Spotify profili ilk yayında RouteNote'ta "Create a new
+profile" ile oluşur; profil adresindeki kimlik odada (Sanatçı → Dağıtım) kaydedilince sonraki yüklemeler o profili
+seçer, profil önerilerde yoksa yeni profil açılmaz. Takip profilin bölündüğünü görürse bildirir.
 
 **Kiralık GPU:** üretim RunPod'da (A40 48 GB, saniye faturalı; `config/motor.toml` → `[uzak]`, `yanki/uzak.py`):
 sunucu açılır, ACE-Step yereldeki sürümle kurulur, şarkılar nicelemesiz ve tek parça üretilir (tam şarkı ~140 sn), sonuç
-iner, sunucu silinir. Anahtar `.env` → `RUNPOD_API_KEY`. Evde üretim kapalı (Scryne, 2026-10-10; `yerel_yedek =
-false`): bakiye 3 $'ın altında, aylık harcama 15 $'a ulaşmış ya da GPU stokta yoksa üretim sırada bekler. Koşu ortasında
-kapanan bilgisayarın açık bıraktığı sunucu bir sonraki koşuda silinir. Harcama: `calisma/gunluk/runpod.json`, panoda
+iner, sunucu silinir. Anahtarlar `.env` → `RUNPOD_API_KEY` (ve ikinci hesap `RUNPOD_API_KEY_2`). Evde üretim kapalı
+(Scryne, 2026-10-10; `yerel_yedek = false`): bakiye `en_az_bakiye`'nin altında, aylık harcama `aylik_butce`'ye ulaşmış
+ya da GPU stokta yoksa üretim sırada bekler. Her pod açan sürecin kimliğiyle kaydedilir (`calisma/.runpod/sahip/`):
+sahibi ölmüş (koşu ortasında kapanan bilgisayar) ya da silinemeyip bırakılmış pod sonraki koşunun ilk adımında silinir,
+sayılmamış süresi bütçeye yazılır; kilitsiz koşan deneyin ya da eğitimin pod'una dokunulmaz. Uzak işçi 30 dk hiç
+ilerlemezse durdurulur. Harcama: `calisma/gunluk/runpod.json`, panoda
 "Bu ay GPU". Ölçümler: `docs/arastirma/06`. `yanki bastan [--uygula]`: şarkıları baştan üretime alır (adaylar ve paket
 `calisma/_arsiv/<tarih>/`'e; yüklenmişler geri çekilir, inceleme bitince üretime döner).
 
-**Ses modeli eğitimi (`yanki egit`):** ACE-Step XL-SFT'ye tür LoRA'sı (vokal ve eşlik birlikte; `yanki/egitim.py`,
-`config/egitim.toml`). Veri yerelde hazırlanır (`--yalniz-veri`, ücretsiz): her sanatçıdan bir şarkı, modern stüdyo
-balad/pop, cover listesindeki sanatçılar hariç; YouTube'dan tam bant Opus, en çok 240 sn, LRCLIB sözü aynı yerden
-kesilir. Eğitim kiralık GPU'da (A40, ~2,5 saat, ~1,5 $), ardından karşılaştırmalı deneme: aynı şarkılar aynı tohumla
-LoRA'sız / yarım / tam → `calisma/dinleme/lora/<zaman>/OKU.md` (kapı ölçüleriyle). Beğenilirse `config/motor.toml` →
-`[motor] lora = "…/final"` (isteğe bağlı `lora_olcek`): kiralık GPU'daki üretim LoRA'yla yapılır.
+**Ses modeli eğitimi (`yanki egit`):** ACE-Step XL-SFT'ye cover görevinde LoRA (vokal ve eşlik birlikte;
+`yanki/egitim.py`, `yanki/kapak_hazirla.py`, `config/egitim.toml`). Veri yerelde hazırlanır (`--yalniz-veri`,
+ücretsiz): çok türlü, her sanatçıdan bir şarkı, cover listesindeki sanatçılar hariç; YouTube'dan tam bant Opus, LRCLIB
+sözü aynı yerden kesilir. Eğitim kiralık GPU'da (A40), ardından karşılaştırmalı deneme → `calisma/dinleme/lora/<zaman>/
+OKU.md`; deneme düşerse eğitim yine kaydedilir, `yanki egit --deneme-yeniden <zaman>`. Üretimdeki LoRA: dördüncü
+eğitimin 20. epoch'u (`config/motor.toml` → `[motor] lora`; kör testte yayınlanabilir 9/17). Klasör yoksa yalnız üretim
+durur, `yanki durum` gösterir.
 
 **Tür çizgisi:** keşif hattın tarifi dinlenmiş türlerinde kalır (balad, pop, piyano/akustik, rock). Rap, metal,
 elektronik, Latin/Brezilya vb. aday Deezer türünden tanınır, puan almaz, kendiliğinden listeye girmez (dinleme
@@ -109,16 +117,18 @@ winget install Gyan.FFmpeg.Shared                          # ffmpeg/ffprobe
 uv run yanki durum                                         # hepsi ✓ olmalı
 powershell -File scripts/gorev_kur.ps1                     # \Yanki\Surekli (açıkken 30 dk), \Yanki\Gece (03:00), \Yanki\Oda
 # Keşif ve takip için: developer.spotify.com → Create app (Premium hesap), Redirect URI http://127.0.0.1:8766/callback
-copy .env.example .env                                     # SPOTIFY_*, TYPESAFE_API_KEY, TUNEARO_API_KEY
+copy .env.example .env                                     # SPOTIFY_*, TYPESAFE_API_KEY, RUNPOD_API_KEY
 uv run yanki spotify-baglan                                # yalnız kendi playlist'lerini taramak için
+uv run yanki routenote giris                               # RouteNote oturumu (bir kez; düşünce yeniden)
 ```
 
 ## Ayarlar
 
 - `config/motor.toml` — model, niceleme, cover gücü, adım, aday/onarım tohumları, GPU eşiği. Tarifin kaynağı dinleme
   testleri (`docs/arastirma/01-spike-bulgulari.md`).
-- `config/yayin.toml` — sanatçı adı, dağıtımcı (`tunearo` | `routenote` | `distrokid`), mastering hedefi (−14 LUFS,
-  −1,2 dBTP, ton eşleme), yayın takvimi, Tunearo'da hariç bölgeler ve mağazalar (`[tunearo]`).
+- `config/yayin.toml` — sanatçı adı, dağıtımcı (`routenote` | `distrokid` | `""`; `tunearo` kapandı), mastering hedefi
+  (−14 LUFS, −1,2 dBTP, ton eşleme), otomatik onay, yayın takvimi, RouteNote (`[routenote]`: gece yüklemesi, Spotify
+  sanatçı kimliği). RouteNote'ta kapatılan mağazalar ve hariç bölgeler `yanki/routenote.py`'de.
 - `config/egitim.toml` — LoRA eğitiminin verisi (şarkı + stil metni) ve ayarları (rank, epoch, deneme şarkıları).
 - `config/kesif.toml` — keşif pazarları, taranacak playlist'ler, gece listeye kaç aday eklensin, arama derinliği.
 - `config/operasyon.toml` — yedek klasörü (varsayılan `calisma/yedek`; başka diske almak daha güvenli), sıklığı,
@@ -127,10 +137,10 @@ uv run yanki spotify-baglan                                # yalnız kendi playl
 
 ## Nasıl çalışır
 
-- **Cover:** ACE-Step `cover` görevi, XL-SFT 4B INT8 (8 GB'a yalnız böyle sığıyor), güç 0,7, 100 adım, kaynağa uygun stil +
-  BPM + ton + gerçek sözler.
-- **Parçalı üretim:** uzun şarkı vokal boşluklarından ~90 sn'lik parçalara bölünür (tek parça 290 sn şarkıda ~57 dk;
-  parçalı ~8 dk). İlk parçanın çıktısı sonraki parçalara tını referansı olur.
+- **Cover:** ACE-Step `cover` görevi, XL-SFT 4B nicelemesiz (kiralık A40) + cover LoRA'sı, güç 0,7, 100 adım, CFG 10,
+  4 aday; stil şarkıya özel betimden (`acestep-captioner` şarkıyı dinler), söz bölüm etiketli (`yanki/yapi.py`).
+- **Parçalı üretim:** 8 dk'dan uzun şarkı (evde 110 sn'den uzun) vokal boşluklarından parçalara bölünür; ilk parçanın
+  çıktısı sonraki parçalara tını referansı olur.
 - **Pencereli onarım:** işaretli aralığın ±25 sn'lik penceresi yeniden üretilip geri dikilir; aralık dışı birebir korunur.
 - **Kapılar:** orijinal kaydı taşıyan (parmak izi ≥ 0,72 ya da dalga korelasyonu ≥ 0,25), sözsüz (WER ≥ 0,5) ya da yanlış
   süreli aday dinlemeye çıkmaz. "İyi"yi kulak seçer: otomatik kalite ölçüleri dinlemeyle uyuşmadı.
