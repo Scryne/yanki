@@ -363,7 +363,8 @@ def test_yazan_istek_yalniz_odanin_kendi_kokeninden(ortam):
 
 
 def test_pano_kapali_otomatik_kosuyu_soyler(tmp_path):
-    """2026-10-13'ten beri Yanki/Surekli ve Yanki/Gece görevleri kapalıydı; pano hiçbir şey söylemiyordu (son koşu "sorunsuz")."""
+    """2026-10-13'ten beri Yanki/Surekli ve Yanki/Gece görevleri kapalıydı; pano hiçbir şey söylemiyordu (son koşu
+    "sorunsuz")."""
     c = tmp_path / "calisma"
     c.mkdir()
     oda = TestClient(sunucu.uygulama(ayarlar.yukle(), c, gorev_oku=lambda: {"Surekli": "Disabled", "Gece": "Ready"}),
