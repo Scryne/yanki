@@ -884,6 +884,15 @@ def _calistir(args: argparse.Namespace) -> int:
         adimlar.append(("temizlik", lambda: _temizle(argparse.Namespace(uygula=True, gun=op.temizlik_gun))))
     adimlar.append(("yedek", lambda: _yedekle(argparse.Namespace(zorla=False))))
 
+    if ayarlar.yukle().uzak.acik:
+        from yanki import uzak
+
+        def artik() -> int:
+            if silinen := uzak.artik_temizle(kok):
+                print(f"açık kalmış kiralık GPU silindi: {', '.join(silinen)}")
+            return 0
+
+        adimlar.insert(0, ("kiralık GPU artığı", artik))
     sorunlu, yazilan = [], []
     for ad, fn in adimlar:
         bas = time.monotonic()
@@ -894,10 +903,14 @@ def _calistir(args: argparse.Namespace) -> int:
             except Exception:  # noqa: BLE001 — adım yalıtımı: iz günlüğe, koşu sürer
                 traceback.print_exc(file=sys.stdout)
                 kod = 1
-        if ad in ADIM_ARALIGI_SAAT:
+        # zaman adım bitince ve yalnız başarıda yazılır: koşu yarıda kalırsa (uyku, kapanma) biten adım sonraki koşuda
+        # yeniden koşmasın (2026-10-13: keşif üretimde düşen koşudan sonra 4,5 saatte bir daha koştu, 174 Spotify
+        # isteği); düşen adım 24 saat beklemesin
+        if kod == 0 and ad in ADIM_ARALIGI_SAAT:
             zamanlar[ad] = simdi.isoformat(timespec="seconds")
-        if ad == "keşif":  # tam keşif popüler şarkıları da içerir
-            zamanlar["popüler keşif"] = simdi.isoformat(timespec="seconds")
+            if ad == "keşif":  # tam keşif popüler şarkıları da içerir
+                zamanlar["popüler keşif"] = zamanlar[ad]
+            dosya.json_yaz(calisma / ".adimlar.json", zamanlar)
         if kod:
             sorunlu.append(ad)
         if cikti.bitir(zorla=bool(kod) or hepsi):
@@ -907,7 +920,6 @@ def _calistir(args: argparse.Namespace) -> int:
                 print(f"✗ {ad} adımı sorunlu bitti ({gecen:.0f} sn)", flush=True)
             elif gecen >= 60:  # uzun adımın süresi (başlık başlama saatini taşıyor)
                 print(f"  {ad} bitti ({gecen / 60:.0f} dk)", flush=True)
-    dosya.json_yaz(calisma / ".adimlar.json", zamanlar)
     if yazilan:
         print(f"── koşu bitti ({datetime.now():%H:%M:%S})"
               + (f"; sorunlu adım: {', '.join(sorunlu)}" if sorunlu else ""))

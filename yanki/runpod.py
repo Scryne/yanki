@@ -147,19 +147,79 @@ def ssh_anahtari(klasor: Path) -> tuple[Path, str]:
     return gizli, (klasor / "id_ed25519.pub").read_text(encoding="utf-8").strip()
 
 
-def kapat_artiklari(api_anahtari: str, klasor: Path, kayit_adi: str = "acik_pod", on_ek: str = "yanki-") -> list[str]:
-    """Önceki koşudan açık kalmış pod'ları siler (kayıttaki kimlik + adı `on_ek` ile başlayanlar). Eğitim pod'u ayrı
-    önek ve kayıtla açılır (`egitim-`, `acik_pod_egitim`): saatler süren eğitim sürerken başlayan üretim koşusu onu
-    "artık" sanıp silmesin."""
+# ── pod sahipliği ─────────────────────────────────────────
+# Her pod açılınca `.runpod/sahip/<pod>` dosyasına açan sürecin kimliği yazılır, pod silinince dosya da silinir. Artık
+# pod = sahibi ölmüş (koşu ortasında bilgisayar kapandı) ya da silinemeyip bırakılmış pod. Sahibi yaşayan pod'a
+# dokunulmaz: kilitsiz koşan bir deney (`spikes/`) ya da eğitim sürerken başlayan üretim koşusu onu silmesin.
+# Hiç kaydı olmayan pod (açılış cevabı zaman aşımına düştü, kimlik hiç gelmedi) ilk görülüşünden ARTIK_SN sonra silinir.
+ARTIK_SN = 900
+
+
+def _sahip_yolu(klasor: Path, pod_id: str) -> Path:
+    return klasor / "sahip" / pod_id
+
+
+def sahip_yaz(klasor: Path, pod_id: str, **ek) -> None:
+    from yanki import dosya
+
+    dosya.json_yaz(_sahip_yolu(klasor, pod_id), {"pid": os.getpid(), **ek}, None)
+
+
+def sahip_oku(klasor: Path, pod_id: str) -> dict | None:
+    try:
+        return json.loads(_sahip_yolu(klasor, pod_id).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
+def _sahibi_yasiyor(sahip: dict | None) -> bool:
+    from yanki import sistem
+
+    return bool(sahip) and not sahip.get("terk") and sistem.surec_yasiyor(sahip.get("pid"))
+
+
+def kapat_artiklari(api_anahtari: str, klasor: Path, kayit_adi: str = "acik_pod", on_ek: str = "yanki-",
+                    harcama=None, simdi: float | None = None) -> list[str]:
+    """Açık kalmış pod'ları siler: kayıttaki kimlik ya da adı `on_ek` ile başlayan, sahibi yaşamayan pod'lar (bkz.
+    pod sahipliği). Eğitim pod'u ayrı önek ve kayıtla açılır (`egitim-`, `acik_pod_egitim`). `harcama(kayit)`:
+    silinen pod'un sayılmamış süresinin maliyeti (önce artık pod'un ücreti hiç yazılmıyordu, aylık bütçe eksik
+    görünüyordu)."""
+    simdi = simdi or time.time()
     silinen = []
-    pods = gql(api_anahtari, "query { myself { pods { id name } } }")["myself"]["pods"] or []
+    pods = gql(api_anahtari, "query { myself { pods { id name costPerHr runtime { uptimeInSeconds } } } }"
+               )["myself"]["pods"] or []
     kayit = klasor / kayit_adi
     kayitli = kayit.read_text(encoding="utf-8").strip() if kayit.exists() else ""
+    gorulen_yolu = klasor / "kayitsiz_gorulen.json"
+    try:
+        gorulen = json.loads(gorulen_yolu.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        gorulen = {}
     for p in pods:
-        if p["id"] == kayitli or (p.get("name") or "").startswith(on_ek):
-            gql(api_anahtari, "mutation($id: String!) { podTerminate(input: {podId: $id}) }", {"id": p["id"]})
-            silinen.append(p["id"])
-    kayit.unlink(missing_ok=True)
+        if not (p["id"] == kayitli or (p.get("name") or "").startswith(on_ek)):
+            continue
+        sahip = sahip_oku(klasor, p["id"])
+        if _sahibi_yasiyor(sahip):
+            continue
+        sure = float(((p.get("runtime") or {}).get("uptimeInSeconds")) or 0)
+        if sahip is None and p["id"] != kayitli:
+            ilk = gorulen.setdefault(p["id"], simdi)
+            if simdi - ilk < ARTIK_SN and sure < ARTIK_SN:  # az önce açılmış olabilir: sahibi kaydı yazmak üzere
+                continue
+        gql(api_anahtari, "mutation($id: String!) { podTerminate(input: {podId: $id}) }", {"id": p["id"]})
+        silinen.append(p["id"])
+        if harcama and (ek := sure - float((sahip or {}).get("sayilan_sn") or 0)) > 0:
+            harcama({"zaman": time.strftime("%Y-%m-%dT%H:%M:%S"), "pod": p["id"], "not": "artık pod silindi",
+                     "usd": round(float(p.get("costPerHr") or 0) * ek / 3600, 3)})
+        _sahip_yolu(klasor, p["id"]).unlink(missing_ok=True)
+        gorulen.pop(p["id"], None)
+    canli = {p["id"] for p in pods} - set(silinen)
+    gorulen = {k: v for k, v in gorulen.items() if k in canli}
+    from yanki import dosya
+
+    dosya.json_yaz(gorulen_yolu, gorulen, None)
+    if kayitli and kayitli not in canli:
+        kayit.unlink(missing_ok=True)
     return silinen
 
 
@@ -177,6 +237,7 @@ class Pod:
         self.ip: str | None = None
         self.port: int | None = None
         self.acilis = 0.0
+        self.kapanis: float | None = None
 
     def __enter__(self) -> "Pod":
         self.gizli, acik = ssh_anahtari(self.klasor)
@@ -194,8 +255,9 @@ class Pod:
             raise StokYok(f"{self.gpu} açılamadı (stok yok olabilir)")
         self.id, self.saatlik = d["id"], float(d.get("costPerHr") or 0)
         self.acilis = time.time()
-        (self.klasor / self.kayit_adi).write_text(self.id, encoding="utf-8")
-        try:
+        try:  # kayıt yazılamazsa (disk, kilit) da pod silinsin
+            sahip_yaz(self.klasor, self.id, ad=self.ad)
+            (self.klasor / self.kayit_adi).write_text(self.id, encoding="utf-8")
             self._ssh_bekle()
             self._hiz_kontrol()
         except BaseException:
@@ -313,19 +375,37 @@ class Pod:
         return yerel
 
     def maliyet(self) -> float:
-        return round(self.saatlik * (time.time() - self.acilis) / 3600, 3) if self.acilis else 0.0
+        """Açılıştan silinişe (silinemediyse bırakılışa; kalanını artık temizliği yazar). Önce koşu sonuna kadar
+        sayılıyordu: hazır olmayıp silinen pod, yerine açılanın bütün süresini de ödemiş görünüyordu."""
+        if not self.acilis:
+            return 0.0
+        return round(self.saatlik * ((self.kapanis or time.time()) - self.acilis) / 3600, 3)
 
     def __exit__(self, *_):
-        if self.id:
+        if self.id and self.kapanis is None:
             # ağ kopukken silme düşerse pod saatlik yanmaya devam eder (2026-10-14, S33: 3 × 5 sn yetmedi, pod açık
-            # kaldı): ~5 dk dene; yine olmazsa `acik_pod` kaydı kalır, sonraki koşu `kapat_artiklari` ile siler
+            # kaldı): ~5 dk dene; yine olmazsa pod "terk" işaretlenir ve bildirilir, sonraki koşu `kapat_artiklari`
+            # ile siler (bu süreç yaşıyor olsa da)
             for _deneme in range(KAPATMA_DENEME):
                 try:
                     gql(self.api, "mutation($id: String!) { podTerminate(input: {podId: $id}) }", {"id": self.id})
+                    self.kapanis = time.time()
                     (self.klasor / self.kayit_adi).unlink(missing_ok=True)
-                    break
+                    _sahip_yolu(self.klasor, self.id).unlink(missing_ok=True)
+                    return
                 except (RunPodHatasi, OSError):
                     time.sleep(KAPATMA_BEKLEME_SN)
+            self.kapanis = time.time()
+            try:
+                sahip_yaz(self.klasor, self.id, ad=self.ad, terk=True, sayilan_sn=round(self.kapanis - self.acilis))
+                from yanki import olay
+
+                olay.bildir(self.kok / "calisma", "kayip", "kiralık GPU silinemedi",
+                            f"Pod {self.id} ({self.gpu}) ~{KAPATMA_DENEME * KAPATMA_BEKLEME_SN // 60} dk denendi, "
+                            "silinemedi; saatlik ücret sürüyor. Sonraki koşu yeniden dener. Acil: runpod.io → Pods → "
+                            "Terminate.", f"pod-silinemedi:{self.id}")
+            except OSError:
+                pass
 
 
 def acestep_kur(p: Pod, commit: str, modeller: tuple[str, ...] = ("acestep-v15-xl-sft",)) -> str:

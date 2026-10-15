@@ -317,3 +317,21 @@ def test_isci_kos_kopuk_yoklamada_dusmez_isci_bitene_kadar_bekler():
     sonuc = uzak.isci_kos(Pod(), "/root/ACE", 60, aralik_sn=0, toplam=1, bildir=satirlar.append)
     assert sonuc == [{"id": "a", "basari": True}]
     assert sum("yoklama kopuk" in s for s in satirlar) == 2
+
+
+def test_isci_kos_ilerlemeyen_isciyi_durdurur():
+    """Günlük ve sonuç hiç değişmezse (asılı CUDA/indirme) işçi zaman aşımını beklemeden durdurulur."""
+    class Pod:
+        def __init__(self):
+            self.betikler = []
+
+        def komut(self, betik, zaman_asimi=120, tekrar=True):
+            self.betikler.append(betik)
+            if "motor_sonuc.json" not in betik or "cat " not in betik:
+                return ""
+            return json.dumps([{"id": "a", "basari": True}]) + "\n#DURUM#\nSURUYOR\n#GUNLUK#\n4096\n"
+
+    p, satirlar = Pod(), []
+    sonuc = uzak.isci_kos(p, "/root/ACE", 3600, aralik_sn=0, toplam=3, bildir=satirlar.append, sessiz_sn=0)
+    assert [x["id"] for x in sonuc] == ["a"] and "ilerlemiyor" in satirlar[-1]
+    assert p.betikler[-1].startswith("kill ")

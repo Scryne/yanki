@@ -84,11 +84,18 @@ def baslatma_betigi(hedef: str, dizin: str = UZAK_DIZIN) -> str:
             f"echo $! > {dizin}/motor.pid")
 
 
+# İşçinin günlüğü (ACE-Step adım çubuğu, indirme) ve biten iş sayısı bu kadar süre hiç değişmezse işçi takılmış sayılır
+# ve durdurulur. Zaman aşımı iş başına 15 dk × iş sayısı (40 iş = 10 saat): asılı bir CUDA/indirme A40'ı o kadar boşa
+# yakardı (~4,4 $). Evdeki motorun 20 dk ilerlemesizlik sınırının uzaktaki karşılığı.
+SESSIZ_SN = 1800
+
+
 def isci_kos(p: runpod.Pod, hedef: str, zaman_asimi_sn: float, aralik_sn: float = 20, toplam: int | None = None,
-             bildir: Callable[[str], None] = print) -> list[dict]:
+             bildir: Callable[[str], None] = print, sessiz_sn: float = SESSIZ_SN) -> list[dict]:
     """İşçiyi arka planda başlatır (SSH kopsa da sürer), bitene kadar bekler; sonuç listesini döner. Süreç pid
     dosyasından izlenir: `pgrep -f motor_isci.py` kendi `bash -lc` satırını eşleştirip hep "sürüyor" diyordu (S19).
-    Biten iş sayısı değiştikçe bir satır yazılır (günlükte saatlik koşunun nerede olduğu görünsün)."""
+    Biten iş sayısı değiştikçe bir satır yazılır (günlükte saatlik koşunun nerede olduğu görünsün). Günlük ve sonuç
+    `sessiz_sn` boyunca değişmezse işçi durdurulur, o ana kadarki sonuçlar döner."""
     try:
         p.komut(baslatma_betigi(hedef), tekrar=False)
     except runpod.RunPodHatasi:
@@ -98,16 +105,24 @@ def isci_kos(p: runpod.Pod, hedef: str, zaman_asimi_sn: float, aralik_sn: float 
             raise
     bitis, bas = time.monotonic() + zaman_asimi_sn, time.monotonic()
     sonuc: list[dict] = []
+    iz, son_degisim = None, time.monotonic()
     while time.monotonic() < bitis:
         time.sleep(aralik_sn)
         try:
             cikti = p.komut(f"cat {UZAK_DIZIN}/motor_sonuc.json 2>/dev/null || echo '[]'; echo; echo '#DURUM#'; "
-                            f"kill -0 $(cat {UZAK_DIZIN}/motor.pid) 2>/dev/null && echo SURUYOR || echo BITTI")
+                            f"kill -0 $(cat {UZAK_DIZIN}/motor.pid) 2>/dev/null && echo SURUYOR || echo BITTI; "
+                            f"echo '#GUNLUK#'; stat -c %s {UZAK_DIZIN}/motor.log 2>/dev/null || echo 0")
         except runpod.RunPodHatasi as e:
             # evdeki ağ koptu (2026-10-14, S33: ~10 dk "No route to host"); işçi podda sürüyor, yoklamaya devam
             bildir(f"  yoklama kopuk: {str(e)[-120:]}")
             continue
         govde, hal = cikti.split("#DURUM#")
+        hal, _, gunluk = hal.partition("#GUNLUK#")
+        if (yeni_iz := (len(govde), gunluk.strip())) != iz:
+            iz, son_degisim = yeni_iz, time.monotonic()
+        elif time.monotonic() - son_degisim >= sessiz_sn:
+            bildir(f"  uzak motor {sessiz_sn / 60:.0f} dk'dır ilerlemiyor (günlük ve sonuç aynı): durduruluyor")
+            break
         try:
             yeni = json.loads(govde.strip() or "[]")
         except ValueError:  # işçi o an yazıyor
@@ -167,7 +182,7 @@ def calistir(a: Ayarlar, isler: list[motor.Is], klasor: Path, zaman_asimi_sn: fl
     # önceki koşudan açık kalan pod (bilgisayar koşu ortasında kapandı/uyudu) saatlik yanmasın: bu koşu kilitli, başka
     # bir koşunun pod'u olamaz. Her hesapta bakılır (pod önceki koşuda öbür hesapta açılmış olabilir).
     if artik := [p for k in dict.fromkeys([api, *runpod.anahtarlar(a.kok)])
-                 for p in kapat(k, a.kok / "calisma" / ".runpod")]:
+                 for p in kapat(k, a.kok / "calisma" / ".runpod", harcama=lambda r: harcama_yaz(a.kok, r))]:
         print(f"önceki koşudan açık kalan pod silindi: {', '.join(artik)}")
     klasor = klasor.resolve()
     klasor.mkdir(parents=True, exist_ok=True)
@@ -239,6 +254,19 @@ def calistir(a: Ayarlar, isler: list[motor.Is], klasor: Path, zaman_asimi_sn: fl
         harcama_yaz(a.kok, kayit)
     gelen = {s.id for s in sonuclar}
     return sonuclar + [motor.Sonuc(i.id, False, "uzak işçi sonuç yazmadı") for i in isler if i.id not in gelen]
+
+
+def artik_temizle(kok: Path, kapat=runpod.kapat_artiklari) -> list[str]:
+    """Her koşunun başında, iş olsun olmasın: açık kalmış üretim pod'ları (önce yalnız üretim işi varken ve bütçe
+    yerindeyken bakılıyordu; kuyruk boşsa ya da artık pod bütçeyi doldurduysa pod bakiye bitene kadar yanardı).
+    Hesap başına tek GraphQL sorgusu. Dönen: silinenler; hata günlüğe, koşu sürer."""
+    silinen = []
+    for k in runpod.anahtarlar(kok):
+        try:
+            silinen += kapat(k, kok / "calisma" / ".runpod", harcama=lambda r: harcama_yaz(kok, r))
+        except (runpod.RunPodHatasi, OSError) as e:
+            print(f"kiralık GPU artık denetimi yapılamadı: {e}")
+    return silinen
 
 
 # sunucu koşu ortasında düşerse bu kadar saat yeniden denenmez (evde üretim kapalıysa üretim o kadar bekler; tek bir

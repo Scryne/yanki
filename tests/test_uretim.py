@@ -502,3 +502,22 @@ def test_tarifte_lora_adi_ara_kaydi_da_adlandirir():
     assert uretim.lora_adi(kok / "checkpoints" / "epoch_20_loss_0.7381") == "20261012-1702/ep20"
     assert uretim.lora_adi(kok / "final") == "20261012-1702"
     assert uretim.lora_adi(None) is None
+
+
+def test_onarim_kabulu_onceki_kabulu_geri_almaz():
+    """İki aralık aynı turda işaretlendi: ikisi de eski dosyaya dikildi. Birini kabul edince öbürü reddedilir."""
+    import pytest
+
+    from yanki import durum, uretim
+
+    d = durum.Durum("a-b", "A", "B")
+    aday = durum.Aday(1, "adaylar/1/tam.flac", 42, {}, True)
+    for i, bolge in ((1, [10, 20]), (2, [60, 70])):
+        aday.onarimlar.append({"id": f"1-{i}", "bolge": bolge, "tohum": 42, "temel": "adaylar/1/tam.flac",
+                               "durum": "hazir", "dosya": f"adaylar/1/onarim_{i}.flac", "kapilar": {}, "hata": None})
+    d.adaylar = [aday]
+    uretim.onarim_kabul(d, 1, "1-1")
+    assert aday.dosya == "adaylar/1/onarim_1.flac"
+    with pytest.raises(ValueError, match="yeniden işaretle"):
+        uretim.onarim_kabul(d, 1, "1-2")
+    assert aday.dosya == "adaylar/1/onarim_1.flac"

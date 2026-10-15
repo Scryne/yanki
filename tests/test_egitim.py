@@ -350,7 +350,7 @@ def test_uretim_kosusu_egitim_podunu_artik_saymaz(tmp_path, monkeypatch):
 
     def gql(_k, sorgu, degisken=None, deneme=3):
         if "pods" in sorgu:
-            return {"myself": {"pods": [{"id": "e1", "name": egitim.POD_AD}, {"id": "m1", "name": "yanki-motor"}]}}
+            return {"myself": {"pods": [{"id": "e1", "name": egitim.POD_AD}, {"id": "m1", "name": "yanki-motor", "runtime": {"uptimeInSeconds": 1200}}]}}
         silinen.append(degisken["id"])
         return {}
 
@@ -486,3 +486,49 @@ def test_hedef_moduller_bossa_side_step_varsayilani_doluysa_komuta_gider():
     assert "--target-modules" not in egitim.egitim_komutu(egitim.Ayar())
     k = egitim.egitim_komutu(egitim.Ayar(hedef_moduller=("q_proj", "gate_proj", "down_proj")))
     assert k.endswith("--gradient-checkpointing --target-modules q_proj gate_proj down_proj")
+
+
+def test_artik_pod_sahibi_yasiyorsa_dokunulmaz_terk_edilmisse_silinir_ucreti_yazilir(tmp_path, monkeypatch):
+    """Kilitsiz koşan deneyin/eğitimin pod'u üretim koşusunun temizliğine yakalanmaz; silinemeyip bırakılan pod (terk)
+    sahibi yaşasa da silinir ve sayılmamış süresi bütçeye yazılır. Kaydı hiç olmayan yeni pod 15 dk beklenir."""
+    import os
+
+    pods = [{"id": "canli", "name": "yanki-s33", "costPerHr": 0.4, "runtime": {"uptimeInSeconds": 5000}},
+            {"id": "terk", "name": "yanki-motor", "costPerHr": 0.36, "runtime": {"uptimeInSeconds": 3600}},
+            {"id": "yeni", "name": "yanki-motor", "costPerHr": 0.4, "runtime": None}]
+    silinen, harcanan = [], []
+
+    def gql(_k, sorgu, degisken=None, deneme=3):
+        if "pods" in sorgu:
+            return {"myself": {"pods": [p for p in pods if p["id"] not in silinen]}}
+        silinen.append(degisken["id"])
+        return {}
+
+    monkeypatch.setattr(runpod, "gql", gql)
+    runpod.sahip_yaz(tmp_path, "canli")  # bu süreç: yaşıyor
+    runpod.sahip_yaz(tmp_path, "terk", terk=True, sayilan_sn=1800)
+    assert runpod.kapat_artiklari("k", tmp_path, harcama=harcanan.append, simdi=1000.0) == ["terk"]
+    assert harcanan[0]["pod"] == "terk" and harcanan[0]["usd"] == 0.18  # sayılmamış yarım saat × 0,36
+    assert not (tmp_path / "sahip" / "terk").exists() and (tmp_path / "sahip" / "canli").exists()
+    assert runpod.kapat_artiklari("k", tmp_path, simdi=1000.0 + runpod.ARTIK_SN) == ["yeni"]
+    runpod.sahip_yaz(tmp_path, "canli")
+    json_ = __import__("json")
+    (tmp_path / "sahip" / "canli").write_text(json_.dumps({"pid": 2**31 - 7}), encoding="utf-8")  # ölü süreç
+    assert os.getpid() != 2**31 - 7
+    assert runpod.kapat_artiklari("k", tmp_path, simdi=5000.0) == ["canli"]
+
+
+def test_silinemeyen_pod_terk_edilir_bildirilir_maliyeti_bırakista_durur(tmp_path, monkeypatch):
+    from yanki import olay
+
+    monkeypatch.setattr(runpod, "KAPATMA_DENEME", 2)
+    monkeypatch.setattr(runpod, "KAPATMA_BEKLEME_SN", 0)
+    monkeypatch.setattr(runpod, "gql", lambda *_a, **_k: (_ for _ in ()).throw(runpod.RunPodHatasi("ağ yok")))
+    monkeypatch.setenv("RUNPOD_API_KEY", "x")
+    p = runpod.Pod(tmp_path)
+    p.id, p.saatlik, p.acilis = "p1", 0.36, runpod.time.time() - 3600
+    p.__exit__(None, None, None)
+    sahip = runpod.sahip_oku(p.klasor, "p1")
+    assert sahip["terk"] and 3590 <= sahip["sayilan_sn"] <= 3610
+    assert p.maliyet() == 0.36 and p.kapanis is not None
+    assert any(o["baslik"] == "kiralık GPU silinemedi" for o in olay.oku(tmp_path / "calisma"))

@@ -304,8 +304,10 @@ def paketle(kok: Path, ornekler: list[dict]) -> Path:
 # ── 2. kiralık GPU ──────────────────────────────────────────
 def arka_plan_betigi(hedef: str, komut: str, ad: str, dizin: str = UZAK) -> str:
     """Komutu pod'da arka planda başlatır; SSH hemen döner (uzak.baslatma_betigi'deki kabuk önceliği dersi: arka plana
-    yalnız komut gider). Bitince çıkış kodu `<ad>.kod`'a yazılır (pid yeniden kullanımına bakılmaz)."""
-    ic = f"{komut}; echo $? > {dizin}/{ad}.kod"
+    yalnız komut gider). Bitince çıkış kodu `<ad>.kod`'a yazılır (pid yeniden kullanımına bakılmaz). Kod önce geçici
+    dosyaya: `>` dosyayı önce boşaltır, o anda gelen yoklama boş kodu "1" (hata) okuyup saatlik eğitimin
+    bağdaştırıcısını indirmeden pod'u silerdi."""
+    ic = f"{komut}; echo $? > {dizin}/{ad}.kod.yazilan && mv {dizin}/{ad}.kod.yazilan {dizin}/{ad}.kod"
     return (f"cd {hedef} || exit 1; export PATH=$HOME/.local/bin:$PATH PYTHONUTF8=1 PYTHONUNBUFFERED=1; "
             f"rm -f {dizin}/{ad}.kod; $(command -v setsid) nohup bash -c {shlex.quote(ic)} > {dizin}/{ad}.log 2>&1 "
             f"< /dev/null & echo $! > {dizin}/{ad}.pid")
@@ -441,6 +443,15 @@ def egit(a: Ayarlar, ayar: Ayar, veri_tar: Path, bildir=print, pod_sinifi=runpod
     kayit: dict = {"zaman": datetime.now().isoformat(timespec="seconds"), "gpu": ayar.gpu, "not": "egitim",
                    "is": 0}
     zaman_asimi = ayar.zaman_asimi_saat * 3600
+    # zaman aşımı bütün eğitim için (betim, ön işleme, kapak, eğitim): aşama başına ayrı süre verilince takılan tek bir
+    # aşama 11 saat, beşi en kötü ~55 saat pod yakabilirdi; bakiye denetimi (`gereken`) de tek süreyi varsayıyor
+    son_an = time.monotonic() + zaman_asimi
+
+    def kalan() -> float:
+        if (k := son_an - time.monotonic()) <= 0:
+            raise runpod.RunPodHatasi(f"eğitim {ayar.zaman_asimi_saat:g} saatte bitmedi")
+        return k
+
     try:
         with uzak.PodAcici(a, pod_sinifi, acilan, gpu=ayar.gpu, ad=POD_AD, kayit_adi=POD_KAYIT) as p:
             kayit["pod"] = p.id
@@ -460,7 +471,7 @@ def egit(a: Ayarlar, ayar: Ayar, veri_tar: Path, bildir=print, pod_sinifi=runpod
             sonuc.sureler["yukleme"] = round(time.time() - t)
             if ayar.betim:
                 t = time.time()
-                veri_betimle(a, ayar, p, hedef, kok, yerel, zaman_asimi, bildir)
+                veri_betimle(a, ayar, p, hedef, kok, yerel, kalan(), bildir)
                 sonuc.sureler["betim"] = round(time.time() - t)
             adimlar = [("on_isleme", on_isleme_komutu(ayar))]
             if ayar.kapak:
@@ -469,7 +480,7 @@ def egit(a: Ayarlar, ayar: Ayar, veri_tar: Path, bildir=print, pod_sinifi=runpod
             for ad, komut in (*adimlar, ("egitim", egitim_komutu(ayar))):
                 t = time.time()
                 p.komut(arka_plan_betigi(hedef, komut, ad), tekrar=False)
-                kod = bekle(p, ad, zaman_asimi, bildir=bildir)
+                kod = bekle(p, ad, kalan(), bildir=bildir)
                 sonuc.sureler[ad] = round(time.time() - t)
                 if kod != 0:
                     try:
@@ -492,8 +503,13 @@ def egit(a: Ayarlar, ayar: Ayar, veri_tar: Path, bildir=print, pod_sinifi=runpod
             if not (final / "adapter_config.json").exists():
                 raise runpod.RunPodHatasi(f"eğitim bitti ama son bağdaştırıcı inmedi: {liste_[:10]}")
             sonuc.lora = final
-            sonuc.deneme = _deneme(a, ayar, p, hedef, calisma, sonuc.dinleme, zaman_asimi, bildir,
-                                   ara_kayitlar(liste_, ayar.deneme_ara_kayitlar))
+            try:  # deneme düşse de eğitim (bağdaştırıcı inmiş, ücret ödenmiş) kaydedilir; deneme sonra yeniden koşar
+                sonuc.deneme = _deneme(a, ayar, p, hedef, calisma, sonuc.dinleme, zaman_asimi, bildir,
+                                       ara_kayitlar(liste_, ayar.deneme_ara_kayitlar))
+            except Exception as e:  # noqa: BLE001
+                kayit["deneme_hata"] = f"{type(e).__name__}: {str(e)[:300]}"
+                bildir(f"uyarı: eğitim bitti, karşılaştırmalı deneme düştü ({e}); bağdaştırıcı {final}. "
+                       f"Denemeyi yeniden: yanki egit --deneme-yeniden {zaman}")
     except Exception as e:
         kayit["hata"] = f"{type(e).__name__}: {str(e)[:300]}"
         raise

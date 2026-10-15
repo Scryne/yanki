@@ -20,6 +20,7 @@ analizine yazılır (sonraki üretimler aynı stili kullanır). Betim düşerse 
 import dataclasses
 import json
 import re
+import subprocess
 from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
@@ -27,7 +28,7 @@ from pathlib import Path
 import numpy as np
 import soundfile as sf
 
-from yanki import ag, durum, kapilar, liste, motor, parcalama, sozler
+from yanki import ag, durum, kapilar, liste, motor, parcalama, runpod, sozler
 from yanki.ayarlar import Ayarlar
 from yanki.motor_isci import betim_stili
 
@@ -127,6 +128,11 @@ def onarim_kabul(d: durum.Durum, aday_no: int, onarim_id: str) -> None:
     secilen = next(o for o in aday.onarimlar if o["id"] == onarim_id)
     if secilen["durum"] != "hazir":
         raise ValueError(f"onarım {onarim_id} kabul edilemez: {secilen['durum']}")
+    if secilen.get("temel") and secilen["temel"] != aday.dosya:
+        # aynı turda iki aralık işaretlendiyse ikisi de eski dosyaya dikildi: ikincisini kabul etmek ilkinin
+        # düzeltmesini sessizce geri alırdı
+        raise ValueError("bu onarım adayın önceki haline dikildi, arada başka bir onarım kabul edildi; aralığı "
+                         "yeniden işaretle (yeni onarım güncel dosyaya dikilir)")
     for o in aday.onarimlar:
         if o["bolge"] == secilen["bolge"] and o["temel"] == secilen["temel"] and o["durum"] == "hazir":
             o["durum"] = "ret"
@@ -405,7 +411,13 @@ def uret(a: Ayarlar, calisma: Path, kimlikler: list[str] | None = None,
                                      cikti_klasor=str(k / "adaylar" / str(n) / f"p{p.no}"), soz=sozler_[p.no - 1],
                                      adim=a.cover.adim, tohum=tohum, guc=a.cover.guc,
                                      referans=ilk.cikti, ek=dict(a.cover.ek), **_ortak(d)))
-    s2 = motor_turu(tur2, "tur2")
+    try:
+        s2 = motor_turu(tur2, "tur2")
+    except (runpod.RunPodHatasi, OSError, subprocess.SubprocessError) as e:
+        # ikinci turun sunucusu açılamadı (stok, ağ): ilk turun ödenmiş tek parça şarkıları kaybolmasın, yalnız
+        # parçalı şarkıların kalan parçaları başarısız sayılır (motor tekrarı yolundan yeniden üretilir)
+        print(f"ikinci tur ({len(tur2)} iş) yapılamadı: {type(e).__name__}: {e}")
+        s2 = {i.id: motor.Sonuc(i.id, False, f"ikinci tur yapılamadı: {e}") for i in tur2}
     sonuclar = {**s1, **s2}
 
     sonuc = []

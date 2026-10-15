@@ -721,7 +721,7 @@ def test_uzak_motor_girdileri_bir_kez_gonderir_ciktilari_yerele_indirir(tmp_path
                       soz="söz", adim=100, tohum=t, guc=0.7) for n, t in ((1, 42), (2, 7))]
     sonuc = uzak.calistir(a, isler, tmp_path / "_motor", 900, pod_sinifi=_SahtePod,
                           kur=lambda p, c, m: "/root/ACE-Step-1.5", commit="ca1e85f", bakiye=lambda _k: 10.0,
-                          kapat=lambda *_: ["eski-pod"])
+                          kapat=lambda *_a, **_k: ["eski-pod"])
     p = _SahtePod.acilan[-1]
     assert p.kapandi and list(p.gonderilen.values()).count("/root/is/girdi/0.wav") == 1  # aynı kaynak bir kez
     is_ = json.loads(p.is_json)
@@ -939,7 +939,7 @@ def test_uzak_kosu_duserse_maliyet_yine_kaydedilir(tmp_path, monkeypatch):
                       soz="söz", adim=100, tohum=42, guc=0.7)]
     with pytest.raises(runpod.RunPodHatasi):
         uzak.calistir(_uzak_ayar(tmp_path), isler, tmp_path / "_m", 900, pod_sinifi=DusenPod,
-                      kur=lambda p, c, m: "/r", commit="x", bakiye=lambda _k: 10.0, kapat=lambda *_: [])
+                      kur=lambda p, c, m: "/r", commit="x", bakiye=lambda _k: 10.0, kapat=lambda *_a, **_k: [])
     kayit = json.loads(uzak.harcama_yolu(tmp_path).read_text(encoding="utf-8"))[-1]
     assert kayit["usd"] == 0.05 and "255" in kayit["hata"]
 
@@ -963,7 +963,7 @@ def test_hazir_olmayan_pod_silinir_baska_pod_denenir_ikisinin_maliyeti_kaydedili
     isler = [motor.Is(id="s|cover|1|1", gorev="cover", kaynak=str(kaynak), cikti_klasor=str(tmp_path / "c"),
                       soz="söz", adim=100, tohum=42, guc=0.7)]
     (s,) = uzak.calistir(_uzak_ayar(tmp_path), isler, tmp_path / "_m", 900, pod_sinifi=IlkiHazirOlmaz,
-                         kur=lambda p, c, m: "/r", commit="x", bakiye=lambda _k: 10.0, kapat=lambda *_: [])
+                         kur=lambda p, c, m: "/r", commit="x", bakiye=lambda _k: 10.0, kapat=lambda *_a, **_k: [])
     assert s.basari and acilis["n"] == 2
     kayit = json.loads(uzak.harcama_yolu(tmp_path).read_text(encoding="utf-8"))[-1]
     assert kayit["usd"] == 0.1  # iki pod × 0,05
