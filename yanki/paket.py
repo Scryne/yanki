@@ -446,7 +446,16 @@ def paketle(calisma: Path, yayin_yolu: Path, kimlikler: list[str] | None = None,
     return islenen
 
 
-KALICI_ALANLAR = ("yukleme", "yukleme_gecmisi", "tunearo", "tunearo_gecmisi")  # geri çekilen yayınlar da
+KALICI_ALANLAR = ("yukleme", "yukleme_gecmisi", "routenote", "routenote_gecmisi", "tunearo", "tunearo_gecmisi")
+
+
+def acik_taslak(paket_klasoru: Path) -> dict | None:
+    """Paketin RouteNote'ta açılmış ama gönderilmemiş taslağı (kayıt), yoksa None."""
+    try:
+        rn = json.loads((paket_klasoru / "metadata.json").read_text(encoding="utf-8")).get("routenote") or {}
+    except (OSError, ValueError):
+        return None
+    return rn if rn.get("adim") and rn.get("adim") != "gonderildi" else None
 
 
 def _paketle_bir(calisma: Path, d: durum.Durum, y: Yayin) -> durum.Durum:
@@ -458,6 +467,10 @@ def _paketle_bir(calisma: Path, d: durum.Durum, y: Yayin) -> durum.Durum:
         raise ValueError(f"seçilen aday ({d.secilen}) ya da dosyası yok")
     kaynak = k / aday.dosya
     p = k / "paket"
+    if (acik := acik_taslak(p)):
+        # taslaktaki ses/kapak RouteNote'ta kayıtlı: paket değişirse taslak eski dosyalarla gönderilirdi
+        raise ValueError(f"RouteNote'ta açık taslak var (UPC {acik.get('upc')}, adım {acik.get('adim')}): taslağı "
+                         f"panelden sil, sonra `yanki routenote taslak-silindi {d.kimlik}`")
     ad = guvenli_ad(f"{y.sanatci_adi or 'SANATCI'} - {d.ad}")
     ses_yolu, kapak_yolu = p / f"{ad}.{SES_BICIMI[y.dagitimci]}", p / f"{ad}.jpg"
     orijinal = k / d.kaynak["dosya"] if d.kaynak.get("dosya") else None

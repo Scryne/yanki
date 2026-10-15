@@ -160,6 +160,18 @@ def test_kaynak_sure_bilinmiyorsa_ilk_temiz():
     assert kaynak.sec([kaynak.Aday("1", "Song cover", 200), kaynak.Aday("2", "Song", 210)], None).id == "2"
 
 
+def test_surum_yedegi_youtube_sirasiyla():
+    """LRCLIB `/get` 297 sn verdi (Dark Horse), sürümler 208–216: resmî ses (216) ilk uyan; remix ve uymayan atlanır."""
+    adaylar = [kaynak.Aday("r", "Dark Horse (Remix)", 214), kaynak.Aday("u", "Dark Horse ft. Juicy J", 225),
+               kaynak.Aday("a", "Dark Horse (Audio)", 216), kaynak.Aday("n", "Dark Horse (Lyrics)", 213)]
+    with pytest.raises(kaynak.KaynakYok):
+        kaynak.sec(adaylar, 297)
+    secilen, sure = kaynak.surumle_sec(adaylar, [208.0, 212.0, 215.0, 216.0])
+    assert secilen.id == "a" and sure == 216.0
+    with pytest.raises(kaynak.KaynakYok):
+        kaynak.surumle_sec(adaylar, [297.0])
+
+
 def test_klasorde_kaynak(tmp_path):
     (tmp_path / "a-b.mp3").write_bytes(b"x")
     assert kaynak.klasorden(tmp_path, "a-b") == tmp_path / "a-b.mp3"

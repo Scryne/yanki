@@ -123,8 +123,15 @@ def _sanatci(s, kutu: str, ad: str, spotify_id: str | None) -> None:
     s.type(kutu, ad, delay=80)
     oneri = s.locator(".autocomplete-suggestion").filter(visible=True)
     oneri.first.wait_for()
-    hedef = oneri.locator(f'xpath=self::*[contains(@data-langartisturi, "{spotify_id}")]') if spotify_id else None
-    (hedef.first if hedef is not None and hedef.count() else oneri.filter(has_text=YENI_PROFIL).first).click()
+    if spotify_id:
+        hedef = oneri.locator(f'xpath=self::*[contains(@data-langartisturi, "{spotify_id}")]').first
+        try:
+            hedef.wait_for(timeout=15000)  # öneriler sırayla geliyor: ilk satır görünürken profil henüz yok olabilir
+        except Exception as e:  # noqa: BLE001 — Playwright zaman aşımı
+            raise RuntimeError(f"Spotify profili ({spotify_id}) önerilerde yok; yeni profil açılmadı") from e
+        hedef.click()
+    else:
+        oneri.filter(has_text=YENI_PROFIL).first.click()
     s.wait_for_timeout(1200)
     if s.locator("#rn_btn_exist").is_visible():
         s.click("#rn_btn_exist")
@@ -148,16 +155,52 @@ def yazarlar(meta: dict) -> list[tuple[str, str]]:
     return [(kisi_adi(a), kisi_adi(s)) for a, s in paket._yazarlar(meta)]
 
 
-def album_bilgisi(s, meta: dict, yayin_tarihi: date, tur: str, spotify_id: str | None = None) -> None:
-    """1. adım (Album Details), `paket._routenote_formu` 1–15 ile aynı sıra. Kaydetmez."""
+# Söz dili (Whisper kodu) → RouteNote'un dil seçeneği (`div#<kimlik>`, album.html 2026-10-15). Listede olmayan dil
+# taslak açılmadan durdurulur: yanlış dil seçmek yerine Scryne seçer.
+RN_DIL = {"en": "English", "tr": "Turkish", "fr": "French", "es": "Spanish", "pt": "Portuguese", "de": "German",
+          "it": "Italian", "nl": "Dutch", "ru": "Russian", "ja": "Japanese", "ko": "Korean", "zh": "Chinese_Simplified",
+          "yue": "Cantonese", "ar": "Arabic", "pl": "Polish", "sv": "Swedish", "id": "Indonesian", "hi": "Hindi",
+          "tl": "Tagalog", "uk": "Ukrainian", "vi": "Vietnamese", "th": "Thai", "he": "Hebrew", "el": "Greek",
+          "fi": "Finnish", "da": "Danish", "no": "Norwegian", "nb": "Norwegian", "cs": "Czech", "sk": "Slovak",
+          "hu": "Hungarian", "ro": "Romanian", "bg": "Bulgarian", "hr": "Croatian", "sl": "Slovenian", "ms": "Malay",
+          "fa": "Persian", "ur": "Urdu", "ta": "Tamil", "te": "Telugu", "bn": "Bengali", "pa": "Punjabi",
+          "ca": "Catalan", "et": "Estonian", "lv": "Latvian", "lt": "Lithuanian", "is": "Icelandic", "ga": "Irish",
+          "af": "Afrikaans", "zu": "Zulu", "kk": "Kazakh", "lo": "Lao", "ht": "Haitian", "la": "Latin"}
+# Playwright dosyayı bellekten gönderir ve 50 MB'tan büyüğünü reddeder (`set_input_files`); pay bırakılır
+EN_BUYUK_SES = 48 * 2**20
+UPC = re.compile(r"\d{12,13}")
+
+
+def on_kontrol(meta: dict, ses: Path, kapak: Path) -> None:
+    """RouteNote'ta taslak açılmadan önce: eksik bilgi taslak açıldıktan sonra fark edilirse yarım taslak kalır.
+    Gönderimden sonra değişmeyen alanlar: yazar ad/soyadı (© satırı), açık içerik, dil."""
+    from PIL import Image
+
     from yanki import paket
 
+    ham = paket._yazarlar(meta) if (meta.get("orijinal_yazar_adlari") or meta.get("orijinal_yazarlar")) else []
+    if not ham:
+        raise ValueError("pakette orijinal yazarlar yok: `yanki kunye <kimlik>`, sonra `yanki paketle --yeniden`")
+    if eksik := [f"{a} {s}".strip() for a, s in ham if not kisi_adi(a) or not kisi_adi(s) or paket.SOYAD_YOK in (a, s)]:
+        raise ValueError(f"yazar ad/soyadı eksik: {eksik} (girdi/liste.toml → yazarlar, sonra paketle --yeniden)")
+    if meta.get("acik_icerik") not in (True, False):
+        raise ValueError("açık içerik bilinmiyor (sözü taranmamış): metadata.json → acik_icerik true/false")
+    if meta.get("dil") not in RN_DIL:
+        raise ValueError(f"söz dili RouteNote listesinde eşlenmemiş: {meta.get('dil')!r} (routenote.RN_DIL)")
+    if ses.stat().st_size > EN_BUYUK_SES:
+        raise ValueError(f"ses {ses.stat().st_size / 2**20:.1f} MB; tarayıcıdan en çok {EN_BUYUK_SES // 2**20} MB")
+    with Image.open(kapak) as im:
+        if im.size != (3000, 3000) or im.mode != "RGB" or kapak.stat().st_size >= 25 * 2**20:
+            raise ValueError(f"kapak RouteNote kuralına uymuyor: {im.size} {im.mode} {kapak.stat().st_size} B")
+
+
+def album_bilgisi(s, meta: dict, yayin_tarihi: date, tur: str, spotify_id: str | None = None) -> None:
+    """1. adım (Album Details), `paket._routenote_formu` 1–15 ile aynı sıra. Kaydetmez. Alanlar `on_kontrol`'den
+    geçmiş olmalı."""
     sanatci = meta["sanatci"]
     yazarlar_ = yazarlar(meta)
-    if not yazarlar_ or any(a == paket.SOYAD_YOK or s_ == paket.SOYAD_YOK for a, s_ in yazarlar_):
-        raise ValueError(f"yazar ad/soyadı eksik: {yazarlar_}")
     _sohbeti_kapat(s)
-    _sec(s, "#edit_album_info_language", paket.DIL_ADI.get(meta["dil"], "English"))
+    _sec(s, "#edit_album_info_language", RN_DIL[meta["dil"]])
     s.fill("#edit_album_info_title", meta["baslik"])
     s.fill("#album_version", "")
     _isaretle(s, "#Yes2")  # cover içeriyor
@@ -281,6 +324,9 @@ def magazalar(s, upc: str) -> None:
         raise RuntimeError(f"mağaza kapatılamadı: {acik}")
     if not s.is_checked("#exclud"):
         s.click("#excluds")  # kutu gizli, etiketi düğme
+    if not s.is_checked("#exclud") or s.is_checked("#includ"):
+        # Include kalırsa beş ülke yayının TEK bölgesi olur: mekanik lisansın olmadığı ülkeler
+        raise RuntimeError("bölge modu Exclude'a geçmedi; mağazalar kaydedilmedi")
     for ulke in HARIC_BOLGELER:
         if any(x.startswith(ulke) for x in _secili_bolgeler(s)):
             continue
@@ -336,10 +382,17 @@ def tarihleri_guncelle(s, upc: str, gun: date) -> None:
     _bekle_adres(s, "/edit_album/", "yeni yayın tarihini")
 
 
-def dagit(s, upc: str) -> None:
-    """Son adım: şartları kabul (`#submit_chk`) + "Distribute Free". Geri alınamaz: ses ve playlist değişikliği
-    bundan sonra yapılamıyor. Henüz canlıda sınanmadı (ilk gerçek gönderim Scryne'ın onayıyla); düğmeden sonra
-    beklenmeyen bir onay penceresi çıkarsa tıklamaz, durur."""
+def _acik_pencereler(s) -> list[str]:
+    return s.evaluate("""() => [...document.querySelectorAll('.rn-modal-container, [role=dialog], .modal')]
+        .filter(e => e.offsetWidth).map(e => e.innerText.trim().slice(0, 300))""")
+
+
+def dagit(s, upc: str, son_tiktan_once=None) -> None:
+    """Son adım: şartları kabul (`#submit_chk`) + "Distribute Free". Düğme sayfanın `free()`'sini çağırır: tarih
+    doğrulaması, sonra kendi onay penceresi (`#agree_terms`, "No further changes can be made…") ve "Complete Release"
+    (`#rn_btn_ok`) formu gönderir (son.html, 2026-10-15). Geri alınamaz. Beklenmeyen bir pencere (tarih, sanatçı rolü)
+    çıkarsa tıklamaz, durur. `son_tiktan_once`: "Complete Release"tan hemen önce çağrılır (yarıda kalan gönderim
+    yeniden denenmesin diye işaret)."""
     if "/edit_album/" not in s.url or not s.locator("#submit_chk").count():
         s.goto(f"{RN}/edit_album/{upc}", referer=f"{RN}/editalbum/{upc}")
         s.wait_for_load_state("networkidle")
@@ -349,18 +402,27 @@ def dagit(s, upc: str) -> None:
         raise RuntimeError("yayının dört adımı tamamlanmamış, gönderilmedi")
     _isaretle(s, "#submit_chk")
     s.locator('input[value="Distribute Free"]').click()
+    onay = s.locator("#agree_terms")
+    try:
+        onay.wait_for(state="visible", timeout=15000)
+    except Exception as e:  # noqa: BLE001 — Playwright zaman aşımı: başka bir pencere ya da hiçbir şey
+        raise RuntimeError(f"gönderim onay penceresi açılmadı; açık pencere: {_acik_pencereler(s)}") from e
+    if "Free Distribution" not in onay.inner_text():
+        raise RuntimeError(f"beklenmeyen onay penceresi: {onay.inner_text()[:200]!r}")
+    if son_tiktan_once:
+        son_tiktan_once()
+    with s.expect_navigation(timeout=120000):
+        s.click("#agree_terms #rn_btn_ok")
     s.wait_for_load_state("networkidle")
-    s.wait_for_timeout(3000)
     if s.locator('input[value="Distribute Free"]').is_visible():
-        pencere = s.evaluate("""() => [...document.querySelectorAll('.rn-modal-container, [role=dialog], .modal')]
-            .filter(e => e.offsetWidth).map(e => e.innerText.trim().slice(0, 300))""")
-        raise RuntimeError(f"Distribute sonrası sayfa değişmedi; onay penceresi: {pencere}")
+        raise RuntimeError(f"Complete Release sonrası yayın hâlâ taslakta; açık pencere: {_acik_pencereler(s)}")
 
 
 class RouteNote:
     """Formu tarayıcıyla dolduran dağıtımcı. Adım adım ilerler, her adımın sonunda RouteNote kaydeder; yarıda kalırsa
     taslağın UPC'si `metadata.json` → `routenote`'ta durur ve sonraki deneme aynı taslaktan sürer (yeni taslak
-    açılmaz). `gonder=False`: dört adım tamamlanır, "Distribute" basılmaz (taslak, insan kontrol eder)."""
+    açılmaz). `gonder=False`: dört adım tamamlanır, "Distribute" basılmaz (taslak, insan kontrol eder).
+    Adımlar: olusturuldu → album → ses_kaydedildi → ses → kapak → hazir → (gonderiliyor) → gonderildi."""
 
     ad, otomatik = "routenote", True
 
@@ -380,7 +442,7 @@ class RouteNote:
     def yukle(self, calisma: Path, d, yayin_tarihi: date, gonder: bool = True) -> dict:
         from playwright.sync_api import sync_playwright
 
-        from yanki import durum, tunearo
+        from yanki import dosya, durum, tunearo
 
         p = durum.klasor(calisma, d.kimlik) / "paket"
         meta_yolu = p / "metadata.json"
@@ -390,11 +452,19 @@ class RouteNote:
         if ses is None or kapak is None:
             raise ValueError(f"pakette FLAC ya da kapak yok ({p}); RouteNote WAV almıyor: yanki paketle --yeniden")
         kayit = meta.get("routenote") or {}
+        if kayit.get("adim") == "gonderiliyor":
+            raise RuntimeError(
+                f"son gönderim yarıda kaldı: RouteNote panelinde (Discography) yayına bak. Gönderildiyse `yanki "
+                f"routenote gonderildi {d.kimlik}`, taslakta duruyorsa `yanki routenote gonderilmedi {d.kimlik}`")
+        if kayit.get("adim") not in ("hazir", "gonderildi"):
+            on_kontrol(meta, ses, kapak)
+        # inceleme 5–10 iş günü: daha yakın tarih incelemede geçer (odadaki pencere de bu tabanı gösteriyor)
+        yayin_tarihi = max(yayin_tarihi, date.today() + timedelta(days=YAYIN_ASGARI_GUN))
 
         def isle(**alan):
             kayit.update(alan)
             meta["routenote"] = kayit
-            meta_yolu.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
+            dosya.json_yaz(meta_yolu, meta)
 
         tur = tunearo.tur_sec(d.analiz.get("stil", ""), (d.kunye or {}).get("sanatci_turleri"))
         with sync_playwright() as pw:
@@ -411,6 +481,8 @@ class RouteNote:
                     s.click("#edit-album-save-image")
                     _bekle_adres(s, "/edit_album/", "yeni yayını")
                     upc = s.url.rstrip("/").split("/")[-1]
+                    if not UPC.fullmatch(upc):
+                        raise RuntimeError(f"yeni yayının UPC'si adresten okunamadı: {s.url}")
                     isle(upc=upc, adim="olusturuldu", tarih=date.today().isoformat())
                 if kayit.get("adim") == "olusturuldu":
                     s.goto(f"{RN}/editalbum/{upc}")
@@ -423,6 +495,8 @@ class RouteNote:
                     ses_yukle(s, upc, ses, meta["baslik"])
                     s.click("#edit-submit")
                     _bekle_adres(s, "trackmetadata", "sesi")
+                    isle(adim="ses_kaydedildi")  # yarıda kalırsa ses ikinci kez yüklenmez (ikinci parça olurdu)
+                if kayit.get("adim") == "ses_kaydedildi":
                     parca_bilgisi(s, upc, meta)
                     s.click("#edit-submit")
                     _bekle_adres(s, "confirm_upload", "parça bilgisini")
@@ -445,7 +519,7 @@ class RouteNote:
                     if eski < date.today() + timedelta(days=YAYIN_ASGARI_GUN):  # taslak beklerken tarih yaklaştı
                         tarihleri_guncelle(s, upc, yayin_tarihi)
                         isle(yayin_tarihi=yayin_tarihi.isoformat())
-                    dagit(s, upc)
+                    dagit(s, upc, son_tiktan_once=lambda: isle(adim="gonderiliyor"))
                     isle(adim="gonderildi", gonderim=date.today().isoformat())
             finally:
                 b.close()

@@ -36,6 +36,8 @@ class Kaynak:
     nereden: str  # "klasor" | "youtube:<id>"
     baslik: str
     sure_sn: float
+    # Seçimde tutturulan beklenen süre: LRCLIB'in `/get`'i başka sürümü verdiyse yedek sürümlerden biri
+    beklenen_sn: float | None = None
 
 
 @dataclass(frozen=True)
@@ -55,6 +57,19 @@ def sec(adaylar: list[Aday], beklenen_sn: float | None) -> Aday:
     if not temiz:
         raise KaynakYok(f"uygun video yok (beklenen süre {beklenen_sn}, {len(adaylar)} aday)")
     return temiz[0]
+
+
+def surumle_sec(adaylar: list[Aday], sureler: list[float]) -> tuple[Aday, float]:
+    """`sec` beklenen süreye uyan aday bulamadığında: YouTube'un sırasıyla ilk temiz adayın süresine ±TOLERANS uyan
+    LRCLIB sürümü. LRCLIB'in `/get`'i bazen başka sürümü veriyor (Dark Horse 297 sn, kayıt 216; Havana 172, kayıt 219;
+    2026-10-15'te 6 şarkı bu yüzden `hata`daydı). Sıra YouTube'un: süre başka bir düzenlemeye (No Rap, radio edit)
+    tesadüfen uyarsa resmî ses önce gelir."""
+    for a in adaylar:
+        if ISTENMEYEN.search(a.baslik) or a.sure_sn is None:
+            continue
+        if yakin := [s for s in sureler if abs(a.sure_sn - s) <= TOLERANS_SN]:
+            return a, min(yakin, key=lambda s: abs(a.sure_sn - s))
+    raise KaynakYok(f"uygun video yok ({len(sureler)} LRCLIB sürümünün süresi {len(adaylar)} adayın hiçbirine uymadı)")
 
 
 def klasorden(klasor: Path, kimlik: str) -> Path | None:
@@ -136,7 +151,9 @@ def _ydl_ayar(**ek) -> dict:
 
 
 def hazirla(kimlik: str, sanatci: str, ad: str, beklenen_sn: float | None, klasor: Path, calisma: Path,
-            youtube: str | None = None) -> Kaynak:
+            youtube: str | None = None, yedek_sureler: list[float] | None = None) -> Kaynak:
+    """`yedek_sureler`: aynı şarkının diğer LRCLIB sürümlerinin süreleri; beklenen süreye uyan video yoksa onlara
+    bakılır (`surumle_sec`), tutturulan süre `Kaynak.beklenen_sn`'de döner."""
     hedef = calisma / "kaynak.wav"
     if yerel := klasorden(klasor, kimlik):
         ses.wav48(yerel, hedef)
@@ -144,7 +161,15 @@ def hazirla(kimlik: str, sanatci: str, ad: str, beklenen_sn: float | None, klaso
     else:
         adaylar = youtube_adaylari(youtube or f"{sanatci} {ad} official audio")
         # Scryne videoyu sabitlediyse süre kapısı uyarıya döner, seçim yine de onun videosu
-        secilen = adaylar[0] if youtube else sec(adaylar, beklenen_sn)
+        if youtube:
+            secilen = adaylar[0]
+        else:
+            try:
+                secilen = sec(adaylar, beklenen_sn)
+            except KaynakYok:
+                if not yedek_sureler:
+                    raise
+                secilen, beklenen_sn = surumle_sec(adaylar, yedek_sureler)
         ham = youtube_indir(secilen.id, calisma / "kaynak_ham.indirilen")  # Opus/WebM ya da AAC: ffmpeg içeriğe bakar
         ses.wav48(ham, hedef)
         ham.unlink(missing_ok=True)
@@ -152,4 +177,4 @@ def hazirla(kimlik: str, sanatci: str, ad: str, beklenen_sn: float | None, klaso
     sure = ses.sure(hedef)
     if beklenen_sn is not None and abs(sure - beklenen_sn) > TOLERANS_SN and not youtube:
         raise KaynakYok(f"kaynak süresi {sure:.1f} sn, beklenen {beklenen_sn:.1f} sn (önizleme ya da farklı sürüm)")
-    return Kaynak(hedef, nereden, baslik, sure)
+    return Kaynak(hedef, nereden, baslik, sure, beklenen_sn)

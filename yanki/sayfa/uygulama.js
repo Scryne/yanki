@@ -350,7 +350,8 @@ addEventListener("keydown", (e) => {
   if (e.key === "?") { e.preventDefault(); kisayolPenceresi(); return; }
   if (e.key === "/") { e.preventDefault(); $("#ara")?.focus(); return; }
   if (!panelTus || e.target.closest?.("summary, .dalga-kap")) return;
-  if (e.key === " " && e.target.closest?.("button, a")) return; // odaktaki düğmenin kendi tıklaması
+  // odaktaki düğmenin, bağlantının, anahtarın kendi tıklaması (Enter başka bir düğmede onay vermesin)
+  if ((e.key === " " || e.key === "Enter") && e.target.closest?.("button, a, [role=switch], summary")) return;
   panelTus(e);
 });
 
@@ -716,7 +717,7 @@ async function yayinGoster() {
   if (d.profiller.length > 1) parcalar.push(el("p", { class: "uyari", role: "alert" },
     `Sanatçı profili bölünmüş: parçalar ${d.profiller.length} ayrı Spotify profilinde. Dağıtımcıdan birleştirme iste.`));
   parcalar.push(d.sarkilar.length ? el("ul", { class: "kayitlar" }, ...d.sarkilar.map(yayinSatiri))
-    : el("p", { class: "bos-kutu" }, "Henüz yüklenmiş şarkı yok. Paketi yükleyince: yanki yuklendi <kimlik>"));
+    : el("p", { class: "bos-kutu" }, "Henüz yüklenmiş şarkı yok. Paketler Sanatçı görünümünden RouteNote'a gönderilir."));
   parcalar.push(takvimBolumu(d.takvim));
   if (d.olaylar?.length) parcalar.push(olayBolumu(d.olaylar));
   doldur(ana, ...parcalar.filter(Boolean));
@@ -1039,8 +1040,8 @@ function kazancPaneli() {
     el("p", { class: "kazanc-alt" }, "Yükleniyor…"));
   const para = (n, birim) => new Intl.NumberFormat("tr-TR", { style: "currency", currency: birim || "GBP" }).format(n || 0);
   api("/api/kazanc").then((k) => {
-    if (!k.bagli) { doldur(kutu, el("h2", {}, "Kazanç"), el("p", { class: "kazanc-alt" }, k.dagitimci_yok
-      ? "Dağıtımcı seçilmedi. Yayın baştan kurulunca kazanç raporları burada görünür." : "Tunearo anahtarı yok (.env).")); return; }
+    if (!k.bagli) { doldur(kutu, el("h2", {}, "Kazanç"), el("p", { class: "kazanc-alt" }, k.mesaj
+      || "Dağıtımcının kazanç raporu bağlı değil.")); return; }
     if (k.ulasilamadi) {
       doldur(kutu, el("h2", {}, "Kazanç"), el("p", { class: "kazanc-toplam soluk-sayi" }, "—"),
         el("p", { class: "kazanc-alt", title: k.hata }, k.erisim_kapali ? "Tunearo API erişimi kapalı. Hesap sahibi açınca raporlar burada görünür."
@@ -1202,7 +1203,9 @@ function gonderPenceresi(x, s) {
     } catch (e) { dugme.removeAttribute("aria-busy"); dugme.disabled = false; bildir(e.message, true); return; }
     sanatciGoster();
   } }, "RouteNote'a gönder");
-  kutu.addEventListener("input", () => { dugme.disabled = kutu.value.trim().toLocaleLowerCase("tr") !== x.ad.trim().toLocaleLowerCase("tr"); });
+  // sunucuyla aynı kural (sanatci.onay_metni): I/İ/ı farkı ve büyük-küçük harf aranmaz
+  const sade = (s) => s.trim().replace(/[Iİı]/g, "i").toLowerCase();
+  kutu.addEventListener("input", () => { dugme.disabled = sade(kutu.value) !== sade(x.ad); });
   const yakin = !x.yayin_tarihi || new Date(x.yayin_tarihi) < new Date(Date.now() + 10 * 864e5);
   const dlg = pencere(`"${x.ad}" RouteNote'a gönderilsin mi?`, [
     el("p", {}, x.hal === "kuyruk" ? "Taslak açılır, dört adım doldurulur ve yayın incelemeye gönderilir." : "Hazır taslak incelemeye gönderilir.",
@@ -1224,12 +1227,13 @@ function isPaneli(is) {
   if (!is || !is.ad) { panel.append(el("p", { class: "ipucu" }, "Odadan başlatılan bir iş yok. Taslak ya da gönderim buradan izlenir.")); return panel; }
   const hata = is.kod != null && is.kod !== 0;
   const oturumYok = (is.gunluk_son || []).some((x) => /oturumu yok|OturumYok/.test(x));
-  const hal = is.suruyor ? ["sürüyor", "suruyor"] : is.sahipsiz ? ["izlenemiyor", ""] : hata ? ["hata", "sorun"] : ["bitti", ""];
+  const hal = is.suruyor ? ["sürüyor", "suruyor"] : is.sahipsiz ? ["bitti (sonuç günlükte)", ""] : hata ? ["hata", "sorun"] : ["bitti", ""];
   panel.append(
     el("p", { class: "gece-satir" }, is.suruyor ? el("span", { class: "nabiz", "aria-hidden": "true" }) : el("span", { class: `nokta ${hal[1]}` }),
       el("b", {}, `${IS_ADI[is.ad] || is.ad}${is.kimlik ? ` · ${is.kimlik}` : ""}`), el("span", { class: "ipucu" }, `${hal[0]} · ${saatDakika(is.baslangic)}`)),
     oturumYok ? el("p", { class: "uyari" }, "RouteNote oturumu düşmüş. Aşağıdan giriş yap, sonra işi yeniden başlat; taslak kaldığı adımdan sürer.") : null,
-    is.sahipsiz ? el("p", { class: "ipucu" }, `Oda yeniden açıldı; iş arka planda bitmiş olabilir. Günlük: ${is.gunluk}`) : null,
+    is.sahipsiz ? el("p", { class: "ipucu" }, is.suruyor ? "Oda yeniden açıldı; iş arka planda sürüyor, bitince yeni iş başlatılabilir."
+      : `Oda yeniden açılmadan önce bitti; sonucu günlükte: ${is.gunluk}`) : null,
     el("pre", { class: "is-gunluk", tabindex: "0", "aria-label": "İş günlüğü" }, (is.gunluk_son || []).slice(-14).join("\n") || "…"));
   return panel;
 }
@@ -1333,13 +1337,22 @@ function listeCiz(secili = decodeURIComponent(location.hash.slice(1)) || "_pano"
 }
 
 const GORUNUM = { _pano: panoGoster, _kesif: kesifGoster, _yayin: yayinGoster, _kulak: kulakGoster, _sanatci: sanatciGoster };
-async function yenile(kimlik = decodeURIComponent(location.hash.slice(1)) || "_pano") {
+function acikKimlik() {
+  try { return decodeURIComponent(location.hash.slice(1)) || "_pano"; } catch { return "_pano"; }
+}
+async function yenile(kimlik = acikKimlik()) {
+  // önceki şarkının hızlı karşılaştırma kısayolları başka görünümde onay/çal yapmasın; şarkı sayfası kendisi kurar
+  panelTus = null;
   await listeGoster(kimlik);
   gorunumSayilari();
   if (GORUNUM[kimlik]) await GORUNUM[kimlik]();
   else await sarkiGoster(kimlik);
 }
-addEventListener("hashchange", () => { calan?.ses.pause(); yenile().then(() => $("#ana").focus({ preventScroll: true })); scrollTo(0, 0); });
+addEventListener("hashchange", () => {
+  calan?.ses.pause();
+  yenile().then(() => $("#ana").focus({ preventScroll: true }), (e) => bildir(`Sayfa açılamadı: ${e.message}`, true));
+  scrollTo(0, 0);
+});
 $("#ara").addEventListener("input", (e) => { aramaMetni = e.target.value; listeCiz(); });
 $("#ara").addEventListener("keydown", (e) => {
   if (e.key === "Escape") { e.target.value = ""; aramaMetni = ""; listeCiz(); e.target.blur(); }
@@ -1348,7 +1361,7 @@ $("#ara").addEventListener("keydown", (e) => {
 yenile().catch((e) => bildir(`Sunucuya ulaşılamadı: ${e.message}`, true));
 // arka planda ilerleyen aşamalar: liste her 30 sn; açık şarkı değiştiyse (yeni adaylar) ve bir şey çalmıyorsa sayfa da
 setInterval(async () => {
-  const kimlik = decodeURIComponent(location.hash.slice(1)) || "_pano";
+  const kimlik = acikKimlik();
   try {
     const liste = await listeGoster(kimlik);
     gorunumSayilari();

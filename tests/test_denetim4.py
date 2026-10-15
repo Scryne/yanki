@@ -234,11 +234,11 @@ def test_yarim_yuklemeli_paket_odadan_reddedilemez(tmp_path):
     from yanki import ayarlar, sunucu
 
     c = tmp_path / "calisma"
-    _paket(c, kimlik="yarim", tunearo={"release_id": "rel-1", "durum": "draft"})
+    _paket(c, kimlik="yarim", routenote={"upc": "5064150700802", "adim": "kapak"})
     _paket(c, kimlik="temiz")
     oda = TestClient(sunucu.uygulama(ayarlar.yukle(), c), base_url="http://127.0.0.1:8765")
     r = oda.post("/api/sarki/yarim/reddet", json={"neden": "beğenmedim"})
-    assert r.status_code == 409 and "geri-cek" in r.json()["detail"]
+    assert r.status_code == 409 and "taslak-silindi" in r.json()["detail"]
     assert oda.post("/api/sarki/temiz/reddet", json={"neden": "x"}).status_code == 200
 
 

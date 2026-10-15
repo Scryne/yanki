@@ -347,4 +347,16 @@ def test_kazanc_dagitimci_yokken_istek_atmaz(ortam, monkeypatch):
     gercek = paket.yayin_ayarlari
     monkeypatch.setattr(paket, "yayin_ayarlari", lambda yol: replace(gercek(yol), dagitimci=""))
     monkeypatch.setattr(tunearo, "kazanc", lambda *_a, **_k: pytest.fail("Tunearo'ya istek atıldı"))
-    assert istemci.get("/api/kazanc").json() == {"bagli": False, "dagitimci_yok": True}
+    assert istemci.get("/api/kazanc").json()["bagli"] is False
+
+
+def test_yazan_istek_yalniz_odanin_kendi_kokeninden(ortam):
+    """Yerelde çalışan başka bir sayfa (başka port) da onay/gönderim uçlarına ulaşamamalı; tarayıcısız istek geçer."""
+    istemci, _ = ortam
+    yol = "/api/sarki/yok-boyle/reddet"
+    for basliklar in ({"Origin": "http://localhost:3000"}, {"Origin": "http://evil.example"}, {"Origin": "null"},
+                      {"Sec-Fetch-Site": "same-site"}, {"Sec-Fetch-Site": "cross-site"}):
+        assert istemci.post(yol, json={"neden": ""}, headers=basliklar).status_code == 403, basliklar
+    kendi = {"Origin": ODA, "Sec-Fetch-Site": "same-origin"}
+    assert istemci.post(yol, json={"neden": ""}, headers=kendi).status_code == 404  # korumadan geçti, şarkı yok
+    assert istemci.post(yol, json={"neden": ""}).status_code == 404

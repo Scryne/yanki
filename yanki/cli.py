@@ -1,6 +1,7 @@
 """yanki komut satırı."""
 
 import argparse
+import json
 import shutil
 import sys
 from pathlib import Path
@@ -270,12 +271,60 @@ def _kesif_ayarlari(kok: Path) -> dict:
         return tomllib.load(f)
 
 
+def _routenote_gonderim(calisma: Path, args: argparse.Namespace) -> int:
+    """Son tıktan sonra süreç düştüyse (`adim = gonderiliyor`) hat yeniden denemez: Scryne panele bakar ve sonucu
+    söyler. `gonderildi`: yükleme kaydedilir, şarkı `yuklendi`; `gonderilmedi`: taslak `hazir`a döner.
+    `taslak-silindi`: panelden silinen taslağın kaydı geçmişe (paket yeniden hazırlanabilir, yeni taslak açılır)."""
+    from datetime import date
+
+    from yanki import dosya, takip
+
+    if not args.kimlik:
+        print("şarkı kimliği gerekli: yanki routenote gonderildi <kimlik>")
+        return 1
+    meta_yolu = durum.klasor(calisma, args.kimlik) / "paket" / "metadata.json"
+    try:
+        meta = json.loads(meta_yolu.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        print(f"✗ {args.kimlik}: paket yok")
+        return 1
+    rn = meta.get("routenote") or {}
+    if args.islem == "taslak-silindi":
+        if not rn.get("adim") or rn.get("adim") == "gonderildi":
+            print(f"✗ {args.kimlik}: açık taslak kaydı yok (adım: {rn.get('adim') or '—'})")
+            return 1
+        meta.setdefault("routenote_gecmisi", []).append({**meta.pop("routenote"), "silindi": date.today().isoformat()})
+        dosya.json_yaz(meta_yolu, meta)
+        print(f"{args.kimlik}: taslak kaydı geçmişe alındı; sonraki yükleme yeni taslak açar")
+        return 0
+    if rn.get("adim") != "gonderiliyor":
+        print(f"✗ {args.kimlik}: yarıda kalan gönderim yok (adım: {rn.get('adim') or '—'})")
+        return 1
+    if args.islem == "gonderilmedi":
+        rn["adim"] = "hazir"
+        dosya.json_yaz(meta_yolu, {**meta, "routenote": rn})
+        print(f"{args.kimlik}: taslak gönderime hazır olarak işaretlendi")
+        return 0
+    rn.update(adim="gonderildi", gonderim=rn.get("gonderim") or date.today().isoformat())
+    dosya.json_yaz(meta_yolu, {**meta, "routenote": rn})
+    takip.yukleme_kaydet(calisma, args.kimlik, {"upc": rn.get("upc"), "isrc": rn.get("isrc"),
+                                                "yayin_tarihi": rn.get("yayin_tarihi"), "dagitimci": "routenote"},
+                         "routenote")
+    with durum.guncelle(calisma, args.kimlik) as d:
+        if d.asama == "paketlendi":
+            d.gec("yuklendi")
+    print(f"{args.kimlik}: gönderildi olarak kaydedildi (UPC {rn.get('upc')}), şarkı yuklendi")
+    return 0
+
+
 def _routenote(args: argparse.Namespace) -> int:
     """RouteNote oturumu (`yanki/routenote.py`): `giris` tarayıcıyı açar, Scryne bir kez elle girer; `kesif` bir
     sayfanın yapısını `calisma/_spike/routenote/`'a kaydeder (geliştirme)."""
     from yanki import routenote
 
     calisma = ayarlar.yukle().kok / "calisma"
+    if args.islem in ("gonderildi", "gonderilmedi", "taslak-silindi"):
+        return _routenote_gonderim(calisma, args)
     if args.islem == "giris":
         print("RouteNote açılıyor: giriş yap, sonra pencere kendiliğinden kapanır (en çok 10 dk).")
         ok = routenote.giris(calisma)
@@ -958,12 +1007,14 @@ def _erisim_yok(calisma: Path, e) -> None:
 
 
 def _takvim_hatirlat(kok: Path) -> int:
-    """Sırası gelen paketler: dağıtımcının API'si varsa (Tunearo) hepsi yüklenir, yoksa ilki bildirilir (bir kez).
-    `[takvim] haftada = 0` iken sıradaki her paket bu koşuda gider. Tunearo'nun hesap parça kotası dolarsa ("Track
-    limit reached") durur ve bildirir; tek bir paketin hatası diğerlerini durdurmaz."""
+    """Sırası gelen paketler: dağıtımcı kendisi yükleyebiliyorsa ve gece yüklemesi açıksa (`[routenote] gece`) hepsi
+    yüklenir, yoksa ilki bildirilir (bir kez). `[takvim] haftada = 0` iken sıradaki her paket bu koşuda gider. Tek bir
+    paketin hatası diğerlerini durdurmaz; oturum düştüyse (RouteNote) ya da hesap kotası dolduysa (Tunearo) durur."""
     from datetime import date
 
-    from yanki import dagitim, paket, tunearo
+    from playwright.sync_api import Error as TarayiciHatasi
+
+    from yanki import dagitim, paket, routenote, tunearo
 
     calisma = kok / "calisma"
     ad = paket.yayin_ayarlari(kok / "config" / "yayin.toml").dagitimci
@@ -987,9 +1038,10 @@ def _takvim_hatirlat(kok: Path) -> int:
     d = dagitim.sec(ad, kok)
     if not d.otomatik or not getattr(d, "gece", True):  # RouteNote: takvimde yükleme açık değilse yalnız bildir
         s = sirasi_gelen[0]
+        nasil = (f"Dinleme odası → Sanatçı → Gönder… (ya da yanki yukle {s.kimlik} --gonder)" if d.otomatik
+                 else f"calisma/{s.kimlik}/paket/YUKLE.md ile yükle, sonra yanki yuklendi {s.kimlik} --isrc …")
         bildir("takvim", f"yükleme sırası: {s.ad}",
-               f"{s.sanatci} — {s.ad}: calisma/{s.kimlik}/paket/YUKLE.md hazır; önerilen yayın tarihi "
-               f"{s.yayin_tarihi:%Y-%m-%d}. Yükleyince: yanki yuklendi {s.kimlik} --isrc …",
+               f"{s.sanatci} — {s.ad} paketi hazır; önerilen yayın tarihi {s.yayin_tarihi:%Y-%m-%d}. {nasil}",
                f"takvim:{s.kimlik}:{s.yukleme}")
         return 0
     yuklenen, hatali = [], 0
@@ -999,6 +1051,12 @@ def _takvim_hatirlat(kok: Path) -> int:
         except tunearo.ErisimYok as e:
             _erisim_yok(calisma, e)
             print(f"takvim: {len(sirasi_gelen) - len(yuklenen)} paket kuyrukta bekliyor")
+            break
+        except routenote.OturumYok as e:  # her paket için tarayıcı yeniden açılmasın; Scryne'a günde bir kez
+            print(f"takvim: {e}; {len(sirasi_gelen) - len(yuklenen)} paket kuyrukta bekliyor")
+            bildir("dagitim", "RouteNote oturumu düştü",
+                   "Gece yüklemesi duruyor: dinleme odası → Sanatçı → RouteNote'a giriş yap (ya da yanki routenote "
+                   "giris). Taslaklar kaldıkları adımdan sürer.", f"routenote:oturum:{date.today()}")
             break
         except tunearo.TunearoHatasi as e:
             if e.kod == 403 and "limit" in str(e).lower():
@@ -1024,23 +1082,28 @@ def _takvim_hatirlat(kok: Path) -> int:
                    "almıyor. girdi/liste.toml'da şarkıya yazarlar = [\"Ad Soyad\"] ekle (sonraki koşu paketleyip "
                    "yükler) ya da dinleme odasında reddet.", f"yazar_yok:{s.kimlik}")
             continue
-        except (LookupError, RuntimeError, OSError) as e:  # bozuk paket, ağ: sıradaki pakete geç
+        except (LookupError, RuntimeError, OSError, TarayiciHatasi) as e:  # bozuk paket, ağ, sayfa: sıradakine
             print(f"✗ {s.sanatci} — {s.ad}: {type(e).__name__}: {e}")
             hatali += 1
             continue
         yuklenen.append((s, bilgi))
-        print(f"takvim: {s.sanatci} — {s.ad} {d.ad}'ya yüklendi, incelemede (yayın {s.yayin_tarihi:%Y-%m-%d}, "
-              f"yayın kimliği {bilgi.get('release_id')})", flush=True)
+        print(f"takvim: {s.sanatci} — {s.ad} {d.ad}'ya yüklendi, incelemede (yayın "
+              f"{bilgi.get('yayin_tarihi') or s.yayin_tarihi}, yayın {_yayin_kimligi(bilgi)})", flush=True)
     adi = paket.DAGITIMCI_ADI.get(d.ad, d.ad)
     if len(yuklenen) == 1:
         s, bilgi = yuklenen[0]
         bildir("dagitim", f"yüklendi: {s.ad}", f"{s.sanatci} — {s.ad} {adi} incelemesine gönderildi; yayın tarihi "
-               f"{s.yayin_tarihi:%Y-%m-%d}", f"yukleme:{s.kimlik}:{bilgi.get('release_id')}")
+               f"{bilgi.get('yayin_tarihi') or s.yayin_tarihi}", f"yukleme:{s.kimlik}:{_yayin_kimligi(bilgi)}")
     elif yuklenen:  # toplu yüklemede tek bildirim (her şarkıya ayrı bildirim yağmuru olmasın)
         bildir("dagitim", f"{len(yuklenen)} şarkı yüklendi",
                f"{adi} incelemesine gönderildi: " + ", ".join(s.ad for s, _ in yuklenen),
-               "yukleme:" + ",".join(str(b.get("release_id")) for _, b in yuklenen))
+               "yukleme:" + ",".join(f"{s.kimlik}:{_yayin_kimligi(b)}" for s, b in yuklenen))
     return 1 if hatali else 0
+
+
+def _yayin_kimligi(bilgi: dict) -> str:
+    """Dağıtımcıdaki yayının kimliği: Tunearo `release_id`, RouteNote UPC."""
+    return str(bilgi.get("release_id") or bilgi.get("upc") or "?")
 
 
 def _takvim(args: argparse.Namespace) -> int:
@@ -1062,8 +1125,12 @@ def _takvim(args: argparse.Namespace) -> int:
 
 
 def _yukle(args: argparse.Namespace) -> int:
-    """Paketi API'li dağıtımcıya şimdi yükler (takvimi beklemeden). --taslak: her şey yüklenir, gönderilmez."""
+    """Paketi dağıtımcıya şimdi yükler (takvimi beklemeden). Varsayılan taslak: her şey yüklenir, gönderilmez.
+    `--gonder` geri alınamaz gönderim ("Distribute": şartlar kabul edilir); odadaki "Gönder…" bunu ad yazdırarak
+    çağırır."""
     from datetime import date, timedelta
+
+    from playwright.sync_api import Error as TarayiciHatasi
 
     from yanki import dagitim
 
@@ -1076,16 +1143,16 @@ def _yukle(args: argparse.Namespace) -> int:
     try:
         tarih = (date.fromisoformat(args.yayin_tarihi) if args.yayin_tarihi
                  else date.today() + timedelta(days=dagitim.takvim_oku(yayin_yolu).yayin_on_gun))
-        bilgi = dagitim.otomatik_yukle(a.kok / "calisma", d, args.kimlik, tarih, gonder=not args.taslak)
-    except (ValueError, LookupError, RuntimeError) as e:  # bozuk paket, şarkı yok, Tunearo hatası
-        print(f"✗ {args.kimlik}: {e}")
+        bilgi = dagitim.otomatik_yukle(a.kok / "calisma", d, args.kimlik, tarih, gonder=args.gonder)
+    except (ValueError, LookupError, RuntimeError, OSError, TarayiciHatasi) as e:  # bozuk paket, oturum, sayfa
+        print(f"✗ {args.kimlik}: {type(e).__name__}: {e}")
         return 1
-    if args.taslak:
-        print(f"taslak hazır ({d.ad}): kapak, parça ve ses yüklendi, gönderilmedi. "
-              f"Göndermek: yanki yukle {args.kimlik}")
+    if not args.gonder:
+        print(f"taslak hazır ({d.ad}): kapak, parça ve ses yüklendi, gönderilmedi (UPC {bilgi.get('upc') or '—'}). "
+              f"Göndermek: dinleme odası → Sanatçı → Gönder…, ya da yanki yukle {args.kimlik} --gonder")
     else:
-        print(f"gönderildi ({d.ad}): yayın {bilgi.get('release_id') or bilgi.get('upc')}, "
-              f"durum {bilgi.get('dagitim_durumu')}, yayın tarihi {bilgi.get('yayin_tarihi')}")
+        print(f"gönderildi ({d.ad}): yayın {_yayin_kimligi(bilgi)}, durum {bilgi.get('dagitim_durumu')}, "
+              f"yayın tarihi {bilgi.get('yayin_tarihi')}")
     return 0
 
 
@@ -1550,7 +1617,10 @@ def main(argv: list[str] | None = None) -> int:
     y.add_argument("--dagitimci", help="varsayılan config/yayin.toml")
     y.set_defaults(fn=_yuklendi)
     rn = alt.add_parser("routenote", help="RouteNote oturumu: bir kez elle giriş (otomatik yükleme bunu kullanır)")
-    rn.add_argument("islem", choices=("giris", "kesif"))
+    rn.add_argument("islem", choices=("giris", "kesif", "gonderildi", "gonderilmedi", "taslak-silindi"),
+                    help="gonderildi/gonderilmedi <kimlik>: yarıda kalan gönderimin paneldeki sonucu; taslak-silindi "
+                         "<kimlik>: panelden silinen taslağın kaydını kapat")
+    rn.add_argument("kimlik", nargs="?")
     rn.add_argument("--url", help="kesif: sayfa adresi (varsayılan panel)")
     rn.add_argument("--ad", default="panel", help="kesif: kayıt adı")
     rn.set_defaults(fn=_routenote)
@@ -1578,9 +1648,11 @@ def main(argv: list[str] | None = None) -> int:
     tm.set_defaults(fn=_temizle)
     tv = alt.add_parser("takvim", help="paketlenmiş şarkıların yükleme sırası ve önerilen yayın tarihleri")
     tv.set_defaults(fn=_takvim)
-    yk = alt.add_parser("yukle", help="paketi dağıtımcıya (RouteNote: tarayıcıyla) şimdi yükle ve incelemeye gönder")
+    yk = alt.add_parser("yukle", help="paketi dağıtımcıya (RouteNote: tarayıcıyla) şimdi taslak olarak yükle")
     yk.add_argument("kimlik")
-    yk.add_argument("--taslak", action="store_true", help="her şeyi yükle ama gönderme (yayın taslakta kalır)")
+    yk.add_argument("--gonder", action="store_true",
+                    help="taslağı incelemeye de gönder (geri alınamaz: Distribute, şartlar kabul edilir)")
+    yk.add_argument("--taslak", action="store_true", help="(varsayılan; eski çağrılar için)")
     yk.add_argument("--yayin-tarihi", help="YYYY-AA-GG (varsayılan bugün + takvim.yayin_on_gun)")
     yk.set_defaults(fn=_yukle)
     kp = alt.add_parser("kapak", help="şarkının moduna göre Pinterest kapağı (paketliyse paketi yeniler)")
@@ -1645,7 +1717,7 @@ def main(argv: list[str] | None = None) -> int:
 
 YAZAN_KOMUTLAR = {"hazirla", "uret", "calistir", "yeniden", "kunye", "paketle", "yuklendi", "kesif", "takip",
                   "temizle", "yedekle", "dagitim-red", "geri-cek", "bastan", "gunduz", "yukle", "dagitim-durum",
-                  "kapak", "yapi"}
+                  "kapak", "yapi", "routenote"}
 
 
 if __name__ == "__main__":

@@ -1,10 +1,10 @@
 """Dinleme sayfası sunucusu (yalnız 127.0.0.1): Scryne adayları dinler, onaylar, aralık işaretler, stili değiştirir,
-reddeder; keşif adaylarını listeye ekler ya da eler; yüklenenlerin yayın durumunu, hattın panosunu, kapakları ve
-Tunearo kazancını görür.
+reddeder; keşif adaylarını listeye ekler ya da eler; yüklenenlerin yayın durumunu, hattın panosunu, kapakları görür;
+Sanatçı görünümünden RouteNote taslağı ve gönderimi başlatır (iş ayrı süreçte, `yanki/sanatci.py → Isci`).
 
-Sunucu motoru çalıştırmaz ve Spotify'a istek atmaz (kota dar; ölçümleri gece koşusu yapar). Dışarıya yalnız iki
-istek: kazanç (Tunearo, 6 saat önbellekli) ve Scryne "başka kapak" deyince Pinterest. Onarım ve yeniden üretim
-istekleri durum.json'a, keşif kararları calisma/kesif/adaylar.json'a ve girdi/liste.toml'a yazılır.
+Sunucu motoru çalıştırmaz ve Spotify'a istek atmaz (kota dar; ölçümleri gece koşusu yapar). Dışarıya yalnız Scryne
+"başka kapak" deyince Pinterest (dağıtımcı Tunearo seçiliyse kazanç da). Onarım ve yeniden üretim istekleri
+durum.json'a, keşif kararları calisma/kesif/adaylar.json'a ve girdi/liste.toml'a yazılır.
 """
 
 import contextlib
@@ -13,7 +13,6 @@ import re
 import threading
 from dataclasses import asdict
 from pathlib import Path
-from urllib.parse import urlparse
 
 import numpy as np
 from fastapi import FastAPI, HTTPException, Request
@@ -118,14 +117,13 @@ KAPAK_BOYUTLARI = (96, 480)
 
 
 def _yarim_yukleme(calisma: Path, kimlik: str) -> bool:
-    """Paketin dağıtımcıda açılmış ama kaydı tamamlanmamış yayını var mı (taslak ya da gönderiliyor)."""
-    import json
-
+    """Paketin dağıtımcıda açılmış yayını var mı (RouteNote taslağı ya da gönderim; eski Tunearo kaydı)."""
     try:
         meta = json.loads((durum.klasor(calisma, kimlik) / "paket" / "metadata.json").read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return False
-    return bool((meta.get("tunearo") or {}).get("release_id"))
+    rn = meta.get("routenote") or {}
+    return bool(rn.get("upc") or rn.get("adim") or (meta.get("tunearo") or {}).get("release_id"))
 
 
 def kapak_kaynagi(calisma: Path, kimlik: str) -> Path | None:
@@ -285,10 +283,12 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None) -> FastA
         if istek.url.hostname not in YEREL_HOSTLAR:
             return JSONResponse({"detail": "dinleme odası yalnız 127.0.0.1 adresinden açılır"}, 403)
         if istek.method not in GUVENLI_YONTEMLER:
+            # köken odanın kendisi olmalı: yerelde çalışan başka bir sayfa (başka port) da yazan uçlara ulaşamasın
             koken = istek.headers.get("origin")
-            if (koken is not None and urlparse(koken).hostname not in YEREL_HOSTLAR) or \
-                    istek.headers.get("sec-fetch-site") == "cross-site":
-                return JSONResponse({"detail": "başka bir siteden gelen istek reddedildi"}, 403)
+            kendisi = f"{istek.url.scheme}://{istek.url.netloc}"
+            if (koken is not None and koken.rstrip("/") != kendisi) or \
+                    istek.headers.get("sec-fetch-site") not in (None, "same-origin", "none"):
+                return JSONResponse({"detail": "başka bir sayfadan gelen istek reddedildi"}, 403)
         return await devam(istek)
 
     def oku(kimlik: str) -> durum.Durum:
@@ -337,14 +337,22 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None) -> FastA
         """Pinterest'ten başka kapak (öncekiler bir daha seçilmez); paketliyse paket yeni kapakla yenilenir."""
         from yanki import paket, pinterest
 
-        d = oku(kimlik)
-        if d.asama not in ("uretildi", "onarim", "onaylandi", "paketlendi"):
-            raise HTTPException(409, "kapak yalnız yüklenmemiş şarkıda değişir (dağıtımcıdaki kapak sabit)")
-        if (durum.klasor(calisma, kimlik) / "kapak_ozel.jpg").exists():
-            raise HTTPException(409, "elle seçilmiş kapak_ozel.jpg var; o kullanılıyor")
+        def uygun() -> durum.Durum:
+            d = oku(kimlik)
+            if d.asama not in ("uretildi", "onarim", "onaylandi", "paketlendi"):
+                raise HTTPException(409, "kapak yalnız yüklenmemiş şarkıda değişir (dağıtımcıdaki kapak sabit)")
+            if (durum.klasor(calisma, kimlik) / "kapak_ozel.jpg").exists():
+                raise HTTPException(409, "elle seçilmiş kapak_ozel.jpg var; o kullanılıyor")
+            if d.asama == "paketlendi" and _yarim_yukleme(calisma, kimlik):
+                raise HTTPException(409, "RouteNote'ta bu paketin taslağı açık; kapak taslakta sabit (taslağı silince: "
+                                         f"yanki routenote taslak-silindi {kimlik})")
+            return d
+
+        uygun()
         with kilit.tek_kosu(calisma / ".yanki.kilit") as alindi:  # paket gece koşusuyla aynı anda yazılmasın
             if not alindi:
                 raise HTTPException(409, "gece ya da gündüz koşusu sürüyor; bitince tekrar dene")
+            d = uygun()  # kilit beklenirken koşu şarkıyı yüklemiş olabilir
             try:
                 pinterest.getir(calisma, d, yeni=(durum.klasor(calisma, kimlik) / "kapak_pinterest.jpg").exists())
             except (OSError, LookupError, ValueError) as e:
@@ -443,9 +451,12 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None) -> FastA
         with guncelle(kimlik) as d:
             if d.asama in ("yuklendi", "yayinda", "reddedildi"):
                 raise HTTPException(409, f"bu aşamada reddedilemez: {d.asama}")
-            if d.asama == "paketlendi" and _yarim_yukleme(calisma, kimlik):
-                raise HTTPException(409, "bu paketin Tunearo'da açılmış bir yayını var (yarım yükleme); önce "
-                                         f"`yanki geri-cek {kimlik}` ya da yüklemenin bitmesini bekle")
+            if d.asama == "paketlendi":
+                if (i := isci.durum(satir=0)) and i.get("suruyor") and i.get("kimlik") == kimlik:
+                    raise HTTPException(409, "bu şarkı için RouteNote işi sürüyor; bitince yeniden dene")
+                if _yarim_yukleme(calisma, kimlik):
+                    raise HTTPException(409, "bu paketin RouteNote'ta açılmış bir taslağı var; önce taslağı panelden "
+                                             f"sil, sonra `yanki routenote taslak-silindi {kimlik}`")
             d.notlar.append({"ret": istek.neden})
             d.gec("reddedildi", istek.neden or None)
         return _ozet(d, calisma)
@@ -587,8 +598,13 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None) -> FastA
             return sanatci.ayar_yaz(a.kok, degisiklik)
         except ValueError as e:
             raise HTTPException(422, str(e)) from e
+        except OSError as e:  # Windows: dosya o an başka bir süreçte açık
+            raise HTTPException(409, f"ayar dosyası yazılamadı ({e.strerror or e}); birazdan yeniden dene") from e
 
     def is_baslat(ad: str, kimlik: str | None = None) -> dict:
+        # koşu kilidi tutuluyken `yanki yukle` kilidi alamayıp çıkar; tarayıcı profili de aynı anda tek pencerede
+        if kosu_durumu(calisma)["suruyor"]:
+            raise HTTPException(409, "gece ya da sürekli koşu sürüyor; bitince yeniden dene")
         try:
             return isci.baslat(ad, kimlik)
         except RuntimeError as e:
@@ -665,10 +681,11 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None) -> FastA
                                  "aday": a.cover.aday_sayisi, "adim": a.cover.adim, "guc": a.cover.guc}}
         except (OSError, ValueError, KeyError):
             ayarlar = {}
-        from yanki import tunearo
+        from yanki import paket, tunearo
 
         uyarilar = []
-        if (e := tunearo.erisim_durumu(calisma)):
+        if paket.yayin_ayarlari(a.kok / "config" / "yayin.toml").dagitimci == "tunearo" and \
+                (e := tunearo.erisim_durumu(calisma)):
             uyarilar.append({"baslik": "Tunearo API erişimi kapalı",
                              "metin": f"{e.get('ilk', '')[:16].replace('T', ' ')}'dan beri her istek reddediliyor; "
                                       "yükleme ve durum yoklaması bekliyor. Hesap sahibi erişimi açınca hat sürer."})
@@ -694,11 +711,14 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None) -> FastA
 
     @app.get("/api/kazanc")
     def kazanc(yenile: bool = False):
-        """Tunearo'daki bizim yayınların kazancı (önbellekli; anahtar yoksa bağlı değil)."""
+        """Dağıtımcıdaki yayınların kazancı. API'si olan yalnız Tunearo'ydu (önbellekli); RouteNote'un kazanç raporu
+        kendi panelinde, hatta bağlı değil."""
         from yanki import paket, tunearo
 
-        if paket.yayin_ayarlari(a.kok / "config" / "yayin.toml").dagitimci != "tunearo":
-            return {"bagli": False, "dagitimci_yok": True}
+        dagitimci = paket.yayin_ayarlari(a.kok / "config" / "yayin.toml").dagitimci
+        if dagitimci != "tunearo":
+            return {"bagli": False, "mesaj": "RouteNote kazancı RouteNote panelinde (Accounting); hatta bağlı değil."
+                    if dagitimci == "routenote" else "Dağıtımcı seçilmedi; kazanç dağıtımcı seçilince görünür."}
         try:
             return {"bagli": True, **tunearo.kazanc(calisma, tunearo.Istemci.kokten(a.kok), zorla=yenile)}
         except tunearo.AyarYok:

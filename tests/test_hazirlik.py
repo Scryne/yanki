@@ -71,7 +71,7 @@ def _sahteler(monkeypatch, soz_hata=False, kaynak_hata=False, kunye_hata=False):
             raise ag.Bulunamadi("mb yok")
         return kunye.Kunye("r", "w", "Song", ("Adele Adkins", "Dan Wilson"))
 
-    def kyn(kimlik, sanatci, ad, beklenen, klasor, calisma, youtube=None):
+    def kyn(kimlik, sanatci, ad, beklenen, klasor, calisma, youtube=None, yedek_sureler=None):
         assert beklenen == 285.0
         if kaynak_hata:
             raise kaynak.KaynakYok("önizleme")
@@ -109,6 +109,37 @@ def test_kunye_yoksa_uyari_ama_devam(tmp_path, monkeypatch):
     _sahteler(monkeypatch, kunye_hata=True)
     d = hazirlik.girdi_hazirla(ayarlar.yukle(), S, tmp_path / "c", tmp_path / "g")
     assert d.asama == "hazir" and "uyari" in d.kunye
+
+
+def test_kaynak_lrclib_surum_yedegi(tmp_path, monkeypatch):
+    """`/get` başka sürümün süresini verdi: video diğer sürümlerin süresiyle bulunur, söz o sürümden yazılır."""
+    _sahteler(monkeypatch)
+    cagri = []
+
+    def kyn(kimlik, sanatci, ad, beklenen, klasor, calisma, youtube=None, yedek_sureler=None):
+        cagri.append(yedek_sureler)
+        if not yedek_sureler:
+            raise kaynak.KaynakYok("uygun video yok")
+        calisma.mkdir(parents=True, exist_ok=True)
+        (calisma / "kaynak.wav").write_bytes(b"x")
+        return kaynak.Kaynak(calisma / "kaynak.wav", "youtube:abc", "Song (Audio)", 216.3, 216.0)
+
+    surum = [sozler.Soz("[verse]\nkisa", "lrclib", 180.0, ((1.0, "kisa"),)),
+             sozler.Soz("[verse]\ndogru", "lrclib", 216.0, ((2.0, "dogru"),))]
+    monkeypatch.setattr(kaynak, "hazirla", kyn)
+    monkeypatch.setattr(sozler, "lrclib_surumleri", lambda *_a, **_k: surum)
+    d = hazirlik.girdi_hazirla(ayarlar.yukle(), S, tmp_path / "c", tmp_path / "g")
+    assert d.asama == "hazir" and cagri == [None, [180.0, 216.0]]
+    k = tmp_path / "c" / S.kimlik
+    assert (k / "soz.txt").read_text(encoding="utf-8") == "[verse]\ndogru"
+    assert "dogru" in (k / "soz_zaman.json").read_text(encoding="utf-8") and d.soz["sure_sn"] == 216.0
+
+
+def test_kaynak_surum_yedegi_de_tutmazsa_hata(tmp_path, monkeypatch):
+    _sahteler(monkeypatch, kaynak_hata=True)
+    monkeypatch.setattr(sozler, "lrclib_surumleri", lambda *_a, **_k: [sozler.Soz("x", "lrclib", 200.0)])
+    d = hazirlik.girdi_hazirla(ayarlar.yukle(), S, tmp_path / "c", tmp_path / "g")
+    assert d.asama == "hata" and "önizleme" in d.hata
 
 
 def _hazir_sarki(c, sure=120):

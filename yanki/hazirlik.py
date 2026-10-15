@@ -49,12 +49,33 @@ def girdi_hazirla(a: Ayarlar, s: Sarki, calisma: Path, girdi: Path) -> durum.Dur
         alanlar["kunye"] = kunye.elle_yazarlar(alanlar["kunye"], s.yazarlar)
 
     try:
-        kyn = kaynak.hazirla(s.kimlik, s.sanatci, s.ad, soz.sure_sn, girdi / "kaynak", k, youtube=s.youtube)
+        try:
+            kyn = kaynak.hazirla(s.kimlik, s.sanatci, s.ad, soz.sure_sn, girdi / "kaynak", k, youtube=s.youtube)
+        except kaynak.KaynakYok:
+            # LRCLIB'in `/get`'i başka sürümü vermiş olabilir (Dark Horse 297 sn, kayıt 216): diğer zaman damgalı
+            # sürümlerin süresine uyan video aranır, söz o sürümden yazılır. Elle söz ya da sabit video varsa yok.
+            if soz.kaynak != "lrclib" or s.youtube or not (surumler := _surumler(s)):
+                raise
+            kyn = kaynak.hazirla(s.kimlik, s.sanatci, s.ad, soz.sure_sn, girdi / "kaynak", k,
+                                 yedek_sureler=[v.sure_sn for v in surumler])
+            if kyn.beklenen_sn != soz.sure_sn:
+                soz = min(surumler, key=lambda v: abs(v.sure_sn - kyn.beklenen_sn))
+                (k / "soz.txt").write_text(soz.metin, encoding="utf-8")
+                (k / "soz_zaman.json").write_text(json.dumps(soz.satirlar, ensure_ascii=False), encoding="utf-8")
+                alanlar["soz"] = {"kaynak": soz.kaynak, "sure_sn": soz.sure_sn, "dosya": "soz.txt",
+                                  "surum": "sesin süresine uyan LRCLIB sürümü"}
     except Exception as e:  # noqa: BLE001 — KaynakYok, yt-dlp DownloadError, ffmpeg hatası
         neden = str(e) if isinstance(e, kaynak.KaynakYok | OSError) else f"{type(e).__name__}: {e}"
         return yaz("hata", f"kaynak ses: {neden}. `girdi/kaynak/{s.kimlik}.mp3` olarak bırakılabilir")
     alanlar["kaynak"] = {"dosya": kyn.wav.name, "nereden": kyn.nereden, "baslik": kyn.baslik, "sure_sn": kyn.sure_sn}
     return yaz("hazir")
+
+
+def _surumler(s: Sarki) -> list[sozler.Soz]:
+    try:
+        return [v for v in sozler.lrclib_surumleri(s.sanatci, s.ad) if v.sure_sn]
+    except Exception:  # noqa: BLE001 — arama düşerse ilk hata metni kalır
+        return []
 
 
 def stil_kur(s: Sarki, lm_caption: str | None = None, kunye: dict | None = None,

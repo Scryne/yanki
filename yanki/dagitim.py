@@ -305,6 +305,8 @@ def geri_cekildi_kaydet(calisma: Path, kimlik: str, neden: str | None = None, ye
             meta.setdefault("yukleme_gecmisi", []).append(
                 {**y, "geri_cekildi": neden, "geri_cekme_tarihi": bugun, **({"son_durum": son_durum} if son_durum
                                                                             else {})})
+            if meta.get("routenote"):  # kaldırılan yayının UPC'si: yeniden yükleme yeni taslak açar
+                meta.setdefault("routenote_gecmisi", []).append(meta.pop("routenote"))
             if meta.get("tunearo"):
                 if yeni_yayin:
                     meta.setdefault("tunearo_gecmisi", []).append(meta.pop("tunearo"))

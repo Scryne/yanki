@@ -15,7 +15,7 @@ import threading
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
-from yanki import durum
+from yanki import dosya, durum, sistem
 
 DURUM_SIRASI = ("taslak_hazir", "taslak_yarim", "kuyruk", "inceleme", "yayinda")
 YAYIN_ON_GUN_ASGARI = 10  # RouteNote incelemesi 5–10 iş günü; daha yakın tarih incelemede geçer
@@ -199,9 +199,7 @@ def ayar_yaz(kok: Path, degisiklik: dict) -> dict:
     import tomllib
 
     tomllib.loads(metin)  # bozuk dosya yazılmaz
-    gecici = yol.with_suffix(".yaziliyor")
-    gecici.write_text(metin, encoding="utf-8")
-    gecici.replace(yol)
+    dosya.yaz(yol, metin)  # benzersiz geçici ad + Windows'ta okuyan varken yeniden deneme
     return ayar_oku(kok)
 
 
@@ -213,8 +211,8 @@ def yeni_yayin_tarihi(kok: Path, bugun: date | None = None) -> date:
 # ── odadan başlatılan işler ────────────────────────────────
 
 IS_KOMUTLARI = {  # ad → (yanki argümanları, kimlik gerekir mi)
-    "taslak": (["yukle", "{kimlik}", "--taslak"], True),
-    "gonder": (["yukle", "{kimlik}"], True),
+    "taslak": (["yukle", "{kimlik}"], True),
+    "gonder": (["yukle", "{kimlik}", "--gonder"], True),
     "giris": (["routenote", "giris"], False),
 }
 
@@ -243,14 +241,17 @@ class Isci:
                 if self._surec is not None and self._surec.pid == k.get("pid"):
                     if (kod := self._surec.poll()) is not None:
                         k.update(bitis=datetime.now().isoformat(timespec="seconds"), kod=kod)
-                        self._kayit_yolu.write_text(json.dumps(k, ensure_ascii=False), encoding="utf-8")
-                else:
-                    k["sahipsiz"] = True  # oda yeniden açıldı: süreç izlenemiyor (iş yine de sürmüş olabilir)
+                        dosya.json_yaz(self._kayit_yolu, k, None)
+                elif sistem.surec_yasiyor(k.get("pid")):
+                    k["sahipsiz"] = True  # oda yeniden açıldı: süreç izlenemiyor ama sürüyor
+                else:  # oda yeniden açılmadan önce bitmiş; çıkış kodu bilinmiyor, sonuç günlükte
+                    k.update(bitis=datetime.now().isoformat(timespec="seconds"), kod=None, sahipsiz=True)
+                    dosya.json_yaz(self._kayit_yolu, k, None)
             try:
                 gunluk = Path(k["gunluk"]).read_text(encoding="utf-8", errors="replace").splitlines()
             except OSError:
                 gunluk = []
-            return {**k, "suruyor": k.get("bitis") is None and not k.get("sahipsiz"), "gunluk_son": gunluk[-satir:]}
+            return {**k, "suruyor": k.get("bitis") is None, "gunluk_son": gunluk[-satir:]}
 
     def baslat(self, ad: str, kimlik: str | None = None) -> dict:
         arg, kimlikli = IS_KOMUTLARI[ad]
@@ -259,6 +260,10 @@ class Isci:
         with self._kilit:
             if self._surec is not None and self._surec.poll() is None:
                 raise RuntimeError("başka bir iş sürüyor; bitince yeniden dene")
+            # oda yeniden açıldıysa önceki odanın başlattığı iş hâlâ sürüyor olabilir (aynı tarayıcı profili tek
+            # pencerede açılır: ikinci iş profili kilitli bulur)
+            if (k := self._kayit()) and k.get("bitis") is None and sistem.surec_yasiyor(k.get("pid")):
+                raise RuntimeError(f"önceki iş ({k.get('ad')}) hâlâ sürüyor; bitince yeniden dene")
             zaman = datetime.now()
             gunluk = self.calisma / "gunluk" / f"oda-{zaman:%Y%m%d-%H%M%S}-{ad}.log"
             gunluk.parent.mkdir(parents=True, exist_ok=True)
@@ -271,5 +276,5 @@ class Isci:
                                                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
             k = {"ad": ad, "kimlik": kimlik, "pid": self._surec.pid, "baslangic": zaman.isoformat(timespec="seconds"),
                  "gunluk": str(gunluk), "bitis": None, "kod": None}
-            self._kayit_yolu.write_text(json.dumps(k, ensure_ascii=False), encoding="utf-8")
+            dosya.json_yaz(self._kayit_yolu, k, None)
             return k

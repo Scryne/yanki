@@ -117,7 +117,7 @@ def test_takvim_hatirlatmasi_bir_kez(tmp_path, monkeypatch):
     assert cli._takvim_hatirlat(tmp_path) == 0
     assert cli._takvim_hatirlat(tmp_path) == 0
     olaylar = olay.oku(c)
-    assert len(olaylar) == 1 and olaylar[0]["tur"] == "takvim" and "paket/YUKLE.md" in olaylar[0]["metin"]
+    assert len(olaylar) == 1 and olaylar[0]["tur"] == "takvim" and "yanki yukle paket --gonder" in olaylar[0]["metin"]
     assert cli.ozet(tmp_path)["yuklenecek"] == "A — PAKET"
 
 
