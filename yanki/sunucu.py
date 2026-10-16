@@ -90,15 +90,6 @@ class GonderOnayi(BaseModel):
     onay: str = Field(max_length=300)  # şarkının adı, elle yazılır: geri alınamaz gönderimin onayı
 
 
-class BulucuFreshtunes(BaseModel):
-    parca: str = Field(pattern=r"^[A-Za-z0-9]{22}$")
-    kendi: bool = False  # Scryne odada "bu sanatçı benim" dedi (sanatçı bir kez sorulur, sonra kayıtlı)
-
-
-class KendiSanatcilar(BaseModel):
-    adlar: list[str] = Field(max_length=10)
-
-
 class ElleYeni(BaseModel):
     baslik: str = Field(default="", max_length=200)
     sablon: Literal["freshtunes"] | None = None  # "kendi şarkım": Orvane değil, yapay zekâ yok, FreshTunes
@@ -111,7 +102,6 @@ class ElleGonder(BaseModel):
 
 class BulucuArama(BaseModel):
     girdi: str = Field(max_length=500)
-    kendi: bool = False  # Kalkmış yayınlarım'dan: playlist Scryne'ın kendi yayınlarının listesi
 
 
 class BulucuBaglan(BaseModel):
@@ -795,42 +785,20 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None, gorev_ok
             "diller": list(routenote.RN_DILLER), "turler": list(routenote.RN_TURLER),
             "dagiticilar": elle.DAGITICILAR, "varsayilan": elle.varsayilanlar(a.kok),
             "mekanik_ulkeler": list(elle.MEKANIK_LISANS_ULKELER), "freshtunes_url": elle.FRESHTUNES_URL},
-            "freshtunes": elle.freshtunes_durumu(calisma), "kendi_sanatcilar": elle.kendi_sanatcilar(calisma),
-            "is": isci.durum()}
-
-    @app.post("/api/elle-freshtunes/sanatcilar")
-    def elle_kendi_sanatcilar(istek: KendiSanatcilar):
-        """Scryne'ın kendi yayın adları: Bulucu'da yalnız bunların kalkmış parçalarına FreshTunes düğmesi çıkar."""
-        try:
-            return {"sanatcilar": elle.kendi_sanatcilar_yaz(calisma, istek.adlar, a.kok)}
-        except elle.Hata as e:
-            raise HTTPException(422, str(e)) from e
-
-    @app.post("/api/elle/{kimlik}/kaynak")
-    def elle_kaynak(kimlik: str):
-        """Bulucu'dan açılmış taslakta ses ve kapak aramasını yeniden başlatır."""
-        try:
-            meta = elle.oku(calisma, kimlik)
-        except elle.Hata as e:
-            raise elle_hata(e) from e
-        if not meta.get("kaynak_parca"):
-            raise HTTPException(409, "bu taslak Bulucu'dan açılmadı; sesi ve kapağı kendin sürükle")
-        if elle.kilitli(meta):
-            raise HTTPException(409, elle.kilitli(meta))
-        return is_baslat("elle_kaynak", kimlik)
+            "freshtunes": elle.freshtunes_durumu(calisma), "is": isci.durum()}
 
     @app.post("/api/elle/{kimlik}/pinterest")
     async def elle_pinterest(kimlik: str):
-        """Pinterest'ten (yeni) kapak: beğenilmeyen pin bir daha seçilmez (`yeniden_yayin.pinterest_kapak`)."""
+        """Pinterest'ten (yeni) kapak: beğenilmeyen pin bir daha seçilmez (`elle_kapak.pinterest_kapak`)."""
         from starlette.concurrency import run_in_threadpool
 
-        from yanki import yeniden_yayin
+        from yanki import elle_kapak
 
         try:
             if neden := elle.kilitli(elle.oku(calisma, kimlik)):
                 raise HTTPException(409, neden)
-            return {"mesaj": await run_in_threadpool(yeniden_yayin.pinterest_kapak, calisma, kimlik)}
-        except (elle.Hata, yeniden_yayin.Hata) as e:
+            return {"mesaj": await run_in_threadpool(elle_kapak.pinterest_kapak, calisma, kimlik)}
+        except (elle.Hata, elle_kapak.Hata) as e:
             raise HTTPException(422, str(e)) from e
         except OSError as e:
             raise HTTPException(502, f"Pinterest'e ulaşılamadı ({e})") from e
@@ -1014,22 +982,6 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None, gorev_ok
         sonuc.sort(key=lambda x: not x["izleniyor"])  # odadan izlenenler başta (sıralama kararlı)
         return sonuc
 
-    @app.get("/api/kendi")
-    def kendi_ozet():
-        """"Kendi müziğim" yüzünün ana sayfası: taranan playlist'lerdeki kendi kalkmış yayınların ve taslak hâlleri,
-        FreshTunes hesabı, Spotify köprüsü, Bulucu ve oda işleri. Ağa çıkmaz (köprü durumu 20 sn önbellekli)."""
-        from yanki import elle, yeniden_yayin
-
-        kendi = elle.kendi_sanatcilar(calisma)
-        kalkmis = yeniden_yayin.kalkmis_yayinlar(calisma, kendi, elle.kendi_listeler(calisma))
-        taslaklar = elle.liste(calisma)
-        return {"kendi_sanatcilar": kendi, "kalkmis": kalkmis, "freshtunes": elle.freshtunes_durumu(calisma),
-                "freshtunes_url": elle.FRESHTUNES_URL, "baglanti": bul.baglanti(), "bulucu_is": bul.durum(),
-                "is": isci.durum(), "listeler": [x for x in bulucu.gecmis(calisma) if x.get("tur") == "playlist"][:8],
-                "sayilar": {"kalkmis": len(kalkmis), "taslaksiz": sum(x["taslak"] is None for x in kalkmis),
-                            "taslak": sum(x["hal"] != "gonderildi" for x in taslaklar),
-                            "gonderildi": sum(x["hal"] == "gonderildi" for x in taslaklar)}}
-
     @app.get("/api/bulucu")
     def bulucu_ozet():
         return {"baglanti": bul.baglanti(), "is": bul.durum(), "gecmis": bulucu.gecmis(calisma),
@@ -1051,12 +1003,7 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None, gorev_ok
             tur, kimlik = bulucu.coz(istek.girdi)
             if not stillmore.cdp_acik():
                 raise HTTPException(409, "Spotify bağlı değil: önce \"Spotify'a bağlan\"")
-            is_ = bul.baslat(tur, kimlik)
-            if istek.kendi and tur == "playlist":
-                from yanki import elle
-
-                elle.kendi_liste_ekle(calisma, kimlik)
-            return is_
+            return bul.baslat(tur, kimlik)
         except bulucu.GirdiHatasi as e:
             raise HTTPException(422, str(e)) from e
         except RuntimeError as e:
@@ -1080,8 +1027,6 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None, gorev_ok
 
     @app.get("/api/bulucu/sonuc/{anahtar}")
     def bulucu_sonuc(anahtar: str):
-        from yanki import elle, yeniden_yayin
-
         v = bulucu_sonucu(anahtar)
         if v.get("tur") == "listeler":  # bulunan listeler: daha önce tarandıysa kalkmış sayısı, açılabilir
             for p in v.get("sonuclar") or []:
@@ -1092,13 +1037,6 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None, gorev_ok
             return v
         satirlar = v.get("satirlar") if v.get("tur") == "playlist" else [v] if v.get("tur") == "parca" else []
         bulucu.yanki_durumu(satirlar, calisma, liste_yolu, a.kok)
-        kendi = elle.kendi_sanatcilar(calisma)
-        taslaklar = yeniden_yayin.taslak_eslesmeleri(calisma)
-        for s in satirlar:  # Scryne'ın kendi kalkmış yayını: FreshTunes'ta yeniden yayınlanabilir
-            s["kendi"] = bool(kendi) and yeniden_yayin.kendi_sanatci(
-                yeniden_yayin.sanatci_adlari(s.get("sanatci"), s.get("sanatcilar")), kendi) is not None
-            s["taslak"] = taslaklar.get(s.get("id")) or (taslaklar.get(s["isrc"]) if s.get("isrc") else None)
-        v["kendi_ayarli"] = bool(kendi)
         if v.get("tur") == "playlist":
             v["izleniyor"] = v.get("id") in bulucu.izlenenler(calisma)
         return v
@@ -1117,28 +1055,6 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None, gorev_ok
         except OSError as e:
             raise HTTPException(409, f"keşif girdisi yazılamadı ({e.strerror or e}); birazdan yeniden dene") from e
         return {"eklenen": eklenen, "atlanan": atlanan}
-
-    @app.post("/api/bulucu/freshtunes")
-    def bulucu_freshtunes(istek: BulucuFreshtunes):
-        """Kendi kalkmış yayını → FreshTunes taslağı (`yanki/yeniden_yayin.py`): künye parçanın ayrıntısından hemen,
-        ses (YouTube, aynı süre) ve kapak (iTunes) oda işinde. Yalnız kayıtlı kendi sanatçı adlarına."""
-        from yanki import elle, yeniden_yayin
-
-        if mevcut := yeniden_yayin.taslak_eslesmeleri(calisma).get(istek.parca):  # ikinci taslak açılmaz
-            return {"kimlik": mevcut, "uyari": None, "mevcut": True}
-        v = bulucu.sonuc_oku(calisma, f"parca-{istek.parca}")
-        if not v:
-            raise HTTPException(409, "önce parçanın ayrıntısı okunmalı")
-        try:
-            m = yeniden_yayin.taslak_kur(calisma, a.kok, v, elle.kendi_sanatcilar(calisma), onay=istek.kendi)
-        except (yeniden_yayin.Hata, elle.Hata) as e:
-            raise HTTPException(422, str(e)) from e
-        try:
-            is_baslat("elle_kaynak", m["kimlik"])
-            uyari = None
-        except HTTPException as e:  # başka iş sürüyor: taslak yine açık, ses ve kapak oradan yeniden aranır
-            uyari = f"ses ve kapak araması başlamadı ({e.detail}); taslaktan \"Sesi ve kapağı bul\" ile yeniden dene"
-        return {"kimlik": m["kimlik"], "uyari": uyari, "mevcut": False}
 
     @app.post("/api/bulucu/izle")
     def bulucu_izle(istek: BulucuIzle):

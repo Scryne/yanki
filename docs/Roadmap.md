@@ -956,3 +956,14 @@ tema) canlı verinin kopyasıyla doğrulandı.
   80 liste; ilk denemede Türkiye listeleri karıştı (istemci hesabın ülkesinde arıyor) → konu süzgeci. Baştakiler: Hot Hits
   Hindi (3,3 mn), Hot Hits Punjabi, Trending Now India, This Is Arijit Singh, New Music Hindi, Desi Hits.
 
+## Bulucu → FreshTunes yeniden yayın söküldü (2026-10-16 gece)
+
+- Akış "kendi kalkmış yayınlarım" diye istenmişti (kendi ISRC'n, kendi kaydın). Kayıtlarda "kendi sanatçım" diye
+  onaylananlar A.R. Rahman, Asha Bhosle, Udit Narayan, Laxmikant–Pyarelal vb.; taslaklar arasında A.R. Rahman ve Alan
+  Walker şarkıları vardı: başkalarının kayıtlarını aynı ISRC'yle yeniden yayınlamak. Bu yüzden söküldü: Bulucu'daki
+  FreshTunes taslağı düğmesi, "bu sanatçı benim" onayı, Kalkmış yayınlarım sayfası, YouTube'dan master indirme
+  (`elle-kaynak`), ISRC/UPC/künye/kapak kopyalama (`yanki/yeniden_yayin.py`).
+- Kalan: FreshTunes elle taslakları (kendi şarkıların, kendi sesinle), Pinterest kapağı (`yanki/elle_kapak.py`, kapak
+  yoksa "Pinterest'ten kapak bul"), Bulucu ve liste keşfi; başkalarının kalkmış şarkıları için yol AI cover hattı
+  (Bulucu → Keşfe gönder → Orvane, RouteNote). Kaynak hatası düzeltmesi (boş YouTube araması aday sayılmaz) kaldı.
+

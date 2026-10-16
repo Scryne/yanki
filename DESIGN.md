@@ -93,9 +93,8 @@ duraklarında): rakamlar sütun sütun hizalanır, kaymaz.
 
 - **İki yüz** (Scryne, 2026-10-16: "AI cover'ları takip ettiğim yüz ve kendi playlistlerimi tarayıp otomatik taslağa
   gittiğim yüz"): kenar çubuğunun üstünde iki parçalı yüz düğmesi. **Orvane** (AI cover hattı): Pano, Karşılaştırma,
-  Keşif, Yayın, Sanatçı ve şarkı listesi. **Kendi müziğim** (FreshTunes): Kalkmış yayınlarım (açılış: playlist tara →
-  kendi kalkmış yayınların → tek tıkla taslak), Taslaklar, Bulucu; kenar çubuğunda şarkılar yerine taslaklar. Yüzü
-  görünüm adresi belirler; her yüz son açılan görünümü hatırlar.
+  Keşif, Yayın, Sanatçı ve şarkı listesi. **Kendi müziğim** (FreshTunes): Taslaklar (açılış), Bulucu; kenar çubuğunda
+  şarkılar yerine taslaklar. Yüzü görünüm adresi belirler; her yüz son açılan görünümü hatırlar.
 - Solda dar cam kenar çubuğu: marka, canlı durum satırı (koşu/kiralık GPU, camgöbeği nabız), görünümler (Pano, Keşif,
   Yayın), arama (`/`), şarkılar aşama gruplarında (Dinlemende, Üretimde, Hata, Yayına hazırlanıyor, Dağıtımda,
   Reddedilen; katlanır, durum tarayıcıda hatırlanır). Mobilde üste geçer.

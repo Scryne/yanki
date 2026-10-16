@@ -81,10 +81,8 @@ odası Spotify Web API'sine hiç istek atmaz.
 
 **Dinleme odasının iki yüzü** (kenar çubuğunun üstündeki düğme; her yüz son açtığın görünümü hatırlar):
 - **Orvane · AI cover hattı:** Pano, Karşılaştırma, Keşif, Yayın, Sanatçı ve kenarda şarkılar (aşağıdaki akışın tamamı).
-- **Kendi müziğim · FreshTunes:** *Kalkmış yayınlarım* (açılış): playlist linkini yapıştır → Tara; buradan taranan
-  listelerin bütün kalkmış şarkıları (ve onayladığın sanatçıların diğer listelerdeki şarkıları) tek listede, her birinde
-  "FreshTunes taslağı" (taslağı varsa "Taslağı aç"); yanda FreshTunes hesabı, Spotify köprüsü, taranan listeler. *Taslaklar* (eski Yükle; boş taslaklar tek
-  tıkla silinir) ve *Bulucu*. Kenarda şarkılar yerine taslakların.
+- **Kendi müziğim · FreshTunes:** *Taslaklar* (açılış; kendi şarkıların: ses ve kapağı sen verirsin, kapağı istersen
+  Pinterest'ten bulur; boş taslaklar tek tıkla silinir) ve *Bulucu*. Kenarda şarkılar yerine taslakların.
 
 **Bulucu (dinleme odası → Kendi müziğim → Bulucu, `yanki/bulucu.py`):** STILLMORE FINDER'ın motoru odada. Spotify linki, ISRC ya da
 UPC yapıştırılır; okuma Spotify uygulamasının içinden yapılır (STILLMORE köprüsü, kotasız):
@@ -101,17 +99,6 @@ UPC yapıştırılır; okuma Spotify uygulamasının içinden yapılır (STILLMO
   sorgu Spotify istemcisinin kendi aramasıyla (kotasız), konu dışı listeler addan/açıklamadan süzülür (istemci hesabın
   ülkesinde aradığı için Türkiye listeleri de geliyordu), en çok 80 liste takipçi sayısıyla en popülerden sıralanır;
   her biri **Tara** ile taranır, taranmışlarda kalkmış sayısı ve **Aç**. Konu eklemek: `yanki/bulucu.py` → `KONULAR`.
-- **Kendi kalkmış yayınların → FreshTunes** (`yanki/yeniden_yayin.py`): Bulucu'da her kalkmış şarkının yanında
-  **FreshTunes taslağı** (taslağı varsa **Taslağı aç**; aynı yayına ikinci taslak açılmaz). Bir sanatçı için ilk tıkta
-  "senin sanatçı adın mı?" sorulur (FreshTunes formundaki "haklar bende" beyanı); evet denince ad kaydedilir, o
-  sanatçının şarkılarında bir daha sorulmaz (Orvane onaylanamaz). Tıklayınca
-  parçanın ayrıntısı okunur ve Yükle'de taslak açılır: ad, sanatçı, Spotify profilin, aynı ISRC ve UPC, ilk yayın tarihi,
-  yazarlar, yapımcı, ©/℗, label, dil, açık içerik. Oda işi (`yanki elle-kaynak <kimlik>`) sesi YouTube'da Spotify'daki
-  süreyle ±2 sn aynı kayıttan indirir (önce "- Topic" kanalı, sonra sanatçının/VEVO'nun kanalı; canlı, remix, orkestral
-  vb. sürümler elenir; 0 dBFS'e dayanan ses 1 dB düşürülür). Kapak: yayının kendisi (iTunes, Deezer ISRC'yle), yoksa
-  cover'lardaki gibi Pinterest (sorgu Spotify'ın ton ve temposundan, en az 1400 px, kullanılmamış pin; uyarıyla).
-  Kalkmış yayının YouTube kopyası çoğu zaman kalmıyor (SoundCloud'daki dağıtıcı kopyaları DRM'li): ses bulunamazsa
-  master dosyanı sürükle; varsa YouTube kopyası yerine de onu sürükle.
 
 Köprü kapalıysa odadaki "Spotify'a bağlan" Spotify'ı hata ayıklama portuyla (yalnız 127.0.0.1) yeniden açar; bir şey
 çalıyorsa önce sorar. Sonuçlar `calisma/bulucu/`'da kalır, "Son aramalar"dan yeniden açılır.
@@ -133,7 +120,8 @@ taslak. Form yazdıkça kaydedilir (`calisma/elle/<kimlik>/`):
   (FreshTunes)**: sanatçı, profil, label ve yazarlar son FreshTunes taslağından gelir, yapay zekâ kapalı, yayın tarihi
   14 gün sonrası. FreshTunes yapay zekâ kaydını ve botu yasaklıyor: hat denetler (yapay zekâ, Orvane adı, yayın tarihi
   en erken 7 gün, başta/sonda en çok 5 sn sessizlik, kırpılma) ve **FreshTunes paketini** (`audio.flac`, `artwork.jpg`,
-  kontrol listesi ve form alanlarıyla `FRESHTUNES.txt`) indirir; formu sen doldurursun, sonra **FreshTunes'a
+  kontrol listesi ve form alanlarıyla `FRESHTUNES.txt`) indirir. Kapak yoksa "Pinterest'ten kapak bul" (cover'lardaki
+  gibi insansız, yazısız; `yanki/elle_kapak.py`); formu sen doldurursun, sonra **FreshTunes'a
   gönderdim**. FreshTunes 3 ayda bir giriş istiyor (yoksa askı, açmak 50 $): 75. günden itibaren haftada bir bildirim
   gelir, Yükle'de **Bugün girdim** sayacı sıfırlar. Para Payoneer'la çekilir (en az 25 $).
 

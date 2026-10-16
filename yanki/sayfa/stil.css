@@ -782,15 +782,3 @@ a.dugme.pasif { opacity: .45; pointer-events: none; }
 .ft-adimlar li { margin: 2px 0; }
 .ft-serit { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); }
 
-/* Kendi müziğim → Kalkmış yayınlarım: üç duraklı zincir, playlist tarama formu */
-.zincir.zincir-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.kendi-tara { display: grid; gap: var(--s2); padding: var(--s4); margin-bottom: var(--s6); border-radius: var(--r-panel); }
-.kendi-tara > label { font: 600 13px/1.2 var(--f-baslik); }
-.kendi-tara input[type="search"] { flex: 1; min-width: 0; }
-.kendi-tara .bolum-baslik { margin: 0; }
-.kendi-tara input[type="search"] { font: inherit; font-size: 14px; color: var(--metin); background: rgba(0, 0, 0, .3);
-  border: 1px solid var(--cizgi); border-radius: var(--r-kucuk); padding: 8px var(--s3); flex: 1; min-width: 0; }
-.kendi-tara input::placeholder { color: color-mix(in srgb, var(--metin-2) 80%, transparent); }
-.kendi-tara input:focus { border-color: var(--cizgi-gumus); outline: none; box-shadow: 0 0 0 3px rgba(127, 214, 240, .14); }
-.kendi-tara input::-webkit-search-cancel-button { display: none; }
-.kendi-tara input:disabled { opacity: .55; cursor: not-allowed; }

@@ -374,8 +374,6 @@ def kontrol(calisma: Path, kimlik: str) -> dict:
         eksik.append("Ana sanatçı")
     if not (k / "ses.flac").exists():
         eksik.append("Ses dosyası")
-    elif (meta.get("ses") or {}).get("youtube"):
-        uyari.append("Ses YouTube'dan (kayıplı): master dosyan (WAV/FLAC) varsa sürükle, kalite daha iyi olur")
     elif (meta.get("ses") or {}).get("kayipli"):
         uyari.append("Ses kayıplı biçimden (MP3/M4A) çevrildi; mümkünse WAV ya da FLAC yükle")
     if not (k / "kapak.jpg").exists():
@@ -581,43 +579,6 @@ def freshtunes_girdim(calisma: Path, gun: date | None = None) -> None:
                                                      "son_giris": (gun or date.today()).isoformat()})
 
 
-def kendi_sanatcilar(calisma: Path) -> list[str]:
-    """Scryne'ın kendi yayın adları (Bulucu'daki kalkmış parçadan FreshTunes taslağı yalnız bunlara açılır,
-    `yeniden_yayin`). Orvane burada olamaz: AI cover sanatçısı RouteNote'ta."""
-    return [x for x in _ft_kayit(calisma).get("sanatcilar") or [] if isinstance(x, str) and x.strip()]
-
-
-def kendi_listeler(calisma: Path) -> list[str]:
-    """"Kendi müziğim → Kalkmış yayınlarım"dan taranan playlist'ler (Scryne'ın kendi yayınlarını topladığı listeler):
-    içlerindeki bütün kalkmış şarkılar o sayfada listelenir."""
-    return [x for x in _ft_kayit(calisma).get("listeler") or [] if isinstance(x, str)]
-
-
-def kendi_liste_ekle(calisma: Path, playlist: str) -> None:
-    listeler = kendi_listeler(calisma)
-    if playlist not in listeler:
-        dosya.json_yaz(_freshtunes_kayit_yolu(calisma), {**_ft_kayit(calisma), "listeler": [*listeler, playlist][-50:]})
-
-
-def kendi_sanatci_ekle(calisma: Path, ad: str, kok: Path | None = None) -> list[str]:
-    """Scryne bir kalkmış yayın için "bu sanatçı benim" dedi (odada bir kez sorulur): sonraki şarkılarında sorulmaz."""
-    mevcut = kendi_sanatcilar(calisma)
-    if any(x.casefold() == ad.strip().casefold() for x in mevcut):
-        return mevcut
-    return kendi_sanatcilar_yaz(calisma, [*mevcut, ad][-10:], kok)
-
-
-def kendi_sanatcilar_yaz(calisma: Path, adlar: list[str], kok: Path | None = None) -> list[str]:
-    if not isinstance(adlar, list) or len(adlar) > 10 or any(not isinstance(x, str) or len(x) > 120 for x in adlar):
-        raise Hata("en çok 10 sanatçı adı")
-    temiz = list(dict.fromkeys(x.strip() for x in adlar if x.strip()))
-    varsayilan = varsayilanlar(kok)["sanatci"] if kok else None
-    if varsayilan and any(x.casefold() == varsayilan.casefold() for x in temiz):
-        raise Hata(f"{varsayilan} AI cover sanatçısı (RouteNote); kendi adların arasına girmez")
-    dosya.json_yaz(_freshtunes_kayit_yolu(calisma), {**_ft_kayit(calisma), "sanatcilar": temiz})
-    return temiz
-
-
 def freshtunes_durumu(calisma: Path, bugun: date | None = None) -> dict | None:
     """FreshTunes hesabının hareketsizlik durumu; FreshTunes'a hiç gönderilmemişse None. ToS §4: 3 ayda bir giriş
     şart, yoksa askı ve açmak 50 $."""
@@ -677,7 +638,7 @@ def sifirla(calisma: Path, kimlik: str, dagitici: str = "routenote") -> str:
 def bos_mu(meta: dict, k: Path) -> bool:
     """Hiçbir şey girilmemiş taslak: adı, sesi, kapağı, dağıtıcı kaydı yok ("Yeni şarkı"ya basılıp bırakılmış)."""
     return (not (meta.get("baslik") or "").strip() and not (k / "ses.flac").exists() and not (k / "kapak.jpg").exists()
-            and not meta.get("routenote") and not meta.get("freshtunes") and not meta.get("kaynak_parca"))
+            and not meta.get("routenote") and not meta.get("freshtunes"))
 
 
 def bos_taslaklar(calisma: Path) -> list[str]:
