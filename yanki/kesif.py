@@ -546,7 +546,8 @@ def bekleyen_sanatcilar(liste_yolu: Path, calisma: Path) -> set[str]:
 def listedekiler(liste_yolu: Path, calisma: Path) -> set[str]:
     """Listede ya da çalışma alanında olan şarkı kimlikleri (eklenmiş sayılır)."""
     klasorler = {p.name for p in calisma.iterdir() if p.is_dir()} if calisma.is_dir() else set()
-    return {s.kimlik for s in liste.yukle(liste_yolu)} | klasorler
+    listede = {s.kimlik for s in liste.yukle(liste_yolu)} if liste_yolu.is_file() else set()  # ilk kurulum
+    return listede | klasorler
 
 
 def liste_kilidi(liste_yolu: Path):

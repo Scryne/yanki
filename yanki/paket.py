@@ -74,7 +74,8 @@ def _loudnorm_olc(girdi: Path, y: Yayin, on_filtre: str = "") -> dict:
         [ses.arac("ffmpeg"), "-hide_banner", "-nostats", "-i", str(girdi), "-af",
          (f"{on_filtre}," if on_filtre else "") + f"loudnorm=I={y.lufs}:TP={y.gercek_tepe}:LRA=11:print_format=json",
          "-f", "null", "-"],
-        capture_output=True, text=True, encoding="utf-8", errors="replace", check=True).stderr
+        capture_output=True, text=True, encoding="utf-8", errors="replace", check=True,
+        timeout=ses.ARAC_SURESI).stderr
     return json.loads(cikti[cikti.rindex("{"): cikti.rindex("}") + 1])
 
 
@@ -114,7 +115,7 @@ def master(girdi: Path, hedef: Path, y: Yayin, deneme: int = 3, referans: Path |
                   f"alimiter=limit={10 ** (tavan_db / 20):.5f}:attack=1:release=80:level=0:latency=1,"
                   f"aresample={y.ornekleme}:osf=s16:dither_method=triangular")
         subprocess.run([ses.arac("ffmpeg"), "-hide_banner", "-loglevel", "error", "-y", "-i", str(girdi), "-af",
-                        zincir, "-ac", "2", *_kodlayici(hedef), str(hedef)], check=True)
+                        zincir, "-ac", "2", *_kodlayici(hedef), str(hedef)], check=True, timeout=ses.ARAC_SURESI)
         son = _loudnorm_olc(hedef, y)
         lufs, tepe = float(son["input_i"]), float(son["input_tp"])
         if abs(y.lufs - lufs) <= 0.2 and tepe <= y.gercek_tepe + 0.05:

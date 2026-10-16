@@ -103,3 +103,32 @@ def test_boyutsuz_govde_akista_sinirlanir(ortam, monkeypatch):
     asyncio.run(app(kapsam, al, gonder))
     assert next(m for m in giden if m["type"] == "http.response.start")["status"] == 413
     assert len(okunan) < 50
+
+
+def test_dusen_yukleme_takvimde_gorunur_ve_yeniden_denenir(tmp_path):
+    """Otomatik yüklemesi düşen paket önce yalnız günlükte görünüyordu; seyrek denemeyi beklemeden açmak yoktu."""
+    import json
+    from datetime import datetime
+
+    from fastapi.testclient import TestClient
+
+    from tests.test_sunucu import ODA
+    from yanki import ayarlar, dagitim, durum, sunucu
+
+    c = tmp_path / "calisma"
+    d = durum.Durum("a-b", "A", "B")
+    d.gec("paketlendi")
+    durum.yaz(c, d)
+    (paket_ := c / "a-b" / "paket").mkdir()
+    (paket_ / "metadata.json").write_text(json.dumps({"orijinal_yazarlar": ["Ad Soyad"]}), encoding="utf-8")
+    dagitim.yukleme_hatalari_yaz(c, {"a-b": {"sayi": 3, "hata": "TimeoutError: #edit-did12",
+                                             "son": datetime.now().isoformat(timespec="seconds")}})
+    oda = TestClient(sunucu.uygulama(ayarlar.yukle(), c, gorev_oku=lambda: {}), base_url=ODA)
+    sira = oda.get("/api/pano").json()["takvim"]["sira"]
+    x = next(s for s in sira if s["kimlik"] == "a-b")
+    assert x["dusus"]["sayi"] == 3 and "did12" in x["dusus"]["hata"] and x["dusus"]["sonraki"]
+    r = oda.post("/api/takvim/a-b/yeniden-dene", json={})
+    assert r.status_code == 200 and "yeniden denenecek" in r.json()["mesaj"]
+    assert dagitim.yukleme_hatalari(c, {"a-b"}) == {}
+    assert oda.post("/api/takvim/a-b/yeniden-dene", json={}).status_code == 404
+    assert oda.post("/api/takvim/..%2Fx/yeniden-dene", json={}).status_code >= 400  # yol geçişi uca ulaşmaz

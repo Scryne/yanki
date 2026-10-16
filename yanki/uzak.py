@@ -305,6 +305,36 @@ def durma_yolu(kok: Path) -> Path:
     return kok / "calisma" / ".uzak_durdu"
 
 
+# Üretimin kiralık GPU'yu açamadığı son neden (bakiye, aylık sınır, stok, ağ, devre dışı): pano, `yanki durum` ve
+# `yanki ozet` ağa çıkmadan gösterir. Sürekli koşu 30 dk'da bir yazar; bu kadar eski kayıt bayat sayılır.
+ENGEL_GECERLI_SAAT = 2
+
+
+def engel_yolu(kok: Path) -> Path:
+    return kok / "calisma" / ".uretim_engeli.json"
+
+
+def _engel_yaz(kok: Path, tur: str, neden: str) -> None:
+    try:
+        dosya.yaz(engel_yolu(kok), json.dumps({"tur": tur, "neden": neden,
+                                               "zaman": datetime.now().isoformat(timespec="seconds")},
+                                              ensure_ascii=False))
+    except OSError:
+        pass  # gösterim için; üretim kararını etkilemez
+
+
+def uretim_engeli(calisma: Path) -> dict | None:
+    """Üretimi bekleten son kiralık GPU engeli ({"tur", "neden", "zaman"}); yoksa ya da bayatsa None. Ağa çıkmaz."""
+    yol = calisma / engel_yolu(Path()).name
+    try:
+        if time.time() - yol.stat().st_mtime > ENGEL_GECERLI_SAAT * 3600:
+            return None
+        e = json.loads(yol.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return e if isinstance(e, dict) and e.get("neden") else None
+
+
 def ag_engeli_bildir(kok: Path, neden: str) -> None:
     """SSH'ı kapatan ağ günde bir bildirilir (sürekli koşu her 30 dk'da yeniden bildirmesin)."""
     from yanki import olay
@@ -344,11 +374,14 @@ def motor_sec(a: Ayarlar, kayit: Callable[[str], None] = print, stok=runpod.stok
     nerede = "üretim evde" if a.uzak.yerel_yedek else "üretim sunucu açılabilene kadar bekliyor"
     durdu = durma_yolu(a.kok)
     if durdu.exists() and time.time() - durdu.stat().st_mtime < DURMA_SAAT * 3600:
-        kayit(f"uzak GPU {DURMA_SAAT} saat devre dışı ({durdu.read_text(encoding='utf-8')[:200]}); {nerede}")
+        neden = durdu.read_text(encoding="utf-8")[:200]
+        kayit(f"uzak GPU {DURMA_SAAT} saat devre dışı ({neden}); {nerede}")
+        _engel_yaz(a.kok, "durdu", f"sunucu düştü, {DURMA_SAAT} saat devre dışı ({neden})")
         return yedek
     if engel := (ssh_engeli or runpod.ssh_engeli)():
         kayit(f"uzak GPU kullanılmıyor ({engel}); {nerede}")
         ag_bildir(a.kok, engel)
+        _engel_yaz(a.kok, "ag", engel)
         return yedek
     try:
         api = runpod.anahtar(a.kok, a.uzak.en_az_bakiye, bakiye)
@@ -360,7 +393,9 @@ def motor_sec(a: Ayarlar, kayit: Callable[[str], None] = print, stok=runpod.stok
         kayit(f"uzak GPU kullanılmıyor ({e}); {nerede}")
         if isinstance(e, ButceYok):
             butce_bildir(a.kok, str(e))
+        _engel_yaz(a.kok, "butce" if isinstance(e, ButceYok) else "sunucu", str(e))
         return yedek
+    engel_yolu(a.kok).unlink(missing_ok=True)
 
     def uzak_calistir(a_, isler, klasor, zaman_asimi_sn, **_k):
         try:

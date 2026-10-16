@@ -150,8 +150,18 @@ def _takvim(kok: Path, calisma: Path) -> dict:
     except (OSError, ValueError, KeyError) as e:
         return {"hata": str(e), "sira": [], "beklemede": None, "duzeltme": [], "yazarsiz": []}
     yazarsiz = [_ozet(d, calisma) for k in p.yazarsiz if (d := durum.oku(calisma, k))]
+    hatalar = dagitim.yukleme_hatalari(calisma, {x.kimlik for x in p.sira})
+
+    def dusus(kimlik: str) -> dict | None:  # otomatik yüklemesi düşen paket: kaç kez, son hata, sonraki deneme
+        if not (h := hatalar.get(kimlik)):
+            return None
+        sonraki = dagitim.yukleme_sonraki_deneme(h)
+        return {"sayi": int(h.get("sayi", 0)), "hata": str(h.get("hata", ""))[:240],
+                "sonraki": sonraki.isoformat(timespec="minutes") if sonraki else None}
+
     return {"beklemede": p.beklemede, "duzeltme": p.duzeltme, "yazarsiz": yazarsiz,
             "sira": [{"kimlik": x.kimlik, "sanatci": x.sanatci, "ad": x.ad, "yukleme": x.yukleme.isoformat(),
+                      "dusus": dusus(x.kimlik),
                       # yükleme günü ya da önce: tarihsiz (yayin_on_gun = 0), RouteNote onaylayınca yayında
                       "yayin_tarihi": x.yayin_tarihi.isoformat() if x.yayin_tarihi > x.yukleme else None,
                       "kesif": x.puan > 0,
@@ -729,6 +739,18 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None, gorev_ok
         except ValueError as e:
             raise HTTPException(409, str(e)) from e
 
+    @app.post("/api/takvim/{kimlik}/yeniden-dene")
+    def takvim_yeniden_dene(kimlik: str):
+        """Otomatik yüklemesi düşen paketin bekleme süresini siler: sonraki koşu (en geç 30 dk) beklemeden dener."""
+        from yanki import dagitim
+
+        d = oku(kimlik)
+        if kosu_durumu(calisma)["suruyor"]:  # koşu kaydı bellekte tutup sonunda yazıyor: silinen geri gelirdi
+            raise HTTPException(409, "gece ya da sürekli koşu sürüyor; bitince yeniden dene")
+        if not dagitim.yukleme_hatasi_sil(calisma, kimlik):
+            raise HTTPException(404, "bu paketin düşmüş yüklemesi yok")
+        return {"mesaj": f"{d.ad}: sonraki koşuda (en geç 30 dk) yeniden denenecek"}
+
     @app.post("/api/sanatci/giris")
     def sanatci_giris():
         """RouteNote girişi: tarayıcı penceresi açılır, Scryne girer (şifre hatta tutulmaz)."""
@@ -1061,6 +1083,13 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None, gorev_ok
                              "metin": f"Görev Zamanlayıcı'da {', '.join(f'Yanki\\{g}' for g in kapali)} devre dışı: "
                                       "keşif, hazırlık, otomatik onay, paket, takip ve yedek koşmuyor. Açmak: "
                                       "Görev Zamanlayıcı → Yanki → görev → Etkinleştir (ya da scripts/gorev_kur.ps1)."})
+        from yanki import uzak as uzak_
+
+        sirada = say("yeni", "hazir", "analiz", "onarim")
+        if a.uzak.acik and sirada and (e := uzak_.uretim_engeli(calisma)):  # bakiye/stok/ağ: üretim sessizce beklemesin
+            uyarilar.append({"baslik": "Üretim bekliyor", "etiket": "kiralık GPU",
+                             "metin": f"{e['neden']}. {sirada} şarkı sırada; engel kalkınca üretim kendiliğinden "
+                                      "sürer (son deneme " + str(e.get("zaman", ""))[11:16] + ")."})
         if dagitimci == "tunearo" and (e := tunearo.erisim_durumu(calisma)):
             uyarilar.append({"baslik": "Tunearo API erişimi kapalı", "etiket": "dağıtım",
                              "metin": f"{e.get('ilk', '')[:16].replace('T', ' ')}'dan beri her istek reddediliyor; "

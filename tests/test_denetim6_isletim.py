@@ -159,3 +159,70 @@ def test_stillmore_configteki_bozuk_playlist_kimligi_kesfi_dusurmez(tmp_path, mo
     st = {"acik": True, "playlistler": ["https://open.spotify.com/", "37i9dQZF1DXcBWIGoYBM5M"]}
     cli._stillmore_tara(SimpleNamespace(), tmp_path, tmp_path / "calisma", st, None, False, [])
     assert "37i9dQZF1DXcBWIGoYBM5M" in yazilan and "atlandı" in capsys.readouterr().out
+
+
+def _takvim_sahnesi(tmp_path, monkeypatch, sira, elle_bekleyen=()):
+    from types import SimpleNamespace
+
+    from yanki import dagitim, paket
+
+    monkeypatch.setattr(dagitim, "takvim_oku", lambda _y: None)
+    monkeypatch.setattr(dagitim, "plan", lambda *_a, **_k: dagitim.Plan(sira, None, None, [],
+                                                                       elle_bekleyen=tuple(elle_bekleyen)))
+    monkeypatch.setattr(paket, "yayin_ayarlari", lambda _y: SimpleNamespace(dagitimci="routenote"))
+    monkeypatch.setattr(dagitim, "sec", lambda *_a: SimpleNamespace(ad="routenote", otomatik=True, gece=True))
+
+
+def test_tarayici_mesgulken_takvim_durur_hata_saymaz(tmp_path, monkeypatch):
+    """Oda işi RouteNote tarayıcısını tutarken her paket aynı kilide takılıp 'düştü' sayılıyor, seyrekleşiyordu."""
+    from datetime import date
+
+    from yanki import cli, dagitim, routenote
+
+    sira = [dagitim.Sira(k, "A", k, date.today(), date.today(), 0.0) for k in ("a-b", "a-c")]
+    _takvim_sahnesi(tmp_path, monkeypatch, sira)
+    denemeler = []
+
+    def yukle(_c, _d, kimlik, _t):
+        denemeler.append(kimlik)
+        raise routenote.TarayiciMesgul("RouteNote tarayıcısı başka bir işte açık")
+
+    monkeypatch.setattr(dagitim, "otomatik_yukle", yukle)
+    assert cli._takvim_hatirlat(tmp_path) == 0 and denemeler == ["a-b"]  # ikinci paket denenmez
+    assert cli._yukleme_hatalari(tmp_path / "calisma", {"a-b", "a-c"}) == {}  # seyrekleştirmeye girmez
+
+
+def test_paket_yenilenirken_sonraki_pakete_gecer(tmp_path, monkeypatch):
+    from datetime import date
+
+    from yanki import cli, dagitim, routenote
+
+    sira = [dagitim.Sira(k, "A", k, date.today(), date.today(), 0.0) for k in ("a-b", "a-c")]
+    _takvim_sahnesi(tmp_path, monkeypatch, sira)
+
+    def yukle(_c, _d, kimlik, _t):
+        if kimlik == "a-b":
+            raise routenote.Mesgul("a-b: paket şu an yeniden hazırlanıyor")
+        return {"upc": "5064"}
+
+    monkeypatch.setattr(dagitim, "otomatik_yukle", yukle)
+    assert cli._takvim_hatirlat(tmp_path) == 0
+    assert cli._yukleme_hatalari(tmp_path / "calisma", {"a-b", "a-c"}) == {}
+
+
+def test_elindeki_taslak_bir_kez_bildirilir(tmp_path, monkeypatch):
+    """Gece kuyruğundan çıkarılan (önceki oturumun hazır taslağı, yarım son tık) paket sessizce beklemesin."""
+    from yanki import cli, durum, olay
+
+    durum.yaz(tmp_path / "calisma", durum.Durum("billie-eilish-lovely", "Billie Eilish", "lovely", asama="paketlendi"))
+    _takvim_sahnesi(tmp_path, monkeypatch, [], elle_bekleyen=["billie-eilish-lovely"])
+    assert cli._takvim_hatirlat(tmp_path) == 0 and cli._takvim_hatirlat(tmp_path) == 0
+    basliklar = [o["baslik"] for o in olay.oku(tmp_path / "calisma")]
+    assert basliklar == ["RouteNote'ta seni bekliyor: lovely"]
+
+
+def test_kesif_listesiz_kurulumda_dusmez(tmp_path):
+    from yanki import kesif
+
+    (tmp_path / "calisma" / "a-b").mkdir(parents=True)
+    assert kesif.listedekiler(tmp_path / "liste.toml", tmp_path / "calisma") == {"a-b"}

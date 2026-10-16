@@ -361,3 +361,61 @@ def geri_cek(calisma: Path, kimlik: str, neden: str, kok: Path | None = None, ka
         raise ValueError(f"{ad} için API yok: yayını panelden kaldır, sonra aynı komutu --kaldirildi ile ver")
     geri_cekildi_kaydet(calisma, kimlik, neden, bastan=bastan)
     return "tamam"
+
+
+# Otomatik yüklemesi düşen paket her 30 dk'da yeniden denenmez: ilk düşüşten sonra bir kez hemen (geçici ağ/sayfa
+# hatası), sonra 2, 4, 8, 16, en çok 24 saatte bir. 2026-10-16: bir paketin RouteNote formu (#edit-did12) gece
+# 01:00'den beri her koşuda 45 sn zaman aşımıyla düştü; her deneme tarayıcı açıp 75 sn sürdü, koşu her seferinde
+# "sorunlu" bitti. Odadaki "Şimdi yeniden dene" kaydı siler (`yukleme_hatasi_sil`).
+YUKLEME_TEKRAR_SAAT_EN_COK = 24
+
+
+def yukleme_hatalari_yolu(calisma: Path) -> Path:
+    return calisma / ".yukleme_hatalari.json"
+
+
+def yukleme_hatalari(calisma: Path, kuyrukta: set[str]) -> dict:
+    """Kuyruktaki paketlerin otomatik yükleme düşüşleri ({kimlik: {sayi, son, hata}}); kuyruktan çıkanınki atılır."""
+    import json
+
+    try:
+        veri = json.loads(yukleme_hatalari_yolu(calisma).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return {k: v for k, v in veri.items() if k in kuyrukta and isinstance(v, dict)} if isinstance(veri, dict) else {}
+
+
+def yukleme_hatalari_yaz(calisma: Path, hatalar: dict) -> None:
+    from yanki import dosya
+
+    try:
+        dosya.json_yaz(yukleme_hatalari_yolu(calisma), hatalar)
+    except OSError as e:  # kayıt yazılamazsa paket yalnız daha sık denenir
+        print(f"yükleme hataları kaydedilemedi: {e}")
+
+
+def yukleme_hatasi_sil(calisma: Path, kimlik: str) -> bool:
+    """Paketin düşüş kaydını siler: sonraki koşu beklemeden dener. Kayıt yoksa False. Oda bunu koşu sürerken çağırmaz
+    (koşu kaydı bellekte tutup sonunda yazar)."""
+    import json
+
+    yol = yukleme_hatalari_yolu(calisma)
+    try:
+        veri = json.loads(yol.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    if not isinstance(veri, dict) or veri.pop(kimlik, None) is None:
+        return False
+    yukleme_hatalari_yaz(calisma, veri)
+    return True
+
+
+def yukleme_sonraki_deneme(kayit: dict | None) -> datetime | None:
+    """Düşen yüklemenin en erken yeniden deneneceği an (None: hemen)."""
+    if not kayit or int(kayit.get("sayi", 0)) < 2:
+        return None
+    try:
+        son = datetime.fromisoformat(kayit["son"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    return son + timedelta(hours=min(YUKLEME_TEKRAR_SAAT_EN_COK, 2 ** (int(kayit["sayi"]) - 1)))

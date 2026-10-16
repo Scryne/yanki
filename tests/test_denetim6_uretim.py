@@ -248,3 +248,52 @@ def test_isci_genel_hatasi_sonucsuz_islere_yazilir(tmp_path):
     r = motor.calistir(ayarlar.yukle(), [i], tmp_path / "m", 60, python=Path(sys.executable), isci=isci,
                        bekle=lambda *_: 0)
     assert r[0].hata == "LoRA yüklenemedi"
+
+
+def test_uretim_engeli_kaydedilir_ve_sunucu_acilinca_silinir(tmp_path, monkeypatch):
+    """Bakiye bitince üretim bekliyordu ama pano, `yanki durum` ve oturum özeti bunu hiç söylemiyordu."""
+    monkeypatch.setenv("RUNPOD_API_KEY", "x")
+    a = _uzak_ayar(tmp_path, en_az_bakiye=1.0, yerel_yedek=False)
+    c = tmp_path / "calisma"
+    uzak.motor_sec(a, kayit=lambda _m: None, stok=lambda k, g: "High", bakiye=lambda _k: 0.8,
+                   ssh_engeli=lambda: None, butce_bildir=lambda *_a: None)
+    e = uzak.uretim_engeli(c)
+    assert e["tur"] == "butce" and "0.80" in e["neden"]
+    uzak.motor_sec(a, kayit=lambda _m: None, stok=lambda k, g: None, bakiye=lambda _k: 10.0,
+                   ssh_engeli=lambda: None)
+    assert uzak.uretim_engeli(c)["tur"] == "sunucu"  # stok yok
+    calistir, _, uzak_mi = uzak.motor_sec(a, kayit=lambda _m: None, stok=lambda k, g: "High",
+                                          bakiye=lambda _k: 10.0, ssh_engeli=lambda: None)
+    assert uzak_mi and uzak.uretim_engeli(c) is None
+
+
+def test_bayat_uretim_engeli_gosterilmez(tmp_path):
+    import os
+    import time
+
+    c = tmp_path / "calisma"
+    c.mkdir()
+    yol = c / ".uretim_engeli.json"
+    yol.write_text(json.dumps({"tur": "butce", "neden": "x"}), encoding="utf-8")
+    assert uzak.uretim_engeli(c)["neden"] == "x"
+    eski = time.time() - (uzak.ENGEL_GECERLI_SAAT + 1) * 3600
+    os.utime(yol, (eski, eski))
+    assert uzak.uretim_engeli(c) is None
+
+
+def test_pano_ve_ozet_uretim_engelini_soyler(tmp_path):
+    from fastapi.testclient import TestClient
+
+    from tests.test_sunucu import ODA
+    from yanki import cli, sunucu
+
+    c = tmp_path / "calisma"
+    durum.yaz(c, durum.Durum("a-b", "A", "B"))  # sırada bir şarkı
+    (c / ".uretim_engeli.json").write_text(json.dumps({"tur": "butce", "neden": "RunPod bakiyesi 0.80 $ (en az "
+                                                       "1.00 $): kredi yükle", "zaman": "2026-10-16T13:30:01"}),
+                                           encoding="utf-8")
+    a = replace(ayarlar.yukle(), uzak=ayarlar.Uzak(acik=True))
+    p = TestClient(sunucu.uygulama(a, c, gorev_oku=lambda: {}), base_url=ODA).get("/api/pano").json()
+    u = next(x for x in p["uyarilar"] if x["baslik"] == "Üretim bekliyor")
+    assert "0.80" in u["metin"] and "1 şarkı sırada" in u["metin"] and "13:30" in u["metin"]
+    assert "kredi yükle" in cli.ozet(tmp_path)["uretim_engeli"]

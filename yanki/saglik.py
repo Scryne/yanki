@@ -95,6 +95,9 @@ def uzak_kontrolu(a: Ayarlar) -> Kontrol:
     durdu = uzak.durma_yolu(a.kok)
     if durdu.exists() and time.time() - durdu.stat().st_mtime < uzak.DURMA_SAAT * 3600:
         return Kontrol("kiralık GPU", False, f"devre dışı ({durdu.read_text(encoding='utf-8')[:120]})")
+    if e := uzak.uretim_engeli(a.kok / "calisma"):  # son koşu sunucuyu açamadı (bakiye, stok, ağ): üretim bekliyor
+        return Kontrol("kiralık GPU", False, f"üretim bekliyor: {e['neden'][:160]} · bu ay {harcanan:.2f} $ / "
+                                             f"{a.uzak.aylik_butce:.2f} $")
     return Kontrol("kiralık GPU", harcanan < a.uzak.aylik_butce,
                    f"bu ay {harcanan:.2f} $ / {a.uzak.aylik_butce:.2f} $ ({a.uzak.gpu.replace('NVIDIA ', '')})")
 

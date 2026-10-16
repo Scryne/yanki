@@ -305,14 +305,14 @@ def _routenote(args: argparse.Namespace) -> int:
     calisma = ayarlar.yukle().kok / "calisma"
     if args.islem in ("gonderildi", "gonderilmedi", "taslak-silindi"):
         return _routenote_gonderim(calisma, args)
-    if args.islem == "giris":
-        print("RouteNote açılıyor: giriş yap, sonra pencere kendiliğinden kapanır (en çok 10 dk).")
-        ok = routenote.giris(calisma)
-        print("oturum kaydedildi" if ok else "giriş yapılmadı (süre doldu)")
-        return 0 if ok else 1
     try:
+        if args.islem == "giris":
+            print("RouteNote açılıyor: giriş yap, sonra pencere kendiliğinden kapanır (en çok 10 dk).")
+            ok = routenote.giris(calisma)
+            print("oturum kaydedildi" if ok else "giriş yapılmadı (süre doldu)")
+            return 0 if ok else 1
         print(routenote.kesif(calisma, args.url or routenote.ANA_URL, args.ad))
-    except routenote.OturumYok as e:
+    except (routenote.OturumYok, routenote.Mesgul) as e:
         print(e)
         return 1
     return 0
@@ -700,7 +700,11 @@ def ozet(kok: Path) -> dict:
     from yanki import tunearo
 
     erisim = tunearo.erisim_durumu(calisma)
-    return {"tunearo_erisim_yok": bool(erisim), "otomatik_onay_24sa": yakin, "dinlemede": say("uretildi"),
+    from yanki import uzak
+
+    engel = uzak.uretim_engeli(calisma)
+    return {"uretim_engeli": engel["neden"] if engel and say("yeni", "hazir", "analiz", "onarim") else None,
+            "tunearo_erisim_yok": bool(erisim), "otomatik_onay_24sa": yakin, "dinlemede": say("uretildi"),
             "onarim": say("onarim"),
             "uretimde": say("yeni", "hazir", "analiz"), "paket_bekliyor": say("paketlendi"),
             "yuklendi": say("yuklendi"), "yayinda": say("yayinda"),
@@ -726,6 +730,8 @@ def _ozet(args: argparse.Namespace) -> int:
         satir.append("Tunearo API erişimi kapalı: yükleme ve yoklama bekliyor")
     elif o.get("yuklenecek"):
         satir.append(f"yükleme sırası geldi: {o['yuklenecek']}")
+    if o.get("uretim_engeli"):
+        satir.append(f"üretim bekliyor: {o['uretim_engeli']}")
     if o["spotify_kilit_sn"]:
         satir.append(f"Spotify kilitli (~{max(1, round(o['spotify_kilit_sn'] / 3600))} sa)")
     print(" · ".join(satir))
@@ -1085,48 +1091,23 @@ def _erisim_yok(calisma: Path, e) -> None:
                         f"tunearo:erisim:{date.today()}")
 
 
-# Otomatik yüklemesi düşen paket her 30 dk'da yeniden denenmez: ilk düşüşten sonra bir kez hemen (geçici ağ/sayfa
-# hatası), sonra 2, 4, 8, 16, en çok 24 saatte bir. 2026-10-16: bir paketin RouteNote formu (#edit-did12) gece
-# 01:00'den beri her koşuda 45 sn zaman aşımıyla düştü; her deneme tarayıcı açıp 75 sn sürdü, koşu her seferinde
-# "sorunlu" bitti.
-YUKLEME_TEKRAR_SAAT_EN_COK = 24
-
-
-def _yukleme_hatalari_yolu(calisma: Path) -> Path:
-    return calisma / ".yukleme_hatalari.json"
-
-
+# Düşen otomatik yüklemelerin kaydı ve seyrek deneme `yanki/dagitim.py`'de (oda da gösterir)
 def _yukleme_hatalari(calisma: Path, kuyrukta: set[str]) -> dict:
-    """Kuyruktaki paketlerin otomatik yükleme düşüşleri ({kimlik: {sayi, son, hata}}); kuyruktan çıkanınki atılır."""
-    import json
+    from yanki import dagitim
 
-    try:
-        veri = json.loads(_yukleme_hatalari_yolu(calisma).read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return {}
-    return {k: v for k, v in veri.items() if k in kuyrukta and isinstance(v, dict)} if isinstance(veri, dict) else {}
+    return dagitim.yukleme_hatalari(calisma, kuyrukta)
 
 
 def _yukleme_hatalari_yaz(calisma: Path, hatalar: dict) -> None:
-    from yanki import dosya
+    from yanki import dagitim
 
-    try:
-        dosya.json_yaz(_yukleme_hatalari_yolu(calisma), hatalar)
-    except OSError as e:  # kayıt yazılamazsa paket yalnız daha sık denenir
-        print(f"yükleme hataları kaydedilemedi: {e}")
+    dagitim.yukleme_hatalari_yaz(calisma, hatalar)
 
 
 def _yukleme_sonraki_deneme(kayit: dict | None):
-    """Düşen yüklemenin en erken yeniden deneneceği an (None: hemen)."""
-    from datetime import datetime, timedelta
+    from yanki import dagitim
 
-    if not kayit or int(kayit.get("sayi", 0)) < 2:
-        return None
-    try:
-        son = datetime.fromisoformat(kayit["son"])
-    except (KeyError, TypeError, ValueError):
-        return None
-    return son + timedelta(hours=min(YUKLEME_TEKRAR_SAAT_EN_COK, 2 ** (int(kayit["sayi"]) - 1)))
+    return dagitim.yukleme_sonraki_deneme(kayit)
 
 
 def _takvim_hatirlat(kok: Path) -> int:
@@ -1151,6 +1132,13 @@ def _takvim_hatirlat(kok: Path) -> int:
                f"{s.sanatci} — {s.ad} için orijinal söz yazarı/besteci bulunamadı; dağıtımcı yazarsız cover "
                "almıyor. girdi/liste.toml'da şarkıya yazarlar = [\"Ad Soyad\"] ekle (sonraki koşu paketleyip "
                "yükler) ya da dinleme odasında reddet.", f"yazar_yok:{kimlik}")
+    for kimlik in p.elle_bekleyen:  # önceki oturumun hazır taslağı ya da yarım son tık: otomasyon dokunmaz, bir kez
+        s = durum.oku(calisma, kimlik)
+        print(f"takvim: {s.sanatci} — {s.ad} RouteNote'ta senin elinde, gece kuyruğunda değil")
+        bildir("dagitim", f"RouteNote'ta seni bekliyor: {s.ad}",
+               f"{s.sanatci} — {s.ad}: taslak RouteNote'ta hazır ya da son tık yarıda kaldı; otomasyon bunu "
+               "gönderemez. Dinleme odası → Sanatçı: panelde gönderdiysen \"Panelde gönderdim\", yarım kaldıysa "
+               "\"Kontrol et\".", f"elle_bekleyen:{kimlik}")
     if p.beklemede:
         print(f"takvim: {p.beklemede}; kuyrukta {len(p.sira)} paket")
         return 0
@@ -1194,6 +1182,12 @@ def _takvim_hatirlat(kok: Path) -> int:
                    "Gece yüklemesi duruyor: dinleme odası → Sanatçı → RouteNote'a giriş yap (ya da yanki routenote "
                    "giris). Taslaklar kaldıkları adımdan sürer.", f"routenote:oturum:{date.today()}")
             break
+        except routenote.TarayiciMesgul as e:  # oda işi ya da giriş tarayıcıyı tutuyor: sıradakiler de bekler
+            print(f"takvim: {e}; {len(sirasi_gelen) - len(yuklenen)} paket sonraki koşuda")
+            break
+        except routenote.Mesgul as e:  # paket o an yeniden hazırlanıyor: hata değil, sonraki koşuda
+            print(f"takvim: {s.sanatci} — {s.ad}: {e}; sonraki koşuda")
+            continue
         except tunearo.TunearoHatasi as e:
             if e.kod == 403 and "limit" in str(e).lower():
                 print(f"takvim: Tunearo parça kotası doldu ({e}); kalan {len(sirasi_gelen) - len(yuklenen)} paket "

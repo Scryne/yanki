@@ -32,6 +32,10 @@ class Mesgul(RuntimeError):
     """RouteNote tarayıcı profili başka bir işte açık (oda işi, gece yüklemesi, giriş) ya da paket o an yenileniyor."""
 
 
+class TarayiciMesgul(Mesgul):
+    """Profil başka bir işte açık: sıradaki paketler de aynı kilide takılır, takvim bu koşuda durur."""
+
+
 TARAYICI_KILIDI = ".routenote.kilit"
 
 
@@ -42,8 +46,8 @@ def _tarayici_kilidi(calisma: Path):
 
     with kilit.tek_kosu(calisma / TARAYICI_KILIDI) as alindi:
         if not alindi:
-            raise Mesgul("RouteNote tarayıcısı başka bir işte açık (oda işi, gece yüklemesi ya da giriş); bitince "
-                         "yeniden dene")
+            raise TarayiciMesgul("RouteNote tarayıcısı başka bir işte açık (oda işi, gece yüklemesi ya da giriş); "
+                                 "bitince yeniden dene")
         yield
 
 

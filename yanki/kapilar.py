@@ -50,7 +50,7 @@ class Olcum:
 
 def parmak_izi(fpcalc: Path, yol: Path, uzunluk_sn: int = 600) -> np.ndarray:
     cikti = subprocess.run([str(fpcalc), "-raw", "-json", "-length", str(uzunluk_sn), str(yol)],
-                           capture_output=True, check=True).stdout
+                           capture_output=True, check=True, timeout=ses.ARAC_SURESI).stdout
     return np.array(json.loads(cikti)["fingerprint"], dtype=np.uint32)
 
 
@@ -73,7 +73,7 @@ def mono(yol: Path, sr: int) -> np.ndarray:
     with tempfile.TemporaryDirectory() as t:
         gecici = Path(t) / "m.wav"
         subprocess.run([ses.arac("ffmpeg"), "-hide_banner", "-loglevel", "error", "-y", "-i", str(yol), "-ac", "1",
-                        "-ar", str(sr), str(gecici)], check=True)
+                        "-ar", str(sr), str(gecici)], check=True, timeout=ses.ARAC_SURESI)
         return sf.read(str(gecici), dtype="float32")[0]
 
 
