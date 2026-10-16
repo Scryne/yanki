@@ -80,6 +80,15 @@ class GonderOnayi(BaseModel):
     onay: str = Field(max_length=300)  # şarkının adı, elle yazılır: geri alınamaz gönderimin onayı
 
 
+class ElleYeni(BaseModel):
+    baslik: str = Field(default="", max_length=200)
+
+
+class ElleGonder(BaseModel):
+    gonder: bool = True
+    onay: str | None = Field(default=None, max_length=300)
+
+
 class BulucuArama(BaseModel):
     girdi: str = Field(max_length=500)
 
@@ -697,6 +706,151 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None, gorev_ok
     @app.get("/api/sanatci/is")
     def sanatci_is():
         return isci.durum() or {}
+
+    # ---- yükle: elle yayın taslağı (yanki/elle.py) ----
+    from yanki import elle, routenote
+
+    def elle_hata(e: Exception) -> HTTPException:
+        return HTTPException(404 if "bulunamadı" in str(e) or "geçersiz taslak" in str(e) else 422, str(e))
+
+    def elle_ozet(kimlik: str) -> dict:
+        try:
+            meta = elle.oku(calisma, kimlik)
+            k = elle.klasor(calisma, kimlik)
+            kontrol = elle.kontrol(calisma, kimlik)
+        except elle.Hata as e:
+            raise elle_hata(e) from e
+        surum = lambda ad: int((k / ad).stat().st_mtime) if (k / ad).exists() else None  # noqa: E731
+        return {**meta, "kimlik": kimlik, "hal": elle.hal(meta), "kilit": elle.kilitli(meta), "kontrol": kontrol,
+                "dosya": {"kapak": surum("kapak.jpg"), "ses": surum("ses.flac")}}
+
+    @app.get("/api/elle")
+    def elle_liste():
+        return {"liste": elle.liste(calisma), "secenek": {
+            "diller": list(routenote.RN_DILLER), "turler": list(routenote.RN_TURLER),
+            "dagiticilar": elle.DAGITICILAR, "varsayilan": elle.varsayilanlar(a.kok),
+            "mekanik_ulkeler": list(elle.MEKANIK_LISANS_ULKELER)}, "is": isci.durum()}
+
+    @app.post("/api/elle")
+    def elle_yeni(istek: ElleYeni):
+        return elle_ozet(elle.yeni(calisma, a.kok, istek.baslik)["kimlik"])
+
+    @app.get("/api/elle/{kimlik}")
+    def elle_ac(kimlik: str):
+        return elle_ozet(kimlik)
+
+    @app.post("/api/elle/{kimlik}")
+    def elle_kaydet(kimlik: str, istek: dict):
+        try:
+            elle.guncelle(calisma, kimlik, istek)
+        except elle.Hata as e:
+            raise elle_hata(e) from e
+        except OSError as e:
+            raise HTTPException(409, f"kaydedilemedi ({e.strerror or e}); yeniden dene") from e
+        return elle_ozet(kimlik)
+
+    async def _govde(istek: Request, en_cok: int) -> bytes:
+        if int(istek.headers.get("content-length") or 0) > en_cok:
+            raise HTTPException(413, f"dosya {en_cok // 2**20} MB'tan büyük")
+        veri = await istek.body()
+        if len(veri) > en_cok:
+            raise HTTPException(413, f"dosya {en_cok // 2**20} MB'tan büyük")
+        return veri
+
+    @app.post("/api/elle/{kimlik}/ses")
+    async def elle_ses(kimlik: str, istek: Request, ad: str = "ses.wav"):
+        """Ses dosyası gövdede (ham bayt; `ad` uzantı için). FLAC'a çevirme ffmpeg'le, iş parçacığında."""
+        from starlette.concurrency import run_in_threadpool
+
+        veri = await _govde(istek, elle.EN_BUYUK_YUKLEME)
+        try:
+            await run_in_threadpool(elle.ses_kaydet, calisma, kimlik, ad, veri)
+        except elle.Hata as e:
+            raise elle_hata(e) from e
+        return elle_ozet(kimlik)
+
+    @app.post("/api/elle/{kimlik}/kapak")
+    async def elle_kapak(kimlik: str, istek: Request, ad: str = "kapak.jpg"):
+        from starlette.concurrency import run_in_threadpool
+
+        veri = await _govde(istek, 60 * 2**20)
+        try:
+            await run_in_threadpool(elle.kapak_kaydet, calisma, kimlik, ad, veri)
+        except elle.Hata as e:
+            raise elle_hata(e) from e
+        return elle_ozet(kimlik)
+
+    @app.get("/elle/{kimlik}/kapak")
+    def elle_kapak_goster(kimlik: str, boyut: int = 480):
+        try:
+            yol = elle.klasor(calisma, kimlik) / "kapak.jpg"
+        except elle.Hata as e:
+            raise HTTPException(404, "kapak yok") from e
+        if not yol.exists() or boyut not in KAPAK_BOYUTLARI:
+            raise HTTPException(404, "kapak yok")
+        return FileResponse(kapak_kucuk(calisma, f"elle-{kimlik}", yol, boyut), media_type="image/jpeg")
+
+    @app.get("/elle/{kimlik}/ses")
+    def elle_ses_dinle(kimlik: str):
+        try:
+            yol = elle.klasor(calisma, kimlik) / "ses.flac"
+        except elle.Hata as e:
+            raise HTTPException(404, "ses yok") from e
+        if not yol.exists():
+            raise HTTPException(404, "ses yok")
+        return FileResponse(yol, media_type="audio/flac")
+
+    @app.get("/elle/{kimlik}/paket.zip")
+    def elle_paket(kimlik: str):
+        from urllib.parse import quote
+
+        from fastapi.responses import Response
+
+        try:
+            veri, ad = elle.paket_zip(calisma, kimlik)
+        except elle.Hata as e:
+            raise elle_hata(e) from e
+        return Response(veri, media_type="application/zip",
+                        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(ad)}"})
+
+    @app.post("/api/elle/{kimlik}/gonder")
+    def elle_gonder(kimlik: str, istek: ElleGonder):
+        """RouteNote: aynı oturumda doldur + gönder (geri alınamaz; onay için şarkının adı yazılır) ya da yalnız
+        taslak (`gonder=False`: Scryne panelden bakıp kendisi gönderir, sonra "Panelde gönderdim")."""
+        try:
+            meta = elle.oku(calisma, kimlik)
+            eksik = elle.hazir_mi(calisma, kimlik, "routenote")
+        except elle.Hata as e:
+            raise elle_hata(e) from e
+        if eksik:
+            raise HTTPException(422, "eksik: " + "; ".join(eksik))
+        if (meta.get("routenote") or {}).get("adim") in ("gonderiliyor", "gonderildi"):
+            raise HTTPException(409, "bu taslak RouteNote'a zaten gönderildi")
+        if istek.gonder and not sanatci.onay_tutar(istek.onay or "", meta.get("baslik") or ""):
+            raise HTTPException(422, "onay için şarkının adını aynen yaz")
+        return is_baslat("elle_gonder" if istek.gonder else "elle_taslak", kimlik)
+
+    @app.post("/api/elle/{kimlik}/gonderim-sonucu")
+    def elle_gonderim_sonucu(kimlik: str, istek: GonderimSonucu):
+        try:
+            return {"mesaj": elle.gonderim_sonucu(calisma, kimlik, istek.gonderildi)}
+        except elle.Hata as e:
+            raise HTTPException(409, str(e)) from e
+
+    @app.post("/api/elle/{kimlik}/sifirla")
+    def elle_sifirla(kimlik: str):
+        try:
+            return {"mesaj": elle.sifirla(calisma, kimlik)}
+        except elle.Hata as e:
+            raise HTTPException(409, str(e)) from e
+
+    @app.post("/api/elle/{kimlik}/sil")
+    def elle_sil(kimlik: str):
+        try:
+            elle.sil(calisma, kimlik)
+        except elle.Hata as e:
+            raise HTTPException(409, str(e)) from e
+        return {"silindi": kimlik}
 
     # ---- bulucu: STILLMORE motoruyla Spotify araması (yanki/bulucu.py) ----
     from yanki import bulucu, stillmore

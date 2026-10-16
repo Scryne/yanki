@@ -1794,6 +1794,329 @@ function aramaSonuc(v, suruyor) {
         : "Spotify araması bu ISRC'ye sonuç vermedi: parça yayında değil ya da kalkmış."));
 }
 
+// ---- yükle: elle yayın taslağı (yanki/elle.py). Form kendiliğinden kaydedilir; gönderim RouteNote'a tarayıcıyla ----
+const ELLE_HAL = {
+  taslak: ["taslak", ""], rn_taslak: ["RouteNote'ta taslak", "amber"], kontrol: ["gönderim yarıda", "amber"], gonderildi: ["gönderildi", "ok"],
+};
+let elleAcik, elleSecenek = null, elleKayit = null, elleIzle = null;
+const elleAdi = (m) => m.baslik || "Adsız taslak";
+
+async function yukleGoster() {
+  const ana = $("#ana");
+  let d;
+  try { d = await api("/api/elle"); } catch (e) { doldur(ana, bosEkran("Yükleme açılamadı", e.message)); return; }
+  elleSecenek = d.secenek;
+  if (elleAcik === undefined) elleAcik = depo.oku("elle.acik", null);
+  if (elleAcik && !d.liste.some((x) => x.kimlik === elleAcik)) { elleAcik = null; depo.yaz("elle.acik", null); }
+  $("#g-yukle").textContent = d.is?.suruyor && String(d.is.ad || "").startsWith("elle") ? "•" : "";
+  if (elleAcik) return elleDuzenle(elleAcik, d.is);
+  const yeni = el("button", { class: "dugme birincil", type: "button", onclick: async (e) => {
+    e.currentTarget.disabled = true;
+    try { const m = await api("/api/elle", { baslik: "" }); elleAc(m.kimlik); } catch (err) { bildir(err.message, true); e.currentTarget.disabled = false; }
+  } }, "Yeni yayın");
+  doldur(ana,
+    el("header", { class: "pano-ust" },
+      el("div", {}, el("h1", {}, "Yükle"),
+        el("p", { class: "ipucu" }, "Kendi şarkını ya da hazırladığın bir kaydı yayınla: bilgileri doldur, sesi ve kapağı bilgisayarından seç, dağıtıcıyı seç. RouteNote'a hat kendisi gönderir.")),
+      yeni),
+    d.liste.length ? el("ul", { class: "kayitlar" }, ...d.liste.map((x) => el("li", { class: "kayit kapakli" },
+      x.kapak ? el("img", { class: "kapak-kucuk kapak-orta", src: `/elle/${x.kimlik}/kapak?boyut=96`, alt: "", width: 44, height: 44 }) : el("span", { class: "kapak-kucuk kapak-orta bos", "aria-hidden": "true" }, dalgaIsareti()),
+      el("div", { class: "kayit-ad" }, el("button", { class: "ad bag-dugme", type: "button", onclick: () => elleAc(x.kimlik) }, x.baslik), el("span", { class: "sanatci" }, x.sanatci || "—")),
+      el("div", { class: "olculer" },
+        el("span", { class: `rozet ${ELLE_HAL[x.hal][1]}` }, ELLE_HAL[x.hal][0]),
+        el("span", {}, x.dagiticilar.map((k) => elleSecenek.dagiticilar[k]?.ad || k).join(" · ") || "dağıtıcı yok"),
+        x.upc ? el("code", { title: "UPC" }, x.upc) : null, x.isrc ? el("code", { title: "ISRC" }, x.isrc) : null,
+        !x.ses || !x.kapak ? el("span", { class: "rozet amber" }, !x.ses && !x.kapak ? "ses ve kapak yok" : !x.ses ? "ses yok" : "kapak yok") : null,
+        el("span", {}, "güncel ", el("b", {}, tarih(x.guncel)))),
+      el("div", { class: "kayit-eylem" }, el("button", { class: "dugme kucuk", type: "button", onclick: () => elleAc(x.kimlik) }, "Aç")))))
+      : el("section", { class: "bos-kutu bulucu-bos" }, el("h2", { class: "bolum-baslik" }, "Henüz taslak yok"),
+        el("ul", { class: "bulucu-ornekler" },
+          el("li", {}, "\"Yeni yayın\"la bir taslak aç; yazdıkça kendiliğinden kaydedilir, istediğin zaman dönersin."),
+          el("li", {}, "Sesi WAV, FLAC, AIFF ya da MP3 olarak, kapağı JPG ya da PNG olarak seç: hat RouteNote'un istediği biçime (FLAC 44,1 kHz; 3000×3000 JPG) çevirir."),
+          el("li", {}, "ISRC'n varsa yaz, yoksa dağıtıcı atar. Eksikler sağda listelenir; hepsi tamamlanınca gönder düğmesi açılır."))));
+}
+
+function elleAc(kimlik) { elleAcik = kimlik; depo.yaz("elle.acik", kimlik); yukleGoster(); scrollTo(0, 0); }
+function elleKapat() { elleAcik = null; depo.yaz("elle.acik", null); clearTimeout(elleIzle); yukleGoster(); scrollTo(0, 0); }
+
+// alan bileşenleri: her biri `data-alan` taşır, `elleTopla` değeri okur
+function alanMetin(m, ad, etiket, ek = {}) {
+  const kimlik = `elle-${ad}`;
+  return el("div", { class: "alan" + (ek.genis ? " genis" : "") },
+    el("label", { for: kimlik }, etiket, ek.zorunlu ? el("span", { class: "zorunlu", "aria-hidden": "true" }, " *") : null),
+    el(ek.cok ? "textarea" : "input", { id: kimlik, "data-alan": ad, type: ek.tur || "text", value: ek.cok ? null : (m[ad] ?? ""), placeholder: ek.ipucu || "",
+      maxlength: ek.uzunluk || 200, autocomplete: "off", spellcheck: ek.yazim ? "true" : "false", inputmode: ek.inputmode || null, required: ek.zorunlu || null,
+      "aria-describedby": ek.not ? `${kimlik}-not` : null, rows: ek.cok ? 3 : null }, ek.cok ? (m[ad] ?? "") : null),
+    ek.not ? el("p", { class: "ipucu alan-not", id: `${kimlik}-not` }, ek.not) : null);
+}
+function alanSecim(m, ad, etiket, secenekler, ek = {}) {
+  const kimlik = `elle-${ad}`;
+  return el("div", { class: "alan" },
+    el("label", { for: kimlik }, etiket, ek.zorunlu ? el("span", { class: "zorunlu", "aria-hidden": "true" }, " *") : null),
+    el("select", { id: kimlik, "data-alan": ad }, ...secenekler.map(([v, ad_]) => el("option", { value: v, selected: m[ad] === v ? true : null }, ad_))));
+}
+function alanEvetHayir(m, ad, etiket, ek = {}) {
+  const grup = el("div", { class: "kesitler ikili", role: "radiogroup", "aria-label": etiket, "data-alan": ad, "data-bool": "1", "data-deger": m[ad] === true ? "1" : m[ad] === false ? "0" : "" },
+    ...[["1", ek.evet || "Evet"], ["0", ek.hayir || "Hayır"]].map(([v, yazi]) => el("button", { class: "kesit kucuk", type: "button", role: "radio",
+      "aria-checked": grup_secili(m[ad], v) ? "true" : "false", "aria-pressed": grup_secili(m[ad], v) ? "true" : "false",
+      onclick: (e) => { const g = e.currentTarget.parentElement; g.dataset.deger = v;
+        for (const b of g.children) { const s = b === e.currentTarget; b.setAttribute("aria-checked", s ? "true" : "false"); b.setAttribute("aria-pressed", s ? "true" : "false"); }
+        elleDegisti(); } }, yazi)));
+  return el("div", { class: "alan" }, el("span", { class: "alan-etiket" }, etiket, ek.zorunlu ? el("span", { class: "zorunlu", "aria-hidden": "true" }, " *") : null), grup,
+    ek.not ? el("p", { class: "ipucu alan-not" }, ek.not) : null);
+}
+const grup_secili = (deger, v) => (deger === true && v === "1") || (deger === false && v === "0");
+function alanAnahtar(m, ad, etiket, not) {
+  const kimlik = `elle-${ad}`;
+  return el("div", { class: "ayar-satir alan-anahtar" },
+    el("div", {}, el("b", { id: `${kimlik}-ad` }, etiket), not ? el("p", { class: "ipucu" }, not) : null),
+    el("button", { class: "anahtar", type: "button", role: "switch", "data-alan": ad, "data-anahtar": "1", "aria-checked": m[ad] ? "true" : "false", "aria-labelledby": `${kimlik}-ad`,
+      onclick: (e) => { const b = e.currentTarget; b.setAttribute("aria-checked", b.getAttribute("aria-checked") === "true" ? "false" : "true"); elleDegisti(true); } },
+      el("span", { "aria-hidden": "true" })));
+}
+function alanKisiler(m, ad, etiket, ek = {}) {
+  const liste = el("ul", { class: "kisi-liste", "data-alan": ad, "data-kisi": "1" });
+  const satir = (a = "", s = "") => {
+    const li = el("li", { class: "kisi-satir" },
+      el("input", { type: "text", value: a, placeholder: "Ad", "aria-label": `${etiket}: ad`, maxlength: 80, autocomplete: "off" }),
+      el("input", { type: "text", value: s, placeholder: "Soyad", "aria-label": `${etiket}: soyad`, maxlength: 80, autocomplete: "off" }),
+      el("button", { class: "dugme tehlike kucuk", type: "button", "aria-label": "Kişiyi çıkar", onclick: () => { li.remove(); if (!liste.children.length) liste.append(satir()); elleDegisti(true); } }, "Çıkar"));
+    return li;
+  };
+  const kisiler = (m[ad] || []).length ? m[ad] : [["", ""]];
+  kisiler.forEach(([a, s]) => liste.append(satir(a, s)));
+  return el("div", { class: "alan genis" }, el("span", { class: "alan-etiket" }, etiket, ek.zorunlu ? el("span", { class: "zorunlu", "aria-hidden": "true" }, " *") : null),
+    liste, el("button", { class: "dugme kucuk ikincil", type: "button", onclick: () => { liste.append(satir()); liste.lastChild.querySelector("input").focus(); } }, ek.ekle || "Kişi ekle"),
+    ek.not ? el("p", { class: "ipucu alan-not" }, ek.not) : null);
+}
+
+function elleTopla() {
+  const deger = {};
+  // dağıtıcı kutuları yan panelde (`form="elle-form"`)
+  for (const e of document.querySelectorAll("#elle-form [data-alan], [form='elle-form'][data-alan]")) {
+    const ad = e.dataset.alan;
+    if (e.dataset.kisi) deger[ad] = [...e.children].map((li) => [...li.querySelectorAll("input")].map((i) => i.value));
+    else if (e.dataset.bool) { if (e.dataset.deger !== "") deger[ad] = e.dataset.deger === "1"; }
+    else if (e.dataset.anahtar) deger[ad] = e.getAttribute("aria-checked") === "true";
+    else if (e.dataset.dagitici) { (deger.dagiticilar ||= []); if (e.checked) deger.dagiticilar.push(e.value); }
+    else if (e.type === "checkbox") deger[ad] = e.checked;
+    else if (["c_yil", "p_yil"].includes(ad)) deger[ad] = e.value.trim() ? Number(e.value) : null;
+    else if (ad === "onizleme") { const r = /^(\d{1,2}):([0-5]\d)$/.exec(e.value.trim()); deger.onizleme_sn = r ? +r[1] * 60 + +r[2] : null; }
+    else deger[ad] = e.value;
+  }
+  if (deger.dagiticilar === undefined && document.querySelector("#elle-form [data-dagitici]")) deger.dagiticilar = [];
+  return deger;
+}
+
+// yazdıkça kaydet (700 ms sonra); sağdaki denetim ve önizleme sunucunun cevabıyla tazelenir
+function elleDegisti(hemen = false) {
+  const durum = $("#elle-kayit");
+  if (durum) { durum.textContent = "Kaydedilecek…"; durum.dataset.d = "bekliyor"; }
+  clearTimeout(elleKayit);
+  elleKayit = setTimeout(elleKaydet, hemen ? 50 : 700);
+}
+async function elleKaydet() {
+  const durum = $("#elle-kayit");
+  try {
+    if (durum) { durum.textContent = "Kaydediliyor…"; durum.dataset.d = "bekliyor"; }
+    const m = await api(`/api/elle/${elleAcik}`, elleTopla());
+    if (durum) { durum.textContent = `Kaydedildi ${new Date().toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })}`; durum.dataset.d = "ok"; }
+    $("#elle-yan")?.replaceWith(elleYan(m, null));
+    $("#elle-baslik").textContent = elleAdi(m);
+    const cover = document.querySelector("#elle-cover-alanlar");
+    if (cover) cover.hidden = !m.cover;
+    const soz = document.querySelector("#elle-soz-alanlar");
+    if (soz) soz.hidden = !m.soz_var || m.soz_ayni !== false;
+  } catch (e) { if (durum) { durum.textContent = `Kaydedilemedi: ${e.message}`; durum.dataset.d = "hata"; } }
+}
+
+function dosyaGonder(yol, dosya, cubuk) {
+  return new Promise((coz, red) => {
+    const x = new XMLHttpRequest();
+    x.open("POST", `${yol}?ad=${encodeURIComponent(dosya.name)}`);
+    x.setRequestHeader("Content-Type", "application/octet-stream");
+    x.upload.onprogress = (e) => { if (e.lengthComputable && cubuk) cubuk.style.transform = `scaleX(${e.loaded / e.total})`; };
+    x.onload = () => { let d = {}; try { d = JSON.parse(x.responseText); } catch { /* boş */ }
+      x.status < 300 ? coz(d) : red(new Error(d.detail || `${x.status}`)); };
+    x.onerror = () => red(new Error("bağlantı koptu"));
+    x.send(dosya);
+  });
+}
+
+function yuklemeKutusu(m, tur, kilit) {
+  const kapak = tur === "kapak";
+  const var_ = kapak ? m.dosya.kapak : m.dosya.ses;
+  const bilgi = kapak ? m.kapak : m.ses;
+  const girdi = el("input", { type: "file", id: `elle-${tur}`, class: "gizli", accept: kapak ? "image/jpeg,image/png" : "audio/*,.wav,.flac,.aif,.aiff,.mp3,.m4a",
+    disabled: kilit ? true : null });
+  const cubuk = el("span", { class: "ilerleme-dolu" });
+  const yukle = async (dosya) => {
+    if (!dosya || kilit) return;
+    kutu.setAttribute("aria-busy", "true"); kutu.classList.add("yukleniyor");
+    try { await dosyaGonder(`/api/elle/${m.kimlik}/${tur}`, dosya, cubuk); bildir(kapak ? "Kapak 3000×3000'e hazırlandı." : "Ses FLAC'a çevrildi."); yukleGoster(); }
+    catch (e) { bildir(`${kapak ? "Kapak" : "Ses"} yüklenemedi: ${e.message}`, true); kutu.removeAttribute("aria-busy"); kutu.classList.remove("yukleniyor"); }
+  };
+  girdi.addEventListener("change", () => yukle(girdi.files[0]));
+  const kutu = el("label", { class: "yukle-kutu" + (var_ ? " dolu" : ""), for: `elle-${tur}`,
+    ondragover: (e) => { e.preventDefault(); kutu.classList.add("uzerinde"); }, ondragleave: () => kutu.classList.remove("uzerinde"),
+    ondrop: (e) => { e.preventDefault(); kutu.classList.remove("uzerinde"); yukle(e.dataTransfer.files[0]); } },
+    kapak && var_ ? el("img", { class: "yukle-kapak", src: `/elle/${m.kimlik}/kapak?boyut=480&v=${var_}`, alt: "Kapak önizlemesi", width: 120, height: 120 })
+      : el("span", { class: "yukle-isaret", "aria-hidden": "true" }, dalgaIsareti(26)),
+    el("span", { class: "yukle-metin" },
+      el("b", {}, kapak ? (var_ ? "Kapak hazır" : "Kapak görseli") : (var_ ? "Ses hazır" : "Ses dosyası")),
+      el("span", { class: "ipucu" }, var_ && bilgi
+        ? (kapak ? `${bilgi.ad} · ${bilgi.asil.join("×")}${bilgi.kirpildi ? " · kare kırpıldı" : ""}${bilgi.buyutuldu ? " · büyütüldü" : ""}` : `${bilgi.ad} · ${sure(bilgi.sure)} · FLAC ${virgul(bilgi.flac_boyut / 2 ** 20, 1)} MB`)
+        : kapak ? "JPG ya da PNG, en az 1400×1400. Sürükle ya da tıkla." : "WAV, FLAC, AIFF ya da MP3. Sürükle ya da tıkla."),
+      var_ && !kilit ? el("span", { class: "ipucu kucuk-ipucu" }, "Değiştirmek için yenisini bırak.") : null),
+    el("span", { class: "ilerleme yukle-ilerleme", "aria-hidden": "true" }, cubuk), girdi);
+  return el("div", { class: "yukle-alan" }, kutu,
+    !kapak && var_ ? el("audio", { controls: true, preload: "none", src: `/elle/${m.kimlik}/ses?v=${var_}`, "data-dosya": "elle" }) : null);
+}
+
+async function elleDuzenle(kimlik, is) {
+  const ana = $("#ana");
+  let m;
+  try { m = await api(`/api/elle/${kimlik}`); } catch (e) { elleAcik = null; depo.yaz("elle.acik", null); doldur(ana, bosEkran("Taslak açılamadı", e.message)); return; }
+  const s = elleSecenek, kilit = !!m.kilit;
+  const diller = s.diller.map((d) => [d, d.replace(/_/g, " ").replace("Simplified", "(Basitleştirilmiş)").replace("Traditional", "(Geleneksel)").replace("Latin America", "(Latin Amerika)")]);
+  const form = el("form", { id: "elle-form", class: "elle-form", novalidate: true, oninput: () => elleDegisti(), onchange: () => elleDegisti(true), onsubmit: (e) => e.preventDefault() },
+    el("fieldset", { class: "form-bolum", disabled: kilit || null }, el("legend", {}, "Dosyalar"),
+      el("div", { class: "yukle-cift" }, yuklemeKutusu(m, "ses", kilit), yuklemeKutusu(m, "kapak", kilit))),
+    el("fieldset", { class: "form-bolum", disabled: kilit || null }, el("legend", {}, "Şarkı"),
+      el("div", { class: "alanlar" },
+        alanMetin(m, "baslik", "Şarkının adı", { zorunlu: true, genis: true, ipucu: "Mağazada görünecek ad", yazim: true }),
+        alanMetin(m, "surum", "Sürüm", { ipucu: "Acoustic, Remix, Live… (yoksa boş)", uzunluk: 100 }),
+        alanMetin(m, "sanatci", "Ana sanatçı", { zorunlu: true, uzunluk: 120 }),
+        alanMetin(m, "spotify_sanatci_id", "Spotify sanatçı profili", { ipucu: "Profil linki ya da kimlik (yoksa boş)", uzunluk: 200,
+          not: "Yayın bu profile bağlanır. Boşsa RouteNote hesaptaki aynı adlı profili kullanır, yoksa yeni profil açar." }),
+        alanSecim(m, "dil", "Dil", diller, { zorunlu: true }),
+        alanSecim(m, "tur", "Tür", s.turler.map((t) => [t, t]), { zorunlu: true }),
+        alanEvetHayir(m, "acik_icerik", "Açık içerik (küfür, argo)", { zorunlu: true, not: "Mağazalar \"E\" (explicit) etiketi koyar." }),
+        alanEvetHayir(m, "soz_var", "Sözlü mü", { evet: "Sözlü", hayir: "Enstrümantal" }))),
+    el("fieldset", { class: "form-bolum", disabled: kilit || null }, el("legend", {}, "Haklar ve künye"),
+      el("div", { class: "alanlar" },
+        alanEvetHayir(m, "cover", "Bu bir cover mı", { evet: "Cover", hayir: "Özgün", not: "Cover'da besteci orijinal şarkının yazarlarıdır." }),
+        el("div", { id: "elle-cover-alanlar", class: "alanlar ic", hidden: !m.cover },
+          alanMetin(m, "orijinal_sanatci", "Orijinal sanatçı", { zorunlu: true, uzunluk: 120 }),
+          el("div", { class: "alan genis" }, el("label", { class: "onay-satir" }, el("input", { type: "checkbox", "data-alan": "mekanik_lisans", checked: m.mekanik_lisans || null }),
+            " Mekanik lisansım var"), el("p", { class: "ipucu alan-not" }, `Yoksa yayın ${s.mekanik_ulkeler.join(", ")} dışında yapılır (RouteNote cover için bu ülkelerde lisans istiyor).`))),
+        alanKisiler(m, "yazar_adlari", "Besteciler", { zorunlu: true, ekle: "Besteci ekle", not: "Yasal ad ve soyad (sahne adı değil). Tek adlı sanatçının soyadı da yazılır." }),
+        el("div", { class: "alan genis" }, el("label", { class: "onay-satir" }, el("input", { type: "checkbox", "data-alan": "soz_ayni", checked: m.soz_ayni !== false || null }),
+          " Söz yazarları bestecilerle aynı")),
+        el("div", { id: "elle-soz-alanlar", class: "alanlar ic", hidden: !m.soz_var || m.soz_ayni !== false },
+          alanKisiler(m, "soz_yazari_adlari", "Söz yazarları", { ekle: "Söz yazarı ekle" })),
+        alanMetin(m, "uretici", "Yapımcı (producer)", { ipucu: m.sanatci || "boşsa ana sanatçı", uzunluk: 120 }),
+        alanMetin(m, "etiket", "Plak şirketi (label)", { ipucu: m.sanatci || "", uzunluk: 120 }),
+        alanMetin(m, "c_yil", "© yılı (beste)", { tur: "number", inputmode: "numeric", uzunluk: 4 }),
+        alanMetin(m, "c_sahibi", "© sahibi", { ipucu: "boşsa besteciler", uzunluk: 200 }),
+        alanMetin(m, "p_yil", "℗ yılı (kayıt)", { tur: "number", inputmode: "numeric", uzunluk: 4 }),
+        alanMetin(m, "p_sahibi", "℗ sahibi", { ipucu: "boşsa ana sanatçı", uzunluk: 200 }))),
+    el("fieldset", { class: "form-bolum", disabled: kilit || null }, el("legend", {}, "Kodlar ve tarih"),
+      el("div", { class: "alanlar" },
+        alanMetin(m, "isrc", "ISRC", { ipucu: "TR-A1B-26-00001", uzunluk: 15, not: "Kaydın kodu. Yoksa boş bırak: dağıtıcı atar." }),
+        alanMetin(m, "upc", "UPC / EAN", { ipucu: "12–13 rakam", uzunluk: 13, inputmode: "numeric", not: "Yayının barkodu. RouteNote kendi atar; başka dağıtıcı için." }),
+        alanMetin(m, "yayin_tarihi", "Yayın tarihi", { tur: "date", uzunluk: 10, not: "Boş: dağıtıcı onaylar onaylamaz yayında (en erken). Tarih seçersen RouteNote için en az 10 gün sonrası." }),
+        alanMetin(m, "orijinal_tarih", "Daha önce yayınlandıysa ilk tarih", { tur: "date", uzunluk: 10 }),
+        alanMetin(m, "onizleme", "Önizleme başlangıcı", { ipucu: "1:05", uzunluk: 5, inputmode: "numeric", not: "TikTok ve mağaza önizlemesi buradan başlar (dk:sn)." }))),
+    el("fieldset", { class: "form-bolum", disabled: kilit || null }, el("legend", {}, "Mağazalar"),
+      alanAnahtar(m, "yapay_zeka", "Ses yapay zekâyla üretildi", "Açıkken Amazon ve Kore mağazaları (Melon, Bugs!, FLO, Genie) kapatılır: yapay zekâ içeriği almıyorlar."),
+      alanAnahtar(m, "content_id", "YouTube Content ID", "Kaydını YouTube'da başkasının videosunda tanır ve gelir toplar. Cover ya da yapay zekâ içeriğinde kapalı tut."),
+      el("div", { class: "alanlar" }, alanMetin(m, "notlar", "Notlar (kendin için)", { cok: true, uzunluk: 2000, genis: true, yazim: true }))));
+  const onizleme = form.querySelector("#elle-onizleme");
+  if (onizleme && m.onizleme_sn != null) onizleme.value = `${Math.floor(m.onizleme_sn / 60)}:${String(m.onizleme_sn % 60).padStart(2, "0")}`;
+  doldur(ana,
+    el("header", { class: "elle-ust" },
+      el("button", { class: "dugme kucuk", type: "button", onclick: elleKapat }, "← Taslaklar"),
+      el("div", { class: "elle-kimlik" }, el("p", { class: "ust-satir ipucu" }, el("span", { class: "tur-etiket" }, "Yayın taslağı"), el("span", { class: `rozet ${ELLE_HAL[m.hal][1]}` }, ELLE_HAL[m.hal][0])),
+        el("h1", { id: "elle-baslik" }, elleAdi(m))),
+      el("p", { id: "elle-kayit", class: "elle-kayit", "aria-live": "polite", "data-d": "ok" }, kilit ? "Salt okunur" : `Kaydedildi ${saatDakika(m.guncel)}`)),
+    kilit ? el("p", { class: "not" }, m.kilit) : null,
+    el("div", { class: "pano-izgara elle-izgara" }, el("div", { class: "pano-sol" }, form), elleYan(m, is)));
+  if (is?.suruyor && String(is.ad || "").startsWith("elle")) elleTakip();
+}
+
+function elleYan(m, is) {
+  const s = elleSecenek, k = m.kontrol;
+  const secili = m.dagiticilar || [];
+  const rn = m.routenote || {};
+  const hazir = (d) => !k.eksik.length && !(k.dagitici[d] || []).length;
+  const dagitici = el("fieldset", { class: "dagitici-sec", disabled: m.kilit ? true : null }, el("legend", {}, "Dağıtıcı"),
+    ...Object.entries(s.dagiticilar).map(([ad, d]) => el("label", { class: "dagitici" + (secili.includes(ad) ? " secili" : "") },
+      el("input", { type: "checkbox", value: ad, "data-alan": "dagiticilar", "data-dagitici": "1", checked: secili.includes(ad) || null, form: "elle-form",
+        onchange: () => elleDegisti(true) }),
+      el("span", {}, el("b", {}, d.ad, d.otomatik ? el("span", { class: "rozet ok" }, "otomatik") : el("span", { class: "rozet" }, "elle")), el("span", { class: "ipucu" }, d.aciklama)))));
+  const eksikler = [...k.eksik, ...Object.entries(k.dagitici).flatMap(([d, l]) => l.map((x) => `${s.dagiticilar[d]?.ad}: ${x}`))];
+  const eylemler = [];
+  if (rn.adim === "gonderildi") eylemler.push(el("p", { class: "not canli" }, el("span", { class: "nokta" }), `RouteNote'a gönderildi${rn.gonderim ? ` (${tarih(rn.gonderim)})` : ""}. İnceleme 5–10 iş günü; onay ya da red e-postası gelince bildirilir.`));
+  else if (rn.adim === "gonderiliyor") eylemler.push(el("p", { class: "uyari" }, "Son tıktan sonra iş yarıda kaldı. RouteNote panelinde yayına bak:"),
+    el("div", { class: "satir-ici" }, ...[[true, "Gönderilmiş"], [false, "Taslakta duruyor"]].map(([g, yazi]) => el("button", { class: g ? "dugme kucuk" : "dugme ikincil kucuk", type: "button",
+      onclick: async () => { try { bildir((await api(`/api/elle/${m.kimlik}/gonderim-sonucu`, { gonderildi: g })).mesaj); } catch (e) { bildir(e.message, true); } yukleGoster(); } }, yazi))));
+  else if (secili.includes("routenote")) {
+    const yarim = rn.upc && rn.adim !== "hazir";
+    eylemler.push(el("button", { class: "dugme tehlike dolu genis-dugme", type: "button", disabled: !hazir("routenote") || is?.suruyor || null,
+      title: hazir("routenote") ? "" : "Önce eksikleri tamamla", onclick: () => elleGonderPenceresi(m) }, rn.adim === "hazir" ? "RouteNote'a gönder…" : yarim ? "Taslağı tamamla ve gönder…" : "RouteNote'a gönder…"));
+    if (rn.adim === "hazir") eylemler.push(el("p", { class: "ipucu kucuk-ipucu" }, "Taslak RouteNote'ta hazır ama başka bir oturumda açıldı: otomasyon gönderemezse panelden gönder, sonra:"),
+      el("button", { class: "dugme kucuk", type: "button", onclick: async () => { try { bildir((await api(`/api/elle/${m.kimlik}/gonderim-sonucu`, { gonderildi: true })).mesaj); } catch (e) { bildir(e.message, true); } yukleGoster(); } }, "Panelde gönderdim"));
+    if (!rn.upc) eylemler.push(el("button", { class: "dugme ikincil kucuk", type: "button", disabled: !hazir("routenote") || is?.suruyor || null,
+      onclick: async () => { try { await api(`/api/elle/${m.kimlik}/gonder`, { gonder: false }); bildir("RouteNote taslağı hazırlanıyor; gönderilmeyecek."); elleTakip(); yukleGoster(); } catch (e) { bildir(e.message, true); } } },
+      "Yalnız RouteNote taslağı aç"));
+  }
+  if (secili.includes("elle")) eylemler.push(el("a", { class: "dugme ikincil genis-dugme" + (m.dosya.ses && m.dosya.kapak ? "" : " pasif"), href: m.dosya.ses && m.dosya.kapak ? `/elle/${m.kimlik}/paket.zip` : null,
+    "aria-disabled": m.dosya.ses && m.dosya.kapak ? null : "true", download: "" }, "Paketi indir (ZIP)"));
+  return el("aside", { id: "elle-yan", class: "pano-sag elle-yan" },
+    el("section", { class: "cam yan-panel elle-onizleme", "aria-label": "Önizleme" },
+      m.dosya.kapak ? el("img", { src: `/elle/${m.kimlik}/kapak?boyut=480&v=${m.dosya.kapak}`, alt: "", width: 480, height: 480 }) : el("div", { class: "elle-kapak-bos", "aria-hidden": "true" }, dalgaIsareti(40)),
+      el("div", { class: "elle-onizleme-yazi" }, el("b", {}, elleAdi(m), m.surum ? el("span", { class: "ipucu" }, ` (${m.surum})`) : null),
+        el("span", { class: "ipucu" }, [m.sanatci, m.tur, m.acik_icerik ? "E" : null].filter(Boolean).join(" · ")),
+        rn.upc || rn.isrc || m.isrc ? el("span", { class: "ipucu elle-kod" }, [rn.upc ? `UPC ${rn.upc}` : null, (rn.isrc || m.isrc) ? `ISRC ${rn.isrc || m.isrc}` : null].filter(Boolean).join(" · ")) : null)),
+    el("section", { class: "cam yan-panel", "aria-label": "Hazırlık" }, el("h2", {}, "Hazırlık"),
+      eksikler.length ? el("ul", { class: "kontrol-liste" }, ...eksikler.map((x) => el("li", { class: "eksik" }, x)))
+        : el("p", { class: "gece-satir" }, el("span", { class: "nokta" }), el("b", {}, "Gönderime hazır")),
+      k.uyari.length ? el("ul", { class: "kontrol-liste" }, ...k.uyari.map((x) => el("li", { class: "uyari-madde" }, x))) : null),
+    el("section", { class: "cam yan-panel", "aria-label": "Dağıtım" }, el("h2", {}, "Dağıtım"), dagitici, ...eylemler,
+      rn.upc && rn.adim !== "gonderildi" && rn.adim !== "gonderiliyor" ? el("details", { class: "elle-ileri" }, el("summary", {}, "RouteNote taslağını panelden sildim"),
+        el("p", { class: "ipucu kucuk-ipucu" }, "Kayıt sıfırlanır, form yeniden düzenlenebilir; sonraki gönderim yeni taslak açar."),
+        el("button", { class: "dugme tehlike kucuk", type: "button", onclick: async () => { try { bildir((await api(`/api/elle/${m.kimlik}/sifirla`, {})).mesaj); } catch (e) { bildir(e.message, true); } yukleGoster(); } }, "Kaydı sıfırla")) : null,
+      !rn.upc ? el("details", { class: "elle-ileri" }, el("summary", {}, "Taslağı sil"),
+        el("button", { class: "dugme tehlike kucuk", type: "button", onclick: async () => { try { await api(`/api/elle/${m.kimlik}/sil`, {}); bildir("Taslak silindi."); elleKapat(); } catch (e) { bildir(e.message, true); } } }, "Kalıcı olarak sil")) : null),
+    is && String(is.ad || "").startsWith("elle") ? isPaneli(is) : null);
+}
+function elleGonderPenceresi(m) {
+  const kutu = el("input", { id: "elle-onay", type: "text", autocomplete: "off", spellcheck: "false", placeholder: m.baslik });
+  const sade = (x) => x.trim().replace(/[Iİı]/g, "i").toLowerCase();
+  const dugme = el("button", { class: "dugme tehlike dolu", type: "button", disabled: true, onclick: async () => {
+    dugme.setAttribute("aria-busy", "true"); dugme.disabled = true;
+    try { await api(`/api/elle/${m.kimlik}/gonder`, { gonder: true, onay: kutu.value }); dlg.close(); bildir(`"${m.baslik}" RouteNote'a gönderiliyor; ilerlemeyi "Son iş"ten izle.`); elleTakip(); }
+    catch (e) { dugme.removeAttribute("aria-busy"); dugme.disabled = false; bildir(e.message, true); return; }
+    yukleGoster();
+  } }, "RouteNote'a gönder");
+  kutu.addEventListener("input", () => { dugme.disabled = sade(kutu.value) !== sade(m.baslik); });
+  const dlg = pencere(`"${m.baslik}" RouteNote'a gönderilsin mi?`, [
+    el("p", {}, "Form tarayıcıyla doldurulur ve aynı oturumda incelemeye gönderilir. RouteNote'un şartları senin adına kabul edilir. Gönderdikten sonra ses ve bilgiler değiştirilemez; kaldırmak için panelden takedown gerekir."),
+    el("dl", { class: "ayar-listesi gonder-ozet" },
+      el("dt", {}, "Sanatçı"), el("dd", {}, m.sanatci),
+      el("dt", {}, "Profil"), el("dd", {}, m.spotify_sanatci_id || "yeni profil"),
+      el("dt", {}, "Tür / dil"), el("dd", {}, `${m.tur} · ${(m.dil || "").replace(/_/g, " ")}`),
+      el("dt", {}, "ISRC"), el("dd", {}, m.isrc || "RouteNote atar"),
+      el("dt", {}, "Yayın"), el("dd", {}, m.yayin_tarihi ? tarih(m.yayin_tarihi) : "onaylanınca"),
+      el("dt", {}, "Bölge"), el("dd", {}, m.cover && !m.mekanik_lisans ? `${elleSecenek.mekanik_ulkeler.join(", ")} hariç` : "bütün dünya")),
+    el("label", { for: "elle-onay" }, "Onaylamak için şarkının adını yaz: ", el("b", {}, m.baslik)), kutu],
+    [el("button", { class: "dugme ikincil", type: "button", onclick: () => dlg.close() }, "Vazgeç"), dugme], "gonder-pencere");
+  kutu.focus();
+}
+
+function elleTakip() {
+  clearTimeout(elleIzle);
+  elleIzle = setTimeout(async () => {
+    if (location.hash !== "#_yukle") return;
+    let is;
+    try { is = await api("/api/sanatci/is"); } catch { elleTakip(); return; }
+    if (is.suruyor) { $("#is-paneli")?.replaceWith(isPaneli(is)); elleTakip(); return; }
+    bildir(is.kod === 0 ? "RouteNote işi bitti." : "RouteNote işi hata verdi; \"Son iş\" günlüğüne bak.", is.kod !== 0);
+    yukleGoster();
+  }, 2500);
+}
+
 // ---- kenar çubuğu: şarkılar aşama gruplarında, aranabilir ----
 const GRUPLAR = [
   { k: "dinleme", ad: "Dinlemende", asamalar: ["uretildi", "onarim"], acik: true },
@@ -1843,7 +2166,7 @@ function listeCiz(secili = decodeURIComponent(location.hash.slice(1)) || "_pano"
   doldur($("#liste"), ...(gruplar.length ? gruplar : [el("p", { class: "ipucu kucuk-ipucu" }, `"${aramaMetni}" ile eşleşen şarkı yok.`)]));
 }
 
-const GORUNUM = { _pano: panoGoster, _kesif: kesifGoster, _bulucu: bulucuGoster, _yayin: yayinGoster, _kulak: kulakGoster, _sanatci: sanatciGoster };
+const GORUNUM = { _pano: panoGoster, _kesif: kesifGoster, _bulucu: bulucuGoster, _yayin: yayinGoster, _kulak: kulakGoster, _sanatci: sanatciGoster, _yukle: yukleGoster };
 function acikKimlik() {
   try { return decodeURIComponent(location.hash.slice(1)) || "_pano"; } catch { return "_pano"; }
 }

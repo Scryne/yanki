@@ -85,6 +85,19 @@ UPC yapıştırılır; okuma Spotify uygulamasının içinden yapılır (STILLMO
 Köprü kapalıysa odadaki "Spotify'a bağlan" Spotify'ı hata ayıklama portuyla (yalnız 127.0.0.1) yeniden açar; bir şey
 çalıyorsa önce sorar. Sonuçlar `calisma/bulucu/`'da kalır, "Son aramalar"dan yeniden açılır.
 
+**Elle yayın (dinleme odası → Yükle, `yanki/elle.py`):** kendi şarkın ya da hazırladığın herhangi bir kayıt için
+taslak. Form yazdıkça kaydedilir (`calisma/elle/<kimlik>/`):
+- **Dosyalar:** sesi (WAV/FLAC/AIFF/MP3) ve kapağı (JPG/PNG, en az 1400²) bilgisayarından sürükle; hat FLAC 44,1 kHz
+  16 bit'e ve 3000×3000 RGB JPG'ye (ortadan kare) çevirir.
+- **Bilgiler:** ad, sürüm, sanatçı, Spotify profili, dil ve tür (RouteNote'un listeleri), açık içerik, sözlü/enstrümantal,
+  cover mı (cover: orijinal sanatçı, mekanik lisans yoksa ABD/Kanada/Meksika/Hindistan/Pakistan hariç), besteciler ve söz
+  yazarları (ad + soyad), yapımcı, ©/℗, label, ISRC (boşsa dağıtıcı atar), UPC, yayın tarihi (boş: onaylanınca), ilk
+  yayın tarihi, önizleme başlangıcı, yapay zekâ (Amazon ve Kore mağazaları kapanır), YouTube Content ID.
+- **Dağıtıcı:** *RouteNote* (otomatik: form tarayıcıyla doldurulur ve aynı oturumda gönderilir; onay için şarkının adı
+  yazılır; `yanki elle-yukle <kimlik> --gonder`) ya da *başka dağıtıcı (elle)*: DistroKid, TuneCore vb. otomasyonu
+  yasakladığı için ses + kapak + `BILGILER.txt` tek ZIP'te iner. Sağ panel eksikleri listeler; tamamlanmadan gönder
+  düğmesi açılmaz. Gönderilen taslak kilitlenir.
+
 **Yayından sonra (dinleme odası → Yayın → Performans, `yanki performans`):** RouteNote paneli botla okunmaz (site
 şartları madde 2: "collecting data … using bots … or other automated data gathering methods"). Onun yerine:
 - **Dinlenme:** takip her gece canlı parçalarımızın Spotify sayacını Spotify uygulamasından okur, günlük seri tutar.

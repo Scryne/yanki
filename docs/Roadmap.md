@@ -857,3 +857,14 @@ genişlik × 2 tema) bir hata daha buldu.
   listeleri; editoryal ve adında sanatçı geçen (tek sanatçılık) listeler alınmaz. Canlı deneme: 4 sanatçıdan 10
   karışık liste.
 - STILLMORE 12.13.1 (zigzag düzeltmesi) Caferlyy/distro-finder-bulmaca main'e gönderildi.
+
+## Elle yayın: odada Yükle (2026-10-16, Scryne: "bir taslak olsun, elimle doldurayım, dağıtıcıyı seçeyim, sen otomatik at; ISRC, bilgisayarımdan yükleme")
+
+- `yanki/elle.py` + odada **Yükle**: form (yazdıkça kaydedilir), ses/kapak yükleme ve dönüştürme, denetim (eksik/uyarı),
+  dağıtıcı seçimi, gönderim işi (`yanki elle-yukle`, odanın iş kuyruğu). Taslaklar gece koşusundan bağımsız.
+- RouteNote doldurucusu genelleşti (`yukle_klasor`): cover/özgün (`#Yes2`/`#No3`, parçada `#Yes0`/`#No0`), sözlü/
+  enstrümantal, kendi ISRC'si (parça sayfasındaki kutu düzenlenebilir), sürüm, yapımcı, © ve ℗ sahipleri, ilk yayın
+  tarihi, mağaza ve bölge seçimi (bölge yoksa adıma dokunulmaz). Yanki paketlerinde davranış aynı (`tur` = "cover"
+  çakışmasın diye elle türü `rn_tur`). Kayıtlı Spotify profili yalnız varsayılan sanatçıya bağlanır.
+- Başka dağıtıcılar (DistroKid, TuneCore…) şartlarıyla botu yasaklıyor: ZIP paketi + alan listesi (İngilizce).
+- Canlı RouteNote gönderimi bu taslakla henüz denenmedi (gerçek bir şarkı gerekiyor); ilk gönderimde iş günlüğü izlenmeli.

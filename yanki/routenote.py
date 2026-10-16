@@ -146,12 +146,24 @@ def _tarih(s, kutu: str, gun: date | None) -> None:
                        gun.strftime("%Y/%m/%d") if gun else "")
 
 
-def _tarihler(s, yayin: date | None) -> None:
+def _tarihler(s, yayin: date | None, ilk: date | None = None) -> None:
     """"Originally Released" ve "Sales Start Date". `yayin` None: satış tarihi boş kalır, yayın onaylanınca mağazalara
     gider (form: "If blank, your release is delivered immediately after approval"; Scryne 2026-10-15 "en erken"). Boş
-    satış tarihiyle ileri ilk yayın tarihi kabul edilmiyor, ilk yayın o zaman bugün."""
-    _tarih(s, "#edit_album_info_org_date", yayin or date.today())
+    satış tarihiyle ileri ilk yayın tarihi kabul edilmiyor, ilk yayın o zaman bugün. `ilk`: daha önce yayınlanmış
+    şarkının ilk yayın tarihi (elle taslak)."""
+    _tarih(s, "#edit_album_info_org_date", ilk or yayin or date.today())
     _tarih(s, "#edit_album_info_sale_date", yayin)
+
+
+def _secim(s, evet: str, hayir: str, deger: bool) -> None:
+    """Evet/Hayır kutu çifti: istenen işaretlenir (sayfanın kendi JS'i karşıtını boşaltır; Yanki'nin cover yolu
+    2026-10-15'ten beri böyle), karşıtı hâlâ işaretliyse o da boşaltılır."""
+    istenen, karsit = (evet, hayir) if deger else (hayir, evet)
+    _isaretle(s, istenen)
+    if s.is_checked(karsit):
+        s.click(karsit)
+    if not s.is_checked(istenen) or s.is_checked(karsit):
+        raise RuntimeError(f"{istenen} / {karsit} seçimi tutmadı")
 
 
 def kisi_adi(ad: str) -> str:
@@ -160,9 +172,24 @@ def kisi_adi(ad: str) -> str:
 
 
 def yazarlar(meta: dict) -> list[tuple[str, str]]:
+    """Besteciler: elle taslakta `yazar_adlari` (Scryne yazar), Yanki cover paketinde orijinalin künyesi."""
     from yanki import paket
 
+    if adlar := meta.get("yazar_adlari"):
+        return [(kisi_adi(a), kisi_adi(s)) for a, s in adlar]
     return [(kisi_adi(a), kisi_adi(s)) for a, s in paket._yazarlar(meta)]
+
+
+def soz_yazarlari(meta: dict) -> list[tuple[str, str]]:
+    if adlar := meta.get("soz_yazari_adlari"):
+        return [(kisi_adi(a), kisi_adi(s)) for a, s in adlar]
+    return yazarlar(meta)
+
+
+def rn_dil(meta: dict) -> str | None:
+    """RouteNote'un dil seçeneği: Yanki paketinde Whisper kodu ("en"), elle taslakta doğrudan RouteNote adı."""
+    d = meta.get("dil")
+    return RN_DIL.get(d) or (d if d in RN_DILLER else None)
 
 
 # Söz dili (Whisper kodu) → RouteNote'un dil seçeneği (`div#<kimlik>`, album.html 2026-10-15). Listede olmayan dil
@@ -176,6 +203,20 @@ RN_DIL = {"en": "English", "tr": "Turkish", "fr": "French", "es": "Spanish", "pt
           "fa": "Persian", "ur": "Urdu", "ta": "Tamil", "te": "Telugu", "bn": "Bengali", "pa": "Punjabi",
           "ca": "Catalan", "et": "Estonian", "lv": "Latvian", "lt": "Lithuanian", "is": "Icelandic", "ga": "Irish",
           "af": "Afrikaans", "zu": "Zulu", "kk": "Kazakh", "lo": "Lao", "ht": "Haitian", "la": "Latin"}
+# RouteNote formunun seçenekleri (album.html, 2026-10-15): dil ve tür `div#<ad>`
+RN_DILLER = (
+    "Arabic", "Bengali", "Bulgarian", "Cantonese", "Catalan", "Chinese_Simplified", "Chinese_Traditional", "Croatian",
+    "Czech", "Danish", "Dutch", "English", "Estonian", "Finnish", "French", "German", "Greek", "Haitian", "Hebrew",
+    "Hindi", "Hungarian", "Icelandic", "Indonesian", "Irish", "Italian", "Japanese", "Kazakh", "Korean", "Lao", "Latin",
+    "Latvian", "Lithuanian", "Malay", "Norwegian", "Persian", "Polish", "Portuguese", "Punjabi", "Romanian", "Russian",
+    "Sanskrit", "Slovak", "Slovenian", "Spanish", "Spanish_Latin_America", "Swedish", "Tagalog", "Tamil", "Telugu",
+    "Thai", "Turkish", "Ukrainian", "Urdu", "Vietnamese", "Zulu")
+RN_TURLER = (
+    "Alternative", "Anime", "Blues", "Brazilian", "Children's Music", "Christian & Gospel", "Classical", "Comedy",
+    "Country", "Dance", "Easy Listening", "Electronic", "Enka", "Fitness & Workout", "French Pop", "German Folk",
+    "German Pop", "Hip Hop/Rap", "Holiday", "Indian", "Instrumental", "J-Pop", "Jazz", "K-Pop", "Karaoke", "Kayokyoku",
+    "Korean", "Latin", "New Age", "Opera", "Pop", "R&B/Soul", "Reggae", "Rock", "Singer/Songwriter", "Soundtrack",
+    "Spoken Word", "Vocal", "World")
 # Playwright dosyayı bellekten gönderir ve 50 MB'tan büyüğünü reddeder (`set_input_files`); pay bırakılır
 EN_BUYUK_SES = 48 * 2**20
 UPC = re.compile(r"\d{12,13}")
@@ -188,15 +229,20 @@ def on_kontrol(meta: dict, ses: Path, kapak: Path) -> None:
 
     from yanki import paket
 
-    ham = paket._yazarlar(meta) if (meta.get("orijinal_yazar_adlari") or meta.get("orijinal_yazarlar")) else []
+    if meta.get("yazar_adlari"):  # elle taslak: Scryne yazdı
+        ham = list(meta["yazar_adlari"]) + list(meta.get("soz_yazari_adlari") or [])
+    else:
+        ham = paket._yazarlar(meta) if (meta.get("orijinal_yazar_adlari") or meta.get("orijinal_yazarlar")) else []
     if not ham:
         raise ValueError("pakette orijinal yazarlar yok: `yanki kunye <kimlik>`, sonra `yanki paketle --yeniden`")
     if eksik := [f"{a} {s}".strip() for a, s in ham if not kisi_adi(a) or not kisi_adi(s) or paket.SOYAD_YOK in (a, s)]:
         raise ValueError(f"yazar ad/soyadı eksik: {eksik} (girdi/liste.toml → yazarlar, sonra paketle --yeniden)")
     if meta.get("acik_icerik") not in (True, False):
         raise ValueError("açık içerik bilinmiyor (sözü taranmamış): metadata.json → acik_icerik true/false")
-    if meta.get("dil") not in RN_DIL:
+    if rn_dil(meta) is None:
         raise ValueError(f"söz dili RouteNote listesinde eşlenmemiş: {meta.get('dil')!r} (routenote.RN_DIL)")
+    if meta.get("rn_tur") is not None and meta["rn_tur"] not in RN_TURLER:  # elle taslağın türü (`tur` = "cover")
+        raise ValueError(f"tür RouteNote listesinde yok: {meta['rn_tur']!r}")
     if ses.stat().st_size > EN_BUYUK_SES:
         raise ValueError(f"ses {ses.stat().st_size / 2**20:.1f} MB; tarayıcıdan en çok {EN_BUYUK_SES // 2**20} MB")
     with Image.open(kapak) as im:
@@ -210,25 +256,30 @@ def album_bilgisi(s, meta: dict, yayin_tarihi: date | None, tur: str, spotify_id
     sanatci = meta["sanatci"]
     yazarlar_ = yazarlar(meta)
     _sohbeti_kapat(s)
-    _sec(s, "#edit_album_info_language", RN_DIL[meta["dil"]])
+    _sec(s, "#edit_album_info_language", rn_dil(meta))
     s.fill("#edit_album_info_title", meta["baslik"])
-    s.fill("#album_version", "")
-    _isaretle(s, "#Yes2")  # cover içeriyor
+    s.fill("#album_version", meta.get("surum") or "")
+    _secim(s, "#Yes2", "#No3", meta.get("cover", True))  # cover içeriyor mu (Yanki paketi: evet)
     _isaretle(s, "#No")  # derleme değil
     _sanatci(s, "#edit_album_info_artist", sanatci, spotify_id)
     _satirlar(s, "#add_mul1", "edit_album_first_composer", "edit_album_last_composer", yazarlar_)
-    _isaretle(s, "#Yes1")  # söz var → söz yazarı satırları açılır
-    _satirlar(s, "#add_mul2", "edit_album_info_first_lyricist", "edit_album_info_last_lyricist", yazarlar_)
+    if meta.get("soz_var", True):
+        _secim(s, "#Yes1", "#No1", True)  # söz var → söz yazarı satırları açılır
+        _satirlar(s, "#add_mul2", "edit_album_info_first_lyricist", "edit_album_info_last_lyricist",
+                  soz_yazarlari(meta))
+    else:
+        _secim(s, "#Yes1", "#No1", False)
     s.click("#mainContribBtn")  # RouteNote'un önceden doldurduğu katkıcıyı boşalt ("Change")
     s.select_option("#role_contrib", "Producer")
-    s.fill("#edit_album_first_contributor", sanatci)
-    _sec(s, "#edit_album_info_genre", tur)
-    s.fill("#cpy_year", str(meta.get("orijinal_yil") or (yayin_tarihi or date.today()).year))
-    s.fill("#cpy_name", ", ".join(f"{a} {s_}" for a, s_ in yazarlar_))
-    s.fill("#edit_album_info_pcopyyear", str(date.today().year))
-    s.fill("#edit_album_info_pcopyname", sanatci)
+    s.fill("#edit_album_first_contributor", meta.get("uretici") or sanatci)
+    _sec(s, "#edit_album_info_genre", meta.get("rn_tur") or tur)
+    s.fill("#cpy_year", str(meta.get("c_yil") or meta.get("orijinal_yil") or (yayin_tarihi or date.today()).year))
+    s.fill("#cpy_name", meta.get("c_sahibi") or ", ".join(f"{a} {s_}" for a, s_ in yazarlar_))
+    s.fill("#edit_album_info_pcopyyear", str(meta.get("p_yil") or date.today().year))
+    s.fill("#edit_album_info_pcopyname", meta.get("p_sahibi") or sanatci)
     s.fill("#edit_album_info_label", meta.get("etiket") or sanatci)
-    _tarihler(s, yayin_tarihi)
+    ilk = meta.get("orijinal_tarih")
+    _tarihler(s, yayin_tarihi, date.fromisoformat(ilk) if ilk else None)
     _sec(s, "#edit_album_info_explicit", "Explicit" if meta.get("acik_icerik") is True else "Not Explicit")
 
 
@@ -272,10 +323,17 @@ def parca_bilgisi(s, upc: str, meta: dict) -> None:
         s.wait_for_load_state("networkidle")
     _sohbeti_kapat(s)
     s.fill("#edit-audio-tags0-title", meta["baslik"])
-    _isaretle(s, "#Yes0")
-    _isaretle(s, "#dflt0")  # mekanik lisans yok (Scryne 2026-10-07)
-    if s.is_checked("#cnfrm0"):
-        raise RuntimeError("mekanik lisans 'Yes' işaretli kaldı")
+    if meta.get("surum"):
+        s.fill("#edit-audio-tags0-version", meta["surum"])
+    if meta.get("cover", True):
+        _secim(s, "#Yes0", "#No0", True)
+        _isaretle(s, "#dflt0")  # mekanik lisans yok (Scryne 2026-10-07)
+        if s.is_checked("#cnfrm0"):
+            raise RuntimeError("mekanik lisans 'Yes' işaretli kaldı")
+    else:
+        _secim(s, "#Yes0", "#No0", False)
+    if meta.get("isrc"):  # kendi ISRC'si (elle taslak); yoksa RouteNote'un atadığı kalır
+        s.fill("#edit-audio-tags0-isrc", meta["isrc"])
     if (on := meta.get("onizleme_sn")) is not None:
         dk, sn = divmod(int(on), 60)
         s.fill("#numOnly0", f"{dk:02d}")
@@ -320,23 +378,28 @@ def _secili_bolgeler(s) -> list[str]:
     return [x.strip() for x in s.locator("#ms1 .ms-sel-item").all_inner_texts()]
 
 
-def magazalar(s, upc: str) -> None:
-    """5. sayfa (Manage Stores): mağazaları kapat, fiyat Standard (varsayılan), bölge: Exclude + beş ülke. Bölge kutusu
-    MagicSuggest (`#ms1`; gizli alan ülke kimliklerini tutar). Kaydetmez."""
+def magazalar(s, upc: str, kapali: dict[str, int] | None = None, haric: tuple[str, ...] | None = None) -> None:
+    """5. sayfa (Manage Stores): mağazaları kapat, fiyat Standard (varsayılan), bölge: Exclude + ülkeler. Bölge kutusu
+    MagicSuggest (`#ms1`; gizli alan ülke kimliklerini tutar). Kaydetmez. Varsayılan Yanki cover'ı; elle taslak kendi
+    seçimini verir (hariç ülke yoksa bölge adımına dokunulmaz: dünya geneli)."""
+    kapali = KAPALI_MAGAZALAR if kapali is None else kapali
+    haric = HARIC_BOLGELER if haric is None else haric
     s.goto(f"{RN}/addstore/form/{upc}")
     s.wait_for_load_state("networkidle")
     _sohbeti_kapat(s)
-    for no in KAPALI_MAGAZALAR.values():
+    for no in kapali.values():
         if s.is_checked(f"#edit-did{no}"):
             s.click(f"#edit-did{no}")
-    if acik := [ad for ad, no in KAPALI_MAGAZALAR.items() if s.is_checked(f"#edit-did{no}")]:
+    if acik := [ad for ad, no in kapali.items() if s.is_checked(f"#edit-did{no}")]:
         raise RuntimeError(f"mağaza kapatılamadı: {acik}")
+    if not haric:
+        return
     if not s.is_checked("#exclud"):
         s.click("#excluds")  # kutu gizli, etiketi düğme
     if not s.is_checked("#exclud") or s.is_checked("#includ"):
         # Include kalırsa beş ülke yayının TEK bölgesi olur: mekanik lisansın olmadığı ülkeler
         raise RuntimeError("bölge modu Exclude'a geçmedi; mağazalar kaydedilmedi")
-    for ulke in HARIC_BOLGELER:
+    for ulke in haric:
         if any(x.startswith(ulke) for x in _secili_bolgeler(s)):
             continue
         s.click("#ms-input-0")
@@ -344,7 +407,7 @@ def magazalar(s, upc: str) -> None:
         oneri = s.locator(".ms-res-item").filter(visible=True)
         oneri.filter(has_text=re.compile(rf"^{re.escape(ulke)}( \(the\))?$")).first.click()  # ISO adı: "… (the)"
     secili = _secili_bolgeler(s)
-    if eksik := [u for u in HARIC_BOLGELER if not any(x.startswith(u) for x in secili)]:
+    if eksik := [u for u in haric if not any(x.startswith(u) for x in secili)]:
         raise RuntimeError(f"bölge seçilemedi: {eksik} (seçili: {secili})")
 
 
@@ -461,11 +524,23 @@ class RouteNote:
         return cls(kok, bool(r.get("gorunur", True)), r.get("spotify_sanatci_id") or None, bool(r.get("gece", False)))
 
     def yukle(self, calisma: Path, d, yayin_tarihi: date, gonder: bool = True) -> dict:
+        """Yanki'nin cover paketi (`calisma/<kimlik>/paket`)."""
+        from yanki import durum, tunearo
+
+        tur = tunearo.tur_sec(d.analiz.get("stil", ""), (d.kunye or {}).get("sanatci_turleri"))
+        return self.yukle_klasor(calisma, durum.klasor(calisma, d.kimlik) / "paket", d.kimlik, yayin_tarihi, tur,
+                                 gonder, f"yanki routenote gonderildi {d.kimlik}`, taslakta duruyorsa `yanki "
+                                         f"routenote gonderilmedi {d.kimlik}")
+
+    def yukle_klasor(self, calisma: Path, p: Path, kimlik: str, yayin_tarihi: date | None, tur: str,
+                     gonder: bool = True, kurtarma: str = "") -> dict:
+        """Bir paket klasörü (`metadata.json` + FLAC + 3000² JPG): Yanki paketi ya da odadan elle doldurulan taslak
+        (`yanki/elle.py`). `yayin_tarihi` None ya da bugün/geçmiş: onaylanınca yayında. `kurtarma`: yarıda kalan
+        gönderimin sonucunu kaydetme yolu (hata mesajında)."""
         from playwright.sync_api import sync_playwright
 
-        from yanki import dosya, durum, tunearo
+        from yanki import dosya
 
-        p = durum.klasor(calisma, d.kimlik) / "paket"
         meta_yolu = p / "metadata.json"
         meta = json.loads(meta_yolu.read_text(encoding="utf-8"))
         ses = next(p.glob("*.flac"), None)
@@ -475,13 +550,14 @@ class RouteNote:
         kayit = meta.get("routenote") or {}
         if kayit.get("adim") == "gonderiliyor":
             raise RuntimeError(
-                f"son gönderim yarıda kaldı: RouteNote panelinde (Discography) yayına bak. Gönderildiyse `yanki "
-                f"routenote gonderildi {d.kimlik}`, taslakta duruyorsa `yanki routenote gonderilmedi {d.kimlik}`")
+                f"son gönderim yarıda kaldı: RouteNote panelinde (Discography) yayına bak. Gönderildiyse `{kurtarma}`"
+                if kurtarma else "son gönderim yarıda kaldı: RouteNote panelinde (Discography) yayına bak; odada "
+                                 "sonucu seç")
         if kayit.get("adim") not in ("hazir", "gonderildi"):
             on_kontrol(meta, ses, kapak)
         # bugün ya da geçmiş tarih (takvim yayin_on_gun = 0): tarihsiz, onaylanınca yayında. İleri tarih en az
         # YAYIN_ASGARI_GUN sonrası: inceleme 5–10 iş günü, daha yakın tarih incelemede geçer
-        hemen = yayin_tarihi <= date.today()
+        hemen = yayin_tarihi is None or yayin_tarihi <= date.today()
         yayin_tarihi = None if hemen else max(yayin_tarihi, date.today() + timedelta(days=YAYIN_ASGARI_GUN))
         iso = yayin_tarihi.isoformat() if yayin_tarihi else None
 
@@ -490,7 +566,10 @@ class RouteNote:
             meta["routenote"] = kayit
             dosya.json_yaz(meta_yolu, meta)
 
-        tur = tunearo.tur_sec(d.analiz.get("stil", ""), (d.kunye or {}).get("sanatci_turleri"))
+        kapali = ({ad: no for ad, no in KAPALI_MAGAZALAR.items() if ad in meta["kapali_magazalar"]}
+                  if "kapali_magazalar" in meta else None)
+        haric = tuple(meta["haric_bolgeler"]) if "haric_bolgeler" in meta else None
+        spotify_id = meta.get("spotify_sanatci_id") or (None if meta.get("yeni_profil") else self.spotify_id)
         with sync_playwright() as pw:
             b = baglam(calisma, pw, self.gorunur)
             try:
@@ -511,7 +590,7 @@ class RouteNote:
                 if kayit.get("adim") == "olusturuldu":
                     s.goto(f"{RN}/editalbum/{upc}")
                     s.wait_for_load_state("networkidle")
-                    album_bilgisi(s, meta, yayin_tarihi, tur, self.spotify_id)
+                    album_bilgisi(s, meta, yayin_tarihi, tur, spotify_id)
                     s.click("#edit-album-save-image")
                     _bekle_adres(s, "/edit_album/", "albüm bilgisini")
                     isle(adim="album", yayin_tarihi=iso)
@@ -532,7 +611,7 @@ class RouteNote:
                     _bekle_adres(s, "/edit_album/", "kapağı")
                     isle(adim="kapak")
                 if kayit.get("adim") == "kapak":
-                    magazalar(s, upc)
+                    magazalar(s, upc, kapali, haric)
                     s.click("#album_save")
                     _bekle_adres(s, "/edit_album/", "mağazaları")
                     isle(adim="hazir")

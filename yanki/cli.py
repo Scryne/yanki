@@ -1254,6 +1254,37 @@ def _dagitim_red(args: argparse.Namespace) -> int:
     return 0
 
 
+def _elle_yukle(args: argparse.Namespace) -> int:
+    """Odada elle doldurulan taslak (`yanki/elle.py`) → RouteNote: dört adım tarayıcıyla, `--gonder` ile aynı oturumda
+    "Distribute" (geri alınamaz)."""
+    from yanki import elle, routenote
+
+    a = ayarlar.yukle()
+    calisma = a.kok / "calisma"
+    try:
+        if eksik := elle.hazir_mi(calisma, args.kimlik, "routenote"):
+            print(f"✗ {args.kimlik}: eksik: {'; '.join(eksik)}")
+            return 1
+        p = elle.routenote_hazirla(calisma, args.kimlik)
+        meta = elle.oku(calisma, args.kimlik)
+        bilgi = routenote.RouteNote.ayardan(a.kok).yukle_klasor(calisma, p, args.kimlik, elle.yayin_tarihi(meta),
+                                                               meta["tur"], gonder=args.gonder)
+    except (elle.Hata, ValueError, RuntimeError, OSError) as e:  # OturumYok RuntimeError türevi
+        print(f"✗ {args.kimlik}: {type(e).__name__}: {e}")
+        return 1
+    from datetime import date
+
+    meta = elle.oku(calisma, args.kimlik)
+    meta["yukleme"] = {"dagitimci": "routenote", "upc": bilgi.get("upc"), "isrc": bilgi.get("isrc"),
+                       "yayin_tarihi": bilgi.get("yayin_tarihi"), "en_gec_yayin": bilgi.get("en_gec_yayin"),
+                       "tarih": (meta.get("yukleme") or {}).get("tarih") or date.today().isoformat()}
+    elle._yaz(calisma, args.kimlik, meta)
+    ne = "gönderildi (RouteNote incelemesinde)" if args.gonder else "taslak hazır (gönderilmedi)"
+    print(f"{ne}: {meta.get('sanatci')} — {meta.get('baslik')} · UPC {bilgi.get('upc')} · ISRC {bilgi.get('isrc')} · "
+          f"yayın {bilgi.get('yayin_tarihi') or 'onaylanınca'}")
+    return 0
+
+
 def _eposta(args: argparse.Namespace) -> int:
     """RouteNote e-postaları (onay, düzeltme isteği, red) → hat (`yanki/eposta.py`). Panel botla okunmaz."""
     import imaplib
@@ -1728,6 +1759,10 @@ def main(argv: list[str] | None = None) -> int:
     kp.set_defaults(fn=_kapak)
     alt.add_parser("dagitim-durum", help="API'li dağıtımcıya yüklenenlerin inceleme/yayın durumu").set_defaults(
         fn=_dagitim_durum)
+    ey = alt.add_parser("elle-yukle", help="odada elle doldurulan yayın taslağını RouteNote'a doldur (ve gönder)")
+    ey.add_argument("kimlik")
+    ey.add_argument("--gonder", action="store_true", help="aynı oturumda Distribute (geri alınamaz)")
+    ey.set_defaults(fn=_elle_yukle)
     ep = alt.add_parser("eposta", help="RouteNote'un onay / düzeltme / red e-postalarını oku ve hatta işle")
     ep.add_argument("--gun", type=int, default=21, help="son kaç günün iletileri")
     ep.set_defaults(fn=_eposta)
@@ -1789,7 +1824,7 @@ def main(argv: list[str] | None = None) -> int:
 
 YAZAN_KOMUTLAR = {"hazirla", "uret", "calistir", "yeniden", "kunye", "paketle", "yuklendi", "kesif", "takip",
                   "temizle", "yedekle", "dagitim-red", "geri-cek", "bastan", "gunduz", "yukle", "dagitim-durum",
-                  "kapak", "yapi", "routenote", "eposta"}
+                  "kapak", "yapi", "routenote", "eposta", "elle-yukle"}
 
 
 if __name__ == "__main__":

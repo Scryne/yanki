@@ -227,6 +227,9 @@ IS_KOMUTLARI = {  # ad → (yanki argümanları, kimlik gerekir mi)
     "taslak": (["yukle", "{kimlik}"], True),
     "gonder": (["yukle", "{kimlik}", "--gonder"], True),
     "giris": (["routenote", "giris"], False),
+    # elle taslak (yanki/elle.py): RouteNote'a aynı oturumda doldur + gönder; ya da yalnız taslak
+    "elle_gonder": (["elle-yukle", "{kimlik}", "--gonder"], True),
+    "elle_taslak": (["elle-yukle", "{kimlik}"], True),
 }
 
 
