@@ -6,10 +6,12 @@ onaylananı paketler ve RouteNote'a tarayıcıyla yükler (son "Distribute" Scry
 kaldırılmış, hâlâ aranan şarkılar ve hattın iyi yaptığı türlerde popüler şarkılar (`yanki kesif`); yüklenen parçanın
 Spotify'da çıkıp çıkmadığını ve adı arandığında kaçıncı sırada olduğunu `yanki takip` izler.
 
-**Şu an (2026-10-15 akşam):** üretim açık, tarif ep20 + CFG 10, yalnız kör testlerde yayınlanabilir çıkan türlerde
+**Şu an (2026-10-15 akşam, güncelleme 2026-10-16):** üretim açık, tarif ep20 + CFG 10, yalnız kör testlerde yayınlanabilir çıkan türlerde
 (balad, pop, rock, metal, pop-punk, country, dance-pop; tür dışı şarkı üretilmez, `uretim.tur_disi`). Otomatik onay
 (24 saat veto) ve RouteNote'a otomatik gönderim açık (`[routenote] gece = true`); RouteNote oturumu düşünce gönderim
 durur ve "giriş yap" bildirilir. S34 (dikkat + MLP LoRA) Scryne söyleyince. Tunearo API'si 2026-10-12'de kapandı.
+2026-10-16: 12 şarkı RouteNote incelemesinde; RunPod bakiyesi 0,80 $ (`en_az_bakiye` 1 $), kredi yüklenene kadar üretim
+bekliyor (panoda görünür). Otomatik onayın öneri kuralı kulak seçimini 12'de 3 tutuyor (`yanki isabet`).
 
 ## Günlük akış
 
@@ -21,7 +23,8 @@ durur ve "giriş yap" bildirilir. S34 (dikkat + MLP LoRA) Scryne söyleyince. Tu
 1. `girdi/liste.toml`'a şarkı ekle (sanatçı + şarkı adı yeter) ya da 0. adımdaki gibi keşiften.
 2. **Sürekli koşu:** bilgisayar açıkken her 30 dk `\Yanki\Surekli` (`scripts/surekli.ps1`) `yanki calistir`
    koşar (Scryne, 2026-10-10: "gece 3'ü beklemeye gerek yok"); `\Yanki\Gece` 03:00'te bilgisayarı uykudan uyandırıp
-   aynısını koşar ve özet bildirimi gösterir (o an sürekli koşu sürüyorsa bildirim göstermeden çıkar). Görevler Görev
+   aynısını koşar ve özet bildirimi gösterir (o an sürekli koşu sürüyorsa bitmesini en çok 3 saat bekler, sonra kendisi
+   koşar). Görevler Görev
    Zamanlayıcı'da kapatılırsa pano ve `yanki durum` söyler. Her koşuda: hazırlık (kaynak ses YouTube, sözler LRCLIB, künye ve stil
    MusicBrainz), üretim, veto penceresi, paket, yükleme sırası. Üretim prizde ve GPU boşken, kullanıcı etkinken de,
    koşu başına en çok 2 şarkı evde, kiralık GPU'da `[uzak] sarki` (bekleyen onarımlar önce). Her koşunun ilk adımı açık
@@ -29,7 +32,11 @@ durur ve "giriş yap" bildirilir. S34 (dikkat + MLP LoRA) Scryne söyleyince. Tu
    uygulamasını kullanır: uygulama kapalıysa ya da bilgisayar 20 dk'dır kullanılmıyorsa, bir şey çalmıyorsa; Spotify
    API'si kilitliyken keşif kilit kalkana kadar bekler. Hazırlıkta düşen şarkı (söz/kaynak yok) en erken 4 saat sonra
    yeniden denenir; `girdi/`'ye söz ya da ses bırakılırsa hemen. Adımlar birbirinden yalıtılmış: biri düşerse hatası
-   günlüğe yazılır, koşu sürer ve hata bildirimi gelir. İş yapılmayan koşu günlüğe yazmaz. Günlük:
+   günlüğe yazılır, koşu sürer ve hata bildirimi gelir (aynı hata günde bir kez). İş yapılmayan koşu günlüğe yazmaz;
+   bekleme hâli (kiralık GPU açılamıyor, pil) değişince bir kez yazılır. Kiralık GPU'nun açılamama nedeni (bakiye,
+   aylık sınır, stok, ağ) panoda "Senden beklenen"de, `yanki durum` ve oturum özetinde görünür; bakiye/sınır günde bir
+   bildirilir. Otomatik yüklemesi düşen paket her koşuda değil, 2, 4, 8 … en çok 24 saatte bir yeniden denenir
+   (`yanki takvim` ve odadaki Yükleme sırası gösterir; **Şimdi yeniden dene** beklemeyi siler). Günlük:
    `calisma/gunluk/<tarih>.log`; ayar: `config/operasyon.toml` → `[surekli]`. Hemen istersen elle
    `uv run yanki calistir` (`--hepsi`: zamanı gelmemiş adımlar da; aynı anda tek koşu, kilitli). Dinleme odası koşu
    sürerken de açık kalabilir: kararlar şarkı başına kilitle yazılır, koşu onları ezmez.
@@ -45,7 +52,9 @@ durur ve "giriş yap" bildirilir. S34 (dikkat + MLP LoRA) Scryne söyleyince. Tu
    gönder…" formun dört adımını (albüm, ses + parça, kapak, mağaza/bölge) doldurur ve şarkının adı yazılınca aynı
    oturumda "Distribute"a basar (geri alınamaz). RouteNote'un yayın sayfası yalnız taslağı dolduran tarayıcı
    oturumunda dolu: önceki oturumda hazırlanmış taslak panelden elle gönderilir, sonra odada **Panelde gönderdim**
-   (ya da `yanki routenote gonderildi <kimlik>`). Elle: `yanki yukle <kimlik>` (taslak), `--gonder` (gönderim).
+   (ya da `yanki routenote gonderildi <kimlik>`); bu paketler gece kuyruğuna girmez, bir kez bildirilir. Kaydı
+   değiştiren düğmeler önce ne olacağını sorar. Elle: `yanki yukle <kimlik>` (taslak), `--gonder` (gönderim).
+   Tarayıcı profili aynı anda tek işte açılır: oda işi ya da giriş sürerken gece yüklemesi o koşuda bekler.
    Taslak açılmadan önce yazar ad/soyadı, açık içerik, dil ve dosya boyutu denetlenir; yarıda kalan taslak kaldığı
    adımdan sürer. Oturum birkaç saatte düşer: odada "RouteNote'a giriş yap" ya da `yanki routenote giris` (şifre
    tutulmaz). Son tıktan sonra iş düşerse hat yeniden göndermez; Sanatçı'da **Kontrol et** çıkar, panelde gördüğünü
@@ -109,8 +118,8 @@ taslak. Form yazdıkça kaydedilir (`calisma/elle/<kimlik>/`):
   havuzuna ekler (`config/kesif.toml` → `[stillmore] sanatci_*`).
 - **RouteNote kararları e-postadan (`yanki eposta`, gece 6 saatte bir):** `.env`'ye `EPOSTA_KULLANICI` (RouteNote
   hesabının Gmail adresi) ve `EPOSTA_SIFRE` (Google hesabı → Güvenlik → 2 adımlı doğrulama → Uygulama şifreleri).
-  Yalnız gönderende "routenote" geçen iletiler, salt okunur. Onay → yükleme kaydında `approved`; düzeltme isteği →
-  bildirim; red → şarkı `paketlendi`ye döner, RouteNote kaydı geçmişe, takvim düzeltilene kadar yeni yükleme açmaz.
+  Yalnız gönderende "routenote" geçen iletiler, salt okunur. Onay → yükleme kaydında `approved` (tarihsiz yayında
+  "Spotify'da hâlâ yok" alarmı onay + 7 + 3 güne kayar); düzeltme isteği → bildirim; red → şarkı `paketlendi`ye döner, RouteNote kaydı geçmişe, takvim düzeltilene kadar yeni yükleme açmaz.
   Elle gönderilen taslağın onay e-postası gelirse gönderim kendiliğinden kaydedilir. İletilerin metni
   `calisma/eposta/ornek/`'e düşer (kurallar ilk örneklerle sıkılaştırılır).
 
@@ -140,13 +149,19 @@ OKU.md`; deneme düşerse eğitim yine kaydedilir, `yanki egit --deneme-yeniden 
 eğitimin 20. epoch'u (`config/motor.toml` → `[motor] lora`; kör testte yayınlanabilir 9/17). Klasör yoksa yalnız üretim
 durur, `yanki durum` gösterir.
 
-**Tür çizgisi:** keşif hattın tarifi dinlenmiş türlerinde kalır (balad, pop, piyano/akustik, rock). Rap, metal,
-elektronik, Latin/Brezilya vb. aday Deezer türünden tanınır, puan almaz, kendiliğinden listeye girmez (dinleme
-odasında "Yine de ekle"). Aynı kalıp otomatik onayı da sınırlar (`yanki/onay.py` → `DENENMEMIS`).
+**Tür çizgisi:** keşif hattın kör testlerde yayınlanabilir çıktığı türlerde kalır (balad, pop, piyano/akustik, rock,
+metal, pop-punk, country, dance-pop). Rap/hip-hop, folk, grunge, reggaeton/Latin, EDM (techno, dubstep, trance), K-pop
+vb. aday Deezer türünden tanınır, puan almaz, kendiliğinden listeye girmez (dinleme odasında "Yine de ekle"); liste
+`config/kesif.toml` → `haric_turler`. Otomatik onayı ayrı bir liste sınırlar (`config/yayin.toml` →
+`[otomatik_onay] denenmemis_turler`). Tür dışı şarkı üretilmez (`uretim.tur_disi`).
 
 Diğer komutlar: `yanki durum` (motor, model, araçlar, GPU, anahtarlar, disk, şarkıların aşaması), `yanki ozet` (tek satır),
 `yanki temizle [--uygula]` (yüklenmiş şarkıların ara sesleri; gece koşusu 14 günden eskileri kendisi siler),
-`yanki yedekle [--zorla]` (seçimler, yükleme bilgisi, keşif kaydı, liste, ayarlar; ses ve sır yok; gece haftada bir),
+`yanki yedekle [--zorla]` (seçimler, yükleme bilgisi — `bastan` arşivi ve eski paketin taslak UPC'si dahil —, elle
+taslakların bilgisi ve kapağı, RouteNote e-posta kaydı, kazanç raporları, keşif kaydı ve CSV'leri, liste, ayarlar; ses ve
+sır yok; gece haftada bir; üretimdeki LoRA yedek klasörüne bir kez kopyalanır),
+`yanki isabet [--ayrinti]` (otomatik onayın öneri kuralı Scryne'ın kulak seçimlerini ne sıklıkla tutuyor; Faz 12 eşiği
+%70; ölçüm `calisma/dinleme/isabet.json`'a, oran panoda "Otomatik onay" satırında),
 `yanki hazirla [--yeniden]` (onaylı/yüklenmiş şarkılara dokunmaz), `yanki uret`,
 `yanki yeniden <kimlik>` (onaylı şarkıya güncel hatla yeni adaylar), `yanki kunye [kimlik]` (yazarlar ve orijinal
 yılı yeniden çek), `yanki paketle [--yeniden]`.
@@ -189,7 +204,7 @@ uv run yanki routenote giris                               # RouteNote oturumu (
 - **Parçalı üretim:** 8 dk'dan uzun şarkı (evde 110 sn'den uzun) vokal boşluklarından parçalara bölünür; ilk parçanın
   çıktısı sonraki parçalara tını referansı olur.
 - **Pencereli onarım:** işaretli aralığın ±25 sn'lik penceresi yeniden üretilip geri dikilir; aralık dışı birebir korunur.
-- **Kapılar:** orijinal kaydı taşıyan (parmak izi ≥ 0,72 ya da dalga korelasyonu ≥ 0,25), sözsüz (WER ≥ 0,5) ya da yanlış
+- **Kapılar:** orijinal kaydı taşıyan (parmak izi ≥ 0,72 ya da dalga korelasyonu ≥ 0,20), sözsüz (WER ≥ 0,5) ya da yanlış
   süreli aday dinlemeye çıkmaz. "İyi"yi kulak seçer: otomatik kalite ölçüleri dinlemeyle uyuşmadı.
 - **Keşif:** kaldırılmış = Spotify'da çalınamayan (`is_playable: false`). Aynı ISRC ya da aynı sanatçı + ad çalınabilir
   durumda geri geldiyse aday düşer; sıra YouTube izlenmesi × kapalı pazar oranı / (1 + rakip cover). Takma adla

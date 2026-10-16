@@ -868,3 +868,46 @@ genişlik × 2 tema) bir hata daha buldu.
   çakışmasın diye elle türü `rn_tur`). Kayıtlı Spotify profili yalnız varsayılan sanatçıya bağlanır.
 - Başka dağıtıcılar (DistroKid, TuneCore…) şartlarıyla botu yasaklıyor: ZIP paketi + alan listesi (İngilizce).
 - Canlı RouteNote gönderimi bu taslakla henüz denenmedi (gerçek bir şarkı gerekiyor); ilk gönderimde iş günlüğü izlenmeli.
+
+## Denetim 6 (2026-10-16, Scryne: "baştan sona incele, denetle, eksik ve hataların tamamını çöz, iyileştir, yeni şeyler ekle; her şey sende")
+
+Altı paralel inceleme (üretim/kiralık GPU, hazırlık/kapılar, paket/RouteNote/e-posta, keşif/takip/kazanç,
+işletim/CLI, oda) ~65 bulgu verdi; her biri kodla doğrulandı, düzeltmelerin testi var (511 → 601 test). Ayrı bir
+worktree'de (`denetim-6`) yapıldı, canlı sistem çalışırken dokunulmadı. Oda değişiklikleri tarayıcıda (390/1440, iki
+tema) canlı verinin kopyasıyla doğrulandı.
+
+- **Canlı günlükten:** bakiye 0,80 $'da kalınca 50 şarkı bütün gün yalnız günlüğe yazılarak bekledi; bildirim yoktu,
+  günlüğe her 30 dk aynı blok düşüyordu. Artık bütçe/bakiye günde bir bildirilir, bekleme hâli değişince bir kez
+  yazılır, neden (bakiye, sınır, stok, ağ) panoda "Senden beklenen"de, "Şu an"da, `yanki durum` ve oturum özetinde.
+  lovely'nin önceki oturumda hazırlanmış taslağı 01:00'den 10:30'a her koşuda tarayıcı açıp düştü ve her seferinde
+  hata bildirimi attı: böyle taslaklar gece kuyruğuna girmez, bir kez bildirilir; düşen yükleme 2, 4, … en çok 24 saatte
+  bir denenir (odada rozet + **Şimdi yeniden dene**); aynı adım hatası günde bir bildirilir; 03:00 gece koşusu sürekli
+  koşuyu bekler (önce kilide takılıp özetsiz çıkıyordu).
+- **RouteNote/paket:** yarım ya da gizli FLAC yüklenemez (iki asıl dosya varsa durur); yeniden paketleme geçici adla
+  yazar (güç giderse yarım ses gönderilmez); tarayıcı profili ve paket için kilit (`Mesgul`); kaydı yazılamamış
+  gönderim tarayıcı açmadan tamamlanır; boş sanatçı/şarkı adı taslaktan önce durur. E-posta: "have a lovely day" diyen
+  red lovely'ye yazılmıyor, başka UPC'li ileti adla eşleşmiyor, düzeltme isteği red sayılmıyor, onay gecikme ölçütünü
+  onay + 7 güne bağlıyor.
+- **Kiralık GPU:** eğitim pod'u da her koşuda artık temizliğine giriyor (sahibi ölmüşse), silinen eğitim pod'unun
+  ücreti bütçeye yazılıyor, harcama kaydı ayın ödemelerini düşürmüyor, yarım yoklama çıktısı koşuyu düşürmüyor, evdeki
+  işçi öksüz kalmıyor, bir şarkının sonuç işlemesi diğerlerinin ödenmiş sonucunu kaybettirmiyor, geçersiz anahtarda
+  ikinci hesap deneniyor.
+- **Hazırlık:** Korece/Japonca söz dosyası her LRCLIB sözüyle "eşleşiyordu" (a-z dışı silinip boş kalıyordu); çok
+  damgalı LRC; yalnız damgalı LRCLIB kaydı; `girdi/kaynak`'taki dosyada LRCLIB sürüm süreleri; Range'siz sunucuda bozuk
+  indirme; liste alan türleri; ffmpeg/fpcalc'a zaman aşımı.
+- **Keşif/takip:** `/intl-tr/` linki keşfi düşürüyordu; token ucunda 429 kilidi; tek şarkının Spotify hatası takibi
+  düşürmüyor; istemci aramasının bir gecelik kaçırması "Spotify'dan kalktı" alarmı vermiyor (ISRC ile doğrulanır);
+  yayın günü 60 kayıt kırpmasıyla kaymıyor; kazanç raporunda "0,003" ve küçük satırlar; bitmeyen Bulucu işi kilitlemiyor.
+- **Oda:** bozuk dalga önbelleği/yan dosya/ayar sayfaları 500'le düşürmüyor; yükleme gövdesi akışla sınırlanıyor;
+  elle formda son 700 ms'de yazılan kaybolmuyor; aynı id iki öğede; dar ekranda görünüm şeridi; kayıt değiştiren tek
+  tıklar ("Panelde gönderdim", "Gönderilmiş", "Taslakta duruyor") önce ne olacağını soruyor; hazır elle taslakta
+  yanıltıcı "gönder" düğmesi kalktı.
+- **Yedek:** `bastan` arşivi, eski paketin taslak UPC'si, elle taslaklar, e-posta kaydı, kazanç raporları ve keşif
+  CSV'leri artık yedekte; üretimdeki LoRA bir kez kopyalanır.
+- **Yeni: `yanki isabet`** (Faz 12 ölçütü, panoda "Otomatik onay · isabet"): öneri kuralı Scryne'ın kulak seçimini
+  12 şarkıda **3** tuttu (%25; yalnız en düşük söz WER'i 4, rastgele beklenen 2,1). S27'deki 21'de 14 o günün
+  adaylarıyla ölçülmüştü; yeniden üretimden sonra kural en yeni tarife bakıyor, Scryne birkaç şarkıda eski tarifin
+  adayını seçti. Otomatik onay (24 saat veto) açık: kulaktan geçmeyen şarkıda seçilen aday bugün rastgeleye yakın.
+  **Karar Scryne'da** (kapatmak, süreyi uzatmak ya da olduğu gibi bırakmak).
+- **Kalan (karar Scryne'da):** RunPod bakiyesi (0,80 $ < `en_az_bakiye` 1 $: üretim duruyor); yedeği ikinci diske
+  almak (`config/operasyon.toml` → `yedek.klasor`).

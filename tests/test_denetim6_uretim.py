@@ -295,5 +295,6 @@ def test_pano_ve_ozet_uretim_engelini_soyler(tmp_path):
     a = replace(ayarlar.yukle(), uzak=ayarlar.Uzak(acik=True))
     p = TestClient(sunucu.uygulama(a, c, gorev_oku=lambda: {}), base_url=ODA).get("/api/pano").json()
     u = next(x for x in p["uyarilar"] if x["baslik"] == "Üretim bekliyor")
-    assert "0.80" in u["metin"] and "1 şarkı sırada" in u["metin"] and "13:30" in u["metin"]
+    assert "0.80" in u["metin"] and "aşamasındaki 1 şarkı" in u["metin"] and "13:30" in u["metin"]
+    assert "kredi yükle" in p["simdi"]["engel"]  # "Şu an" şarkıları "üretiliyor" değil "sırada" gösterir
     assert "kredi yükle" in cli.ozet(tmp_path)["uretim_engeli"]

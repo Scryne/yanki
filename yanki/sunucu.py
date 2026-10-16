@@ -1091,8 +1091,9 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None, gorev_ok
         sirada = say("yeni", "hazir", "analiz", "onarim")
         if a.uzak.acik and sirada and (e := uzak_.uretim_engeli(calisma)):  # bakiye/stok/ağ: üretim sessizce beklemesin
             uyarilar.append({"baslik": "Üretim bekliyor", "etiket": "kiralık GPU",
-                             "metin": f"{e['neden']}. {sirada} şarkı sırada; engel kalkınca üretim kendiliğinden "
-                                      "sürer (son deneme " + str(e.get("zaman", ""))[11:16] + ")."})
+                             "metin": f"{e['neden']}. Kiralık GPU açılmıyor, üretim aşamasındaki {sirada} şarkı "
+                                      "bekliyor; engel kalkınca kendiliğinden sürer (son deneme "
+                                      + str(e.get("zaman", ""))[11:16] + ")."})
         if dagitimci == "tunearo" and (e := tunearo.erisim_durumu(calisma)):
             uyarilar.append({"baslik": "Tunearo API erişimi kapalı", "etiket": "dağıtım",
                              "metin": f"{e.get('ilk', '')[:16].replace('T', ' ')}'dan beri her istek reddediliyor; "
@@ -1116,6 +1117,8 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None, gorev_ok
             "simdi": {**kosu_durumu(calisma), "uretimde": [_ozet(d, calisma) for d in hepsi
                                                            if d.asama in ("analiz", "onarim")],
                       "uretim_acik": ayarlar.get("uretim_acik", True),
+                      # kiralık GPU açılamıyor (bakiye, stok, ağ): şarkılar "üretiliyor" değil, bekliyor
+                      "engel": (e["neden"] if a.uzak.acik and (e := uzak_.uretim_engeli(calisma)) else None),
                       "otomatik_kapali": bool(sistem.kapali_gorevler(gorevler()))},
         }
 

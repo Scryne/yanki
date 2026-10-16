@@ -1049,8 +1049,9 @@ async function panoGoster() {
 function simdiBolumu(s) {
   if (!s || (!s.suruyor && !s.pod && !s.uretimde?.length)) return null;
   const durumYazi = s.pod ? `Kiralık GPU açık · ${s.pod.dakika} dk` : s.suruyor ? "Koşu sürüyor"
-    : s.uretim_acik === false ? "Üretim duraklatıldı; sırada bekliyor" : s.otomatik_kapali ? "Sırada; otomatik koşu kapalı" : "Sırada, sonraki koşuyu bekliyor";
-  const bekliyor = s.uretim_acik === false && !s.suruyor && !s.pod;
+    : s.uretim_acik === false ? "Üretim duraklatıldı; sırada bekliyor" : s.otomatik_kapali ? "Sırada; otomatik koşu kapalı"
+    : s.engel ? "Kiralık GPU açılamıyor; sırada bekliyor (Senden beklenen)" : "Sırada, sonraki koşuyu bekliyor";
+  const bekliyor = (s.uretim_acik === false || !!s.engel) && !s.suruyor && !s.pod;
   return el("section", { class: "simdi-serit" + (s.suruyor || s.pod ? " canli" : ""), "aria-label": "Şu an" },
     el("div", { class: "simdi-baslik" }, s.suruyor || s.pod ? el("span", { class: "nabiz", "aria-hidden": "true" }) : el("span", { class: "nokta" }),
       el("div", {}, el("b", {}, "Şu an"), el("span", { class: "ipucu" }, durumYazi))),
