@@ -207,6 +207,7 @@ class Kopru:
             reason: x.removed && x.removed.reasonCode, plays: x.removed ? x.removed.plays : null,
             isrc: (x.removed && x.removed.isrc) || x.isrc || null, releaseDate: x.removed && x.removed.releaseDate,
             artistListeners: x.removed && x.removed.artistListeners,
+            counter: x.removed && x.removed.window ? (x.removed.window.countRetained ?? null) : null,
             reuploads: ((x.removed && x.removed.reuploads) || []).map(u => u.id)
           }}));
         }})()"""
@@ -222,6 +223,20 @@ class Kopru:
     def isrc_ara(self, isrc: str) -> list[dict]:
         """ISRC araması bulanık eşleşme de döndürebilir: çağıran ad ve sanatçıyla ayrıca doğrular."""
         return self.ara(f"isrc:{isrc}", 20, "searchTracks")
+
+    def dinlenme(self, parca_id: str) -> int | None:
+        """Parçanın Spotify sayacı (uygulamanın albüm sayfasında gördüğü sayı); önbellek atılır, her çağrı taze."""
+        ifade = (f"(async () => {{ const id = {json.dumps(parca_id)}; Stillmore.track.forget(id); "
+                 "const d = await Stillmore.track.analyze(id); return d.playCount ?? null; })()")
+        n = self.degerlendir(ifade, 60)
+        return int(n) if isinstance(n, (int, float)) else None
+
+    def sanatci_listeleri(self, sanatci_id: str) -> list[dict]:
+        """Sanatçının dinleyicilerinin bulduğu playlist'ler (Spotify'ın "Discovered on"u, STILLMORE `artist.overview`):
+        [{id, name, owner}]."""
+        ifade = (f"Stillmore.artist.overview({json.dumps(sanatci_id)}).then(o => (o.discoveredOn || [])"
+                 ".map(p => ({id: p.id, name: p.name, owner: p.owner})))")
+        return self.degerlendir(ifade, 60) or []
 
     def ulke(self) -> str | None:
         ifade = ("(async () => { try { return (await Spicetify.Platform.ProductStateAPI.getValues()).country; } "
@@ -291,6 +306,7 @@ def adaylara(satirlar: list[dict], playlist_id: str):
             spotify_id=x.get("trackId"), isrc=(x.get("isrc") or "").upper() or None, album=x.get("album") or None,
             cikis=x.get("releaseDate") or None, neden="kismi" if x.get("reason") == "country" else "kaldirildi",
             spotify_dinlenme=x.get("plays") if isinstance(x.get("plays"), int) else None,
+            sayac_duruyor=x.get("counter") if isinstance(x.get("counter"), bool) else None,
         ))
     return adaylar
 
@@ -317,6 +333,85 @@ def havuza_ekle(havuz: dict[str, dict], playlist_id: str, ad: str, kaynak: str, 
     havuz[playlist_id] = {"ad": ad, "kaynak": kaynak, "toplam": toplam, "son_tarama": None, "calinamayan": None,
                           "aday": None}
     return True
+
+
+def sanatci_yolu(calisma: Path) -> Path:
+    return calisma / "kesif" / "stillmore_sanatcilar.json"
+
+
+def sanatci_bul(kopru: "Kopru", sanatci: str, ad: str) -> str | None:
+    """Orijinal sanatçının Spotify kimliği: istemci aramasında şarkının sonuçlarından adı birebir tutan sanatçı."""
+    for t in kopru.ara(f"{sanatci} {ad}", 10):
+        for a in t.get("artists") or []:
+            if a.get("id") and (a.get("name") or "").casefold() == sanatci.casefold():
+                return a["id"]
+    return None
+
+
+def havuz_genislet(kopru: "Kopru", calisma: Path, havuz: dict[str, dict], sarkilar: list[tuple[str, str]], gece: int,
+                   liste_basina: int, en_cok: int, tazeleme_gun: int = 30, simdi=None) -> int:
+    """İyi giden şarkılarımızın sanatçılarının yer aldığı playlist'ler havuza (`kaynak = sanatci:<ad>`). Aynı kitlenin
+    listeleri: orada kalkmış şarkılar Orvane'in dinleyicisine yakın. Spotify'ın editoryal listeleri alınmaz (kalkan
+    parçayı hemen çıkarıyorlar, gri satır kalmıyor). `sarkilar` (orijinal sanatçı, şarkı) öncelik sırasıyla; son
+    `tazeleme_gun` içinde genişletilen sanatçı atlanır, gece en çok `gece` sanatçı. Eklenen playlist sayısı."""
+    from datetime import datetime, timedelta
+
+    from yanki import dosya
+
+    simdi = simdi or datetime.now()
+    yol = sanatci_yolu(calisma)
+    kayit = json.loads(yol.read_text(encoding="utf-8")) if yol.exists() else {}
+    sinir = simdi - timedelta(days=tazeleme_gun)
+    sira: dict[str, tuple[str, str]] = {}
+    for sanatci, sarki in sarkilar:
+        k = sanatci.casefold()
+        onceki = (kayit.get(k) or {}).get("tarih")
+        if k not in sira and (not onceki or datetime.fromisoformat(onceki) < sinir):
+            sira[k] = (sanatci, sarki)
+    eklenen = 0
+    for sanatci, sarki in list(sira.values())[:gece]:
+        if len(havuz) >= en_cok:
+            break
+        e = {"tarih": simdi.isoformat(timespec="seconds"), "id": None, "liste": 0}
+        try:
+            e["id"] = sanatci_bul(kopru, sanatci, sarki)
+            listeler = kopru.sanatci_listeleri(e["id"]) if e["id"] else []
+        except StillmoreYok as hata:
+            print(f"✗ STILLMORE sanatçı listeleri ({sanatci}): {hata}")
+            continue
+        # adında sanatçı geçen liste tek sanatçılık ("billie eilish - all songs"): başka sanatçının kalkmış şarkısı az
+        karisik = [p for p in listeler if (p.get("owner") or "").casefold() != "spotify"
+                   and sanatci.casefold() not in (p.get("name") or "").casefold()]
+        for p in karisik[:liste_basina]:
+            if len(havuz) < en_cok and havuza_ekle(havuz, p["id"], p.get("name") or "", f"sanatci:{sanatci}"):
+                e["liste"] += 1
+                eklenen += 1
+        kayit[sanatci.casefold()] = e
+    if sira:
+        dosya.json_yaz(yol, kayit, indent=1)
+    return eklenen
+
+
+def iyi_sarkilar(calisma: Path) -> list[tuple[str, str]]:
+    """Havuz genişletmenin tohumu: Scryne'ın kulağından geçmiş şarkılar (onaylandı ve sonrası), önce yayında olup en
+    çok dinlenenler (`performans`), sonra dağıtımdakiler, sonra en son onaylananlar."""
+    from yanki import durum, performans
+
+    puan = performans.sarki_gunluk(calisma)
+    sira = {"yayinda": 0, "yuklendi": 1, "paketlendi": 2, "onaylandi": 3}
+    secilen = [d for d in durum.hepsi(calisma) if d.asama in sira]
+    secilen.sort(key=lambda d: (-(puan.get(d.kimlik) or 0), sira[d.asama],
+                                -_zaman(d.gecmis[-1]["zaman"] if d.gecmis else None)))
+    return [(d.sanatci, d.ad) for d in secilen]
+
+
+def _zaman(zaman: str | None) -> float:
+    from datetime import datetime
+
+    try:
+        return datetime.fromisoformat(zaman).timestamp() if zaman else 0.0
+    except ValueError:
+        return 0.0
 
 
 def sec(havuz: dict[str, dict], adet: int, tazeleme_gun: int, simdi=None) -> list[str]:

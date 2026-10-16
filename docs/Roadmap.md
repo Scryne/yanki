@@ -840,3 +840,20 @@ genişlik × 2 tema) bir hata daha buldu.
   kalıyor, gece koşusu onu kullanır.
 - RouteNote: odadaki ayrı "Taslağı hazırla" + "Gönder" iki oturum açıyordu (yayın sayfası ikincisinde boş, lovely);
   kuyrukta yalnız "Yükle ve gönder…", hazır taslak için "Panelde gönderdim".
+
+## Yayından sonra: performans, e-posta, havuz (2026-10-16, Scryne: "1, 2, 3 bunları yapmanı istiyorum")
+
+- **Engel:** RouteNote site şartları madde 2 (okundu 2026-10-16) botla veri toplamayı yasaklıyor: panelden kazanç ve
+  durum okumak buna giriyor. Scryne seçti: "kurala uygun" + "e-postadan". Yükleme otomasyonu (form) bu maddeye
+  girmiyor, olduğu gibi.
+- **Dinlenme** (`takip.dinlenme_olc`, `performans.py`): canlı parçanın Spotify sayacı, STILLMORE köprüsüyle her gece;
+  `durum.yayin["dinlenme"]` günlük seri. Takip kaydı artık `yayin`ın diğer anahtarlarını silmiyor.
+- **Kazanç** (`kazanc.py`): RouteNote raporunun sütun adları belgelenmemiş (araştırma: Monthly Sales Report, USD,
+  ~45 gün gecikme, "spreadsheet"); okuyucu başlıkları eş anlamlılarından tanıyor, ilk gerçek raporla sıkılaşacak.
+- **Tür çarpanı** keşif puanına (`Aday.performans`), **tazelik** (`Aday.sayac_duruyor`, ×1,3).
+- **E-posta** (`eposta.py`): IMAP, salt okunur. Gönderen ve konu satırları belgelenmemiş: anahtar kelime sınıfı,
+  UPC/ad eşleşmesi; tanınmayan ileti de bildirilir ve örneği saklanır. Ayar Scryne'da (Gmail uygulama şifresi).
+- **Havuz genişletme** (`stillmore.havuz_genislet`): onaylı şarkılarımızın orijinal sanatçılarının "Discovered on"
+  listeleri; editoryal ve adında sanatçı geçen (tek sanatçılık) listeler alınmaz. Canlı deneme: 4 sanatçıdan 10
+  karışık liste.
+- STILLMORE 12.13.1 (zigzag düzeltmesi) Caferlyy/distro-finder-bulmaca main'e gönderildi.

@@ -83,6 +83,11 @@ class Aday:
     olcum: str | None = None  # ücretsiz ölçümlerin (YouTube, LRCLIB) zamanı
     ilk_gorulme: str | None = None
     elendi: bool = False  # Scryne dinleme odasında eledi: listeye kendiliğinden girmez
+    # STILLMORE: kalkmış parçanın Spotify sayacı hâlâ görünüyor (sayaç kalkıştan sonra 90 gün tutulur) → son 90 günde
+    # kalktı, dinleyicisi onu hâlâ arıyor. Puan TAZELIK_CARPANI'yla çarpılır.
+    sayac_duruyor: bool | None = None
+    # yayınlanmış şarkılarımızda bu türün dinlenme çarpanı (yanki/performans.py; None: veri yok, puan değişmez)
+    performans: float | None = None
 
     @property
     def kimlik(self) -> str:
@@ -110,7 +115,9 @@ class Aday:
             kapsam = POPULER_KAPSAM
         else:  # global çalışılıyor (Scryne, 2026-10-09): boşluk ne kadar çok pazarda açıksa o kadar değerli
             kapsam = len(self.kapali_pazarlar) / len(self.bakilan_pazarlar) if self.bakilan_pazarlar else 1.0
-        return self.talep * kapsam / (1 + (self.rakip_cover or 0))
+            if self.sayac_duruyor:
+                kapsam *= TAZELIK_CARPANI
+        return self.talep * kapsam * (self.performans or 1.0) / (1 + (self.rakip_cover or 0))
 
     @property
     def populer(self) -> bool:
@@ -220,6 +227,8 @@ def stillmore_csv(yol: Path) -> list[Aday]:
             isrc=(r.get("ISRC") or "").strip().upper() or None, cikis=(r.get("Çıkış") or "").strip() or None,
             neden="kismi" if durum.startswith("Ülkende kapalı") else "kaldirildi",
             spotify_dinlenme=_sayi(r.get("Dinlenme")),
+            # Bulucu'nun yazdığı sütun (STILLMORE'un kendi CSV'sinde yok)
+            sayac_duruyor={"duruyor": True, "silinmiş": False}.get((r.get("Sayaç") or "").strip()),
         ))
     return adaylar
 
@@ -378,6 +387,8 @@ SURE_SINIRI_SN = 420  # hattın parçalı üretimi ölçüldüğü aralığın �
 # Popüler (Spotify'da duran) adayın puanı talebin bu kadarı: aynı talepte boşluğu her pazarda açık kaldırılmış şarkı
 # 5 kat önde. Popüler hitlerin talebi (YouTube'da yüz milyonlar) yine de çoğu kaldırılmış şarkının üstünde kalır.
 POPULER_KAPSAM = 0.2
+# Sayacı hâlâ görünen (son 90 günde kalkmış) şarkı: dinleyicisi yeni kaybetti, arıyor. Aynı talepte bu kadar önde.
+TAZELIK_CARPANI = 1.3
 INGILIZCE_ESIGI = 0.15  # yanki/hazirlik.py ile aynı: İngilizce sözde sık kelimelerin payı ~0,3–0,5, başka dilde ~0
 
 
@@ -447,11 +458,14 @@ def birlestir(calisma: Path, yeniler: list[Aday]) -> dict[str, Aday]:
             if eski is not None:
                 a.elendi = eski.elendi
             kayit[a.kimlik] = a
+        from yanki import performans
+
+        performans.uygula(kayit, calisma)  # yayınlarımızın tür performansı puana
         kaydet(calisma, kayit)
     return kayit
 
 
-KIMLIK_ALANLARI = ("spotify_dinlenme", "isrc", "spotify_id", "album", "cikis")
+KIMLIK_ALANLARI = ("spotify_dinlenme", "isrc", "spotify_id", "album", "cikis", "sayac_duruyor")
 # Aynı adımda birlikte ölçülen alanlar grup olarak taşınır: taze ölçümde None da geçerli bir sonuçtur ("belirsiz"),
 # eski kaydın değeriyle doldurulmaz (2026-10-09: Jev "belirsiz" dediği aday eski regex "uymuyor"uyla eziliyordu).
 UCRETSIZ_ALANLAR = ("youtube_izlenme", "youtube_baslik", "youtube_id", "youtube_kanit", "sanatci_uyusuyor", "soz_var",

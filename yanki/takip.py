@@ -17,7 +17,7 @@ import re
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
-from yanki import dosya, durum, spotify
+from yanki import dosya, durum, performans, spotify
 from yanki.kesif import sade_ad
 
 GECMIS_SINIRI = 60
@@ -170,7 +170,7 @@ def kaydet(d: durum.Durum, son: dict) -> list[str]:
         uyarilar.append("parça canlı ama sanatçı adı eşleşmedi")
     if (son["canli"], son.get("siralar")) != (onceki.get("canli"), onceki.get("siralar")):
         gecmis.append({k: son.get(k) for k in ("zaman", "canli", "arama_sirasi", "siralar")})
-    d.yayin = {"son": son, "gecmis": gecmis[-GECMIS_SINIRI:]}
+    d.yayin = {**(d.yayin or {}), "son": son, "gecmis": gecmis[-GECMIS_SINIRI:]}  # dinlenme serisi korunur
     return uyarilar
 
 
@@ -234,6 +234,21 @@ def profil_olaylari(calisma: Path, sanatci_adi: str) -> list[tuple[str, str, str
     return sonuc
 
 
+def dinlenme_olc(istemci, son: dict) -> int | None:
+    """Canlı parçamızın Spotify sayacı, Spotify uygulamasının içinden (STILLMORE; yalnız istemci varken: Web API sayacı
+    vermiyor). Ölçülemezse None: dinlenme serisine nokta yazılmaz, takip sürer."""
+    from yanki import stillmore
+
+    kopru = getattr(istemci, "kopru", None)
+    if kopru is None or not son.get("canli") or not son.get("spotify_id"):
+        return None
+    try:
+        return kopru.dinlenme(son["spotify_id"])
+    except stillmore.StillmoreYok as e:
+        print(f"  dinlenme okunamadı ({son['spotify_id']}): {e}")
+        return None
+
+
 def takip_et(sp, calisma: Path, sanatci_adi: str, pazarlar, kimlikler: list[str] | None = None,
              arama_limiti: int = 20, bildir=None, istemci=None, web_gun: int = WEB_GUN
              ) -> list[tuple[durum.Durum, list[str]]]:
@@ -255,9 +270,12 @@ def takip_et(sp, calisma: Path, sanatci_adi: str, pazarlar, kimlikler: list[str]
                          onceki=(d.yayin or {}).get("son"), istemci=istemci, web_gun=web_gun)
         son.update(yayin_tarihi=y.get("yayin_tarihi"), en_gec_yayin=y.get("en_gec_yayin"), dagitimci=y.get("dagitimci"),
                    dagitim_durumu=y.get("dagitim_durumu"))
+        son["dinlenme"] = dinlenme_olc(istemci, son)
         with durum.guncelle(calisma, d.kimlik) as taze:
             onceki = dict((taze.yayin or {}).get("son") or {})
             uyarilar = kaydet(taze, son)
+            if son["dinlenme"] is not None:
+                performans.dinlenme_ekle(taze, son["dinlenme"])
         if bildir:
             for olay in olaylar(taze, onceki, son):
                 bildir(*olay)

@@ -85,6 +85,22 @@ UPC yapıştırılır; okuma Spotify uygulamasının içinden yapılır (STILLMO
 Köprü kapalıysa odadaki "Spotify'a bağlan" Spotify'ı hata ayıklama portuyla (yalnız 127.0.0.1) yeniden açar; bir şey
 çalıyorsa önce sorar. Sonuçlar `calisma/bulucu/`'da kalır, "Son aramalar"dan yeniden açılır.
 
+**Yayından sonra (dinleme odası → Yayın → Performans, `yanki performans`):** RouteNote paneli botla okunmaz (site
+şartları madde 2: "collecting data … using bots … or other automated data gathering methods"). Onun yerine:
+- **Dinlenme:** takip her gece canlı parçalarımızın Spotify sayacını Spotify uygulamasından okur, günlük seri tutar.
+- **Kazanç:** ayda bir RouteNote → Performance → Reports'tan *Monthly Sales Report*'u indir, `girdi/kazanc/`'a koy
+  (rapor ay sonundan ~45 gün sonra gelir, USD). Sütunlar adlarından tanınır, satır şarkıya ISRC/UPC ile bağlanır.
+- **Keşfe geri besleme:** türün ortanca günlük dinlenmesi / bütün şarkıların ortancası → keşif puanında tür çarpanı
+  (karekök, 0,6–1,6; en az 4 şarkı, türde 2, her biri 14 gün yayında). Sayacı hâlâ duran (son 90 günde kalkmış)
+  şarkı ×1,3. Gece keşfi kulaktan geçmiş şarkılarımızın sanatçılarının yer aldığı karışık playlist'leri STILLMORE
+  havuzuna ekler (`config/kesif.toml` → `[stillmore] sanatci_*`).
+- **RouteNote kararları e-postadan (`yanki eposta`, gece 6 saatte bir):** `.env`'ye `EPOSTA_KULLANICI` (RouteNote
+  hesabının Gmail adresi) ve `EPOSTA_SIFRE` (Google hesabı → Güvenlik → 2 adımlı doğrulama → Uygulama şifreleri).
+  Yalnız gönderende "routenote" geçen iletiler, salt okunur. Onay → yükleme kaydında `approved`; düzeltme isteği →
+  bildirim; red → şarkı `paketlendi`ye döner, RouteNote kaydı geçmişe, takvim düzeltilene kadar yeni yükleme açmaz.
+  Elle gönderilen taslağın onay e-postası gelirse gönderim kendiliğinden kaydedilir. İletilerin metni
+  `calisma/eposta/ornek/`'e düşer (kurallar ilk örneklerle sıkılaştırılır).
+
 Bildirimler `calisma/olaylar.jsonl`'a da yazılır (aynı olay bir kez). Gece koşusu sonunda dış servislerin (YouTube,
 LRCLIB, MusicBrainz, Deezer, Spotify) istek/hata sayısı günlüğe, günlük toplamı `calisma/gunluk/servisler.json`'a.
 

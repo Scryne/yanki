@@ -582,19 +582,21 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None, gorev_ok
     # ---- yayın ----
     @app.get("/api/yayin")
     def yayin():
-        from yanki import takip
+        from yanki import performans, takip
 
         sarkilar = []
         for d in durum.hepsi(calisma):
             if d.asama not in ("yuklendi", "yayinda"):
                 continue
             y = takip.yukleme_bilgisi(calisma, d.kimlik) or {}
+            seri = performans.seri(d)
             sarkilar.append({"kimlik": d.kimlik, "sanatci": d.sanatci, "ad": d.ad, "asama": d.asama,
                              "yayin_tarihi": y.get("yayin_tarihi"), "dagitimci": y.get("dagitimci"),
                              "dagitim_durumu": y.get("dagitim_durumu"), "upc": y.get("upc"),
                              "isrc": y.get("isrc"), "son": (d.yayin or {}).get("son"),
                              "gecmis": (d.yayin or {}).get("gecmis", []), "kapak": _kapak_url(calisma, d.kimlik),
-                             "geri_cek": bool(y.get("geri_cek"))})
+                             "geri_cek": bool(y.get("geri_cek")), "dinlenme": seri[-1][1] if seri else None,
+                             "gunluk": performans.gunluk(d)})
         sarkilar.sort(key=lambda s: s["yayin_tarihi"] or "")
         return {"sarkilar": sarkilar, "kota": _kota(a.kok), "profiller": sorted(takip.profil_kimlikleri(calisma)),
                 "takvim": _takvim(a.kok, calisma), "olaylar": olay.oku(calisma, son=8)[::-1]}
@@ -886,6 +888,39 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None, gorev_ok
                       "otomatik_kapali": bool(sistem.kapali_gorevler(gorevler()))},
         }
 
+    def _routenote_kazanc() -> dict:
+        """RouteNote aylık raporları (`girdi/kazanc/`, Scryne indirir; panel botla okunmaz): kazanç panelinin biçimi."""
+        from yanki import kazanc as kazanc_
+
+        r = kazanc_.sarki_kazanclari(a.kok, calisma)
+        o = r["ozet"]
+        if not o["dosya"]:
+            return {"bagli": False, "mesaj": "RouteNote raporu yok. Ayda bir RouteNote → Performance → Reports'tan "
+                    "Monthly Sales Report'u indir, girdi/kazanc/ klasörüne koy (rapor ay sonundan ~45 gün sonra "
+                    "gelir)."}
+        para = max(o["toplam"], key=o["toplam"].get) if o["toplam"] else "USD"
+        son_ay = o["aylar"][-1] if o["aylar"] else None
+        return {"bagli": True, "toplam": o["toplam"].get(para, 0), "para": para if len(para) == 3 else "USD",
+                "bu_ay": (o.get("aylik", {}).get(son_ay) or {}).get(para, 0), "son_ay": son_ay,
+                "yayinlar": sorted(r["sarkilar"]), "hatalar": o["hatalar"], "eslesmeyen": o["eslesmeyen"],
+                "kaynaklar": [{"kaynak": k, "tutar": v} for k, v in
+                              sorted(o["magazalar"].items(), key=lambda x: -x[1])]}
+
+    @app.get("/api/performans")
+    def performans_ozet():
+        """Yayınlarımız: dinlenme (takip, Spotify uygulamasından), kazanç (aylık rapor), türlere göre keşif çarpanı;
+        RouteNote e-postalarının durumu."""
+        from yanki import eposta, performans
+
+        o = performans.ozet(calisma, a.kok)
+        yol = eposta.kayit_yolu(calisma)
+        try:
+            islenen = json.loads(yol.read_text(encoding="utf-8")) if yol.exists() else {}
+        except (OSError, ValueError):
+            islenen = {}
+        son = sorted(islenen.values(), key=lambda x: x.get("tarih") or "", reverse=True)[:6]
+        return {**o, "eposta": {"ayarli": eposta.ayar(a.kok) is not None, "son": son}}
+
     @app.get("/api/kazanc")
     def kazanc(yenile: bool = False):
         """Dağıtımcıdaki yayınların kazancı. API'si olan yalnız Tunearo'ydu (önbellekli); RouteNote'un kazanç raporu
@@ -893,9 +928,10 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None, gorev_ok
         from yanki import paket, tunearo
 
         dagitimci = paket.yayin_ayarlari(a.kok / "config" / "yayin.toml").dagitimci
+        if dagitimci == "routenote":
+            return _routenote_kazanc()
         if dagitimci != "tunearo":
-            return {"bagli": False, "mesaj": "RouteNote kazancı RouteNote panelinde (Accounting); hatta bağlı değil."
-                    if dagitimci == "routenote" else "Dağıtımcı seçilmedi; kazanç dağıtımcı seçilince görünür."}
+            return {"bagli": False, "mesaj": "Dağıtımcı seçilmedi; kazanç dağıtımcı seçilince görünür."}
         try:
             return {"bagli": True, **tunearo.kazanc(calisma, tunearo.Istemci.kokten(a.kok), zorla=yenile)}
         except tunearo.AyarYok:

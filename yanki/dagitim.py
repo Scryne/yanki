@@ -273,7 +273,10 @@ def red_kaydet(calisma: Path, kimlik: str, neden: str) -> durum.Durum:
             if meta.get("yukleme"):
                 meta.setdefault("yukleme_gecmisi", []).append({**meta.pop("yukleme"), "red": neden,
                                                                "red_tarihi": date.today().isoformat()})
-                dosya.json_yaz(meta_yolu, meta)
+            if meta.get("routenote"):  # RouteNote reddedilen yayını katalogdan çıkarıyor: yeniden gönderim yeni taslak
+                meta.setdefault("routenote_gecmisi", []).append({**meta.pop("routenote"), "red": neden,
+                                                                 "red_tarihi": date.today().isoformat()})
+            dosya.json_yaz(meta_yolu, meta)
         d.notlar.append({"dagitim_red": {"neden": neden, "tarih": date.today().isoformat()}})
         d.yayin = {}
         d.gec("paketlendi", f"{RED_ONEKI}{neden}")  # takvim bunu düzeltilene (yeniden paketlenene) kadar atlar

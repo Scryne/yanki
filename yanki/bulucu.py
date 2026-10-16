@@ -34,7 +34,8 @@ ANAHTAR = re.compile(r"(parca|playlist|sanatci|katalog|album|isrc|upc)-[A-Za-z0-
 IS_ZAMAN_ASIMI = 45 * 60  # 1.000+ parçalık playlist'te her kalkmış şarkı için ISRC araması
 GECMIS_EN_COK = 200
 CSV_SUTUNLARI = ("Parça", "Sanatçı", "Çalınabilir", "Durum", "Yeniden yüklenmiş", "Spotify ID", "ISRC", "Çıkış",
-                 "Dinlenme", "Kaynak")
+                 "Dinlenme", "Sayaç", "Kaynak")
+SAYAC_YAZI = {True: "duruyor", False: "silinmiş"}  # kesif.stillmore_csv okur: sayacı duran şarkı son 90 günde kalktı
 
 
 class GirdiHatasi(ValueError):
@@ -180,7 +181,9 @@ def kesfe_gonder(kok: Path, satirlar: list[dict], kaynak: str) -> tuple[int, int
                          "Durum": "Ülkende kapalı" if s.get("neden") == "country" else "Kaldırılmış",
                          "Yeniden yüklenmiş": "", "Spotify ID": s["id"], "ISRC": s.get("isrc") or "",
                          "Çıkış": s.get("cikis") or "",
-                         "Dinlenme": "" if s.get("dinlenme") is None else str(s["dinlenme"]), "Kaynak": kaynak})
+                         "Dinlenme": "" if s.get("dinlenme") is None else str(s["dinlenme"]),
+                         "Sayaç": SAYAC_YAZI.get((s.get("pencere") or {}).get("sayi_duruyor"), ""),
+                         "Kaynak": kaynak})
         if yeni:
             cikti = io.StringIO()
             w = csv.DictWriter(cikti, fieldnames=CSV_SUTUNLARI, extrasaction="ignore", lineterminator="\n")

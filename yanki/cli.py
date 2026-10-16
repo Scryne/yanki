@@ -555,10 +555,18 @@ def _stillmore_tara(args, kok: Path, calisma: Path, st: dict, sp, dogrula: bool,
             print(f"playlist araması '{q}': {len(bulunan)} sonuç, {yeni} yeni havuza")
     secilen = stillmore.sec(havuz, int(st.get("gece_playlist", 3)), int(st.get("tazeleme_gun", 7)))
     stillmore.havuz_yaz(calisma, havuz)
-    if not secilen:
+    genislet = int(st.get("sanatci_gece", 0))
+    if not secilen and not genislet:
         return
     try:
         with stillmore.Oturum(yeniden_baslat=getattr(args, "spotify_yeniden_baslat", False)) as k:
+            if genislet:  # iyi giden şarkılarımızın sanatçılarının listeleri (sonraki gecelerde taranır)
+                n = stillmore.havuz_genislet(k, calisma, havuz, stillmore.iyi_sarkilar(calisma), genislet,
+                                             int(st.get("sanatci_liste", 5)), int(st.get("havuz_en_cok", 400)),
+                                             int(st.get("sanatci_tazeleme_gun", 30)))
+                if n:
+                    print(f"STILLMORE havuzu: şarkılarımızın sanatçılarından {n} yeni playlist")
+                    stillmore.havuz_yaz(calisma, havuz)
             for pid in secilen:
                 try:
                     bilgi = k.playlist_bilgi(pid) or {}
@@ -722,12 +730,14 @@ def _ozet(args: argparse.Namespace) -> int:
 # Adımların en sık ne zaman koşacağı (saat). Listede olmayan adım her koşuda (sürekli koşu her 30 dk): hazırlık,
 # üretim, veto penceresi, paketleme, yükleme sırası, yedek (kendi haftalık eşiği var). Keşif ve takip Spotify kotası
 # ve Spotify uygulamasını yeniden başlatma yüzünden günde bir; dağıtım yoklaması dağıtımcıyı yormamak için.
-ADIM_ARALIGI_SAAT = {"keşif": 24, "popüler keşif": 12, "takip": 24, "dağıtım durumu": 3, "temizlik": 24}
+ADIM_ARALIGI_SAAT = {"keşif": 24, "popüler keşif": 12, "takip": 24, "dağıtım durumu": 3, "e-posta": 6,
+                     "temizlik": 24}
 # Bu çıktılar "yapılacak iş yoktu" demek: sürekli koşuda yalnız bunları üreten adım günlüğe yazılmaz
 BOS_CIKTI = ("üretilecek bir şey yok", "paketlenecek onaylı şarkı yok", "takvim: ", "yedek güncel",
              "liste boş", "tunearo: izlenen yükleme yok", "takip edilecek yüklenmiş şarkı yok", "toplam 0 MB",
              # bilinen bekleme hâlleri: her 30 dk'da günlüğe aynı blok yazılmasın
-             "durum yoklaması yok", "üretim duraklatıldı")
+             "durum yoklaması yok", "üretim duraklatıldı", "e-posta: yeni RouteNote e-postası yok",
+             "e-posta ayarı yok")
 
 
 class _AdimCiktisi:
@@ -862,6 +872,8 @@ def _calistir(args: argparse.Namespace) -> int:
                 ("veto penceresi", lambda: _otomatik_onay(kok)), ("paketleme", lambda: _paketle(args))]
     if zamani("dağıtım durumu"):  # takipten önce: kabul gelince Tunearo'nun atadığı ISRC takibe girsin
         adimlar.append(("dağıtım durumu", lambda: _dagitim_durum(argparse.Namespace())))
+    if zamani("e-posta"):  # RouteNote onay/düzeltme/red e-postaları (panel botla okunmaz)
+        adimlar.append(("e-posta", lambda: _eposta(argparse.Namespace(gun=21))))
     if spotify_var and zamani("takip") and (serbest if serbest is not None else _spotify_serbest(op)):
         adimlar.append(("takip", lambda: _takip(argparse.Namespace(kimlik=[], spotify_yeniden_baslat=True))))
     adimlar += [("takvim", lambda: _takvim_hatirlat(kok))]
@@ -1239,6 +1251,57 @@ def _dagitim_red(args: argparse.Namespace) -> int:
         print(f"✗ {args.kimlik}: {e}")
         return 1
     print(f"dağıtımcı reddi kaydedildi: {d.sanatci} — {d.ad} → paketlendi (takvim yeniden paketlenene kadar atlar)")
+    return 0
+
+
+def _eposta(args: argparse.Namespace) -> int:
+    """RouteNote e-postaları (onay, düzeltme isteği, red) → hat (`yanki/eposta.py`). Panel botla okunmaz."""
+    import imaplib
+
+    from yanki import eposta
+
+    kok = ayarlar.yukle().kok
+    a = eposta.ayar(kok)
+    if a is None:
+        print("e-posta ayarı yok (.env: EPOSTA_KULLANICI, EPOSTA_SIFRE): RouteNote kararları okunmuyor")
+        return 0
+    try:
+        iletiler = eposta.getir(a, gun=getattr(args, "gun", 21))
+    except (OSError, imaplib.IMAP4.error) as e:
+        print(f"✗ e-posta okunamadı ({a['sunucu']}): {e}")
+        return 1
+    sonuc = eposta.isle(kok / "calisma", iletiler, bildir=_bildirici(kok / "calisma"))
+    if not sonuc:
+        print(f"e-posta: yeni RouteNote e-postası yok ({len(iletiler)} ileti, hepsi işlenmiş)")
+    for x in sonuc:
+        print(f"  {x['sinif'] or '?':8} {x['kimlik'] or '—':40} {x['eylem']} · {x['konu'][:80]}")
+    return 0
+
+
+def _performans(args: argparse.Namespace) -> int:
+    from yanki import performans
+
+    kok = ayarlar.yukle().kok
+    o = performans.ozet(kok / "calisma", kok)
+    if not o["sarkilar"]:
+        print("dağıtımda şarkı yok")
+    for s in o["sarkilar"]:
+        dinlenme = f"{s['dinlenme']:,}" if s["dinlenme"] is not None else "—"
+        gunluk = s["gunluk"] if s["gunluk"] is not None else "—"
+        print(f"{s['sanatci']} — {s['ad']}: dinlenme {dinlenme}, günlük {gunluk}, tür {s['tur'] or '?'}"
+              + (f", kazanç {s['kazanc']:.2f}" if s["kazanc"] else ""))
+    t = o["turler"]
+    carpan = "uygulanıyor" if t["yeterli"] else "için veri az, hepsi 1"
+    print(f"\ntürler ({t['sarki']} şarkı ölçüldü; çarpan {carpan}):")
+    for tur, v in sorted(t["turler"].items(), key=lambda x: -x[1]["gunluk"]):
+        print(f"  {tur:24} {v['sarki']} şarkı, günlük {v['gunluk']}, çarpan {v['carpan']}")
+    k = o["kazanc"]
+    if k["dosya"]:
+        print(f"\nkazanç ({k['dosya']} rapor, {', '.join(k['aylar']) or 'ay yok'}): "
+              + ", ".join(f"{v:.2f} {p}" for p, v in k["toplam"].items()) + (f"; {k['eslesmeyen']} satır şarkımıza"
+                                                                             " bağlanmadı" if k["eslesmeyen"] else ""))
+    else:
+        print("\nkazanç raporu yok: RouteNote → Performance → Reports'tan aylık raporu indir, girdi/kazanc/'a koy")
     return 0
 
 
@@ -1665,6 +1728,11 @@ def main(argv: list[str] | None = None) -> int:
     kp.set_defaults(fn=_kapak)
     alt.add_parser("dagitim-durum", help="API'li dağıtımcıya yüklenenlerin inceleme/yayın durumu").set_defaults(
         fn=_dagitim_durum)
+    ep = alt.add_parser("eposta", help="RouteNote'un onay / düzeltme / red e-postalarını oku ve hatta işle")
+    ep.add_argument("--gun", type=int, default=21, help="son kaç günün iletileri")
+    ep.set_defaults(fn=_eposta)
+    pf = alt.add_parser("performans", help="yayınlarımızın dinlenmesi, kazancı ve türlere göre keşif çarpanı")
+    pf.set_defaults(fn=_performans)
     dr = alt.add_parser("dagitim-red", help="dağıtımcının reddettiği şarkıyı kaydet (paketlendi'ye döner)")
     dr.add_argument("kimlik")
     dr.add_argument("--neden", required=True, help="dağıtımcının red gerekçesi (ör. kapak, AI içerik)")
@@ -1721,7 +1789,7 @@ def main(argv: list[str] | None = None) -> int:
 
 YAZAN_KOMUTLAR = {"hazirla", "uret", "calistir", "yeniden", "kunye", "paketle", "yuklendi", "kesif", "takip",
                   "temizle", "yedekle", "dagitim-red", "geri-cek", "bastan", "gunduz", "yukle", "dagitim-durum",
-                  "kapak", "yapi", "routenote"}
+                  "kapak", "yapi", "routenote", "eposta"}
 
 
 if __name__ == "__main__":

@@ -84,6 +84,14 @@ arama_gece = 2
 min_parca = 100
 gece_playlist = 3
 tazeleme_gun = 7
+# Havuz genişletme (2026-10-16, Scryne: "Bulucu ile keşfi otomatik büyüt"): kulaktan geçmiş şarkılarımızın
+# (önce en çok dinlenenler) orijinal sanatçılarının yer aldığı playlist'ler, Spotify'ın "Discovered on"u. Gece en
+# çok sanatci_gece sanatçı, sanatçı başına sanatci_liste liste; sanatçı 30 günde bir. Spotify'ın editoryal
+# listeleri alınmaz (kalkan parçayı hemen çıkarıyorlar). Havuz havuz_en_cok'ta durur.
+sanatci_gece = 2
+sanatci_liste = 5
+sanatci_tazeleme_gun = 30
+havuz_en_cok = 400
 
 [katalog]
 # Kendi keşfimiz (STILLMORE'suz): Deezer'da çok dinlenen ama Spotify'da kapalı/olmayan şarkılar (yanki/katalog.py).

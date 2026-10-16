@@ -34,7 +34,7 @@ const KAPI_ACIKLAMA = {
   soz_wer: "Sözün Whisper'la ölçülen hata oranı; eşik orijinal kaydın kendi hatasına göre",
   sure_fark: "Orijinalle süre farkı (sn)",
 };
-const DAGITIM = { draft: "taslak", pending: "incelemede", approved: "onaylandı", live: "mağazalarda", rejected: "reddedildi",
+const DAGITIM = { draft: "taslak", pending: "incelemede", gonderildi: "incelemede", action_needed: "düzeltme istiyor", approved: "onaylandı", live: "mağazalarda", rejected: "reddedildi",
   takedown: "kaldırıldı", takedown_requested: "kaldırılıyor", taken_down: "kaldırıldı" };
 const DAGITIMCI = { tunearo: "Tunearo", routenote: "RouteNote", distrokid: "DistroKid" };
 const DIL = { en: "İngilizce", es: "İspanyolca", ko: "Korece", ja: "Japonca", tl: "Tagalogca", tr: "Türkçe", pt: "Portekizce",
@@ -706,8 +706,9 @@ function kesifSatiri(x, guncelle) {
 
 async function yayinGoster() {
   const ana = $("#ana");
-  let d;
-  try { d = await api("/api/yayin"); } catch (e) { doldur(ana, bosEkran("Yayın durumu açılamadı", e.message)); return; }
+  let d, p = null;
+  try { [d, p] = await Promise.all([api("/api/yayin"), api("/api/performans").catch(() => null)]); }
+  catch (e) { doldur(ana, bosEkran("Yayın durumu açılamadı", e.message)); return; }
   const canli = d.sarkilar.filter((s) => s.son?.canli).length;
   const parcalar = [
     el("header", { class: "sayfa-ust" }, el("h1", {}, "Yayın"),
@@ -718,9 +719,46 @@ async function yayinGoster() {
     `Sanatçı profili bölünmüş: parçalar ${d.profiller.length} ayrı Spotify profilinde. Dağıtımcıdan birleştirme iste.`));
   parcalar.push(d.sarkilar.length ? el("ul", { class: "kayitlar" }, ...d.sarkilar.map(yayinSatiri))
     : el("p", { class: "bos-kutu" }, "Henüz yüklenmiş şarkı yok. Paketler Sanatçı görünümünden RouteNote'a gönderilir."));
+  if (p) parcalar.push(performansBolumu(p));
   parcalar.push(takvimBolumu(d.takvim));
   if (d.olaylar?.length) parcalar.push(olayBolumu(d.olaylar));
   doldur(ana, ...parcalar.filter(Boolean));
+}
+
+// yayından sonra: dinlenme (takip), kazanç (aylık RouteNote raporu), türlere göre keşif çarpanı, RouteNote e-postaları
+// (yanki/performans.py, kazanc.py, eposta.py; RouteNote paneli botla okunmaz)
+const EPOSTA_SINIF = { onay: ["onay", "ok"], aksiyon: ["düzeltme", "amber"], red: ["red", "no"] };
+function performansBolumu(p) {
+  const t = p.turler, k = p.kazanc;
+  const olculen = p.sarkilar.filter((s) => s.dinlenme != null);
+  const toplam = olculen.reduce((n, s) => n + s.dinlenme, 0);
+  const turler = Object.entries(t.turler).sort((a, b) => b[1].gunluk - a[1].gunluk);
+  const para = Object.entries(k.toplam || {}).sort((a, b) => b[1] - a[1])[0];
+  const tutar = (n, birim) => { try { return new Intl.NumberFormat("tr-TR", { style: "currency", currency: birim }).format(n); } catch { return `${virgul(n, 2)} ${birim}`; } };
+  return el("section", { class: "bolum", "aria-label": "Performans" },
+    el("h2", { class: "bolum-baslik" }, "Performans"),
+    el("p", { class: "ipucu bolum-not" }, "Hangi türde şarkılarımız dinleniyor: keşif o türdeki adayları öne alır. Dinlenme her gece Spotify uygulamasından, kazanç RouteNote'un aylık raporundan."),
+    el("div", { class: "sonuc-olcu cam" },
+      el("div", {}, el("span", { class: "olcu-sayi" + (toplam ? " gumus-yazi" : "") }, kisaSayi(toplam)), el("span", { class: "olcu-ad" }, `toplam dinlenme · ${olculen.length} şarkı ölçüldü`)),
+      el("div", {}, el("span", { class: "olcu-sayi" + (para ? " gumus-yazi" : "") }, para ? tutar(para[1], para[0].length === 3 ? para[0] : "USD") : "—"),
+        el("span", { class: "olcu-ad" }, k.dosya ? `kazanç · ${k.aylar.length} ay rapor${k.eslesmeyen ? ` · ${k.eslesmeyen} satır eşleşmedi` : ""}` : "kazanç · rapor yok"))),
+    turler.length ? el("ul", { class: "kayitlar" }, ...turler.map(([ad, v]) => el("li", { class: "kayit" },
+      el("div", { class: "kayit-ad" }, el("span", { class: "ad" }, ad), el("span", { class: "sanatci" }, `${v.sarki} şarkı`)),
+      el("div", { class: "olculer" }, el("span", {}, "günlük ", el("b", {}, kisaSayi(v.gunluk))),
+        el("span", { class: "rozet " + (v.carpan > 1 ? "ok" : v.carpan < 1 ? "no" : ""), title: "Bu türdeki keşif adayının puanı bununla çarpılır" }, `keşif × ${virgul(v.carpan, 2)}`)),
+      el("div", { class: "kayit-eylem" }))))
+      : null,
+    t.yeterli ? null : el("p", { class: "ipucu kucuk-ipucu" }, `Keşif çarpanı için en az 4 şarkı, her biri 14 gün yayında ölçülmeli (şimdi ${t.sarki}); o zamana kadar bütün türler × 1.`),
+    k.dosya ? null : el("p", { class: "ipucu kucuk-ipucu" }, "Kazanç: ayda bir RouteNote → Performance → Reports'tan Monthly Sales Report'u indir, girdi/kazanc/ klasörüne koy. Rapor ay sonundan ~45 gün sonra gelir."),
+    k.hatalar?.length ? el("p", { class: "uyari" }, `Okunamayan rapor: ${k.hatalar.join(" · ")}`) : null,
+    p.eposta.ayarli
+      ? el("div", {}, el("h3", { class: "ara-baslik" }, "RouteNote e-postaları"),
+        p.eposta.son.length ? el("ul", { class: "olaylar" }, ...p.eposta.son.map((e) => el("li", {},
+          el("span", { class: "olay-zaman" }, tarih(e.tarih)),
+          el("span", {}, EPOSTA_SINIF[e.sinif] ? el("span", { class: `rozet ${EPOSTA_SINIF[e.sinif][1]}` }, EPOSTA_SINIF[e.sinif][0]) : el("span", { class: "rozet" }, "?"),
+            " ", el("b", {}, e.konu), e.eylem && e.eylem !== "bildirildi" ? el("span", { class: "olay-metin" }, ` · ${e.eylem}`) : null))))
+          : el("p", { class: "ipucu kucuk-ipucu" }, "Henüz RouteNote e-postası gelmedi. Onay, düzeltme isteği ve red geldikçe burada ve bildirimde görünür."))
+      : el("p", { class: "not" }, "RouteNote e-postaları okunmuyor: .env'ye EPOSTA_KULLANICI ve EPOSTA_SIFRE (Gmail uygulama şifresi) eklenince onay ve red kendiliğinden işlenir."));
 }
 
 // paketlenmiş şarkıların yükleme sırası (yanki/dagitim.py; ölçüm değil, durumdan hesap)
@@ -756,7 +794,9 @@ function yayinSatiri(s) {
       el("span", { class: "rozet " + hal[1] }, hal[0]),
       el("span", {}, DAGITIMCI[s.dagitimci] || s.dagitimci || "—", dd ? [" · ", el("b", {}, DAGITIM[dd] || dd)] : null),
       s.geri_cek ? el("span", { class: "rozet", title: "Geri çekilmesi istendi; inceleme bitince hat kaldırır ve şarkıyı yeniden sıraya alır" }, "geri çekilecek") : null,
-      el("span", {}, "çıkış ", el("b", {}, tarih(s.yayin_tarihi))),
+      el("span", {}, "çıkış ", el("b", {}, s.yayin_tarihi ? tarih(s.yayin_tarihi) : "onaylanınca")),
+      s.dinlenme != null ? el("span", { title: "Spotify sayacı (takip her gece Spotify uygulamasından okur)" }, "dinlenme ", el("b", {}, kisaSayi(s.dinlenme))) : null,
+      s.gunluk != null ? el("span", { title: "Son 28 günün ortalama günlük dinlenmesi" }, "günlük ", el("b", {}, kisaSayi(s.gunluk))) : null,
       el("span", {}, "son bakış ", el("b", {}, tarih(son?.zaman))),
       siralar.length ? el("span", { class: "siralar", title: `Şarkının adı arandığında ilk ${son.arama_limiti} sonuçtaki sıramız` },
         ...siralar.map(([m, n]) => el("span", { class: "sira" + (n && n <= 3 ? " iyi" : "") }, `${m} ${n ?? "—"}`))) : null),
@@ -1056,7 +1096,7 @@ function kazancPaneli() {
     const enCok = Math.max(...k.kaynaklar.map((x) => x.tutar), 0.01);
     doldur(kutu, el("h2", {}, "Kazanç"),
       el("p", { class: "kazanc-toplam gumus-yazi" }, para(k.toplam, k.para)),
-      el("p", { class: "kazanc-alt" }, `bu ay ${para(k.bu_ay, k.para)} · ${k.yayinlar.length} yayın · aylık raporla güncellenir`),
+      el("p", { class: "kazanc-alt" }, `${k.son_ay ? `son rapor (${k.son_ay})` : "bu ay"} ${para(k.bu_ay, k.para)} · ${k.yayinlar.length} yayın · aylık raporla güncellenir`),
       k.kaynaklar.length ? el("ul", { class: "cubuklar" }, ...k.kaynaklar.slice(0, 6).map((x) => el("li", {},
         el("span", {}, x.kaynak), el("b", {}, para(x.tutar, k.para)),
         el("span", { class: "cubuk", "aria-hidden": "true" }, el("i", { style: { width: `${Math.round((x.tutar / enCok) * 100)}%` } })))))
