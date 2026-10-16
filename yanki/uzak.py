@@ -15,7 +15,7 @@ import json
 import subprocess
 import time
 from collections.abc import Callable
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from yanki import dosya, motor, runpod
@@ -41,6 +41,20 @@ def bu_ay_harcama(kok: Path, simdi: datetime | None = None) -> float:
     return round(sum(x.get("usd", 0) for x in kayit if str(x.get("zaman", "")).startswith(ay)), 3)
 
 
+HARCAMA_EN_AZ_KAYIT = 500
+
+
+def _harcama_kirp(liste: list[dict], simdi: datetime | None = None) -> list[dict]:
+    """Eski kayıtlar atılır ama bu ayın ve geçen ayın hepsi kalır: önce düz son 500 kayıt tutuluyordu; stok yokken
+    her 30 dk'da bir 0 $'lık deneme yazılırsa ayın başındaki ödemeler düşer, aylık bütçe eksik görünürdü."""
+    simdi = simdi or datetime.now()
+    gecen_ay = (simdi.replace(day=1) - timedelta(days=1)).strftime("%Y-%m")
+    if len(liste) <= HARCAMA_EN_AZ_KAYIT:
+        return liste
+    bas = len(liste) - HARCAMA_EN_AZ_KAYIT
+    return [x for i, x in enumerate(liste) if i >= bas or str(x.get("zaman", ""))[:7] >= gecen_ay]
+
+
 def harcama_yaz(kok: Path, kayit: dict) -> None:
     """Kilitli oku-ekle-yaz: eğitim pod'u ile üretim pod'u aynı anda bitip birbirinin kaydını ezmesin."""
     from yanki import kilit
@@ -52,7 +66,7 @@ def harcama_yaz(kok: Path, kayit: dict) -> None:
             liste = json.loads(yol.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             liste = []
-        dosya.json_yaz(yol, [*liste, kayit][-500:], indent=1)
+        dosya.json_yaz(yol, _harcama_kirp([*liste, kayit]), indent=1)
 
 
 def butce_kontrol(a: Ayarlar, api_anahtari: str, bakiye: Callable[[str], float] = runpod.bakiye) -> float:
@@ -116,7 +130,10 @@ def isci_kos(p: runpod.Pod, hedef: str, zaman_asimi_sn: float, aralik_sn: float 
             # evdeki ağ koptu (2026-10-14, S33: ~10 dk "No route to host"); işçi podda sürüyor, yoklamaya devam
             bildir(f"  yoklama kopuk: {str(e)[-120:]}")
             continue
-        govde, hal = cikti.split("#DURUM#")
+        govde, ayrac, hal = cikti.partition("#DURUM#")
+        if not ayrac:  # yarım çıktı (bağlantı çıktı ortasında kesildi): işçi sürüyor, kopuk yoklama gibi
+            bildir("  yoklama yarım geldi")
+            continue
         hal, _, gunluk = hal.partition("#GUNLUK#")
         if (yeni_iz := (len(govde), gunluk.strip())) != iz:
             iz, son_degisim = yeni_iz, time.monotonic()
@@ -195,6 +212,7 @@ def calistir(a: Ayarlar, isler: list[motor.Is], klasor: Path, zaman_asimi_sn: fl
                 girdiler[yol] = f"{UZAK_DIZIN}/girdi/{len(girdiler)}{Path(yol).suffix}"
     kayit: dict = {"zaman": datetime.now().isoformat(timespec="seconds"), "is": len(isler), "gpu": a.uzak.gpu}
     sonuclar: list[motor.Sonuc] = []
+    ham: list[dict] = []
     acilan: list = []  # açılan her pod (hazır olmayan dahil): maliyeti kayda
     try:
         with PodAcici(a, pod_sinifi, acilan) as p:
@@ -253,19 +271,28 @@ def calistir(a: Ayarlar, isler: list[motor.Is], klasor: Path, zaman_asimi_sn: fl
         kayit["basarili"] = sum(s.basari for s in sonuclar)
         harcama_yaz(a.kok, kayit)
     gelen = {s.id for s in sonuclar}
-    return sonuclar + [motor.Sonuc(i.id, False, "uzak işçi sonuç yazmadı") for i in isler if i.id not in gelen]
+    # işçinin genel hatası (model/LoRA yüklenemedi) sonuçsuz kalan işlere: "sonuç yazmadı" nedenini söylemiyordu
+    genel = next((r.get("hata") for r in reversed(ham) if r.get("id") is None and r.get("hata")), None)
+    return sonuclar + [motor.Sonuc(i.id, False, genel or "uzak işçi sonuç yazmadı") for i in isler if i.id not in gelen]
 
 
 def artik_temizle(kok: Path, kapat=runpod.kapat_artiklari) -> list[str]:
-    """Her koşunun başında, iş olsun olmasın: açık kalmış üretim pod'ları (önce yalnız üretim işi varken ve bütçe
-    yerindeyken bakılıyordu; kuyruk boşsa ya da artık pod bütçeyi doldurduysa pod bakiye bitene kadar yanardı).
-    Hesap başına tek GraphQL sorgusu. Dönen: silinenler; hata günlüğe, koşu sürer."""
+    """Her koşunun başında, iş olsun olmasın: açık kalmış üretim ve eğitim pod'ları (önce yalnız üretim işi varken ve
+    bütçe yerindeyken bakılıyordu; kuyruk boşsa ya da artık pod bütçeyi doldurduysa pod bakiye bitene kadar yanardı).
+    Eğitim pod'u da: eğitim ortasında kapanan bilgisayarın pod'u yalnız bir sonraki `yanki egit`te siliniyordu (günlerce
+    yanabilirdi). Sahibi yaşayan pod'a (süren eğitim, deney) dokunulmaz (`runpod.kapat_artiklari`). Dönen: silinenler;
+    hata günlüğe, koşu sürer."""
+    from yanki import egitim
+
     silinen = []
     for k in runpod.anahtarlar(kok):
-        try:
-            silinen += kapat(k, kok / "calisma" / ".runpod", harcama=lambda r: harcama_yaz(kok, r))
-        except (runpod.RunPodHatasi, OSError) as e:
-            print(f"kiralık GPU artık denetimi yapılamadı: {e}")
+        for kayit_adi, on_ek in (("acik_pod", "yanki-"), (egitim.POD_KAYIT, "egitim-")):
+            try:
+                silinen += kapat(k, kok / "calisma" / ".runpod", kayit_adi, on_ek,
+                                 harcama=lambda r: harcama_yaz(kok, r))
+            except (runpod.RunPodHatasi, OSError) as e:
+                print(f"kiralık GPU artık denetimi yapılamadı: {e}")
+                break  # bu hesapta ikinci sorgu da düşer
     return silinen
 
 
@@ -287,9 +314,20 @@ def ag_engeli_bildir(kok: Path, neden: str) -> None:
                 "kendiliğinden sürer.", f"ag-ssh:{datetime.now():%Y-%m-%d}")
 
 
+def butce_yok_bildir(kok: Path, neden: str) -> None:
+    """Bakiye bitti ya da aylık sınır doldu: günde bir bildirilir. Önce yalnız günlüğe yazılıyordu; 2026-10-16'da
+    bakiye 0,80 $'da kaldı, 50 şarkı bütün gün sessizce bekledi."""
+    from yanki import olay
+
+    olay.bildir(kok / "calisma", "kayip", "üretim bekliyor: kiralık GPU bütçesi",
+                f"{neden}. Kiralık GPU açılmıyor; RunPod'a kredi yükleyince (ya da config/motor.toml → [uzak] sınırı) "
+                "üretim kendiliğinden sürer.", f"gpu-butce:{datetime.now():%Y-%m-%d}")
+
+
 def motor_sec(a: Ayarlar, kayit: Callable[[str], None] = print, stok=runpod.stok,
               bakiye: Callable[[str], float] = runpod.bakiye, ssh_engeli: Callable[[], str | None] | None = None,
-              ag_bildir: Callable[[Path, str], None] = ag_engeli_bildir
+              ag_bildir: Callable[[Path, str], None] = ag_engeli_bildir,
+              butce_bildir: Callable[[Path, str], None] = butce_yok_bildir
               ) -> tuple[Callable[..., list[motor.Sonuc]] | None, float, bool]:
     """Üretimin motoru ve tek parça eşiği, işler planlanmadan önce: uzak açık, son 3 saatte düşmemiş, ağ SSH'a açık,
     anahtar ve bütçe yerinde, GPU stokta ise sunucu (tek parça); değilse evdeki kart (INT8, parçalı). Karar sonradan
@@ -320,6 +358,8 @@ def motor_sec(a: Ayarlar, kayit: Callable[[str], None] = print, stok=runpod.stok
             raise runpod.RunPodHatasi(f"{a.uzak.gpu} stok: {durum_}")
     except (runpod.RunPodHatasi, OSError) as e:
         kayit(f"uzak GPU kullanılmıyor ({e}); {nerede}")
+        if isinstance(e, ButceYok):
+            butce_bildir(a.kok, str(e))
         return yedek
 
     def uzak_calistir(a_, isler, klasor, zaman_asimi_sn, **_k):

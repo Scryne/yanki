@@ -63,11 +63,16 @@ def kontroller(a: Ayarlar) -> list[Kontrol]:
     if a.uzak.acik:
         sonuc.append(uzak_kontrolu(a))
     kullanilan = gpu_kullanilan_mib()
+    # evde üretim kapalıyken (kiralık GPU, yerel_yedek = false) evdeki kartın dolu olması hattı durdurmaz: bilgi
+    # satırı; önce oyun açıkken `yanki durum` hep 1 dönüp ✗ gösteriyordu
+    evde = not (a.uzak.acik and not a.uzak.yerel_yedek)
+    ek = "" if evde else " (evde üretim kapalı, üretim kiralık GPU'da)"
     if kullanilan is None:
-        sonuc.append(Kontrol("GPU", False, "nvidia-smi okunamadı"))
+        sonuc.append(Kontrol("GPU", not evde, "nvidia-smi okunamadı" + ek))
     else:
         bos = kullanilan < a.gpu.bos_esik_mib
-        sonuc.append(Kontrol("GPU boş", bos, f"{kullanilan} MiB kullanımda (eşik {a.gpu.bos_esik_mib})"))
+        sonuc.append(Kontrol("GPU boş", bos or not evde,
+                             f"{kullanilan} MiB kullanımda (eşik {a.gpu.bos_esik_mib})" + ek))
     return sonuc
 
 
@@ -124,7 +129,7 @@ def anahtar_kontrolleri(a: Ayarlar) -> list[Kontrol]:
     # .env'nin tamamı (spotify.env_oku Spotify dışındakileri de okur) + ortam değişkenleri (Tunearo ve TypeSafe orada
     # da olabilir)
     e = {**spotify.env_oku(a.kok),
-         **{k: v for k, v in os.environ.items() if k.startswith(("TUNEARO_", "TYPESAFE_", "RUNPOD_"))}}
+         **{k: v for k, v in os.environ.items() if k.startswith(("TUNEARO_", "TYPESAFE_", "RUNPOD_", "EPOSTA_"))}}
     var = lambda *adlar: all(e.get(x) for x in adlar)  # noqa: E731
     return [
         dagitimci_kontrolu(a, var("TUNEARO_API_KEY")),
@@ -133,6 +138,9 @@ def anahtar_kontrolleri(a: Ayarlar) -> list[Kontrol]:
                 else ".env → SPOTIFY_CLIENT_ID/SECRET yok: keşif doğrulanmaz, takip yok"),
         Kontrol("TypeSafe anahtarı", var("TYPESAFE_API_KEY"), "keşif özgünlük kararı (Jev)" if var("TYPESAFE_API_KEY")
                 else ".env → TYPESAFE_API_KEY yok: özgünlük regex yedeğiyle"),
+        Kontrol("e-posta", var("EPOSTA_KULLANICI", "EPOSTA_SIFRE"),
+                "RouteNote onay/red e-postaları okunuyor" if var("EPOSTA_KULLANICI", "EPOSTA_SIFRE")
+                else ".env → EPOSTA_KULLANICI/EPOSTA_SIFRE yok: RouteNote kararları elle işlenir"),
         *([Kontrol("RunPod anahtarı", var("RUNPOD_API_KEY"), "üretim kiralık GPU'da" if var("RUNPOD_API_KEY")
                    else ".env → RUNPOD_API_KEY yok: kiralık GPU kullanılamaz")] if a.uzak.acik else []),
     ]

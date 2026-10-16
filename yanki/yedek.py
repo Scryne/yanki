@@ -25,11 +25,23 @@ DESENLER = (
     "calisma/*/kapak_kaynak.json",
     "calisma/*/paket/metadata.json",
     "calisma/*/paket/YUKLE.md",
+    # yeniden paketlenen şarkının eski paketi: RouteNote'ta açık kalan taslağın UPC'si burada
+    "calisma/*/paket_onceki/metadata.json",
+    # `yanki bastan` arşivi: geri çekilmiş/yayındaki eski RouteNote yayınlarının UPC/ISRC'si (oda → Sanatçı bunu okur)
+    "calisma/_arsiv/*/*/durum.json",
+    "calisma/_arsiv/*/*/paket/metadata.json",
+    "calisma/_arsiv/*/*/paket/YUKLE.md",
+    # odada elle doldurulan yayın taslakları (form + dağıtıcı kayıtları, kapak; ses büyük ve Scryne'da var)
+    "calisma/elle/*/metadata.json",
+    "calisma/elle/*/kapak.jpg",
+    "calisma/eposta/*.json",  # işlenmiş RouteNote e-postaları (karar bir kez uygulanır)
     "calisma/kesif/*.json",
     "calisma/olaylar.jsonl",  # bildirimlerin tekrar anahtarları: geri yüklemede eski olaylar yeniden bildirilmesin
     "calisma/gunluk/runpod.json",  # kiralık GPU harcaması: aylık bütçe sınırı bundan hesaplanıyor
     "girdi/liste.toml",
     "girdi/sozler/*.txt",
+    "girdi/kazanc/*",  # RouteNote aylık satış raporları (Scryne'ın indirdiği)
+    "girdi/kesif/*.csv",  # STILLMORE ve odadaki Bulucu'nun keşfe gönderdikleri
     "config/*.toml",
 )
 AD_BICIMI = "yanki-%Y-%m-%d-%H%M%S.zip"
@@ -63,11 +75,32 @@ def yedekle(kok: Path, op: Operasyon, simdi: datetime | None = None) -> tuple[Pa
     op.yedek_klasor.mkdir(parents=True, exist_ok=True)
     hedef = op.yedek_klasor / simdi.strftime(AD_BICIMI)
     gecici = hedef.with_name(hedef.name + ".tmp")
-    liste = dosyalar(kok)
+    yazilan = 0
     with zipfile.ZipFile(gecici, "w", zipfile.ZIP_DEFLATED) as z:
-        for p in liste:
-            z.write(p, p.relative_to(kok).as_posix())
+        for p in dosyalar(kok):
+            try:  # tarama ile yazım arasında silinen/taşınan dosya (oda o an paketi yeniliyor) yedeği düşürmesin
+                z.write(p, p.relative_to(kok).as_posix())
+            except FileNotFoundError:
+                continue
+            yazilan += 1
     gecici.replace(hedef)
     for eski in yedekler(op.yedek_klasor)[: -op.yedek_sakla]:
         eski.unlink(missing_ok=True)
-    return hedef, len(liste)
+    return hedef, yazilan
+
+
+def lora_yedekle(lora: Path | None, op: Operasyon) -> Path | None:
+    """Üretimdeki LoRA (kiralık GPU'da saatlerce eğitildi, ~160 MB) yedek klasörüne bir kez kopyalanır; zip'e girmez
+    (her yedekte yeniden yazılmasın). Dönen: yeni kopyalandıysa hedef, zaten varsa ya da LoRA yoksa None."""
+    import shutil
+
+    if lora is None or not (lora / "adapter_config.json").is_file():
+        return None
+    hedef = op.yedek_klasor / "lora" / "-".join(x for x in lora.parts[-3:] if x != "checkpoints")  # <eğitim>-<epoch>
+    if (hedef / "adapter_config.json").is_file():
+        return None
+    gecici = hedef.with_name(hedef.name + ".tmp")
+    shutil.rmtree(gecici, ignore_errors=True)
+    shutil.copytree(lora, gecici)
+    gecici.replace(hedef)
+    return hedef

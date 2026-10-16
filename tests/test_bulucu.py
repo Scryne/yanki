@@ -107,7 +107,7 @@ def test_is_ilerler_sonucu_kaydeder(tmp_path, monkeypatch):
     d = _bekle(b)
     assert d["durum"] == "bitti" and d["anahtar"] == f"playlist-{PID}"
     assert k.ifadeler[0] == bulucu.YARDIMCI  # yardımcı önce yüklendi
-    assert f'baslat("playlist", "{PID}")' in k.ifadeler[1]
+    assert f'baslat("playlist", "{PID}", {bulucu.IS_ZAMAN_ASIMI * 1000})' in k.ifadeler[1]
     kayit = bulucu.sonuc_oku(tmp_path, f"playlist-{PID}")
     assert kayit["ad"] == "akil" and kayit["zaman"]
     assert bulucu.gecmis(tmp_path)[0] | {"zaman": None} == {

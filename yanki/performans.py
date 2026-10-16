@@ -40,7 +40,9 @@ def seri(d: durum.Durum) -> list[tuple[date, int]]:
 
 
 def yayin_gunu(d: durum.Durum) -> date | None:
-    """Spotify'da ilk görüldüğü gün (takip geçmişinin ilk canlı kaydı)."""
+    """Spotify'da ilk görüldüğü gün: takibin yazdığı `ilk_canli`, yoksa (eski kayıt) geçmişin ilk canlı kaydı."""
+    if ilk := (d.yayin or {}).get("ilk_canli"):
+        return datetime.fromisoformat(ilk).date()
     for g in (d.yayin or {}).get("gecmis") or []:
         if g.get("canli"):
             return datetime.fromisoformat(g["zaman"]).date()

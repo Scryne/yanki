@@ -118,6 +118,15 @@ def kontrol_et(sp, d: durum.Durum, isrc: str, sanatci_adi: str, pazarlar, arama_
         elif bizim_sanatci(t) and sade_ad(t.get("name") or "") == sade:  # istemci: ad + sanatçıyla doğrula
             bizim = t
             break
+    if bizim is None and istemci is not None and sp is not None and (onceki or {}).get("canli"):
+        # istemcinin araması bir gece parçayı göstermeyebilir (bulanık ISRC eşleşmesi, arama dizini): önceden canlı
+        # parçayı "Spotify'dan kalktı" saymadan önce Web API'nin kesin ISRC aramasıyla doğrula (yalnız bu durumda 1
+        # istek; kota/ağ hatasında istemcinin sonucu geçerli)
+        try:
+            bizim = next((t for t in sp.isrc_ara(isrc, market) if t.get("is_playable") is not False
+                          and ((t.get("external_ids") or {}).get("isrc") or isrc).upper() == isrc), None)
+        except spotify.SpotifyHatasi:
+            bizim = None
     if bizim:
         son["canli"], son["spotify_id"] = True, bizim["id"]
         son["sanatci_id"] = next((a.get("id") for a in bizim.get("artists") or []
@@ -139,12 +148,11 @@ def kontrol_et(sp, d: durum.Durum, isrc: str, sanatci_adi: str, pazarlar, arama_
             bulunan_ = kaynak.ara(d.ad, m, adet=arama_limiti)
         except spotify.Sinirli:
             # kota pazar döngüsünde doldu: canlılık zaten bulundu, kaydedilsin (önce bütün takip düşüyordu: hiçbir
-            # şarkının yayına çıkışı ya da kalkışı yazılmıyordu); kalan pazarların önceki sırası taşınır
-            for k in pazarlar[pazarlar.index(m):]:
-                son["siralar"].setdefault(k, ((onceki or {}).get("siralar") or {}).get(k))
+            # şarkının yayına çıkışı ya da kalkışı yazılmıyordu); bu ve kalan Web API pazarlarının önceki sırası
+            # taşınır, istemcinin pazarı (kotasız) yine ölçülür
             son["siralar"][m] = ((onceki or {}).get("siralar") or {}).get(m)
             web_zamani = False
-            break
+            continue
         for i, t in enumerate(bulunan_, 1):
             if t.get("id") == bizim["id"] or (sade_ad(t.get("name") or "") == sade and bizim_sanatci(t)):
                 son["siralar"][m] = i
@@ -163,6 +171,10 @@ def kaydet(d: durum.Durum, son: dict) -> list[str]:
     gecmis = list((d.yayin or {}).get("gecmis") or [])
     if son["canli"] and d.asama == "yuklendi":
         d.gec("yayinda")
+    ilk = (d.yayin or {}).get("ilk_canli")
+    if son["canli"] and not ilk:
+        # geçmiş GECMIS_SINIRI'nda kırpılıyor: ilk canlı kaydı düşünce yayın günü (performans) kayardı
+        ilk = son["zaman"]
     son["kayip"] = bool(onceki.get("canli") and not son["canli"])
     if son["kayip"]:
         uyarilar.append("önceden canlıydı, ISRC artık bulunmuyor (kaldırılmış olabilir)")
@@ -171,6 +183,8 @@ def kaydet(d: durum.Durum, son: dict) -> list[str]:
     if (son["canli"], son.get("siralar")) != (onceki.get("canli"), onceki.get("siralar")):
         gecmis.append({k: son.get(k) for k in ("zaman", "canli", "arama_sirasi", "siralar")})
     d.yayin = {**(d.yayin or {}), "son": son, "gecmis": gecmis[-GECMIS_SINIRI:]}  # dinlenme serisi korunur
+    if ilk:
+        d.yayin["ilk_canli"] = ilk
     return uyarilar
 
 
@@ -255,6 +269,8 @@ def takip_et(sp, calisma: Path, sanatci_adi: str, pazarlar, kimlikler: list[str]
     """`bildir(tur, baslik, metin, anahtar)` verilirse değişiklikler bildirilir (gece koşusu, `yanki takip`).
     `istemci`: Spotify uygulaması üzerinden kotasız arama (`kontrol_et`)."""
     sonuc = []
+    hatalar: list[spotify.SpotifyHatasi] = []
+    denenen = 0
     for d in durum.hepsi(calisma):
         if d.asama not in ("yuklendi", "yayinda") or (kimlikler and d.kimlik not in kimlikler):
             continue
@@ -266,8 +282,17 @@ def takip_et(sp, calisma: Path, sanatci_adi: str, pazarlar, kimlikler: list[str]
                 sonuc.append((d, [f"ISRC yok: dağıtımcının atadığı ISRC'yi `yanki yuklendi {d.kimlik} --isrc …` ile "
                                   "ekle"]))
             continue
-        son = kontrol_et(sp, d, y["isrc"].upper(), sanatci_adi, pazarlar, arama_limiti,
-                         onceki=(d.yayin or {}).get("son"), istemci=istemci, web_gun=web_gun)
+        denenen += 1
+        try:
+            son = kontrol_et(sp, d, y["isrc"].upper(), sanatci_adi, pazarlar, arama_limiti,
+                             onceki=(d.yayin or {}).get("son"), istemci=istemci, web_gun=web_gun)
+        except spotify.Sinirli:
+            raise  # kota kilidi: kalan şarkılar da istek atamaz, çağıran "ertelendi" der
+        except spotify.SpotifyHatasi as e:
+            # tek şarkının hatası (ağ kesintisi, art arda 5xx, 404) kalanların takibini düşürmesin
+            hatalar.append(e)
+            sonuc.append((d, [f"Spotify'a sorulamadı: {e}"]))
+            continue
         son.update(yayin_tarihi=y.get("yayin_tarihi"), en_gec_yayin=y.get("en_gec_yayin"), dagitimci=y.get("dagitimci"),
                    dagitim_durumu=y.get("dagitim_durumu"))
         son["dinlenme"] = dinlenme_olc(istemci, son)
@@ -280,6 +305,8 @@ def takip_et(sp, calisma: Path, sanatci_adi: str, pazarlar, kimlikler: list[str]
             for olay in olaylar(taze, onceki, son):
                 bildir(*olay)
         sonuc.append((taze, uyarilar))
+    if hatalar and len(hatalar) == denenen:
+        raise hatalar[-1]  # hiçbir şarkı sorulamadı (ağ yok): çağıran koşu hatası olarak görsün
     if bildir:
         for olay in profil_olaylari(calisma, sanatci_adi):
             bildir(*olay)

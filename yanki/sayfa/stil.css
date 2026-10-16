@@ -113,6 +113,13 @@ button { font: inherit; color: inherit; cursor: pointer; }
   border-radius: var(--r-kucuk); color: inherit; text-decoration: none; border: 1px solid transparent; font-weight: 500; }
 .gorunumler a:hover { background: rgba(255, 255, 255, .04); }
 .gorunumler a[aria-current="page"] { border-color: var(--cizgi-gumus); background: rgba(214, 222, 235, .07); }
+/* dar ekranda yedi görünüm alt alta kenar çubuğunun yarısını kaplıyor, şarkı listesi kesiliyordu: yatay kaydırılan tek satır */
+@media (max-width: 760px) {
+  .gorunumler { grid-auto-flow: column; grid-auto-columns: max-content; overflow-x: auto; scrollbar-width: none;
+    margin-inline: calc(-1 * var(--s4)); padding-inline: var(--s4); scroll-padding-inline: var(--s4); }
+  .gorunumler::-webkit-scrollbar { display: none; }
+  .gorunumler a { padding: var(--s2) var(--s3); border-color: var(--cizgi); }
+}
 .g-sayi { font: 500 11px/1 var(--f-zaman); color: var(--gumus); }
 .g-sayi.dikkat { color: var(--primary); }
 

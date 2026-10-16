@@ -253,7 +253,7 @@ def test_egitim_orkestrasyonu(tmp_path, monkeypatch):
     kapatilan = []
     s = egitim.egit(a, ayar, tar, bildir=lambda *_: None, pod_sinifi=_EgitimPodu,
                     kur=lambda p, cm, m: runpod.ACESTEP_DIZIN, bakiye=lambda _k: 10.0,
-                    kapat=lambda *x: kapatilan.append(x[2:]) or [], commit="ca1e85f")
+                    kapat=lambda *x, **_k: kapatilan.append(x[2:]) or [], commit="ca1e85f")
     p = _EgitimPodu.acilan[-1]
     # eğitim pod'u üretimin artık temizliğine yakalanmaz: ayrı ad, ayrı kayıt, kendi önekiyle temizlenir
     assert p.ad == egitim.POD_AD and not p.ad.startswith("yanki-") and p.kayit_adi == egitim.POD_KAYIT
@@ -299,7 +299,7 @@ def test_egitim_onceki_bagdastiricidan_devam_eder(tmp_path, monkeypatch):
         (tmp_path / "lora" / "ep20").mkdir(parents=True, exist_ok=True)
         (tmp_path / "lora" / "ep20" / f).write_text("x", encoding="utf-8")
     egitim.egit(a, ayar, tar, bildir=lambda *_: None, pod_sinifi=_EgitimPodu,
-                kur=lambda p, cm, m: runpod.ACESTEP_DIZIN, bakiye=lambda _k: 10.0, kapat=lambda *x: [],
+                kur=lambda p, cm, m: runpod.ACESTEP_DIZIN, bakiye=lambda _k: 10.0, kapat=lambda *x, **_k: [],
                 commit="ca1e85f")
     p = _EgitimPodu.acilan[-1]
     assert p.gonderilen[str(tmp_path / "lora" / "ep20" / "adapter_model.safetensors")] == \
@@ -340,7 +340,7 @@ def test_egitim_duserse_gunluk_iner_maliyet_yazilir(tmp_path, monkeypatch):
     tar.write_bytes(b"tar")
     with pytest.raises(runpod.RunPodHatasi, match="egitim 1 koduyla"):
         egitim.egit(a, egitim.Ayar(betim=False), tar, bildir=lambda *_: None, pod_sinifi=Dusen,
-                    kur=lambda p, cm, m: runpod.ACESTEP_DIZIN, bakiye=lambda _k: 10.0, kapat=lambda *x: [],
+                    kur=lambda p, cm, m: runpod.ACESTEP_DIZIN, bakiye=lambda _k: 10.0, kapat=lambda *x, **_k: [],
                     commit="x")
     p = _EgitimPodu.acilan[-1]
     assert p.kapandi and any(x.endswith("egitim.log") for x in p.alinan)

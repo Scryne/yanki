@@ -93,7 +93,7 @@ def bul(sanatci: str, ad: str, json_al=ag.json_al, uyku=time.sleep) -> Kunye:
         turler, tip, cinsiyet = (), None, None
         kredi = (kayit.get("artist-credit") or [{}])[0].get("artist", {})
         # yalnız aranan sanatçının kendisiyse (başka birinin cover kaydının türleri yanıltır)
-        if kredi.get("id") and kredi.get("name", "").casefold() == sanatci.casefold():
+        if kredi.get("id") and duz(kredi.get("name", "")).casefold() == duz(sanatci).casefold():
             uyku(1.1)
             sn = json_al(f"{MB}/artist/{kredi['id']}", {"inc": "genres", "fmt": "json"})
             turler = tuple(g["name"] for g in sorted(sn.get("genres", []), key=lambda g: -g.get("count", 0)))

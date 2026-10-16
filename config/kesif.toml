@@ -5,8 +5,8 @@
 [kesif]
 # İlki ana pazar (aramalar orada). Bir şarkı hepsinde kapalıysa "kaldirildi", bazılarında "kismi"; puan kapalı pazar
 # oranıyla çarpılır. Her ek pazar, aday başına bir Spotify isteği. Yalnız yayın yaptığımız pazarlar (2026-10-10):
-# US ve MX'te yayın yok (mekanik lisans, config/yayin.toml → [tunearo]); yalnız oralarda kapalı bir şarkı Orvane için
-# boşluk değil ama önce puan alıyordu.
+# US ve MX'te yayın yok (mekanik lisans yok: RouteNote'ta US/CA/MX/IN/PK hariç, yanki/routenote.py); yalnız oralarda
+# kapalı bir şarkı Orvane için boşluk değil ama önce puan alıyordu.
 pazarlar = ["GB", "DE", "FR", "BR", "JP", "TR"]
 # Web API ile taranacak playlist'ler: yalnız Scryne'ın kendi ya da ortak olduğu playlist'ler (başkasınınki 403).
 # Hem çalınamayan parçaları verir hem de sanatçıları katalog farkına tohum olur. STILLMORE CSV'leri: girdi/kesif/.

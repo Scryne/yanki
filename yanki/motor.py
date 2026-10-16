@@ -156,38 +156,48 @@ def calistir(
         return [Sonuc(i.id, False, hata) for i in isler]
     bekle(a, gpu_bekleme_sn)
     gunluk = klasor / "motor.log"
-    takildi = False
+    takildi = suresi_doldu = False
     with open(gunluk, "wb") as log:
         surec = subprocess.Popen(
             [str(python or a.motor.python), str(isci), str(is_yolu), str(sonuc_yolu)],
             stdout=log, stderr=subprocess.STDOUT, env=_ortam(a),
             cwd=str(a.motor.klasor if a.motor.klasor.is_dir() else klasor),
         )
-        bitis, son_hareket = time.monotonic() + zaman_asimi_sn, time.monotonic()
-        boyut = -1
-        while surec.poll() is None:
-            try:  # işçi bitince hemen döner; bitmediyse bekçi aralığında bir bakar
-                surec.wait(timeout=bekci_aralik_sn)
-                break
-            except subprocess.TimeoutExpired:
-                pass
-            yeni = gunluk.stat().st_size if gunluk.exists() else 0
-            if yeni != boyut:
-                boyut, son_hareket = yeni, time.monotonic()
-            # bekçi: işçi günlüğe hiç yazmadan HAREKETSIZ_SN geçerse takılmıştır (2026-10-10: VAE çözme boş VRAM
-            # 0,76 GB'ta paylaşımlı belleğe taştı, bir saat ilerlemedi; toplam zaman aşımı 3 saat 45 dk sonraydı)
-            takildi = time.monotonic() - son_hareket > hareketsiz_sn
-            if takildi or time.monotonic() > bitis:
+        try:
+            bitis, son_hareket = time.monotonic() + zaman_asimi_sn, time.monotonic()
+            boyut = -1
+            while surec.poll() is None:
+                try:  # işçi bitince hemen döner; bitmediyse bekçi aralığında bir bakar
+                    surec.wait(timeout=bekci_aralik_sn)
+                    break
+                except subprocess.TimeoutExpired:
+                    pass
+                yeni = gunluk.stat().st_size if gunluk.exists() else 0
+                if yeni != boyut:
+                    boyut, son_hareket = yeni, time.monotonic()
+                # bekçi: işçi günlüğe hiç yazmadan HAREKETSIZ_SN geçerse takılmıştır (2026-10-10: VAE çözme boş VRAM
+                # 0,76 GB'ta paylaşımlı belleğe taştı, bir saat ilerlemedi; toplam zaman aşımı 3 saat 45 dk sonraydı)
+                takildi = time.monotonic() - son_hareket > hareketsiz_sn
+                suresi_doldu = not takildi and time.monotonic() > bitis
+                if takildi or suresi_doldu:
+                    surec.kill()
+                    surec.wait()
+                    break
+        except BaseException:
+            # hat düştü (Ctrl+C, bekçide hata): işçi GPU'yu tutarak öksüz kalmasın
+            if surec.poll() is None:
                 surec.kill()
                 surec.wait()
-                break
-        cikis = None if surec.returncode is None or takildi or time.monotonic() > bitis else surec.returncode
+            raise
+        # öldürülmediyse işçinin kendi çıkış kodu (son bekçi aralığında, süre dolarken biten işçi zaman aşımı sayılmaz)
+        cikis = None if takildi or suresi_doldu else surec.returncode
     try:
         okunan = json.loads(sonuc_yolu.read_text(encoding="utf-8")) if sonuc_yolu.exists() else []
     except (OSError, ValueError):  # işçi yazarken öldürüldü (zaman aşımı): yarım JSON
         okunan = []
     sonuclar = {r["id"]: Sonuc.okunan(r) for r in okunan if r.get("id") is not None}
-    genel = next((r["hata"] for r in okunan if r.get("id") is None), None)
+    # işçinin genel hatası (model/LoRA yüklenemedi); birden çoksa sonuncusu kalan işleri durdurandır
+    genel = next((r["hata"] for r in reversed(okunan) if r.get("id") is None), None)
     if takildi:
         genel = f"işçi {hareketsiz_sn / 60:.0f} dk ilerlemedi, durduruldu (ayrıntı: {gunluk})"
     elif cikis is None:

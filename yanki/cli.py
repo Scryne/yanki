@@ -1,6 +1,8 @@
 """yanki komut satırı."""
 
 import argparse
+import contextlib
+import re
 import shutil
 import sys
 from pathlib import Path
@@ -537,7 +539,10 @@ def _stillmore_tara(args, kok: Path, calisma: Path, st: dict, sp, dogrula: bool,
         return
     havuz = stillmore.havuz_oku(calisma)
     for pid in st.get("playlistler", []):
-        stillmore.havuza_ekle(havuz, spotify.kimlik_ayikla(pid), "", "config")
+        try:  # config'teki tek bozuk kimlik bütün keşfi düşürmesin
+            stillmore.havuza_ekle(havuz, spotify.kimlik_ayikla(pid), "", "config")
+        except ValueError as e:
+            print(f"✗ config/kesif.toml → [stillmore] playlistler: '{pid}' atlandı ({e})")
     bulucu.havuza_isle(havuz, bulucu.izlenenler(calisma))  # odadaki Bulucu'dan "gece taransın" denenler
     sorgular = st.get("arama", [])
     if dogrula and sorgular:  # her gece sıradaki birkaç sorgu (döner)
@@ -738,6 +743,15 @@ BOS_CIKTI = ("üretilecek bir şey yok", "paketlenecek onaylı şarkı yok", "ta
              # bilinen bekleme hâlleri: her 30 dk'da günlüğe aynı blok yazılmasın
              "durum yoklaması yok", "üretim duraklatıldı", "e-posta: yeni RouteNote e-postası yok",
              "e-posta ayarı yok")
+# Bekleme hâlleri (kiralık GPU açılamıyor, pil, GPU dolu): hâl değişince bir kez yazılır, aynı hâl sürdükçe yazılmaz.
+# Hâl sayılardan arındırılarak karşılaştırılır: bakiye ya da sıradaki şarkı sayısı değişti diye yeniden yazılmasın
+# (2026-10-16: bakiye 0,80 $ iken her 30 dk'da "üretim bekliyor … (50 şarkı sırada)" bloğu, gün boyu).
+BEKLEME_CIKTI = ("üretim bekliyor", "uzak GPU ")
+
+
+def _sayisiz(satir: str) -> str:
+    """Hâl/hata karşılaştırması için sayılar (bakiye, şarkı sayısı, saat, ms) tek simgeye indirilir."""
+    return re.sub(r"\d+(?:[.,:]\d+)*", "#", satir)
 
 
 class _AdimCiktisi:
@@ -748,11 +762,16 @@ class _AdimCiktisi:
     bitiş saatini başlama saati gibi göstererek görünüyor, koşu yarıda kesilirse (uyku, kapanma) hiç görünmüyordu
     (2026-10-10 günlüğü: "── üretim (18:51:46)" altında 17:38'de başlamış üretim)."""
 
-    def __init__(self, baslik: str, hedef):
+    def __init__(self, baslik: str, hedef, onceki_bekleme: str = ""):
         self.baslik, self.hedef = baslik, hedef
         self.tampon: list[str] = []
         self.yarim = ""
         self.akiyor = False
+        self.onceki_bekleme = onceki_bekleme  # önceki koşuda bu adımın bekleme hâli (`bekleme`)
+        self.bekleme_satirlari: list[str] = []
+        self.is_yapti = False  # bekleme ve "iş yok" dışında bir satır çıktı
+        self.hatalar: list[str] = []  # "✗ …" satırları (adımın hata bildirimi için)
+        self.son_satir = ""
 
     def write(self, s: str) -> int:
         self.yarim += s
@@ -769,13 +788,27 @@ class _AdimCiktisi:
         print(satir, file=self.hedef, flush=True)
 
     def _satir(self, satir: str) -> None:
+        if satir.strip():
+            self.son_satir = satir.strip()
+            if satir.startswith("✗ ") and len(self.hatalar) < 5:
+                self.hatalar.append(satir[2:].strip())
         if self.akiyor:
             self._yaz(satir)
             return
         if satir.strip() or self.tampon:  # baştaki boş satırlar atılır
             self.tampon.append(satir)
-        if satir.strip() and not any(x in satir for x in BOS_CIKTI):
+        if any(satir.startswith(x) for x in BEKLEME_CIKTI):
+            self.bekleme_satirlari.append(satir)
+        elif satir.strip() and not any(x in satir for x in BOS_CIKTI):
+            self.is_yapti = True
             self.ac()
+
+    @property
+    def bekleme(self) -> str:
+        """Adım yalnız beklediyse hâlin sayısız imzası; iş yaptıysa ya da beklemediyse boş."""
+        if self.is_yapti:
+            return ""
+        return "\n".join(_sayisiz(x) for x in self.bekleme_satirlari)
 
     def ac(self) -> None:
         if self.akiyor:
@@ -791,6 +824,8 @@ class _AdimCiktisi:
         if self.yarim:
             self._satir(self.yarim)
             self.yarim = ""
+        if not self.akiyor and self.bekleme_satirlari and self.bekleme != self.onceki_bekleme:
+            self.ac()
         if zorla:
             self.ac()
         return self.akiyor
@@ -803,6 +838,31 @@ def _adim_zamanlari(calisma: Path) -> dict:
         return json.loads((calisma / ".adimlar.json").read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return {}
+
+
+def _adim_hatasi_bildir(calisma: Path, ad: str, hatalar: list[str]) -> None:
+    """Düşen adım Scryne'a bildirilir; aynı hata (sayılardan arındırılmış) günde bir kez. Önce `surekli.ps1` her
+    sorunlu koşuda bildiriyordu: 2026-10-16'da bir paketin RouteNote yüklemesi gece 01:00'den beri her 30 dk'da aynı
+    zaman aşımıyla düştü, her seferinde "koşu hata verdi" bildirimi geldi."""
+    import hashlib
+    from datetime import date
+
+    imza = "\n".join(_sayisiz(x) for x in hatalar)
+    anahtar = f"kosu-hata:{ad}:{hashlib.sha1(imza.encode()).hexdigest()[:12]}:{date.today()}"
+    gunluk = f"calisma\\gunluk\\{date.today()}.log"
+    with contextlib.suppress(OSError):  # bildirim en iyi çaba
+        _bildirici(calisma)("hata", f"{ad} adımı düştü", "; ".join(hatalar)[:300] + f" (günlük: {gunluk})", anahtar)
+
+
+def _beklemeler(calisma: Path) -> dict:
+    """Adım adına son yazılan bekleme hâli (`_AdimCiktisi.bekleme`)."""
+    import json
+
+    try:
+        veri = json.loads((calisma / ".beklemeler.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return veri if isinstance(veri, dict) else {}
 
 
 def _spotify_serbest(op) -> bool:
@@ -832,8 +892,8 @@ def _calistir(args: argparse.Namespace) -> int:
     gereken adımlar (keşif, takip) uygulama serbestken (`_spotify_serbest`), değilse sonraki koşuya kalır.
 
     Adımlar birbirinden yalıtılmış: biri düşerse hatası günlüğe yazılır, koşu sürer ve 1 döner. Yapılacak işi olmayan
-    adım yazmaz; hiçbir adım iş yapmadıysa koşu hiçbir şey yazmaz (günlük her 30 dk'da bir şişmesin)."""
-    import contextlib
+    adım yazmaz; hiçbir adım iş yapmadıysa koşu hiçbir şey yazmaz (günlük her 30 dk'da bir şişmesin). Yalnız bekleyen
+    adım (kiralık GPU açılamıyor) hâli değişince bir kez yazılır (`BEKLEME_CIKTI`); düşen adım günde bir bildirilir."""
     import time
     import traceback
     from datetime import datetime, timedelta
@@ -891,9 +951,10 @@ def _calistir(args: argparse.Namespace) -> int:
 
         adimlar.insert(0, ("kiralık GPU artığı", artik))
     sorunlu, yazilan = [], []
+    beklemeler = _beklemeler(calisma)
     for ad, fn in adimlar:
         bas = time.monotonic()
-        cikti = _AdimCiktisi(f"── {ad} ({datetime.now():%H:%M:%S})", sys.stdout)
+        cikti = _AdimCiktisi(f"── {ad} ({datetime.now():%H:%M:%S})", sys.stdout, beklemeler.get(ad, ""))
         with contextlib.redirect_stdout(cikti):
             try:
                 kod = fn() or 0
@@ -910,7 +971,14 @@ def _calistir(args: argparse.Namespace) -> int:
             dosya.json_yaz(calisma / ".adimlar.json", zamanlar)
         if kod:
             sorunlu.append(ad)
-        if cikti.bitir(zorla=bool(kod) or hepsi):
+        yazildi = cikti.bitir(zorla=bool(kod) or hepsi)
+        if beklemeler.get(ad, "") != cikti.bekleme:
+            beklemeler[ad] = cikti.bekleme
+            with contextlib.suppress(OSError):  # yazılamazsa en kötü ihtimalle hâl bir kez daha yazılır
+                dosya.json_yaz(calisma / ".beklemeler.json", {k: v for k, v in beklemeler.items() if v})
+        if kod:
+            _adim_hatasi_bildir(calisma, ad, cikti.hatalar or [cikti.son_satir or "ayrıntı günlükte"])
+        if yazildi:
             yazilan.append(ad)
             gecen = time.monotonic() - bas
             if kod:
@@ -1017,11 +1085,56 @@ def _erisim_yok(calisma: Path, e) -> None:
                         f"tunearo:erisim:{date.today()}")
 
 
+# Otomatik yüklemesi düşen paket her 30 dk'da yeniden denenmez: ilk düşüşten sonra bir kez hemen (geçici ağ/sayfa
+# hatası), sonra 2, 4, 8, 16, en çok 24 saatte bir. 2026-10-16: bir paketin RouteNote formu (#edit-did12) gece
+# 01:00'den beri her koşuda 45 sn zaman aşımıyla düştü; her deneme tarayıcı açıp 75 sn sürdü, koşu her seferinde
+# "sorunlu" bitti.
+YUKLEME_TEKRAR_SAAT_EN_COK = 24
+
+
+def _yukleme_hatalari_yolu(calisma: Path) -> Path:
+    return calisma / ".yukleme_hatalari.json"
+
+
+def _yukleme_hatalari(calisma: Path, kuyrukta: set[str]) -> dict:
+    """Kuyruktaki paketlerin otomatik yükleme düşüşleri ({kimlik: {sayi, son, hata}}); kuyruktan çıkanınki atılır."""
+    import json
+
+    try:
+        veri = json.loads(_yukleme_hatalari_yolu(calisma).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return {k: v for k, v in veri.items() if k in kuyrukta and isinstance(v, dict)} if isinstance(veri, dict) else {}
+
+
+def _yukleme_hatalari_yaz(calisma: Path, hatalar: dict) -> None:
+    from yanki import dosya
+
+    try:
+        dosya.json_yaz(_yukleme_hatalari_yolu(calisma), hatalar)
+    except OSError as e:  # kayıt yazılamazsa paket yalnız daha sık denenir
+        print(f"yükleme hataları kaydedilemedi: {e}")
+
+
+def _yukleme_sonraki_deneme(kayit: dict | None):
+    """Düşen yüklemenin en erken yeniden deneneceği an (None: hemen)."""
+    from datetime import datetime, timedelta
+
+    if not kayit or int(kayit.get("sayi", 0)) < 2:
+        return None
+    try:
+        son = datetime.fromisoformat(kayit["son"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    return son + timedelta(hours=min(YUKLEME_TEKRAR_SAAT_EN_COK, 2 ** (int(kayit["sayi"]) - 1)))
+
+
 def _takvim_hatirlat(kok: Path) -> int:
     """Sırası gelen paketler: dağıtımcı kendisi yükleyebiliyorsa ve gece yüklemesi açıksa (`[routenote] gece`) hepsi
     yüklenir, yoksa ilki bildirilir (bir kez). `[takvim] haftada = 0` iken sıradaki her paket bu koşuda gider. Tek bir
-    paketin hatası diğerlerini durdurmaz; oturum düştüyse (RouteNote) ya da hesap kotası dolduysa (Tunearo) durur."""
-    from datetime import date
+    paketin hatası diğerlerini durdurmaz; oturum düştüyse (RouteNote) ya da hesap kotası dolduysa (Tunearo) durur.
+    Yüklemesi üst üste düşen paket seyrek denenir (`_yukleme_sonraki_deneme`)."""
+    from datetime import date, datetime
 
     from playwright.sync_api import Error as TarayiciHatasi
 
@@ -1056,7 +1169,19 @@ def _takvim_hatirlat(kok: Path) -> int:
                f"takvim:{s.kimlik}:{s.yukleme}")
         return 0
     yuklenen, hatali = [], 0
+    hatalar = _yukleme_hatalari(calisma, {x.kimlik for x in p.sira})
     for s in sirasi_gelen:
+        if (sonraki := _yukleme_sonraki_deneme(hatalar.get(s.kimlik))) and sonraki > datetime.now():
+            print(f"takvim: {s.sanatci} — {s.ad} yüklemesi {hatalar[s.kimlik]['sayi']} kez düştü, sonraki deneme "
+                  f"{sonraki:%d.%m %H:%M} (son hata: {hatalar[s.kimlik]['hata'][:120]})")
+            continue
+
+        def dustu(e: Exception, s=s) -> None:
+            onceki = hatalar.get(s.kimlik) or {}
+            hatalar[s.kimlik] = {"sayi": int(onceki.get("sayi", 0)) + 1, "hata": f"{type(e).__name__}: {e}",
+                                 "son": datetime.now().isoformat(timespec="seconds")}
+            _yukleme_hatalari_yaz(calisma, hatalar)
+
         try:
             bilgi = dagitim.otomatik_yukle(calisma, d, s.kimlik, s.yayin_tarihi)
         except tunearo.ErisimYok as e:
@@ -1079,11 +1204,13 @@ def _takvim_hatirlat(kok: Path) -> int:
                        f"kota:{date.today()}")
                 break
             print(f"✗ {s.sanatci} — {s.ad}: {e}")
+            dustu(e)
             hatali += 1
             continue
         except ValueError as e:
             if "orijinal yazarlar yok" not in str(e):
                 print(f"✗ {s.sanatci} — {s.ad}: {e}")
+                dustu(e)
                 hatali += 1
                 continue
             # kaynakta yazar yok (MusicBrainz'de kaydı olmayan şarkı): her 30 dk hata değil, Scryne'a bir kez
@@ -1095,8 +1222,11 @@ def _takvim_hatirlat(kok: Path) -> int:
             continue
         except (LookupError, RuntimeError, OSError, TarayiciHatasi) as e:  # bozuk paket, ağ, sayfa: sıradakine
             print(f"✗ {s.sanatci} — {s.ad}: {type(e).__name__}: {e}")
+            dustu(e)
             hatali += 1
             continue
+        if hatalar.pop(s.kimlik, None):
+            _yukleme_hatalari_yaz(calisma, hatalar)
         yuklenen.append((s, bilgi))
         print(f"takvim: {s.sanatci} — {s.ad} {d.ad}'ya yüklendi, incelemede (yayın "
               f"{bilgi.get('yayin_tarihi') or s.yayin_tarihi}, yayın {_yayin_kimligi(bilgi)})", flush=True)
@@ -1127,10 +1257,16 @@ def _takvim(args: argparse.Namespace) -> int:
     print(f"son yükleme: {p.son_yukleme or '—'}" + (f" · {p.beklemede}" if p.beklemede else ""))
     if not p.sira:
         print("kuyruk boş: paketlenmiş şarkı yok")
+    hatalar = _yukleme_hatalari(calisma, {x.kimlik for x in p.sira})
     for i, x in enumerate(p.sira, 1):
         puan = f"keşif {x.puan:,.0f}" if x.puan else "liste"
         yayin = "onaylanınca" if x.yayin_tarihi <= x.yukleme else f"{x.yayin_tarihi:%Y-%m-%d}"  # yayin_on_gun = 0
         print(f"{i:2}. {x.yukleme:%Y-%m-%d} yükle → {yayin} yayın  {x.sanatci} — {x.ad}  ({puan})")
+        if h := hatalar.get(x.kimlik):
+            sonraki = _yukleme_sonraki_deneme(h)
+            print(f"      ✗ otomatik yükleme {h.get('sayi')} kez düştü"
+                  + (f", sonraki deneme {sonraki:%d.%m %H:%M}" if sonraki else ", sonraki koşuda yeniden denenir")
+                  + f": {str(h.get('hata'))[:160]}")
     for kimlik in p.duzeltme:
         print(f"  ✗ {kimlik}: dağıtımcı reddetti; düzeltip `yanki paketle --yeniden` deyince kuyruğa döner")
     return 0
@@ -1257,6 +1393,8 @@ def _dagitim_red(args: argparse.Namespace) -> int:
 def _elle_yukle(args: argparse.Namespace) -> int:
     """Odada elle doldurulan taslak (`yanki/elle.py`) → RouteNote: dört adım tarayıcıyla, `--gonder` ile aynı oturumda
     "Distribute" (geri alınamaz)."""
+    from playwright.sync_api import Error as TarayiciHatasi
+
     from yanki import elle, routenote
 
     a = ayarlar.yukle()
@@ -1269,7 +1407,8 @@ def _elle_yukle(args: argparse.Namespace) -> int:
         meta = elle.oku(calisma, args.kimlik)
         bilgi = routenote.RouteNote.ayardan(a.kok).yukle_klasor(calisma, p, args.kimlik, elle.yayin_tarihi(meta),
                                                                meta["tur"], gonder=args.gonder)
-    except (elle.Hata, ValueError, RuntimeError, OSError) as e:  # OturumYok RuntimeError türevi
+    except (elle.Hata, ValueError, RuntimeError, OSError, TarayiciHatasi) as e:  # OturumYok RuntimeError türevi;
+        # sayfa zaman aşımı (Playwright TimeoutError RuntimeError değil) önce izle çöküyordu
         print(f"✗ {args.kimlik}: {type(e).__name__}: {e}")
         return 1
     from datetime import date
@@ -1540,6 +1679,12 @@ def _yedekle(args: argparse.Namespace) -> int:
     yol, n = yedek.yedekle(a.kok, op)
     print(f"yedek alındı: {yol} ({n} dosya, {yol.stat().st_size / 1e6:.1f} MB; en yeni {op.yedek_sakla} tanesi "
           "saklanır)")
+    try:
+        if lora := yedek.lora_yedekle(a.motor.lora, op):
+            print(f"üretimdeki LoRA yedeklendi: {lora}")
+    except OSError as e:  # disk dolu, klasör kilitli: zip yedeği yine alındı
+        print(f"✗ LoRA yedeklenemedi: {e}")
+        return 1
     return 0
 
 

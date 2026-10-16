@@ -136,7 +136,8 @@ def _indir_bir(video_id: str, hedef: Path, bicim: str = BICIM) -> Path:
                 break
             f.write(r.content)
             bas += len(r.content)
-            if len(r.content) < PARCA:
+            # 200: sunucu Range'i yok saydı, gövde dosyanın tamamı (sonraki istek aynı içeriği tekrar eklerdi)
+            if r.status_code == 200 or len(r.content) < PARCA:
                 break
     if boyut and bas < boyut:
         raise OSError(f"eksik indirme: {bas}/{boyut} bayt{son}")
@@ -158,10 +159,18 @@ def hazirla(kimlik: str, sanatci: str, ad: str, beklenen_sn: float | None, klaso
     if yerel := klasorden(klasor, kimlik):
         ses.wav48(yerel, hedef)
         nereden, baslik = "klasor", yerel.name
+        # LRCLIB `/get`'i başka sürümü verdiyse Scryne'ın bıraktığı kayıt diğer sürümlerin süresiyle de tutabilir
+        # (hata metni "girdi/kaynak'a bırak" diyordu ama yedek süreler yalnız YouTube seçiminde deneniyordu)
+        sure = ses.sure(hedef)
+        if beklenen_sn is not None and abs(sure - beklenen_sn) > TOLERANS_SN and (
+                yakin := [x for x in yedek_sureler or () if abs(sure - x) <= TOLERANS_SN]):
+            beklenen_sn = min(yakin, key=lambda x: abs(sure - x))
     else:
         adaylar = youtube_adaylari(youtube or f"{sanatci} {ad} official audio")
         # Scryne videoyu sabitlediyse süre kapısı uyarıya döner, seçim yine de onun videosu
         if youtube:
+            if not adaylar:
+                raise KaynakYok(f"sabitlenen video açılamadı: {youtube}")
             secilen = adaylar[0]
         else:
             try:
@@ -174,7 +183,7 @@ def hazirla(kimlik: str, sanatci: str, ad: str, beklenen_sn: float | None, klaso
         ses.wav48(ham, hedef)
         ham.unlink(missing_ok=True)
         nereden, baslik = f"youtube:{secilen.id}", secilen.baslik
-    sure = ses.sure(hedef)
+        sure = ses.sure(hedef)
     if beklenen_sn is not None and abs(sure - beklenen_sn) > TOLERANS_SN and not youtube:
         raise KaynakYok(f"kaynak süresi {sure:.1f} sn, beklenen {beklenen_sn:.1f} sn (önizleme ya da farklı sürüm)")
     return Kaynak(hedef, nereden, baslik, sure, beklenen_sn)

@@ -9,6 +9,7 @@ eş anlamlılarından tanınır, satır şarkıya ISRC (yoksa UPC) ile bağlanı
 import csv
 import io
 import re
+from collections import Counter
 from pathlib import Path
 
 # başlık (küçük harf, sade) → alan; ilk eşleşen kazanır
@@ -65,7 +66,10 @@ def _para(metin: str, baslik: str = "") -> tuple[float | None, str | None]:
     if "," in m and "." in m:  # binlik ayırıcı hangisi: sondaki ondalık
         m = m.replace(",", "") if m.rfind(".") > m.rfind(",") else m.replace(".", "").replace(",", ".")
     elif "," in m:
-        m = m.replace(",", ".") if re.search(r",\d{1,2}$|,\d{3,}\d$", m) and m.count(",") == 1 else m.replace(",", "")
+        # tek virgül: 1–2 ya da 4+ hane ondalık, tam kısmı 0 ise her zaman ondalık ("0,003" akış başı kazanç; önce
+        # binlik sanılıp 3 sayılıyordu); "1,234" binlik
+        ondalik = re.search(r",\d{1,2}$|,\d{3,}\d$", m) or re.fullmatch(r"-?0,\d+", m)
+        m = m.replace(",", ".") if ondalik and m.count(",") == 1 else m.replace(",", "")
     try:
         return float(m), birim
     except ValueError:
@@ -140,7 +144,10 @@ def sarki_kazanclari(kok: Path, calisma: Path) -> dict:
             isrc_kimlik[y["isrc"].upper()] = d.kimlik
         if y.get("upc"):
             upc_kimlik[str(y["upc"]).lstrip("0")] = d.kimlik
-    goruldu = set()
+    # Aynı satır iki dosyada (aylık rapor + tüm geçmiş) bir kez sayılır; aynı dosyada birebir aynı iki satır ise ayrı
+    # kayıtlardır (ör. aynı mağaza/ülke/ayda iki satış türü) ve ikisi de sayılır: satır, bir dosyada görüldüğü en çok
+    # adet kadar sayılır (önce dosya içindeki ikinci satır da atılıyordu)
+    sayilan: Counter = Counter()
     aylar = set()
     for yol in dosyalar:
         try:
@@ -148,27 +155,37 @@ def sarki_kazanclari(kok: Path, calisma: Path) -> dict:
         except (OSError, ValueError) as e:
             ozet["hatalar"].append(str(e)[:200])
             continue
+        bu_dosya: Counter = Counter()
         for r in satirlar:
             if r["tutar"] is None:
                 continue
             anahtar = (r["ay"], r["magaza"], r["ulke"], r["isrc"], r["upc"], r["adet"], r["tutar"])
-            if anahtar in goruldu:
+            bu_dosya[anahtar] += 1
+            if bu_dosya[anahtar] <= sayilan[anahtar]:
                 continue
-            goruldu.add(anahtar)
+            sayilan[anahtar] = bu_dosya[anahtar]
             para = r["para"] or "?"
-            ozet["toplam"][para] = round(ozet["toplam"].get(para, 0) + r["tutar"], 4)
+            ozet["toplam"][para] = ozet["toplam"].get(para, 0) + r["tutar"]
             if r["magaza"]:
-                ozet["magazalar"][r["magaza"]] = round(ozet["magazalar"].get(r["magaza"], 0) + r["tutar"], 4)
+                ozet["magazalar"][r["magaza"]] = ozet["magazalar"].get(r["magaza"], 0) + r["tutar"]
             if r["ay"]:
                 aylar.add(r["ay"])
                 ay = ozet.setdefault("aylik", {}).setdefault(r["ay"], {})
-                ay[para] = round(ay.get(para, 0) + r["tutar"], 4)
+                ay[para] = ay.get(para, 0) + r["tutar"]
             k = isrc_kimlik.get(r["isrc"] or "") or upc_kimlik.get((r["upc"] or "").lstrip("0"))
             if k is None:
                 ozet["eslesmeyen"] += 1
                 continue
             s = sarkilar.setdefault(k, {"tutar": 0.0, "akis": 0, "para": para})
-            s["tutar"] = round(s["tutar"] + r["tutar"], 4)
+            s["tutar"] += r["tutar"]
             s["akis"] += r["adet"] or 0
+    # yuvarlama en sonda: satır başına kazanç çoğu zaman 0,0001'in altında, toplarken her adımda yuvarlamak küçük
+    # satırları sıfırlıyordu (round(0 + 0.00004, 4) == 0)
+    ozet["toplam"] = {k: round(v, 4) for k, v in ozet["toplam"].items()}
+    ozet["magazalar"] = {k: round(v, 4) for k, v in ozet["magazalar"].items()}
+    if "aylik" in ozet:
+        ozet["aylik"] = {ay: {k: round(v, 4) for k, v in t.items()} for ay, t in ozet["aylik"].items()}
+    for s in sarkilar.values():
+        s["tutar"] = round(s["tutar"], 4)
     ozet["aylar"] = sorted(aylar)
     return {"sarkilar": sarkilar, "ozet": ozet}

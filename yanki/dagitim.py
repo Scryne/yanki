@@ -137,6 +137,10 @@ class Plan:
     bugun: date = date.min  # planın kurulduğu gün (verilmezse bugün)
     # orijinal yazarı bilinmeyen paketler: hiçbir dağıtımcı yazarsız cover almıyor; `liste.toml` → `yazarlar` bekler
     yazarsiz: tuple[str, ...] = ()
+    # RouteNote'ta insanın elinde bekleyen paketler (kuyruğa girmez): önceki oturumda hazırlanmış taslak (`hazir`;
+    # yayın sayfası otomasyona boş geliyor, panelden gönderilir) ya da son tıktan sonra yarıda kalan gönderim
+    # (`gonderiliyor`; panelde bakılır). Kuyrukta kalsalar her koşu tarayıcıyı açıp aynı hatayla düşerdi.
+    elle_bekleyen: tuple[str, ...] = ()
 
     @property
     def bugun_yuklenecekler(self) -> list[Sira]:
@@ -157,6 +161,13 @@ def _meta(calisma: Path, d: durum.Durum) -> dict:
         return json.loads(yol.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return {}
+
+
+ELLE_ADIMLAR = ("hazir", "gonderiliyor")
+
+
+def _routenote_adim(meta: dict) -> str | None:
+    return (meta.get("routenote") or {}).get("adim")
 
 
 def _yarim(calisma: Path, d: durum.Durum) -> dict | None:
@@ -181,7 +192,8 @@ def _ilk_kabul_bekleme(calisma: Path, hepsi: list[durum.Durum], dagitimci: str |
             return None  # bu dağıtımcı en az bir parçayı kabul etti
         if bizim(y) and d.asama == "yuklendi":
             incelemede.append(d.ad)
-        elif d.asama == "paketlendi" and (meta.get("tunearo") or {}).get("durum") == "gonderiliyor":
+        elif d.asama == "paketlendi" and ((meta.get("tunearo") or {}).get("durum") == "gonderiliyor"
+                                          or _routenote_adim(meta) == "gonderiliyor"):
             incelemede.append(d.ad)  # gönderildi ama sonuç kaydedilemedi: sunucuda incelemede olabilir
         red += [d.ad for g in gecmis if g.get("red") and g.get("dagitimci") in (dagitimci, None)]
     if incelemede:
@@ -211,9 +223,11 @@ def plan(calisma: Path, t: Takvim, bugun: date | None = None, puanlar: dict[str,
     # görünüyordu (2026-10-11, Heaven Knows); yazarlar listeye yazılınca paket yenilenir ve sıraya girer
     yazarsiz = tuple(d.kimlik for d in hepsi if d.asama == "paketlendi" and d.kimlik not in reddedilen
                      and (meta := _meta(calisma, d)) and not yazarlar(meta))
+    elle_bekleyen = tuple(d.kimlik for d in hepsi if d.asama == "paketlendi" and d.kimlik not in reddedilen
+                          and _routenote_adim(_meta(calisma, d)) in ELLE_ADIMLAR)
     # yarım kalan API yüklemesi önce: aynı yayın tamamlanır, açılmış taslak ve parça sahipsiz kalmaz
     kuyruk = sorted((d for d in hepsi if d.asama == "paketlendi" and d.kimlik not in reddedilen
-                     and d.kimlik not in yazarsiz),
+                     and d.kimlik not in yazarsiz and d.kimlik not in elle_bekleyen),
                     key=lambda d: (_yarim(calisma, d) is None, -puanlar.get(d.kimlik, 0.0),
                                    _gecis(d, "onaylandi") or datetime.max, d.kimlik))
     ilk = max(bugun, son + t.aralik) if son else bugun
@@ -230,7 +244,7 @@ def plan(calisma: Path, t: Takvim, bugun: date | None = None, puanlar: dict[str,
                      "(düzeltilen şarkı: yanki paketle --yeniden, sonra yanki yukle <kimlik>)")
     if beklemede is None and dagitimci == "tunearo" and (e := erisim_kapali(calisma)):
         beklemede = f"Tunearo API erişimi kapalı ({e}); erişim açılınca yüklemeler kendiliğinden sürer"
-    return Plan(sira, beklemede, son, reddedilen, bugun, yazarsiz)
+    return Plan(sira, beklemede, son, reddedilen, bugun, yazarsiz, elle_bekleyen)
 
 
 ERISIM_DENEME_SAAT = 6  # erişim kapalı görüldükten bu kadar sonra takvim bir yüklemeyi yeniden dener

@@ -120,6 +120,7 @@ def yeni(calisma: Path, kok: Path, baslik: str = "") -> dict:
     klasor(calisma, kimlik).mkdir(parents=True)
     return _yaz(calisma, kimlik, {"kimlik": kimlik, "baslik": baslik.strip(), **{k: v[k] for k in v if k != "baslik"},
                                   "varsayilan_sanatci": v["sanatci"],
+                                  "varsayilan_spotify_id": v["spotify_sanatci_id"],
                                   "olusturma": datetime.now().isoformat(timespec="seconds")})
 
 
@@ -223,12 +224,13 @@ def ses_kaydet(calisma: Path, kimlik: str, ad: str, veri: bytes) -> dict:
         eski.unlink()
     kaynak = k / "kaynak" / f"ses{uzanti}"
     kaynak.write_bytes(veri)
-    gecici = k / "ses.yaziliyor.flac"
+    gecici = k / ".ses.yaziliyor.flac"
     r = subprocess.run([ses.arac("ffmpeg"), "-hide_banner", "-loglevel", "error", "-y", "-i", str(kaynak), "-vn",
                         "-ac", "2", "-ar", "44100", "-c:a", "flac", "-sample_fmt", "s16", str(gecici)],
                        capture_output=True, text=True, timeout=600)
     if r.returncode or not gecici.exists():
         kaynak.unlink(missing_ok=True)
+        gecici.unlink(missing_ok=True)  # yarım FLAC kalmasın (yükleyici yalnız ses.flac'ı alır, yine de)
         raise Hata(f"ses okunamadı: {(r.stderr or '').strip()[:200] or 'ffmpeg hata verdi'}")
     gecici.replace(k / "ses.flac")
     sure = ses.sure(k / "ses.flac")
@@ -331,15 +333,33 @@ def kontrol(calisma: Path, kimlik: str) -> dict:
         if ses_bilgi.get("flac_boyut", 0) > routenote.EN_BUYUK_SES:
             rn.append(f"FLAC {ses_bilgi['flac_boyut'] / 2**20:.0f} MB; tarayıcıdan en çok "
                       f"{routenote.EN_BUYUK_SES // 2**20} MB (şarkı çok uzun)")
-        if t := meta.get("yayin_tarihi"):
+        if (t := meta.get("yayin_tarihi")) and _tarih_mi(t):
             gun = date.fromisoformat(t)
             if date.today() < gun < date.today() + timedelta(days=routenote.YAYIN_ASGARI_GUN):
                 rn.append(f"Yayın tarihi en erken {date.today() + timedelta(days=routenote.YAYIN_ASGARI_GUN)} "
                           "(inceleme 5–10 iş günü) ya da boş bırak: onaylanınca yayında")
         dag["routenote"] = rn
+    if (ilk := meta.get("orijinal_tarih")) and _tarih_mi(ilk):
+        # ilk yayın geçmişte olmalı: ileri tarih mağazalarda "henüz çıkmamış" sayılır, RouteNote kaydı reddeder
+        if date.fromisoformat(ilk) > date.today():
+            eksik.append("İlk yayın tarihi gelecekte olamaz (daha önce yayınlanmadıysa boş bırak)")
+        elif (yt := meta.get("yayin_tarihi")) and _tarih_mi(yt) and date.fromisoformat(ilk) > date.fromisoformat(yt):
+            eksik.append("İlk yayın tarihi yayın tarihinden sonra olamaz")
+    if (meta.get("sanatci") != meta.get("varsayilan_sanatci") and meta.get("spotify_sanatci_id")
+            and meta.get("spotify_sanatci_id") == meta.get("varsayilan_spotify_id")):
+        uyari.append(f"Spotify profili {meta.get('varsayilan_sanatci')}'in; sanatçı farklı olduğu için profile "
+                     "bağlanmaz (RouteNote aynı adlı profili kullanır ya da yeni profil açar)")
     if "elle" in (meta.get("dagiticilar") or []):
         dag["elle"] = []
     return {"eksik": eksik, "uyari": uyari, "dagitici": dag}
+
+
+def _tarih_mi(t: str) -> bool:
+    try:
+        date.fromisoformat(t)
+    except (TypeError, ValueError):
+        return False
+    return True
 
 
 def hazir_mi(calisma: Path, kimlik: str, dagitici: str) -> list[str]:
@@ -348,7 +368,7 @@ def hazir_mi(calisma: Path, kimlik: str, dagitici: str) -> list[str]:
 
 
 # ── dağıtıcıya çeviri ────────────────────────────────────────────────────────────────────────────────────────────
-def routenote_meta(meta: dict) -> dict:
+def routenote_meta(meta: dict, kayitli_sid: str | None = None) -> dict:
     """Formdaki seçimler → RouteNote doldurucusunun okuduğu alanlar (`routenote.album_bilgisi`, `magazalar`)."""
     kapali = set()
     if meta.get("yapay_zeka"):
@@ -358,9 +378,14 @@ def routenote_meta(meta: dict) -> dict:
     if not meta.get("content_id"):
         kapali.add("YouTube Content ID")
     yazarlar = _dolu_kisiler(meta.get("yazar_adlari"))
-    # kayıtlı profil (config) yalnız varsayılan sanatçıya: başka adla yayına Orvane'in profili bağlanmasın
-    yeni_profil = bool(meta.get("yeni_profil")) or meta.get("sanatci") != meta.get("varsayilan_sanatci")
-    return {"yazar_adlari": yazarlar, "rn_tur": meta.get("tur"), "yeni_profil": yeni_profil,
+    # kayıtlı profil (config) yalnız varsayılan sanatçıya: başka adla yayına Orvane'in profili bağlanmasın. Form
+    # yeni taslakta kayıtlı profille dolu geliyor; sanatçı değiştirilip kutu öyle kaldıysa o profil de bağlanmaz.
+    varsayilan = meta.get("sanatci") == meta.get("varsayilan_sanatci")
+    yeni_profil = bool(meta.get("yeni_profil")) or not varsayilan
+    sid = meta.get("spotify_sanatci_id") or None
+    if sid and not varsayilan and sid in {meta.get("varsayilan_spotify_id"), kayitli_sid}:
+        sid = None
+    return {"yazar_adlari": yazarlar, "rn_tur": meta.get("tur"), "yeni_profil": yeni_profil, "rn_spotify_id": sid,
             "soz_yazari_adlari": yazarlar if meta.get("soz_ayni", True) else _dolu_kisiler(
                 meta.get("soz_yazari_adlari")),
             "kapali_magazalar": sorted(kapali),
@@ -370,8 +395,15 @@ def routenote_meta(meta: dict) -> dict:
 
 def routenote_hazirla(calisma: Path, kimlik: str) -> Path:
     """RouteNote doldurucusunun okuyacağı `metadata.json`'u günceller (formun türetilmiş alanları). Klasör döner."""
+    import tomllib
+
     meta = oku(calisma, kimlik)
-    meta.update(routenote_meta(meta))
+    try:  # hattın kayıtlı profili (config/yayin.toml; `calisma`nın yanında)
+        with open(calisma.parent / "config" / "yayin.toml", "rb") as f:
+            kayitli = tomllib.load(f).get("routenote", {}).get("spotify_sanatci_id") or None
+    except (OSError, ValueError):
+        kayitli = None
+    meta.update(routenote_meta(meta, kayitli))
     _yaz(calisma, kimlik, meta)
     return klasor(calisma, kimlik)
 
@@ -392,7 +424,10 @@ def gonderim_sonucu(calisma: Path, kimlik: str, gonderildi: bool) -> str:
         rn.setdefault("gonderim", date.today().isoformat())
     meta["routenote"] = rn
     _yaz(calisma, kimlik, meta)
-    return "gönderildi olarak kaydedildi" if gonderildi else "taslak gönderime hazır olarak işaretlendi"
+    if gonderildi:
+        return "gönderildi olarak kaydedildi"
+    return ("taslakta duruyor olarak işaretlendi; otomasyon bu taslağı artık gönderemez (başka oturumda açıldı): "
+            "panelde gönder ve \"Panelde gönderdim\", ya da panelden sil ve kaydı sıfırla")
 
 
 def sifirla(calisma: Path, kimlik: str) -> str:

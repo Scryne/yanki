@@ -66,6 +66,9 @@ def girdi_hazirla(a: Ayarlar, s: Sarki, calisma: Path, girdi: Path) -> durum.Dur
                                   "surum": "sesin süresine uyan LRCLIB sürümü"}
     except Exception as e:  # noqa: BLE001 — KaynakYok, yt-dlp DownloadError, ffmpeg hatası
         neden = str(e) if isinstance(e, kaynak.KaynakYok | OSError) else f"{type(e).__name__}: {e}"
+        if yerel := kaynak.klasorden(girdi / "kaynak", s.kimlik):  # Scryne'ın dosyası zaten orada: çözüm başka
+            return yaz("hata", f"kaynak ses (`girdi/kaynak/{yerel.name}`): {neden}. Sözün süresine uyan kayıt "
+                               f"bırakılabilir ya da listede `youtube` ile video sabitlenebilir")
         return yaz("hata", f"kaynak ses: {neden}. `girdi/kaynak/{s.kimlik}.mp3` olarak bırakılabilir")
     alanlar["kaynak"] = {"dosya": kyn.wav.name, "nereden": kyn.nereden, "baslik": kyn.baslik, "sure_sn": kyn.sure_sn}
     return yaz("hazir")
@@ -125,12 +128,18 @@ def analiz_et(a: Ayarlar, sarkilar: list[Sarki], calisma: Path, zaman_asimi_sn: 
                                                 model=a.motor.analiz_model)}
     for s, d in hedef:
         r = sonuclar[s.kimlik]
-        lm = r.analiz if r.basari else {}
+        lm = (r.analiz or {}) if r.basari else {}
+        k = durum.klasor(calisma, s.kimlik)
+        dil = dil_bul(d, k)
+        if hata := soz_dili_uyumu(d, k, dil["dil"]):  # MusicBrainz yolundaki gibi: yanlış dilde söz söyletilmez
+            _hataya(calisma, s.kimlik, hata)
+            continue
         _analizi_yaz(calisma, s.kimlik, {
-            "stil": stil_kur(s, lm.get("caption"), d.kunye),
+            "stil": stil_kur(s, lm.get("caption"), d.kunye,
+                             yedek_turler=None if lm.get("caption") else _yedek_turler(s, d)),
             "bpm": s.bpm or _tam(lm.get("bpm")),
             "ton": s.ton or (lm.get("keyscale") or ""),
-            **dil_bul(d, durum.klasor(calisma, s.kimlik)),
+            **dil,
             "lm": lm,
             "lm_hata": None if r.basari else r.hata,
         })

@@ -98,11 +98,20 @@ def ceviri_at(satirlar: list[str]) -> list[str]:
     return [x.split(CEVIRI_AYRACI, 1)[0].rstrip() for x in satirlar]
 
 
+_DAMGA = re.compile(r"\[(\d+):(\d+(?:\.\d+)?)\]")
+
+
 def senkron(lrc: str | None) -> tuple[tuple[float, str], ...]:
+    """LRC → [(sn, satır)], zamana göre. Sıkıştırılmış LRC'de tekrar eden satır birden çok damgayla tek satırdadır
+    ("[00:12.00][00:45.50]Nakarat"); her damga ayrı satır olur."""
     satirlar = []
     for satir in (lrc or "").splitlines():
-        if m := re.match(r"\[(\d+):(\d+(?:\.\d+)?)\]\s*(.*)", satir.strip()):
-            satirlar.append((round(int(m.group(1)) * 60 + float(m.group(2)), 2), m.group(3).strip()))
+        satir, damgalar = satir.strip(), []
+        while m := _DAMGA.match(satir):
+            damgalar.append(round(int(m.group(1)) * 60 + float(m.group(2)), 2))
+            satir = satir[m.end():].lstrip()
+        satirlar += [(t, satir) for t in damgalar]
+    satirlar.sort(key=lambda x: x[0])
     metinler = ceviri_at([m for _, m in satirlar])
     return tuple((t, m) for (t, _), m in zip(satirlar, metinler, strict=True))
 
@@ -128,17 +137,19 @@ def lrclib(sanatci: str, ad: str, json_al=ag.json_al) -> Soz:
     except ag.Bulunamadi:
         bulunan = json_al(f"{LRCLIB}/search", {"artist_name": sanatci, "track_name": ad})
         # arama başka sanatçının (karaoke, cover) kaydını da döndürüyor: ilk sonuç doğrulanmadan alınmaz
-        bulunan = [b for b in bulunan if b.get("plainLyrics") and not b.get("instrumental")
+        bulunan = [b for b in bulunan if (b.get("plainLyrics") or b.get("syncedLyrics")) and not b.get("instrumental")
                    and ayni_sanatci(sanatci, b.get("artistName") or "")]
         if not bulunan:
             raise ag.Bulunamadi(f"LRCLIB'de söz yok: {sanatci} — {ad}") from None
         d = bulunan[0]
-    if d.get("instrumental") or not (d.get("plainLyrics") or "").strip():
+    satirlar = senkron(d.get("syncedLyrics"))
+    # düz sözü boş, zaman damgalı sözü dolu kayıtlar var: söz damgalı satırlardan
+    duz_ham = (d.get("plainLyrics") or "").strip() or "\n".join(m for _, m in satirlar).strip()
+    if d.get("instrumental") or not duz_ham:
         raise ag.Bulunamadi(f"LRCLIB kaydı sözsüz: {sanatci} — {ad}")
     sure = float(d["duration"]) if d.get("duration") else None
-    satirlar = senkron(d.get("syncedLyrics"))
     # zaman damgası varsa yapı ondan (boşluklar bölüm sınırı, giriş/ara/çıkış); yoksa düz sözün tekrarlarından
-    duz = "\n".join(ceviri_at(d["plainLyrics"].splitlines()))
+    duz = "\n".join(ceviri_at(duz_ham.splitlines()))
     metin = yapi.metin(yapi.coz(satirlar, sure, ad)) if satirlar else etiketle(duz, ad)
     return Soz(metin, "lrclib", sure, satirlar)
 
@@ -168,8 +179,8 @@ def bul(sanatci: str, ad: str, dosya: Path, json_al=ag.json_al) -> Soz:
         try:
             uzak = lrclib(sanatci, ad, json_al)
             sure = uzak.sure_sn
-            benim = {_sade(x) for x in metin.splitlines() if x.strip() and not x.startswith("[")}
-            onlarin = {_sade(m) for _, m in uzak.satirlar if m.strip()}
+            benim = {y for x in metin.splitlines() if not x.startswith("[") and (y := _sade(x))}
+            onlarin = {y for _, m in uzak.satirlar if (y := _sade(m))}
             if benim and onlarin and len(benim & onlarin) / len(benim) >= 0.8:
                 satirlar = uzak.satirlar
         except (ag.Bulunamadi, OSError, ValueError, KeyError):  # LRCLIB yalnız yardımcı: düşerse söz dosyası yeter
@@ -179,4 +190,6 @@ def bul(sanatci: str, ad: str, dosya: Path, json_al=ag.json_al) -> Soz:
 
 
 def _sade(s: str) -> str:
-    return re.sub(r"[^a-z0-9]+", " ", s.lower()).strip()
+    # Unicode harfler korunur: önce yalnız a-z kalıyordu, Korece/Japonca satırlar boş dizgiye düşüp tamamen başka bir
+    # sözle bile "eşleşiyordu"
+    return " ".join(_sozcukler(s))

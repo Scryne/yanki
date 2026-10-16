@@ -139,8 +139,12 @@ def getir(a: dict, gun: int = 21, imap=imaplib.IMAP4_SSL) -> list[Ileti]:
 
 
 def sinif(i: Ileti) -> str | None:
+    """Red önce ("not been approved" onay sayılmasın); ama düzeltme isteyen ileti ("cannot be approved until you
+    amend…") red değil: ikisi birden tutarsa düzeltme (şarkıyı kuyruğa döndürmez, Scryne'a metniyle bildirir)."""
     metin = f"{i.konu}\n{i.metin[:BASLIK_UZUNLUGU]}"
-    for ad, kalip in (("red", RED), ("aksiyon", AKSIYON), ("onay", ONAY)):
+    if RED.search(metin):
+        return "aksiyon" if AKSIYON.search(metin) else "red"
+    for ad, kalip in (("aksiyon", AKSIYON), ("onay", ONAY)):
         if kalip.search(metin):
             return ad
     return None
@@ -163,14 +167,33 @@ def adaylar(calisma: Path) -> list[dict]:
     return sonuc
 
 
+# Gövdede tek sözcüklü ad yalnız yayın bağlamında sayılır: "lovely" bir şarkımızın adı, "have a lovely day" değil.
+# Bağlam: tırnak/ayraç içinde, "release/single/track/titled …" sonrasında ya da "… was/has/is" öncesinde.
+BAGLAM_ONCE = re.compile(r"(?:release|single|track|album|\bep|titled|called|for|:|[\"“'‘«(\[])\s*$")
+BAGLAM_SONRA = re.compile(r"^\s*(?:[\"”'’»)\]]|was\b|has\b|is\b|have\b|-|–|—|by\b|upc\b)")
+
+
+def _geciyor(ad: str, metin: str, baglamli: bool) -> bool:
+    for m in re.finditer(rf"(?<!\w){re.escape(ad)}(?!\w)", metin):
+        if (not baglamli or BAGLAM_ONCE.search(metin[max(0, m.start() - 20):m.start()])
+                or BAGLAM_SONRA.search(metin[m.end():m.end() + 12])):
+            return True
+    return False
+
+
 def eslestir(i: Ileti, liste: list[dict]) -> dict | None:
-    """UPC iletide geçiyorsa o; yoksa adı konu ya da metinde sözcük olarak geçen tek şarkı."""
+    """UPC iletide geçiyorsa o. İletide UPC var ama hiçbir adayın değilse (geçmişe alınmış taslak, arşivdeki yayın,
+    elle taslak, başkasının yayını) adla eşleştirilmez: ileti başka bir yayın hakkında. Yoksa adı konuda geçen ya da
+    gövdede (tek sözcüklü adda yayın bağlamında) geçen tek şarkı. Eşleşmeyen ileti yalnız bildirilir."""
     metin = f"{i.konu}\n{i.metin}"
     upcler = set(UPC.findall(metin))
     if hit := [x for x in liste if x["upc"] and (x["upc"] in upcler or x["upc"].lstrip("0") in upcler)]:
         return hit[0]
-    sade = metin.casefold()
-    adlilar = [x for x in liste if x["ad"] and re.search(rf"(?<!\w){re.escape(x['ad'].casefold())}(?!\w)", sade)]
+    if upcler:
+        return None
+    konu, govde = i.konu.casefold(), i.metin.casefold()
+    adlilar = [x for x in liste if (ad := (x["ad"] or "").casefold())
+               and (_geciyor(ad, konu, False) or _geciyor(ad, govde, len(ad.split()) < 2))]
     adlilar.sort(key=lambda x: -len(x["ad"]))  # "Numb" ile "Numb (Acoustic)" ikisi tutarsa uzun ad
     if len(adlilar) == 1 or (len(adlilar) > 1 and len(adlilar[0]["ad"]) > len(adlilar[1]["ad"])):
         return adlilar[0]
@@ -200,7 +223,12 @@ def isle(calisma: Path, iletiler: list[Ileti], bildir=None) -> list[dict]:
         ozet_kimlik = hashlib.sha1(i.kimlik.encode()).hexdigest()
         tur, sarki = sinif(i), eslestir(i, liste)
         bas = f"{i.konu}\n{i.metin[:BASLIK_UZUNLUGU]}"
-        ilgisiz = tur is None and bool(ILGISIZ.search(i.konu) or not ILGILI.search(bas))
+        # hesap iletisi konusundan tanınır ("Welcome aboard", "Password"): gövdesinde "congratulations" geçse de
+        # onay sayılmaz, gövdesi (etkinleştirme bağlantısı, kod) diske yazılmaz
+        hesap = bool(ILGISIZ.search(i.konu)) and not ILGILI.search(i.konu)
+        ilgisiz = hesap or (tur is None and not ILGILI.search(bas))
+        if ilgisiz:
+            tur = sarki = None
         if not ilgisiz:  # hesap iletilerinin gövdesi (giriş kodu, etkinleştirme bağlantısı) diske yazılmaz
             ornek = calisma / "eposta" / "ornek" / f"{(i.tarih or 'tarihsiz')[:10]}-{ozet_kimlik[:8]}.txt"
             ornek.parent.mkdir(parents=True, exist_ok=True)
@@ -249,6 +277,6 @@ def isle(calisma: Path, iletiler: list[Ileti], bildir=None) -> list[dict]:
         kayit[i.kimlik] = {"tarih": i.tarih, "konu": i.konu, "sinif": tur, "sarki": sarki and sarki["kimlik"],
                            "eylem": eylem, "islendi": datetime.now().isoformat(timespec="seconds")}
         sonuc.append({"konu": i.konu, "sinif": tur, "kimlik": sarki and sarki["kimlik"], "eylem": eylem})
-    if sonuc:
+        # her iletiden sonra: sonraki iletide hata çıksa da işlenen (red kaydı, bildirim) ikinci kez işlenmez
         dosya.json_yaz(yol, kayit, indent=1)
     return sonuc

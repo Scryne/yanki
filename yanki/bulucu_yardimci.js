@@ -102,17 +102,20 @@
   };
   window.__yanki = {
     surum: __SURUM__,
-    baslat(tur, kimlik) {
-      if (is.durum === "suruyor") throw new Error("Spotify'da başka bir Bulucu işi sürüyor");
+    baslat(tur, kimlik, sinirMs) {
+      // hiç bitmeyen bir söz (Promise) sayfa yenilenene kadar bütün aramaları kilitlemesin: süresi geçen iş bırakılır
+      if (is.durum === "suruyor" && Date.now() - is.baslangic < (sinirMs || 45 * 60 * 1000))
+        throw new Error("Spotify'da başka bir Bulucu işi sürüyor");
       if (!islemler[tur]) throw new Error("bilinmeyen tür: " + tur);
       const no = ++is.no;
-      Object.assign(is, { durum: "suruyor", tur, kimlik, ilerleme: null, sonuc: null, hata: null });
+      Object.assign(is, { durum: "suruyor", tur, kimlik, ilerleme: null, sonuc: null, hata: null, baslangic: Date.now() });
       islemler[tur](kimlik).then((r) => { if (is.no === no) Object.assign(is, { durum: "bitti", sonuc: r }); },
         (e) => { if (is.no === no) Object.assign(is, { durum: "hata", hata: String((e && e.message) || e) }); });
       return no;
     },
     durum() { return { no: is.no, durum: is.durum, ilerleme: is.ilerleme || null, hata: is.hata || null }; },
     sonuc(no) { if (is.no !== no) return null; const r = is.sonuc; is.sonuc = null; is.durum = "bos"; return r; },
+    birak(no) { if (is.no === no && is.durum === "suruyor") Object.assign(is, { durum: "bos", sonuc: null }); return true; },
   };
   return true;
 })()

@@ -14,8 +14,9 @@ Side-Step (`train.py fixed`: modelin kendi sürekli zaman adımı dağılımı, 
 Kalite kararı kulakta (proje ilkesi): deneme sesleri `calisma/dinleme/lora/<tarih>/`'e, kapı ölçüleriyle (söz WER,
 parmak izi) birlikte. Üretimde kullanmak `config/motor.toml` → `[motor] lora`.
 
-Eğitim pod'u üretimden ayrı adla (`egitim-…`) ve kayıtla (`acik_pod_egitim`) açılır: saatler süren eğitim sürerken
-başlayan üretim koşusu onu artık pod sanıp silmesin.
+Eğitim pod'u üretimden ayrı adla (`egitim-…`) ve kayıtla (`acik_pod_egitim`) açılır; saatler süren eğitim sürerken
+başlayan üretim koşusu onu silmez (pod sahipliği: açan süreç yaşıyor). Sahibi ölmüşse (eğitim ortasında kapanan
+bilgisayar) her koşunun artık temizliği siler (`uzak.artik_temizle`), süresi bütçeye yazılır.
 """
 
 import json
@@ -434,7 +435,8 @@ def egit(a: Ayarlar, ayar: Ayar, veri_tar: Path, bildir=print, pod_sinifi=runpod
         bildir(f"uyarı: hiçbir hesapta {gereken:.1f} $ yok; eğitim bakiye biterse yarıda kalabilir")
     uzak.butce_kontrol(a, api, bakiye)
     if artik := [p for k in dict.fromkeys([api, *runpod.anahtarlar(kok)])
-                 for p in kapat(k, calisma / ".runpod", POD_KAYIT, "egitim-")]:
+                 for p in kapat(k, calisma / ".runpod", POD_KAYIT, "egitim-",
+                                harcama=lambda r: uzak.harcama_yaz(kok, r))]:  # artık pod'un süresi de bütçeye
         bildir(f"önceki eğitimden açık kalan pod silindi: {', '.join(artik)}")
     commit = commit or uzak.acestep_commit(a)
     zaman = datetime.now().strftime("%Y%m%d-%H%M")

@@ -62,13 +62,21 @@ def anahtar(kok: Path, en_az: float | None = None, bakiye=None) -> str:
     if en_az is None:
         return _SECILEN.get(kok, hepsi[0])
     bakiye = bakiye or globals()["bakiye"]
-    son = None
+    okunan, hata = None, None
     for k in hepsi:
-        if (son := bakiye(k)) >= en_az:
+        try:
+            b = bakiye(k)
+        except RunPodHatasi as e:  # bir hesabın anahtarı geçersiz/iptal: öbür hesap yine denenir
+            hata = e
+            continue
+        okunan = k
+        if b >= en_az:
             _SECILEN[kok] = k
             return k
     _SECILEN.pop(kok, None)
-    return hepsi[-1] if son is not None else hepsi[0]  # hiçbirinde yok: bütçe denetimi bakiyeyi yazıp durdurur
+    if okunan is None and hata is not None:
+        raise hata
+    return okunan or hepsi[0]  # hiçbirinde yok: bütçe denetimi (son okunan hesabın) bakiyesini yazıp durdurur
 
 
 def gql(api_anahtari: str, sorgu: str, degiskenler: dict | None = None, deneme: int = 3) -> dict:
@@ -394,7 +402,8 @@ class Pod:
                     _sahip_yolu(self.klasor, self.id).unlink(missing_ok=True)
                     return
                 except (RunPodHatasi, OSError):
-                    time.sleep(KAPATMA_BEKLEME_SN)
+                    if _deneme < KAPATMA_DENEME - 1:
+                        time.sleep(KAPATMA_BEKLEME_SN)
             self.kapanis = time.time()
             try:
                 sahip_yaz(self.klasor, self.id, ad=self.ad, terk=True, sayilan_sn=round(self.kapanis - self.acilis))

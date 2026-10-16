@@ -179,8 +179,7 @@ def hal(a: Aday) -> str:
     if a.geri_geldi is None:
         return "doğrulanmadı"
     return {"kaldirildi": "kaldırılmış", "kismi": "kısmen kapalı", "spotify_yok": "Spotify'da yok",
-            "populer": "popüler"}.get(a.neden,
-                                                                                                         a.neden)
+            "populer": "popüler"}.get(a.neden, a.neden)
 
 
 # ── Bulma ───────────────────────────────────────────────────
@@ -546,7 +545,8 @@ def bekleyen_sanatcilar(liste_yolu: Path, calisma: Path) -> set[str]:
 
 def listedekiler(liste_yolu: Path, calisma: Path) -> set[str]:
     """Listede ya da çalışma alanında olan şarkı kimlikleri (eklenmiş sayılır)."""
-    return {s.kimlik for s in liste.yukle(liste_yolu)} | {p.name for p in calisma.iterdir() if p.is_dir()}
+    klasorler = {p.name for p in calisma.iterdir() if p.is_dir()} if calisma.is_dir() else set()
+    return {s.kimlik for s in liste.yukle(liste_yolu)} | klasorler
 
 
 def liste_kilidi(liste_yolu: Path):

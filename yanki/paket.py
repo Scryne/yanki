@@ -449,6 +449,12 @@ def paketle(calisma: Path, yayin_yolu: Path, kimlikler: list[str] | None = None,
 KALICI_ALANLAR = ("yukleme", "yukleme_gecmisi", "routenote", "routenote_gecmisi", "tunearo", "tunearo_gecmisi")
 
 
+def yukleme_kilidi(paket_klasoru: Path) -> Path:
+    """Paketin kilidi (`kilit.tek_kosu`): dağıtımcıya yükleme sürerken paket yenilenmesin, yenilenirken yüklenmesin.
+    Klasörün dışında: `yanki yeniden` paket klasörünü taşıyabilsin (Windows açık dosyalı klasörü taşımıyor)."""
+    return paket_klasoru.parent / f".{paket_klasoru.name}.yukleme.kilit"
+
+
 def acik_taslak(paket_klasoru: Path) -> dict | None:
     """Paketin RouteNote'ta açılmış ama gönderilmemiş taslağı (kayıt), yoksa None."""
     try:
@@ -459,6 +465,22 @@ def acik_taslak(paket_klasoru: Path) -> dict | None:
 
 
 def _paketle_bir(calisma: Path, d: durum.Durum, y: Yayin) -> durum.Durum:
+    from yanki import kilit
+
+    p = durum.klasor(calisma, d.kimlik) / "paket"
+    with kilit.tek_kosu(yukleme_kilidi(p)) as alindi:
+        if not alindi:
+            raise ValueError("paket şu an dağıtımcıya yükleniyor; yükleme bitince yeniden dene")
+        return _paketle_kilitli(calisma, d, y)
+
+
+def _gecici(hedef: Path) -> Path:
+    """Paketin yanında yarım yazılabilecek dosyanın adı: noktalı ve `.yaziliyor` (yükleyici saymaz, sonraki paketleme
+    siler), uzantı aynı (ffmpeg biçimi uzantıdan seçiyor)."""
+    return hedef.with_name(f".{hedef.stem}.yaziliyor{hedef.suffix}")
+
+
+def _paketle_kilitli(calisma: Path, d: durum.Durum, y: Yayin) -> durum.Durum:
     from yanki import sunucu
 
     k = durum.klasor(calisma, d.kimlik)
@@ -474,37 +496,44 @@ def _paketle_bir(calisma: Path, d: durum.Durum, y: Yayin) -> durum.Durum:
     ad = guvenli_ad(f"{y.sanatci_adi or 'SANATCI'} - {d.ad}")
     ses_yolu, kapak_yolu = p / f"{ad}.{SES_BICIMI[y.dagitimci]}", p / f"{ad}.jpg"
     orijinal = k / d.kaynak["dosya"] if d.kaynak.get("dosya") else None
-    olcum = master(kaynak, ses_yolu, y, referans=orijinal if orijinal and orijinal.exists() else None)
+    # ses ve kapak önce geçici adla yazılır, bitince yerine konur: yeniden paketleme yarıda kesilirse (güç, çökme)
+    # eski metadata.json'un yanında yarım bir FLAC kalmaz (aşama `paketlendi` kaldığı için o dosya yüklenirdi)
+    gecici_ses, gecici_kapak = _gecici(ses_yolu), _gecici(kapak_yolu)
+    olcum = master(kaynak, gecici_ses, y, referans=orijinal if orijinal and orijinal.exists() else None)
     # Scryne'ın elle koyduğu kapak her zaman önce; yoksa ayara göre Pinterest (şarkının modu) ya da dalga formundan
     # üretilen. Görsel 3000×3000 kareye getirilir. Pinterest bulamazsa hata: şarkı onaylı kalır, sonraki koşu dener.
     if (ozel := k / "kapak_ozel.jpg").exists():
-        kapak_bilgi = ozel_kapak(ozel, kapak_yolu)
+        kapak_bilgi = ozel_kapak(ozel, gecici_kapak)
     elif y.kapak == "pinterest":
         from yanki import olay, pinterest
 
         yeni_secim = not (k / "kapak_pinterest.jpg").exists()
-        kapak_bilgi = {**ozel_kapak(pinterest.getir(calisma, d), kapak_yolu), "kaynak": "pinterest"}
-        kaynak = json.loads((k / "kapak_kaynak.json").read_text(encoding="utf-8"))
-        kapak_bilgi["pin"] = kaynak.get("pin")
+        kapak_bilgi = {**ozel_kapak(pinterest.getir(calisma, d), gecici_kapak), "kaynak": "pinterest"}
+        kaynak_yolu = k / "kapak_kaynak.json"
+        pin = json.loads(kaynak_yolu.read_text(encoding="utf-8")) if kaynak_yolu.exists() else {}
+        kapak_bilgi["pin"] = pin.get("pin")
         if yeni_secim:  # açıklama süzgeci her yazıyı/insanı yakalamıyor (11'de 2 kaçtı): göz atılsın
             olay.bildir(calisma, "kapak", f"kapak seçildi: {d.ad}",
-                        f"{kaynak.get('aciklama')} — calisma/{d.kimlik}/kapak_pinterest.jpg. Beğenmezsen: "
-                        f"yanki kapak {d.kimlik} --yeni", f"kapak:{d.kimlik}:{kaynak.get('pin_id')}")
+                        f"{pin.get('aciklama')} — calisma/{d.kimlik}/kapak_pinterest.jpg. Beğenmezsen: "
+                        f"yanki kapak {d.kimlik} --yeni", f"kapak:{d.kimlik}:{pin.get('pin_id')}")
     else:
-        kapak(d.ad, sunucu.dalga(kaynak)["tepe"], kapak_yolu, y.sanatci_adi)
+        kapak(d.ad, sunucu.dalga(kaynak)["tepe"], gecici_kapak, y.sanatci_adi)
         kapak_bilgi = {"kaynak": "uretilen", "ozgun_boyut": [KAPAK_BOYUT, KAPAK_BOYUT], "islem": None}
     zaman = k / "soz_zaman.json"
     onizleme = nakarat_baslangici(json.loads(zaman.read_text(encoding="utf-8"))) if zaman.exists() else None
     soz = k / "soz.txt"
     acik = acik_sozler(soz.read_text(encoding="utf-8")) if soz.exists() else None
-    meta = metadata(d, y, olcum, ses.sure(ses_yolu), onizleme, acik)
+    meta = metadata(d, y, olcum, ses.sure(gecici_ses), onizleme, acik)
     meta["kapak"] = kapak_bilgi
     # yeniden paketlemede dağıtım geçmişi kalır: reddedilen yayın aynı kayıtla yeniden gönderilir (Tunearo), red
     # geçmişi takvimin ilk_kabul kapısını tutar
     if (eski_yol := p / "metadata.json").exists():
         eski = json.loads(eski_yol.read_text(encoding="utf-8"))
         meta.update({a: eski[a] for a in KALICI_ALANLAR if a in eski})
-    # başka biçimde ya da adla kalmış eski ses/kapak (FLAC → WAV, sanatçı adı değişti): yükleyici tek dosya bekler
+    gecici_ses.replace(ses_yolu)
+    gecici_kapak.replace(kapak_yolu)
+    # başka biçimde ya da adla kalmış eski ses/kapak (FLAC → WAV, sanatçı adı değişti), yarım kalmış geçici dosya:
+    # yükleyici tek dosya bekler
     for eski_dosya in [*p.glob("*.flac"), *p.glob("*.wav"), *p.glob("*.jpg")]:  # noktalılar dahil (eski küçük resim)
         if eski_dosya not in (ses_yolu, kapak_yolu):
             eski_dosya.unlink()

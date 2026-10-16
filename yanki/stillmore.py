@@ -213,7 +213,6 @@ class Kopru:
         }})()"""
         return self.degerlendir(ifade, zaman_asimi) or []
 
-
     def ara(self, terim: str, adet: int = 20, islem: str = "searchDesktop") -> list[dict]:
         """Spotify istemcisinin kendi araması (GraphQL): Web API kotası harcamaz, hesabın ülkesinde arar (2026-10-10
         canlı: 20 sonuç ~1 sn; istemci token'ıyla Web API ise hemen 429). Sonuç Web API biçiminde."""

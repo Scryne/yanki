@@ -76,6 +76,13 @@ def coz(metin: str, ad: str = "liste.toml") -> list[Sarki]:
             raise ValueError(f"{yol.name}: {i}. şarkıda bilinmeyen alan: {', '.join(sorted(bilinmeyen))}")
         if s.get("vokal") is not None and s["vokal"] not in VOKAL:
             raise ValueError(f"{yol.name}: {i}. şarkı vokal 'kadin' ya da 'erkek' olmalı: {s['vokal']}")
+        # tür denetimi: `bpm = "68"` ya da `stil = 5` sessizce geçip hazırlıkta/motorda anlaşılmaz hatayla düşüyordu
+        for alan in ("youtube", "stil", "ton"):
+            if s.get(alan) is not None and not isinstance(s[alan], str):
+                raise ValueError(f"{yol.name}: {i}. şarkı {alan} metin olmalı: {s[alan]!r}")
+        bpm = s.get("bpm")
+        if bpm is not None and (isinstance(bpm, bool) or not isinstance(bpm, int) or not 20 <= bpm <= 300):
+            raise ValueError(f"{yol.name}: {i}. şarkı bpm 20–300 arası tam sayı olmalı: {bpm!r}")
         yazarlar = s.get("yazarlar")
         if yazarlar is not None and (not isinstance(yazarlar, list) or not yazarlar
                                      or not all(isinstance(x, str) and x.strip() for x in yazarlar)):

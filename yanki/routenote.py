@@ -10,6 +10,7 @@ Oturum: `calisma/.routenote_profil` kalıcı Chrome profili (Scryne'ın asıl Ch
 (`yanki routenote giris`); şifre hiçbir yerde tutulmaz. Oturum düşerse yükleme durur ve bildirir, giriş denemez.
 """
 
+import contextlib
 import json
 import re
 import time
@@ -27,6 +28,25 @@ class OturumYok(RuntimeError):
     """RouteNote oturumu yok ya da düştü: `yanki routenote giris` gerekir."""
 
 
+class Mesgul(RuntimeError):
+    """RouteNote tarayıcı profili başka bir işte açık (oda işi, gece yüklemesi, giriş) ya da paket o an yenileniyor."""
+
+
+TARAYICI_KILIDI = ".routenote.kilit"
+
+
+@contextlib.contextmanager
+def _tarayici_kilidi(calisma: Path):
+    """Profil aynı anda tek tarayıcıda açılabilir; ikinci iş Chrome'un belirsiz hatası yerine açık bir hatayla durur."""
+    from yanki import kilit
+
+    with kilit.tek_kosu(calisma / TARAYICI_KILIDI) as alindi:
+        if not alindi:
+            raise Mesgul("RouteNote tarayıcısı başka bir işte açık (oda işi, gece yüklemesi ya da giriş); bitince "
+                         "yeniden dene")
+        yield
+
+
 def baglam(calisma: Path, pw, gorunur: bool = True):
     """Kalıcı profil: sistemdeki Chrome (Playwright'ın Chromium'u değil; giriş sayfası Cloudflare arkasında)."""
     return pw.chromium.launch_persistent_context(
@@ -42,7 +62,7 @@ def giris(calisma: Path, bekle_sn: int = 600) -> bool:
     """Tarayıcıyı giriş sayfasında açar, Scryne giriş yapana kadar bekler (URL giriş sayfasından çıkınca)."""
     from playwright.sync_api import sync_playwright
 
-    with sync_playwright() as pw:
+    with _tarayici_kilidi(calisma), sync_playwright() as pw:
         b = baglam(calisma, pw)
         s = b.pages[0] if b.pages else b.new_page()
         s.goto(GIRIS_URL)
@@ -63,7 +83,7 @@ def kesif(calisma: Path, url: str, ad: str) -> Path:
 
     hedef = calisma / "_spike" / "routenote"
     hedef.mkdir(parents=True, exist_ok=True)
-    with sync_playwright() as pw:
+    with _tarayici_kilidi(calisma), sync_playwright() as pw:
         b = baglam(calisma, pw)
         s = b.pages[0] if b.pages else b.new_page()
         s.goto(url)
@@ -229,6 +249,8 @@ def on_kontrol(meta: dict, ses: Path, kapak: Path) -> None:
 
     from yanki import paket
 
+    if not (meta.get("sanatci") or "").strip() or not (meta.get("baslik") or "").strip():
+        raise ValueError("sanatçı adı ya da şarkı adı boş (config/yayin.toml → sanatci_adi, sonra paketle --yeniden)")
     if meta.get("yazar_adlari"):  # elle taslak: Scryne yazdı
         ham = list(meta["yazar_adlari"]) + list(meta.get("soz_yazari_adlari") or [])
     else:
@@ -537,17 +559,29 @@ class RouteNote:
         """Bir paket klasörü (`metadata.json` + FLAC + 3000² JPG): Yanki paketi ya da odadan elle doldurulan taslak
         (`yanki/elle.py`). `yayin_tarihi` None ya da bugün/geçmiş: onaylanınca yayında. `kurtarma`: yarıda kalan
         gönderimin sonucunu kaydetme yolu (hata mesajında)."""
+        from yanki import kilit, paket
+
+        # paket bu iş boyunca yenilenemez (`paket._paketle_bir` aynı kilidi ister): yeniden paketleme ses/kapak
+        # dosyasını yükleme sürerken değiştirmesin, eski metadata yenisinin üstüne yazılmasın
+        with _tarayici_kilidi(calisma), kilit.tek_kosu(paket.yukleme_kilidi(p)) as alindi:
+            if not alindi:
+                raise Mesgul(f"{kimlik}: paket şu an yeniden hazırlanıyor ya da başka bir işte yükleniyor")
+            return self._yukle_kilitli(calisma, p, kimlik, yayin_tarihi, tur, gonder, kurtarma)
+
+    def _yukle_kilitli(self, calisma: Path, p: Path, kimlik: str, yayin_tarihi: date | None, tur: str,
+                       gonder: bool, kurtarma: str) -> dict:
         from playwright.sync_api import sync_playwright
 
         from yanki import dosya
 
         meta_yolu = p / "metadata.json"
         meta = json.loads(meta_yolu.read_text(encoding="utf-8"))
-        ses = next(p.glob("*.flac"), None)
-        kapak = next(p.glob("*.jpg"), None)
-        if ses is None or kapak is None:
-            raise ValueError(f"pakette FLAC ya da kapak yok ({p}); RouteNote WAV almıyor: yanki paketle --yeniden")
+        ses, kapak = paket_dosyalari(p)
         kayit = meta.get("routenote") or {}
+        if kayit.get("adim") == "gonderildi":
+            # gönderilmiş ama yükleme kaydı yazılamamış (koşu Distribute'tan hemen sonra düştü): tarayıcı açılmaz,
+            # bilgi kayıttan döner, çağıran yüklemeyi kaydeder (oturum düşmüş olsa da)
+            return _bilgi(meta, kayit)
         if kayit.get("adim") == "gonderiliyor":
             raise RuntimeError(
                 f"son gönderim yarıda kaldı: RouteNote panelinde (Discography) yayına bak. Gönderildiyse `{kurtarma}`"
@@ -569,7 +603,10 @@ class RouteNote:
         kapali = ({ad: no for ad, no in KAPALI_MAGAZALAR.items() if ad in meta["kapali_magazalar"]}
                   if "kapali_magazalar" in meta else None)
         haric = tuple(meta["haric_bolgeler"]) if "haric_bolgeler" in meta else None
-        spotify_id = meta.get("spotify_sanatci_id") or (None if meta.get("yeni_profil") else self.spotify_id)
+        if "rn_spotify_id" in meta:  # elle taslak: profil `elle.routenote_meta`'da çözüldü (None: ada göre / yeni)
+            spotify_id = meta["rn_spotify_id"] or (None if meta.get("yeni_profil") else self.spotify_id)
+        else:
+            spotify_id = meta.get("spotify_sanatci_id") or (None if meta.get("yeni_profil") else self.spotify_id)
         with sync_playwright() as pw:
             b = baglam(calisma, pw, self.gorunur)
             try:
@@ -628,11 +665,35 @@ class RouteNote:
                     isle(adim="gonderildi", gonderim=date.today().isoformat())
             finally:
                 b.close()
-        tarihsiz = not kayit.get("yayin_tarihi")
-        return {"upc": upc, "isrc": kayit.get("isrc"), "yayin_tarihi": kayit.get("yayin_tarihi"),
-                "en_gec_yayin": (date.today() + timedelta(days=ONAY_EN_GEC_GUN)).isoformat() if tarihsiz else None,
-                "onizleme": f"{int(meta['onizleme_sn']) // 60}:{int(meta['onizleme_sn']) % 60:02d}"
-                if meta.get("onizleme_sn") is not None else None, "dagitim_durumu": kayit.get("adim")}
+        return _bilgi(meta, kayit)
+
+
+def _bilgi(meta: dict, kayit: dict) -> dict:
+    """Yükleme bilgisi (`takip.yukleme_kaydet` alanları) taslak kaydından."""
+    tarihsiz = not kayit.get("yayin_tarihi")
+    on = meta.get("onizleme_sn")
+    return {"upc": kayit.get("upc"), "isrc": kayit.get("isrc"), "yayin_tarihi": kayit.get("yayin_tarihi"),
+            "en_gec_yayin": (date.fromisoformat(kayit.get("gonderim") or date.today().isoformat())
+                             + timedelta(days=ONAY_EN_GEC_GUN)).isoformat() if tarihsiz else None,
+            "onizleme": f"{int(on) // 60}:{int(on) % 60:02d}" if on is not None else None,
+            "dagitim_durumu": kayit.get("adim")}
+
+
+def _paket_dosyasi(p: Path, uzanti: str) -> Path | None:
+    """Paketteki asıl dosya: noktalı (gizli, eski küçük resim) ve yarım yazılmış (`.yaziliyor`) dosyalar sayılmaz.
+    Birden çok aday varsa hangisinin gideceği belirsiz: yükleme durur (yanlış ses geri alınamaz biçimde gitmesin)."""
+    adaylar = sorted(x for x in p.glob(f"*{uzanti}") if not x.name.startswith(".") and ".yaziliyor" not in x.name)
+    if len(adaylar) > 1:
+        raise ValueError(f"pakette birden çok {uzanti} var ({', '.join(x.name for x in adaylar)}): yanki paketle "
+                         "--yeniden")
+    return adaylar[0] if adaylar else None
+
+
+def paket_dosyalari(p: Path) -> tuple[Path, Path]:
+    ses, kapak = _paket_dosyasi(p, ".flac"), _paket_dosyasi(p, ".jpg")
+    if ses is None or kapak is None:
+        raise ValueError(f"pakette FLAC ya da kapak yok ({p}); RouteNote WAV almıyor: yanki paketle --yeniden")
+    return ses, kapak
 
 
 # ── insanın panelde gördüğünün kaydı ────────────────────────
@@ -660,7 +721,11 @@ def gonderim_sonucu(calisma: Path, kimlik: str, gonderildi: bool) -> str:
     if not gonderildi:
         rn["adim"] = "hazir"
         dosya.json_yaz(yol, {**meta, "routenote": rn})
-        return f"{kimlik}: taslak gönderime hazır olarak işaretlendi"
+        # hazır taslak başka oturumda açıldığı için otomasyon gönderemez (yayın sayfası boş gelir); gece kuyruğu da
+        # onu atlar (`dagitim.plan` → `elle_bekleyen`)
+        return (f"{kimlik}: taslakta duruyor olarak işaretlendi. Otomasyon bu taslağı gönderemez: panelde gönder ve "
+                f"`yanki routenote gonderildi {kimlik}`, ya da panelden sil ve `yanki routenote taslak-silindi "
+                f"{kimlik}` (sonraki koşu yeniden açıp tek oturumda gönderir)")
     rn.update(adim="gonderildi", gonderim=rn.get("gonderim") or date.today().isoformat())
     dosya.json_yaz(yol, {**meta, "routenote": rn})
     takip.yukleme_kaydet(calisma, kimlik, {"upc": rn.get("upc"), "isrc": rn.get("isrc"),

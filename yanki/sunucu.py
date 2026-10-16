@@ -12,6 +12,7 @@ import contextlib
 import json
 import re
 import threading
+import tomllib
 from dataclasses import asdict
 from pathlib import Path
 
@@ -33,6 +34,14 @@ DUZENLENEBILIR = ("uretildi", "onarim")  # onay, onarım ve onarım kabulü yaln
 def _kimlik_gecerli(kimlik: str) -> bool:
     """Şarkı kimliği `liste.kimlik` biçiminde (a-z, 0-9, tire): yol ayıracı ya da `..` taşıyamaz."""
     return bool(re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", kimlik))
+
+
+def _json_oku(yol: Path, varsayilan):
+    """Yan dosya (söz zamanı, kapak bilgisi): yoksa ya da yarım yazılmışsa varsayılan."""
+    try:
+        return json.loads(yol.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return varsayilan
 
 
 class OnarIstegi(BaseModel):
@@ -286,19 +295,28 @@ def _son_gece(calisma: Path) -> dict | None:
 
 
 def dalga(yol: Path, nokta: int = DALGA_NOKTA) -> dict:
-    """Dalga formu tepe değerleri; dosyanın değişme zamanına göre önbelleklenir."""
+    """Dalga formu tepe değerleri; dosyanın değişme zamanına göre önbelleklenir. Önbellek atomik yazılır; yarım kalmış
+    (oda yazarken kapandı) önbellek ses değişene kadar her açılışta "ses okunamadı" diyordu, yeniden hesaplanır."""
     import soundfile as sf
 
     onbellek = yol.with_name(yol.name + ".dalga.json")
     if onbellek.exists() and onbellek.stat().st_mtime >= yol.stat().st_mtime:
-        return json.loads(onbellek.read_text(encoding="utf-8"))
+        with contextlib.suppress(OSError, ValueError):
+            veri = json.loads(onbellek.read_text(encoding="utf-8"))
+            if isinstance(veri, dict) and "sure" in veri and "tepe" in veri:
+                return veri
     ses, sr = sf.read(str(yol), dtype="float32", always_2d=True)
     m = np.abs(ses).max(axis=1)
     kova = max(1, len(m) // nokta)
     tepe = m[: kova * (len(m) // kova)].reshape(-1, kova).max(axis=1)
     tepe = tepe / (tepe.max() or 1.0)
     veri = {"sure": round(len(ses) / sr, 3), "tepe": [round(float(x), 3) for x in tepe]}
-    onbellek.write_text(json.dumps(veri), encoding="utf-8")
+    gecici = onbellek.with_name(f"{onbellek.name}.{threading.get_ident()}.yaziliyor")  # aynı anda iki istek
+    try:
+        gecici.write_text(json.dumps(veri), encoding="utf-8")
+        gecici.replace(onbellek)
+    except OSError:  # önbellek yazılamadı (Windows: dosya o an açık): veri yine döner
+        gecici.unlink(missing_ok=True)
     return veri
 
 
@@ -321,6 +339,11 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None, gorev_ok
         return gorev_onbellek["deger"]
 
     liste_yolu = liste_yolu or a.kok / "girdi" / "liste.toml"
+
+    @app.exception_handler(tomllib.TOMLDecodeError)
+    async def ayar_bozuk(_istek: Request, e: tomllib.TOMLDecodeError):
+        """Elle düzenlenen ayar dosyasındaki yazım hatası: "Internal Server Error" yerine ne olduğu."""
+        return JSONResponse({"detail": f"bir ayar dosyası (config/*.toml ya da girdi/liste.toml) okunamadı: {e}"}, 503)
 
     @app.middleware("http")
     async def yerel_koruma(istek: Request, devam):
@@ -410,27 +433,35 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None, gorev_ok
                 paket.paketle(calisma, a.kok / "config" / "yayin.toml", [kimlik], yeniden=True, hatalar=hatalar)
                 if hatalar:
                     raise HTTPException(500, f"yeniden paketlenemedi: {hatalar[0][1]}")
-        kaynak = json.loads((durum.klasor(calisma, kimlik) / "kapak_kaynak.json").read_text(encoding="utf-8"))
+        kaynak = _json_oku(durum.klasor(calisma, kimlik) / "kapak_kaynak.json", None)
         return {**_ozet(durum.oku(calisma, kimlik), calisma), "kapak_bilgi": kaynak}
 
     @app.get("/api/sarki/{kimlik}")
     def sarki(kimlik: str):
         d = oku(kimlik)
-        zaman = durum.klasor(calisma, kimlik) / "soz_zaman.json"
-        satirlar = json.loads(zaman.read_text(encoding="utf-8")) if zaman.exists() else []
+        k = durum.klasor(calisma, kimlik)
+        # yarım/bozuk yan dosya (söz zamanı, kapak bilgisi) şarkının dinlenmesini engellemesin
+        satirlar = _json_oku(k / "soz_zaman.json", [])
+        if not isinstance(satirlar, list):
+            satirlar = []
         from yanki import onay, takip
 
-        ayar = onay.ayar_oku(a.kok / "config" / "yayin.toml")
-        oto = onay.onay_zamani(d, ayar)
+        try:
+            ayar = onay.ayar_oku(a.kok / "config" / "yayin.toml")
+        except (OSError, ValueError):  # config/yayin.toml'da yazım hatası: otomatik onay bilgisi yok, şarkı açılır
+            ayar = None
+        oto = onay.onay_zamani(d, ayar) if ayar else None
         oneri = onay.oneri(d) if oto else None
-        k = durum.klasor(calisma, kimlik)
-        kaynak = k / "kapak_kaynak.json"
-        return {**asdict(d), **_ozet(d, calisma), "kesitler": sozler.kesitler(satirlar, d.kaynak.get("sure_sn")),
+        try:
+            kesitler = sozler.kesitler(satirlar, d.kaynak.get("sure_sn"))
+        except (ValueError, TypeError, IndexError):
+            kesitler = []
+        return {**asdict(d), **_ozet(d, calisma), "kesitler": kesitler,
                 "bolumler": _bolumler(satirlar, d.kaynak.get("sure_sn"), d.ad), "oneri": _oneri(d),
                 "otomatik_onay": {"zaman": oto.isoformat(timespec="minutes"), "aday": oneri.no}
                 if oto and oneri else None,
-                "onay_engeli": onay.engel(d, ayar) if ayar.acik and d.asama == "uretildi" else None,
-                "kapak_bilgi": json.loads(kaynak.read_text(encoding="utf-8")) if kaynak.exists() else None,
+                "onay_engeli": onay.engel(d, ayar) if ayar and ayar.acik and d.asama == "uretildi" else None,
+                "kapak_bilgi": _json_oku(k / "kapak_kaynak.json", None),
                 "kapak_elle": (k / "kapak_ozel.jpg").exists(),
                 "yukleme": takip.yukleme_bilgisi(calisma, kimlik)}
 
@@ -750,12 +781,20 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None, gorev_ok
         return elle_ozet(kimlik)
 
     async def _govde(istek: Request, en_cok: int) -> bytes:
-        if int(istek.headers.get("content-length") or 0) > en_cok:
-            raise HTTPException(413, f"dosya {en_cok // 2**20} MB'tan büyük")
-        veri = await istek.body()
-        if len(veri) > en_cok:
-            raise HTTPException(413, f"dosya {en_cok // 2**20} MB'tan büyük")
-        return veri
+        """Gövde parça parça okunur, sınır aşılınca okuma durur: Content-Length'siz (parçalı) gövde önce bütünüyle
+        belleğe alınıp sonra ölçülüyordu."""
+        buyuk = HTTPException(413, f"dosya {en_cok // 2**20} MB'tan büyük")
+        try:
+            if int(istek.headers.get("content-length") or 0) > en_cok:
+                raise buyuk
+        except ValueError as e:
+            raise HTTPException(400, "geçersiz Content-Length") from e
+        veri = bytearray()
+        async for parca in istek.stream():
+            veri += parca
+            if len(veri) > en_cok:
+                raise buyuk
+        return bytes(veri)
 
     @app.post("/api/elle/{kimlik}/ses")
     async def elle_ses(kimlik: str, istek: Request, ad: str = "ses.wav"):
@@ -974,7 +1013,15 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None, gorev_ok
         yayin_yolu = a.kok / "config" / "yayin.toml"
         hepsi = durum.hepsi(calisma)
         say = lambda *asamalar: sum(d.asama in asamalar for d in hepsi)  # noqa: E731
-        ayar = onay.ayar_oku(yayin_yolu)
+        uyarilar = []
+        try:
+            ayar = onay.ayar_oku(yayin_yolu)
+            dagitimci = paket.yayin_ayarlari(yayin_yolu).dagitimci
+        except (OSError, ValueError) as e:  # Scryne ayarı elle düzenlerken bıraktığı yazım hatası: pano yine açılır
+            ayar, dagitimci = onay.Ayar(), None
+            uyarilar.append({"baslik": "Ayar dosyası okunamadı", "etiket": "ayar",
+                             "metin": f"config/yayin.toml okunamadı ({e}). Düzeltilene kadar otomatik onay, takvim ve "
+                                      "yükleme bu ayarlarla çalışamaz."})
         dagitimda = []
         for d in hepsi:
             if d.asama in ("yuklendi", "yayinda"):
@@ -1007,16 +1054,14 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None, gorev_ok
                                  "aday": a.cover.aday_sayisi, "adim": a.cover.adim, "guc": a.cover.guc}}
         except (OSError, ValueError, KeyError):
             ayarlar = {}
-        from yanki import paket, tunearo
+        from yanki import tunearo
 
-        uyarilar = []
         if kapali := sistem.kapali_gorevler(gorevler()):
             uyarilar.append({"baslik": "Otomatik koşu kapalı", "etiket": "zamanlayıcı",
                              "metin": f"Görev Zamanlayıcı'da {', '.join(f'Yanki\\{g}' for g in kapali)} devre dışı: "
                                       "keşif, hazırlık, otomatik onay, paket, takip ve yedek koşmuyor. Açmak: "
                                       "Görev Zamanlayıcı → Yanki → görev → Etkinleştir (ya da scripts/gorev_kur.ps1)."})
-        if paket.yayin_ayarlari(a.kok / "config" / "yayin.toml").dagitimci == "tunearo" and \
-                (e := tunearo.erisim_durumu(calisma)):
+        if dagitimci == "tunearo" and (e := tunearo.erisim_durumu(calisma)):
             uyarilar.append({"baslik": "Tunearo API erişimi kapalı", "etiket": "dağıtım",
                              "metin": f"{e.get('ilk', '')[:16].replace('T', ' ')}'dan beri her istek reddediliyor; "
                                       "yükleme ve durum yoklaması bekliyor. Hesap sahibi erişimi açınca hat sürer."})

@@ -86,7 +86,11 @@ def _kes(kaynak: Path, bas: float, son: float, hedef: Path) -> Path:
 def onarim_iste(a: Ayarlar, d: durum.Durum, aday_no: int, bas: float, son: float) -> None:
     if not 0 <= bas < son:
         raise ValueError(f"geçersiz aralık: {bas}–{son}")
-    aday = next(x for x in d.adaylar if x.no == aday_no)
+    aday = next((x for x in d.adaylar if x.no == aday_no), None)
+    if aday is None or not aday.dosya:
+        # dosyasız aday (motor düştü): onarımın temeli olmaz; kabul edilseydi sonraki üretim bütün şarkıyı `hata`ya
+        # düşürürdü
+        raise ValueError(f"aday {aday_no} onarılamaz: " + ("yok" if aday is None else "sesi yok"))
     sira = len(aday.onarimlar)
     for i, tohum in enumerate(a.onarim.tohumlar):
         aday.onarimlar.append({"id": f"{aday_no}-{sira + i + 1}", "bolge": [bas, son], "tohum": tohum,
@@ -124,8 +128,10 @@ def stil_degistir(d: durum.Durum, stil: str, bpm: int | None, ton: str) -> None:
 
 
 def onarim_kabul(d: durum.Durum, aday_no: int, onarim_id: str) -> None:
-    aday = next(x for x in d.adaylar if x.no == aday_no)
-    secilen = next(o for o in aday.onarimlar if o["id"] == onarim_id)
+    aday = next((x for x in d.adaylar if x.no == aday_no), None)
+    secilen = next((o for o in aday.onarimlar if o["id"] == onarim_id), None) if aday else None
+    if secilen is None:
+        raise ValueError(f"onarım yok: aday {aday_no}, {onarim_id}")
     if secilen["durum"] != "hazir":
         raise ValueError(f"onarım {onarim_id} kabul edilemez: {secilen['durum']}")
     if secilen.get("temel") and secilen["temel"] != aday.dosya:
@@ -196,6 +202,8 @@ def _onarim_isleri(a: Ayarlar, calisma: Path, d: durum.Durum, pencere_bas: dict[
             temel = k / o["temel"]
             sure = sf.info(str(temel)).duration
             bas, son = o["bolge"]
+            if bas >= sure:
+                raise ValueError(f"onarım {o['id']}: aralık ({bas:.1f} sn) adayın sonundan ({sure:.1f} sn) sonra")
             pb, ps = max(0.0, bas - PENCERE_PAYI), min(sure, son + PENCERE_PAYI)
             pencere = _kes(temel, pb, ps, k / "onarimlar" / o["id"] / "pencere_temel.wav")
             soz = sozler.aralik_sozu(satirlar, pb, ps, d.kaynak.get("sure_sn"), d.ad) or _soz(calisma, d)
@@ -446,28 +454,45 @@ def uret(a: Ayarlar, calisma: Path, kimlikler: list[str] | None = None,
         if d.asama not in ("analiz", "onarim"):  # hazırlıkta hataya düştü
             sonuc.append(d)
             continue
-        k = durum.klasor(calisma, d.kimlik)
-        kaynak, soz, dil = k / d.kaynak["dosya"], _soz(calisma, d), d.analiz.get("dil", "en")
-        # göreli söz kapısı: orijinal kaydın söz WER'i şarkı başı bir kez ölçülür, analize yazılır
-        if "orijinal_wer" not in d.analiz:
-            analizler.setdefault(d.kimlik, {})["orijinal_wer"] = d.analiz["orijinal_wer"] = orijinal_wer(
-                kaynak, soz, dil)
-        owr = d.analiz.get("orijinal_wer")
-        yeni_adaylar, onarimlar = [], {}
-        if d.kimlik in planlar:
-            plan, _, numaralar = planlar[d.kimlik]
-            yeni_adaylar = [_aday_kur(k, d, plan, n, tohum, sonuclar, degerlendir, kaynak, soz, dil, owr, tarif)
-                            for n, tohum in numaralar]
-        else:
-            for aday in d.adaylar:
-                for o in aday.onarimlar:
-                    r = sonuclar.get(f"{d.kimlik}|onarim|{aday.no}|{o['id']}")
-                    if o["durum"] == "bekliyor" and r is not None:
-                        onarimlar[o["id"]] = _onarim_sonucu(k, o, r, pencere_bas[o["id"]], degerlendir, kaynak, soz,
-                                                            dil, owr)
-        sonuc.append(_sonuclari_isle(calisma, d.asama, yeni_adaylar, onarimlar, d.kimlik, notlar.get(d.kimlik),
-                                     analizler.get(d.kimlik)))
+        try:  # bir şarkının sonuç işlemesi (söz, diskteki durum) düşerse diğerlerinin ödenmiş üretimi kaybolmasın
+            sonuc.append(_sarki_sonucu(calisma, d, planlar, sonuclar, pencere_bas, degerlendir, orijinal_wer, tarif,
+                                       notlar, analizler))
+        except Exception as e:  # noqa: BLE001
+            print(f"✗ {d.sanatci} — {d.ad}: üretim sonucu işlenemedi: {type(e).__name__}: {e}")
+            try:  # kalıcı bir sorun her koşuda yeniden (ücretli) üretim açtırmasın: Scryne'a `hata`da kalır
+                with durum.guncelle(calisma, d.kimlik) as taze:
+                    if taze.asama == d.asama:
+                        taze.gec("hata", f"üretim sonucu işlenemedi: {type(e).__name__}: {e}")
+                sonuc.append(taze)
+            except Exception:  # noqa: BLE001 — durum da yazılamıyorsa (şarkı silindi) geç
+                sonuc.append(d)
     return sonuc
+
+
+def _sarki_sonucu(calisma: Path, d: durum.Durum, planlar: dict, sonuclar: dict, pencere_bas: dict, degerlendir,
+                  orijinal_wer, tarif: dict, notlar: dict, analizler: dict) -> durum.Durum:
+    """Bir şarkının motor sonuçları → adaylar/onarımlar (kapılardan geçirilir), diskteki taze duruma işlenir."""
+    k = durum.klasor(calisma, d.kimlik)
+    kaynak, soz, dil = k / d.kaynak["dosya"], _soz(calisma, d), d.analiz.get("dil", "en")
+    # göreli söz kapısı: orijinal kaydın söz WER'i şarkı başı bir kez ölçülür, analize yazılır
+    if "orijinal_wer" not in d.analiz:
+        analizler.setdefault(d.kimlik, {})["orijinal_wer"] = d.analiz["orijinal_wer"] = orijinal_wer(
+            kaynak, soz, dil)
+    owr = d.analiz.get("orijinal_wer")
+    yeni_adaylar, onarimlar = [], {}
+    if d.kimlik in planlar:
+        plan, _, numaralar = planlar[d.kimlik]
+        yeni_adaylar = [_aday_kur(k, d, plan, n, tohum, sonuclar, degerlendir, kaynak, soz, dil, owr, tarif)
+                        for n, tohum in numaralar]
+    else:
+        for aday in d.adaylar:
+            for o in aday.onarimlar:
+                r = sonuclar.get(f"{d.kimlik}|onarim|{aday.no}|{o['id']}")
+                if o["durum"] == "bekliyor" and r is not None:
+                    onarimlar[o["id"]] = _onarim_sonucu(k, o, r, pencere_bas[o["id"]], degerlendir, kaynak, soz,
+                                                        dil, owr)
+    return _sonuclari_isle(calisma, d.asama, yeni_adaylar, onarimlar, d.kimlik, notlar.get(d.kimlik),
+                           analizler.get(d.kimlik))
 
 
 ARSIV_KLASORLER = ("adaylar", "onarimlar", "parcalar", "paket", "paket_onceki")
@@ -488,17 +513,26 @@ def bastan(calisma: Path, kimlik: str, neden: str, arsiv: Path | None = None) ->
         if d.asama not in BASTAN_ASAMALAR or not d.analiz.get("stil"):
             raise ValueError(f"baştan alınamaz (aşama {d.asama}" + ("" if d.analiz.get("stil") else ", analiz yok")
                              + ")")
-        tasinan = []
+        tasinan, kalan = [], []
         for ad in ARSIV_KLASORLER:
             if (k / ad).exists():
                 hedef = arsiv / ad
                 if hedef.exists():  # aynı gün ikinci kez: öncekinin yanına
                     hedef = arsiv / f"{ad}_{len(list(arsiv.glob(ad + '*')))}"
                 hedef.parent.mkdir(parents=True, exist_ok=True)
-                shutil.move(str(k / ad), str(hedef))
-                tasinan.append(ad)
+                try:
+                    shutil.move(str(k / ad), str(hedef))
+                    tasinan.append(ad)
+                except OSError as e:
+                    # Windows'ta açık dosya (dinleme odası o an adayı çalıyor) klasörü kilitler; taşıma yarıda
+                    # kalınca önce durum yazılmıyor, adaylar silinmiş dosyaları gösteriyordu. Kalan klasör yerinde
+                    # durur, yeni adaylar aynı numaralarla üstüne yazılır.
+                    kalan.append(f"{ad}: {type(e).__name__}: {e}")
         d.notlar.append({"bastan": {"neden": neden, "onceki_asama": d.asama, "onceki_secilen": d.secilen,
-                                    "aday": len(d.adaylar), "arsiv": str(arsiv), "tasinan": tasinan}})
+                                    "aday": len(d.adaylar), "arsiv": str(arsiv), "tasinan": tasinan,
+                                    **({"tasinamayan": kalan} if kalan else {})}})
+        if kalan:
+            print(f"uyarı: {kimlik}: arşive taşınamadı ({'; '.join(kalan)})")
         d.adaylar, d.secilen, d.yayin = [], None, {}
         d.gec("analiz")
     return d

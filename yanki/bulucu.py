@@ -47,7 +47,7 @@ def coz(metin: str) -> tuple[str, str]:
     m = (metin or "").strip()
     if not m:
         raise GirdiHatasi("Spotify linki, ISRC ya da UPC yapıştır")
-    bul = re.search(r"(?:open\.spotify\.com/(?:intl-[a-z-]+/)?(?:embed/)?|spotify:)(track|playlist|artist|album)[/:]"
+    bul = re.search(r"(?:open\.spotify\.com/(?:intl-[A-Za-z-]+/)?(?:embed/)?|spotify:)(track|playlist|artist|album)[/:]"
                     r"([A-Za-z0-9]{22})", m)
     if bul:
         return {"track": "parca", "artist": "sanatci"}.get(bul[1], bul[1]), bul[2]
@@ -75,7 +75,7 @@ def gecerli(tur: str, kimlik: str) -> bool:
 # Sonuçlar burada kırpılır: büyük playlist'in ham satırları (her biri kalkmış şarkının tüm incelemesi) WebSocket'ten
 # taşınmasın. Süre STILLMORE'un `durationMs`'inden alınmaz: metadata'daki sint32 alan zigzag çözülmeden okunuyor
 # (12.13: her süre iki katı; 2026-10-16 ölçüldü), ses özelliklerindeki `duration_ms` doğru.
-YARDIMCI_SURUM = 1
+YARDIMCI_SURUM = 2  # 2: süresi geçen iş bırakılır (`birak`, `baslat` sınırı)
 YARDIMCI = Path(__file__).with_name("bulucu_yardimci.js").read_text(encoding="utf-8").replace(
     "__SURUM__", str(YARDIMCI_SURUM))
 
@@ -349,7 +349,8 @@ class Bulucu:
             raise stillmore.StillmoreYok("Spotify bağlı değil: önce \"Spotify'a bağlan\"")
         k = self._kopru_ac()
         k.degerlendir(YARDIMCI, 15)
-        no = k.degerlendir(f"window.__yanki.baslat({json.dumps(is_['tur'])}, {json.dumps(is_['kimlik'])})", 15)
+        no = k.degerlendir(f"window.__yanki.baslat({json.dumps(is_['tur'])}, {json.dumps(is_['kimlik'])}, "
+                           f"{IS_ZAMAN_ASIMI * 1000})", 15)
         bitis = time.monotonic() + IS_ZAMAN_ASIMI
         hata_sayisi = 0
         while time.monotonic() < bitis:
@@ -372,4 +373,8 @@ class Bulucu:
                 if not veri:
                     raise RuntimeError("STILLMORE sonucu boş döndü")
                 return veri
+        try:  # sayfadaki iş bırakılır: yoksa sonraki her arama "başka bir Bulucu işi sürüyor" derdi
+            k.degerlendir(f"window.__yanki && window.__yanki.birak({int(no)})", 15)
+        except stillmore.StillmoreYok:
+            pass
         raise TimeoutError(f"{TUR_ADI.get(is_['tur'])} {IS_ZAMAN_ASIMI // 60} dakikada bitmedi")

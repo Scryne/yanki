@@ -26,6 +26,7 @@ import hashlib
 import http.client
 import json
 import os
+import re
 import secrets
 import time
 import urllib.error
@@ -147,7 +148,11 @@ class Spotify:
         basliklar = {"Content-Type": "application/x-www-form-urlencoded"}
         if yetki:
             basliklar["Authorization"] = yetki
-        kod, _, govde = self._http("POST", url, basliklar, urllib.parse.urlencode(alanlar).encode())
+        kod, bas, govde = self._http("POST", url, basliklar, urllib.parse.urlencode(alanlar).encode())
+        if kod == 429:  # token ucu da kotaya tabi: kilit yazılmazsa her komut aynı ucu yeniden yoklardı
+            sn = _retry_after({k.lower(): v for k, v in bas.items()}.get("retry-after"))
+            self.kilitle(sn, "token 429")
+            raise Sinirli(sn, "token 429")
         if kod != 200:
             raise SpotifyHatasi(f"token isteği {kod}: {govde[:200].decode(errors='replace')}")
         return json.loads(govde)
@@ -179,7 +184,7 @@ class Spotify:
                     neden = ""
                 self.kilitle(sn, neden or "429")
                 raise Sinirli(sn, neden)
-            if kod in (500, 502, 503) and deneme == 0:
+            if kod in (500, 502, 503, 504) and deneme == 0:
                 time.sleep(3)
                 continue
             raise SpotifyHatasi(f"GET {url.split('?')[0]} → {kod}: {govde[:200].decode(errors='replace')}")
@@ -298,12 +303,13 @@ def _retry_after(deger: str | None, varsayilan: int = 60) -> int:
 
 
 def kimlik_ayikla(metin: str, tur: str = "playlist") -> str:
-    """URL, URI ya da çıplak kimlik → 22 karakterlik Spotify kimliği."""
+    """URL, URI ya da çıplak kimlik → 22 karakterlik Spotify kimliği. Paylaşım linkindeki dil eki (`/intl-tr/`) ve
+    gömme yolu (`/embed/`) atlanır: önce "https:" kimlik sanılıp ValueError veriyordu."""
     metin = metin.strip()
-    for ayrac in (f"open.spotify.com/{tur}/", f"spotify:{tur}:"):
-        if ayrac in metin:
-            metin = metin.split(ayrac, 1)[1]
-            break
+    if m := re.search(rf"open\.spotify\.com/(?:intl-[A-Za-z-]+/)?(?:embed/)?{tur}/([^?/#\s]+)", metin):
+        metin = m[1]
+    elif f"spotify:{tur}:" in metin:
+        metin = metin.split(f"spotify:{tur}:", 1)[1]
     metin = metin.split("?")[0].split("/")[0]
     if len(metin) != 22 or not metin.isalnum():
         raise ValueError(f"Spotify {tur} kimliği değil: {metin!r}")

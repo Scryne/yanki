@@ -186,8 +186,9 @@ def getir(calisma: Path, d: durum.Durum, yeni: bool = False, arayici=ara, indiri
 
     k = durum.klasor(calisma, d.kimlik)
     hedef, kaynak_yolu = k / "kapak_pinterest.jpg", k / "kapak_kaynak.json"
-    if hedef.exists() and not yeni:
+    if hedef.exists() and kaynak_yolu.exists() and not yeni:  # kaynaksız görsel: yazım yarıda kalmış, yeniden seç
         return hedef
+    gecici = k / ".kapak_pinterest.yaziliyor.jpg"  # yarım kaydedilen görsel kapak sayılmasın
     onceki = json.loads(kaynak_yolu.read_text(encoding="utf-8")) if kaynak_yolu.exists() else {}
     kullanilan = kullanilanlar(calisma)
     soz_yolu = k / "soz.txt"
@@ -199,7 +200,7 @@ def getir(calisma: Path, d: durum.Durum, yeni: bool = False, arayici=ara, indiri
                 with Image.open(io.BytesIO(indirici(_gorsel(pin)["url"]))) as img:
                     if min(img.size) < EN_KUCUK:
                         raise ValueError(f"gerçek boyut {img.size[0]}×{img.size[1]} küçük")
-                    img.convert("RGB").save(hedef, "JPEG", quality=95)
+                    img.convert("RGB").save(gecici, "JPEG", quality=95)
             except (OSError, ValueError) as e:  # PIL.UnidentifiedImageError OSError türevi
                 son_hata = e
                 continue
@@ -208,6 +209,7 @@ def getir(calisma: Path, d: durum.Durum, yeni: bool = False, arayici=ara, indiri
         if secilen:
             break
     if secilen is None:
+        gecici.unlink(missing_ok=True)
         raise Bulunamadi(f"Pinterest'te uygun görsel yok (sorgu: {q})" + (f"; son hata: {son_hata}" if son_hata
                                                                             else ""))
     g = _gorsel(secilen)
@@ -219,4 +221,5 @@ def getir(calisma: Path, d: durum.Durum, yeni: bool = False, arayici=ara, indiri
         "onceki": [*onceki.get("onceki", []),
                    *([x for x in (onceki.get("pin_id"), onceki.get("imza")) if x] if yeni else [])],
     })
+    gecici.replace(hedef)  # kaynak önce yazılır: görsel varsa kaynağı da vardır
     return hedef

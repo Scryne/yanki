@@ -6,7 +6,7 @@ function Bildir([string]$baslik, [string]$metin, [string]$adres = "http://127.0.
         [Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom.XmlDocument, ContentType = WindowsRuntime] | Out-Null
         $esc = [Security.SecurityElement]
         $xml = New-Object Windows.Data.Xml.Dom.XmlDocument
-        $xml.LoadXml("<toast activationType=`"protocol`" launch=`"$adres`"><visual><binding template=`"ToastGeneric`">" +
+        $xml.LoadXml("<toast activationType=`"protocol`" launch=`"$($esc::Escape($adres))`"><visual><binding template=`"ToastGeneric`">" +
             "<text>$($esc::Escape($baslik))</text><text>$($esc::Escape($metin))</text></binding></visual></toast>")
         $kimlik = "{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\WindowsPowerShell\v1.0\powershell.exe"
         [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier($kimlik).Show(

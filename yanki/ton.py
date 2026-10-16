@@ -32,6 +32,8 @@ def bant_spektrumu(yol: Path, merkezler=MERKEZLER) -> np.ndarray:
     seg = np.lib.stride_tricks.sliding_window_view(m, PENCERE)[:: PENCERE // 2]
     enerji = (seg ** 2).mean(1)
     seg = seg[enerji > enerji.max() * 1e-3]
+    if not len(seg):  # tamamen sessiz: bant ortalamaları NaN olur, ffmpeg eğrisi bozulurdu
+        raise ValueError(f"ses sessiz: {yol}")
     guc = (np.abs(np.fft.rfft(seg * np.hanning(PENCERE), axis=1)) ** 2).mean(0)
     f = np.fft.rfftfreq(PENCERE, 1 / sr)
     return np.array([10 * np.log10(guc[(f >= c / 2 ** (1 / 6)) & (f < c * 2 ** (1 / 6))].mean() + 1e-20)

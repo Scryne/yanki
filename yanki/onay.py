@@ -137,7 +137,8 @@ def uygula(calisma: Path, ayar: Ayar, simdi: datetime | None = None) -> list[tup
                 continue
             taze.secilen = a.no
             taze.notlar.append({"otomatik_onay": {"zaman": simdi.isoformat(timespec="seconds"), "aday": a.no,
-                                                  "kural": "en düşük söz WER", "sure_saat": ayar.sure_saat}})
+                                                  "kural": "en düşük iki WER'den hizalaması yüksek",
+                                                  "sure_saat": ayar.sure_saat}})
             taze.gec("onaylandi")
         onaylanan.append((taze, a))
     return onaylanan

@@ -34,9 +34,9 @@ def hal(d: durum.Durum, meta: dict) -> str:
     gönderilmediğini Scryne panelde görür) · inceleme · yayinda."""
     if d.asama == "yayinda" or ((d.yayin or {}).get("son") or {}).get("canli"):
         return "yayinda"
-    if d.asama == "yuklendi":
-        return "inceleme"
     adim = (meta.get("routenote") or {}).get("adim")
+    if d.asama == "yuklendi" or adim == "gonderildi":  # gönderildi ama yükleme kaydı yazılamadı: sonraki koşu yazar
+        return "inceleme"
     if adim == "hazir":
         return "taslak_hazir"
     if adim == "gonderiliyor":

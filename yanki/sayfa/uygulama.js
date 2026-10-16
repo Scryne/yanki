@@ -16,6 +16,8 @@ const doldur = (e, ...c) => e.replaceChildren(...c.flat().filter((x) => x != nul
 const sure = (s) => { s = Math.max(0, s || 0); return `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`; };
 const aralik = (a, b) => `${sure(a)}–${sure(b)}`;
 const virgul = (n, basamak) => n == null ? "—" : String(basamak == null ? n : Number(n).toFixed(basamak)).replace(".", ",");
+// şarkı klasörü içindeki göreli yol (adaylar/1/aday.flac): her parça ayrı kodlanır, "#", "?" ya da boşluk adresi bölmez
+const yolKodla = (yol) => String(yol).split("/").map(encodeURIComponent).join("/");
 const css = (ad) => getComputedStyle(document.documentElement).getPropertyValue(ad).trim();
 const azHareket = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
 const depo = {
@@ -88,6 +90,9 @@ document.addEventListener("play", (e) => {
 }, true);
 document.addEventListener("timeupdate", (e) => { if (e.target === calan?.ses) sozYuru?.(e.target.currentTime); }, true);
 let sozYuru = null; // şarkı ekranındaki söz rayının güncelleyicisi
+// klavyeyle panoda gezinen birinin odağı 30 sn'lik tazelemede sayfanın başına düşmesin
+// (yalnız klavye odağı: fareyle tıklanan özet ya da düğme tazelemeyi durdurmaz)
+const anadaOdak = () => { const o = document.activeElement, ana = $("#ana"); return !!o && o !== ana && ana.contains(o) && o.matches(":focus-visible"); };
 const sesCaliyor = () => !!calan && !calan.ses.paused && document.contains(calan.ses);
 
 // ---- dalga şeridi ----
@@ -96,7 +101,7 @@ class Serit {
   constructor({ kimlik, dosya, secilebilir = false, vurgu = null, kucuk = false, etiket }) {
     this.kimlik = kimlik; this.dosya = dosya; this.secilebilir = secilebilir; this.vurgu = vurgu;
     this.secim = null; this.tepe = []; this.toplam = 0;
-    this.ses = el("audio", { preload: "none", src: `/ses/${kimlik}/${dosya}`, "data-dosya": dosya });
+    this.ses = el("audio", { preload: "none", src: `/ses/${kimlik}/${yolKodla(dosya)}`, "data-dosya": dosya });
     this.tuval = el("canvas", { role: "img", "aria-label": `${etiket} dalga formu` + (secilebilir ? "; sürükleyerek aralık seç" : "") });
     this.kap = el("div", { class: "dalga-kap yukleniyor" + (kucuk ? " kucuk" : ""), tabindex: "0", "aria-label": `${etiket}: boşluk çal/durdur, oklar 5 sn` + (secilebilir ? ", Shift+ok seçimi genişletir, Esc temizler" : "") }, this.tuval);
     this.zaman = el("span", { class: "zaman" }, "0:00");
@@ -112,7 +117,7 @@ class Serit {
     this.yukle();
   }
   async yukle() {
-    try { const d = await api(`/api/dalga/${this.kimlik}/${this.dosya}`); this.tepe = d.tepe; this.toplam = d.sure; this.ciz(); }
+    try { const d = await api(`/api/dalga/${this.kimlik}/${yolKodla(this.dosya)}`); this.tepe = d.tepe; this.toplam = d.sure; this.ciz(); }
     catch (e) { this.zaman.textContent = "dalga okunamadı"; }
     finally { this.kap.classList.remove("yukleniyor"); }
   }
@@ -419,7 +424,7 @@ function karsilastirma(d, duzenlenebilir) {
   };
 
   for (const iz of izler) {
-    iz.ses = el("audio", { preload: "none", src: `/ses/${d.kimlik}/${iz.dosya}`, "data-dosya": iz.dosya });
+    iz.ses = el("audio", { preload: "none", src: `/ses/${d.kimlik}/${yolKodla(iz.dosya)}`, "data-dosya": iz.dosya });
     iz.ses.addEventListener("timeupdate", () => {
       if (iz !== aktif) return;
       if (iz.ses.currentTime >= kesit().son) sonaGeldi(iz); else goster();
@@ -1121,7 +1126,7 @@ function tarifPaneli(a) {
 }
 
 function gecePaneli(g) {
-  const kutu = el("section", { class: "cam yan-panel", "aria-label": "Son koşu" }, el("h2", {}, "Son gece koşusu"));
+  const kutu = el("section", { class: "cam yan-panel", "aria-label": "Son koşu" }, el("h2", {}, "Son koşu"));
   if (!g) { kutu.append(el("p", { class: "kazanc-alt" }, "Henüz koşu yok.")); return kutu; }
   const sorun = !g.suruyor && (g.kod || g.sorunlu);
   const durum = g.suruyor ? `sürüyor · ${g.adim || "başlıyor"}` : sorun ? `sorunlu: ${g.sorunlu || `kod ${g.kod}`}` : "sorunsuz bitti";
@@ -1157,7 +1162,7 @@ const HAL = {
   yayinda: { ad: "Yayında", rozet: ["yayında", "ok"], aciklama: "Spotify'da dinlenebilir." },
 };
 const ADIM = { olusturuldu: "taslak açıldı", album: "albüm bilgisi", ses_kaydedildi: "ses yüklendi", ses: "ses ve parça", kapak: "kapak", hazir: "dört adım tamam", gonderiliyor: "gönderiliyor", gonderildi: "gönderildi" };
-const IS_ADI = { taslak: "Taslak", gonder: "Gönderim", giris: "RouteNote girişi" };
+const IS_ADI = { taslak: "Taslak", gonder: "Gönderim", giris: "RouteNote girişi", elle_gonder: "Elle yayın gönderimi", elle_taslak: "Elle yayın taslağı" };
 let isIzle = null;
 
 async function sanatciGoster() {
@@ -1353,7 +1358,8 @@ function dagitimAyarPaneli(s) {
   const gece = el("button", { class: "anahtar", type: "button", role: "switch", "aria-checked": s.ayar.gece ? "true" : "false", "aria-labelledby": "gece-ad",
     onclick: () => s.ayar.gece ? kaydet({ gece: false }, "Gece yüklemesi kapandı: sırası gelen paket yalnız bildirilir.") : geceAcPenceresi(s, kaydet) },
     el("span", { "aria-hidden": "true" }));
-  const gun = el("input", { id: "yayin-gun", type: "number", min: 0, max: 120, value: s.ayar.yayin_on_gun ?? 21, inputmode: "numeric", "aria-describedby": "yayin-gun-ipucu" });
+  // boş kutu `+""` = 0 olup "onaylanınca yayında"ya geçiriyordu: değer zorunlu, tam sayı
+  const gun = el("input", { id: "yayin-gun", type: "number", min: 0, max: 120, step: 1, required: true, value: s.ayar.yayin_on_gun ?? 21, inputmode: "numeric", "aria-describedby": "yayin-gun-ipucu" });
   const kimlik = el("input", { id: "spotify-kimlik", type: "text", value: s.ayar.spotify_sanatci_id || "", maxlength: 40, spellcheck: "false", autocomplete: "off", placeholder: "profil adresindeki kimlik" });
   return el("section", { class: "cam yan-panel", "aria-label": "Dağıtım ayarları" }, el("h2", {}, "Dağıtım"),
     el("div", { class: "ayar-satir" }, el("div", {}, el("b", { id: "gece-ad" }, "Gece yüklemesi"),
@@ -1798,10 +1804,11 @@ function aramaSonuc(v, suruyor) {
 const ELLE_HAL = {
   taslak: ["taslak", ""], rn_taslak: ["RouteNote'ta taslak", "amber"], kontrol: ["gönderim yarıda", "amber"], gonderildi: ["gönderildi", "ok"],
 };
-let elleAcik, elleSecenek = null, elleKayit = null, elleIzle = null;
+let elleAcik, elleSecenek = null, elleKayit = null, elleIzle = null, elleIs = null; // elleKayit: { kimlik, zaman }
 const elleAdi = (m) => m.baslik || "Adsız taslak";
 
 async function yukleGoster() {
+  await elleBekleyeniGonder(); // ekran sunucudaki hâlle yeniden kurulmadan önce
   const ana = $("#ana");
   let d;
   try { d = await api("/api/elle"); } catch (e) { doldur(ana, bosEkran("Yükleme açılamadı", e.message)); return; }
@@ -1912,17 +1919,31 @@ function elleTopla() {
 function elleDegisti(hemen = false) {
   const durum = $("#elle-kayit");
   if (durum) { durum.textContent = "Kaydedilecek…"; durum.dataset.d = "bekliyor"; }
-  clearTimeout(elleKayit);
-  elleKayit = setTimeout(elleKaydet, hemen ? 50 : 700);
+  clearTimeout(elleKayit?.zaman);
+  const kimlik = elleAcik;
+  elleKayit = { kimlik, zaman: setTimeout(() => { elleKayit = null; elleKaydet(kimlik); }, hemen ? 50 : 700) };
 }
-async function elleKaydet() {
+// bekleyen kaydı hemen gönderir: taslaktan çıkarken, başka görünüme geçerken, ekran yeniden kurulmadan önce (son 700 ms'de
+// yazılan kayboluyordu); sayfa kapanırken `keepalive` ile. Form değerleri ekran değişmeden okunur.
+function elleBekleyeniGonder(kapaniyor = false) {
+  const k = elleKayit;
+  if (!k) return null;
+  clearTimeout(k.zaman); elleKayit = null;
+  if (!kapaniyor) return elleKaydet(k.kimlik);
+  try { fetch(`/api/elle/${k.kimlik}`, { method: "POST", keepalive: true, headers: { "Content-Type": "application/json" }, body: JSON.stringify(elleTopla()) }); }
+  catch { /* sayfa kapanıyor */ }
+  return null;
+}
+addEventListener("pagehide", () => elleBekleyeniGonder(true));
+async function elleKaydet(kimlik = elleAcik) {
   const durum = $("#elle-kayit");
   try {
     if (durum) { durum.textContent = "Kaydediliyor…"; durum.dataset.d = "bekliyor"; }
-    const m = await api(`/api/elle/${elleAcik}`, elleTopla());
+    const m = await api(`/api/elle/${kimlik}`, elleTopla());
+    if (kimlik !== elleAcik || !document.contains(durum)) return; // kayıt yapıldı; ekran artık başka bir taslağın
     if (durum) { durum.textContent = `Kaydedildi ${new Date().toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })}`; durum.dataset.d = "ok"; }
-    $("#elle-yan")?.replaceWith(elleYan(m, null));
-    $("#elle-baslik").textContent = elleAdi(m);
+    $("#elle-yan")?.replaceWith(elleYan(m, elleIs));
+    $("#elle-ust-ad").textContent = elleAdi(m);
     const cover = document.querySelector("#elle-cover-alanlar");
     if (cover) cover.hidden = !m.cover;
     const soz = document.querySelector("#elle-soz-alanlar");
@@ -1978,6 +1999,7 @@ async function elleDuzenle(kimlik, is) {
   let m;
   try { m = await api(`/api/elle/${kimlik}`); } catch (e) { elleAcik = null; depo.yaz("elle.acik", null); doldur(ana, bosEkran("Taslak açılamadı", e.message)); return; }
   const s = elleSecenek, kilit = !!m.kilit;
+  elleIs = is;
   const diller = s.diller.map((d) => [d, d.replace(/_/g, " ").replace("Simplified", "(Basitleştirilmiş)").replace("Traditional", "(Geleneksel)").replace("Latin America", "(Latin Amerika)")]);
   const form = el("form", { id: "elle-form", class: "elle-form", novalidate: true, oninput: () => elleDegisti(), onchange: () => elleDegisti(true), onsubmit: (e) => e.preventDefault() },
     el("fieldset", { class: "form-bolum", disabled: kilit || null }, el("legend", {}, "Dosyalar"),
@@ -2028,7 +2050,7 @@ async function elleDuzenle(kimlik, is) {
     el("header", { class: "elle-ust" },
       el("button", { class: "dugme kucuk", type: "button", onclick: elleKapat }, "← Taslaklar"),
       el("div", { class: "elle-kimlik" }, el("p", { class: "ust-satir ipucu" }, el("span", { class: "tur-etiket" }, "Yayın taslağı"), el("span", { class: `rozet ${ELLE_HAL[m.hal][1]}` }, ELLE_HAL[m.hal][0])),
-        el("h1", { id: "elle-baslik" }, elleAdi(m))),
+        el("h1", { id: "elle-ust-ad" }, elleAdi(m))), // "elle-baslik" ad kutusunun: aynı kimlik etiketi başlığa bağlıyordu
       el("p", { id: "elle-kayit", class: "elle-kayit", "aria-live": "polite", "data-d": "ok" }, kilit ? "Salt okunur" : `Kaydedildi ${saatDakika(m.guncel)}`)),
     kilit ? el("p", { class: "not" }, m.kilit) : null,
     el("div", { class: "pano-izgara elle-izgara" }, el("div", { class: "pano-sol" }, form), elleYan(m, is)));
@@ -2111,6 +2133,7 @@ function elleTakip() {
     if (location.hash !== "#_yukle") return;
     let is;
     try { is = await api("/api/sanatci/is"); } catch { elleTakip(); return; }
+    elleIs = is;
     if (is.suruyor) { $("#is-paneli")?.replaceWith(isPaneli(is)); elleTakip(); return; }
     bildir(is.kod === 0 ? "RouteNote işi bitti." : "RouteNote işi hata verdi; \"Son iş\" günlüğüne bak.", is.kod !== 0);
     yukleGoster();
@@ -2131,7 +2154,12 @@ const katla = (s) => s.toLocaleLowerCase("tr").normalize("NFD").replace(/\p{M}/g
 
 async function listeGoster(secili) {
   for (const a of document.querySelectorAll(".gorunumler a")) {
-    if (a.dataset.g === secili) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
+    if (a.dataset.g !== secili) { a.removeAttribute("aria-current"); continue; }
+    a.setAttribute("aria-current", "page");
+    // dar ekranda görünümler yatay kayan tek satır: açık olan görünsün (sayfa dikeyde oynamaz)
+    const ul = a.closest(".gorunumler");
+    if (ul.scrollWidth > ul.clientWidth)
+      ul.scrollLeft += a.getBoundingClientRect().left - ul.getBoundingClientRect().left - (ul.clientWidth - a.offsetWidth) / 2;
   }
   sonListe = await api("/api/sarkilar");
   listeCiz(secili);
@@ -2180,6 +2208,7 @@ async function yenile(kimlik = acikKimlik()) {
 }
 addEventListener("hashchange", () => {
   calan?.ses.pause();
+  elleBekleyeniGonder(); // Yükle'den başka görünüme geçerken son yazılan kaybolmasın
   yenile().then(() => $("#ana").focus({ preventScroll: true }), (e) => bildir(`Sayfa açılamadı: ${e.message}`, true));
   scrollTo(0, 0);
 });
@@ -2202,6 +2231,6 @@ setInterval(async () => {
         const y = scrollY; await sarkiGoster(kimlik); scrollTo(0, y);
         bildir(s.asama === "uretildi" ? `"${s.ad}" için yeni adaylar geldi.` : `"${s.ad}" güncellendi: ${ASAMA[s.asama] || s.asama}.`);
       }
-    } else if (kimlik === "_pano") { const y = scrollY; await panoGoster(); scrollTo(0, y); }
+    } else if (kimlik === "_pano" && !anadaOdak()) { const y = scrollY; await panoGoster(); scrollTo(0, y); }
   } catch { /* sunucu kısa süre yoksa sonraki turda */ }
 }, 30000);
