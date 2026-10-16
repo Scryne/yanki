@@ -949,3 +949,10 @@ tema) canlı verinin kopyasıyla doğrulandı.
   Kalkmış yayınlarım'dan taranan liste kendi listesi sayılır (bütün kalkmışları listelenir). Taslağı olan şarkıda
   "Taslağı aç"; sunucu aynı yayına ikinci taslak açmaz (denemede açılıyordu). 629 test.
 
+## Bulucu: liste keşfi (2026-10-16, Scryne: "Spotify'da Hint şarkılarının olduğu popüler playlistleri bul, Yanki üzerinden görebileceğim şekilde Bulucu'da göster")
+
+- Yeni Bulucu türü `listeler` (`bulucu.KONULAR`, yardımcı sürüm 4): istemcinin `searchDesktop` aramasının playlist
+  sonuçları (Web API kotası harcamaz), STILLMORE `playlist.info` ile takipçi ve parça sayısı. Canlı: 12 sorgu, 22 sn,
+  80 liste; ilk denemede Türkiye listeleri karıştı (istemci hesabın ülkesinde arıyor) → konu süzgeci. Baştakiler: Hot Hits
+  Hindi (3,3 mn), Hot Hits Punjabi, Trending Now India, This Is Arijit Singh, New Music Hindi, Desi Hits.
+

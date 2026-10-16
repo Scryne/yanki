@@ -1033,7 +1033,7 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None, gorev_ok
     @app.get("/api/bulucu")
     def bulucu_ozet():
         return {"baglanti": bul.baglanti(), "is": bul.durum(), "gecmis": bulucu.gecmis(calisma),
-                "izlenen": izlenen_ozet()}
+                "izlenen": izlenen_ozet(), "konular": [{"kimlik": k, "ad": v["ad"]} for k, v in bulucu.KONULAR.items()]}
 
     @app.post("/api/bulucu/baglan")
     def bulucu_baglan(istek: BulucuBaglan):
@@ -1083,6 +1083,13 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None, gorev_ok
         from yanki import elle, yeniden_yayin
 
         v = bulucu_sonucu(anahtar)
+        if v.get("tur") == "listeler":  # bulunan listeler: daha önce tarandıysa kalkmış sayısı, açılabilir
+            for p in v.get("sonuclar") or []:
+                tarama = bulucu.sonuc_oku(calisma, f"playlist-{p.get('id')}") if bulucu.SPOTIFY_ID.fullmatch(
+                    str(p.get("id"))) else None
+                p["tarandi"] = ({"kalkmis": len(tarama.get("satirlar") or []), "zaman": tarama.get("zaman")}
+                                if tarama else None)
+            return v
         satirlar = v.get("satirlar") if v.get("tur") == "playlist" else [v] if v.get("tur") == "parca" else []
         bulucu.yanki_durumu(satirlar, calisma, liste_yolu, a.kok)
         kendi = elle.kendi_sanatcilar(calisma)

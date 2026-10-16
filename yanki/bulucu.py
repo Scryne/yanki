@@ -25,12 +25,26 @@ from pathlib import Path
 
 from yanki import stillmore
 
-TURLER = ("parca", "playlist", "sanatci", "katalog", "album", "isrc", "upc")
+TURLER = ("parca", "playlist", "sanatci", "katalog", "album", "isrc", "upc", "listeler")
 TUR_ADI = {"parca": "Parça", "playlist": "Playlist", "sanatci": "Sanatçı", "katalog": "Sanatçı kataloğu",
-           "album": "Albüm", "isrc": "ISRC", "upc": "UPC", "baglan": "Spotify bağlantısı"}
+           "album": "Albüm", "isrc": "ISRC", "upc": "UPC", "listeler": "Liste keşfi", "baglan": "Spotify bağlantısı"}
+# Liste keşfi (Scryne 2026-10-16: "Spotify'da Hint şarkılarının olduğu popüler playlistleri bul, Bulucu'da göster"):
+# konu başına birkaç sorgu Spotify istemcisinin kendi aramasıyla (kotasız), bulunan listeler takipçiye göre sıralanır;
+# her biri Bulucu'da taranır. Sorgular Spotify'ın editoryal Hint listelerinin adlarından ve en çok aranan türlerden.
+KONULAR = {
+    "hint": {"ad": "Hint şarkıları (Bollywood)", "sorgular": [
+        "hot hits hindi", "bollywood hits", "hindi hits", "bollywood top 50", "bollywood romantic", "arijit singh",
+        "hindi sad songs", "90s bollywood", "bollywood party", "hindi lofi", "desi hits", "old hindi songs"],
+        # istemci hesabın ülkesinde arar: "hits" sorguları Türkiye listelerini de getiriyor (2026-10-16 canlı: Hot Hits
+        # Türkiye, Yabancı Pop); adında ya da açıklamasında bunlardan biri geçmeyen liste konu dışı sayılır
+        "suzgec": r"hindi|bollywood|\bdesi\b|india|bharat|punjabi|filmi|ghazal|\bsufi\b|arijit|shreya|"
+                  r"diljit|kishore kumar|lata mangeshkar|atif aslam|jubin|neha kakkar|sonu nigam|udit narayan|"
+                  r"kumar sanu|pritam|rahman|हिंदी|बॉलीवुड"},
+}
+LISTE_ZENGINLESTIR = 80  # takipçi ve parça sayısı okunacak en çok liste (her biri ~0,2 sn)
 SPOTIFY_ID = re.compile(r"[A-Za-z0-9]{22}")
 ISRC = re.compile(r"[A-Z]{2}[A-Z0-9]{3}\d{7}")
-ANAHTAR = re.compile(r"(parca|playlist|sanatci|katalog|album|isrc|upc)-[A-Za-z0-9]{1,40}")
+ANAHTAR = re.compile(r"(parca|playlist|sanatci|katalog|album|isrc|upc|listeler)-[A-Za-z0-9]{1,40}")
 IS_ZAMAN_ASIMI = 45 * 60  # 1.000+ parçalık playlist'te her kalkmış şarkı için ISRC araması
 GECMIS_EN_COK = 200
 CSV_SUTUNLARI = ("Parça", "Sanatçı", "Çalınabilir", "Durum", "Yeniden yüklenmiş", "Spotify ID", "ISRC", "Çıkış",
@@ -68,6 +82,8 @@ def gecerli(tur: str, kimlik: str) -> bool:
         return bool(SPOTIFY_ID.fullmatch(kimlik))
     if tur == "isrc":
         return bool(ISRC.fullmatch(kimlik))
+    if tur == "listeler":
+        return kimlik in KONULAR
     return tur == "upc" and bool(re.fullmatch(r"\d{12,14}", kimlik))
 
 
@@ -75,7 +91,7 @@ def gecerli(tur: str, kimlik: str) -> bool:
 # Sonuçlar burada kırpılır: büyük playlist'in ham satırları (her biri kalkmış şarkının tüm incelemesi) WebSocket'ten
 # taşınmasın. Süre STILLMORE'un `durationMs`'inden alınmaz: metadata'daki sint32 alan zigzag çözülmeden okunuyor
 # (12.13: her süre iki katı; 2026-10-16 ölçüldü), ses özelliklerindeki `duration_ms` doğru.
-YARDIMCI_SURUM = 2  # 2: süresi geçen iş bırakılır (`birak`, `baslat` sınırı)
+YARDIMCI_SURUM = 4  # 2: süresi geçen iş bırakılır (`birak`, `baslat` sınırı); 4: liste keşfi (`listeler`) süzgeçli
 YARDIMCI = Path(__file__).with_name("bulucu_yardimci.js").read_text(encoding="utf-8").replace(
     "__SURUM__", str(YARDIMCI_SURUM))
 
@@ -119,6 +135,8 @@ def _ozet_sayi(v: dict) -> str | None:
         return f"{len(v.get('satirlar') or [])} parça"
     if tur in ("isrc", "upc"):
         return f"{len(v.get('sonuclar') or [])} sonuç"
+    if tur == "listeler":
+        return f"{len(v.get('sonuclar') or [])} liste"
     if tur == "katalog":
         return f"{len(v.get('yayinlar') or [])} yayın"
     if tur == "parca":
@@ -349,7 +367,9 @@ class Bulucu:
             raise stillmore.StillmoreYok("Spotify bağlı değil: önce \"Spotify'a bağlan\"")
         k = self._kopru_ac()
         k.degerlendir(YARDIMCI, 15)
-        no = k.degerlendir(f"window.__yanki.baslat({json.dumps(is_['tur'])}, {json.dumps(is_['kimlik'])}, "
+        arg = ({"konu": is_["kimlik"], "zengin": LISTE_ZENGINLESTIR, **KONULAR[is_["kimlik"]]}
+               if is_["tur"] == "listeler" else is_["kimlik"])
+        no = k.degerlendir(f"window.__yanki.baslat({json.dumps(is_['tur'])}, {json.dumps(arg, ensure_ascii=False)}, "
                            f"{IS_ZAMAN_ASIMI * 1000})", 15)
         bitis = time.monotonic() + IS_ZAMAN_ASIMI
         hata_sayisi = 0

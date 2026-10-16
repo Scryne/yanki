@@ -97,6 +97,10 @@ UPC yapıştırılır; okuma Spotify uygulamasının içinden yapılır (STILLMO
 - **Sanatçı:** dinleyici, şehirler ve yer aldığı listeler (her biri taranabilir); **Katalog**: her yayının
   distribütörü ve dinlenmesi, birden çok kez yüklenenler.
 - **Albüm**, **ISRC**, **UPC** araması.
+- **Liste keşfi** (sağdaki panel): konuya göre popüler playlist'ler — şimdilik "Hint şarkıları (Bollywood)". On iki
+  sorgu Spotify istemcisinin kendi aramasıyla (kotasız), konu dışı listeler addan/açıklamadan süzülür (istemci hesabın
+  ülkesinde aradığı için Türkiye listeleri de geliyordu), en çok 80 liste takipçi sayısıyla en popülerden sıralanır;
+  her biri **Tara** ile taranır, taranmışlarda kalkmış sayısı ve **Aç**. Konu eklemek: `yanki/bulucu.py` → `KONULAR`.
 - **Kendi kalkmış yayınların → FreshTunes** (`yanki/yeniden_yayin.py`): Bulucu'da her kalkmış şarkının yanında
   **FreshTunes taslağı** (taslağı varsa **Taslağı aç**; aynı yayına ikinci taslak açılmaz). Bir sanatçı için ilk tıkta
   "senin sanatçı adın mı?" sorulur (FreshTunes formundaki "haklar bende" beyanı); evet denince ad kaydedilir, o

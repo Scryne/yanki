@@ -93,6 +93,36 @@
       return { tur: "isrc", id: kod, ad: kod, sonuclar: h.filter((x) => x.id).map((x) => ({ tur: "parca", id: x.id, ad: x.name, sanatci: x.artist,
         album: x.album || "", resim: resim(x.art), calinir: x.playable ?? null })) };
     },
+    // liste keşfi: konu sorgularıyla Spotify istemcisinin kendi araması (searchDesktop, kotasız); her listenin takipçi
+    // ve parça sayısı STILLMORE'dan (`playlist.info`), en popüler önce
+    async listeler(a) {
+      const tanim = Spicetify.GraphQL.Definitions.searchDesktop || { name: "searchDesktop", operation: "query",
+        sha256Hash: "db61238974d27839a136c9dc02bfdbe3fab7635f21cf85976ebff9a1ee281345", value: null };
+      const bulunan = new Map();
+      for (const [i, q] of a.sorgular.entries()) {
+        ilerle(i, a.sorgular.length, `"${q}" aranıyor`);
+        const r = await Spicetify.GraphQL.Request(tanim, { searchTerm: q, offset: 0, limit: 20, numberOfTopResults: 5,
+          includeAudiobooks: false, includePreReleases: false }).catch(() => null);
+        for (const x of (r && r.data && r.data.searchV2 && r.data.searchV2.playlists && r.data.searchV2.playlists.items) || []) {
+          const d = (x && x.data) || x;
+          const id = String((d && d.uri) || "").split(":").pop();
+          if (!/^[A-Za-z0-9]{22}$/.test(id) || bulunan.has(id)) continue;
+          const kaynak = (((d.images || {}).items || [])[0] || {}).sources || [];
+          bulunan.set(id, { id, ad: d.name || "", sahip: (((d.ownerV2 || {}).data) || {}).name || null,
+            resim: resim((kaynak.find((s) => s.width >= 300) || kaynak[0] || {}).url),
+            aciklama: String(d.description || "").replace(/<[^>]+>/g, "").slice(0, 200), sorgu: q });
+        }
+      }
+      const konu = a.suzgec ? new RegExp(a.suzgec, "i") : null;
+      const liste = [...bulunan.values()].filter((p) => !konu || konu.test(`${p.ad} ${p.aciklama}`)).slice(0, a.zengin || 80);
+      for (const [i, p] of liste.entries()) {
+        ilerle(i, liste.length, "Takipçi sayıları okunuyor");
+        try { const b = await S().playlist.info(p.id); p.takipci = b.followers ?? null; p.toplam = b.total ?? null; p.sahip = p.sahip || b.owner || null; }
+        catch (e) { p.takipci = null; }
+      }
+      liste.sort((x, y) => (y.takipci ?? -1) - (x.takipci ?? -1));
+      return { tur: "listeler", id: a.konu, ad: a.ad, sorgular: a.sorgular, sonuclar: liste };
+    },
     async upc(kod) {
       ilerle(0, 1, "UPC aranıyor");
       const h = await S().search.upc(kod);

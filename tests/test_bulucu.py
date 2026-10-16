@@ -212,3 +212,39 @@ def test_sonuc_hattaki_yeriyle_doner_ve_keşfe_gider(oda):
         "id": PID, "ad": "akil", "toplam": 37, "son_tarama": None, "calinamayan": None, "aday": None,
         "kaynak": "bulucu", "izleniyor": True}
     assert istemci.get(f"/api/bulucu/sonuc/{anahtar}").json()["izleniyor"] is True
+
+
+def test_liste_kesfi_konu_sorgulariyla_ve_tarandi_bilgisiyle(tmp_path, monkeypatch):
+    """Scryne 2026-10-16: "Spotify'da Hint şarkılarının olduğu popüler playlistleri bul, Bulucu'da göster"."""
+    import json
+
+    from fastapi.testclient import TestClient
+
+    from tests.test_sunucu import ODA
+    from yanki import ayarlar, sunucu
+
+    monkeypatch.setattr(stillmore, "cdp_acik", lambda port=9222: True)
+    assert bulucu.gecerli("listeler", "hint") and not bulucu.gecerli("listeler", "yok")
+    sonuc = {"tur": "listeler", "id": "hint", "ad": "Hint şarkıları (Bollywood)", "sorgular": ["hot hits hindi"],
+             "sonuclar": [{"id": PID, "ad": "Hot Hits Hindi", "sahip": "Spotify", "takipci": 3261187, "toplam": 50},
+                          {"id": "4uLU6hMCjMI75M1A2tKUQC", "ad": "Bollywood 90s", "sahip": "x", "takipci": 1200}]}
+    k = _Kopru(sonuc)
+    b = bulucu.Bulucu(tmp_path, kopru_ac=lambda: k, uyku=lambda s: None)
+    b.baslat("listeler", "hint")
+    assert _bekle(b)["anahtar"] == "listeler-hint"
+    arg = json.loads(k.ifadeler[1].split("baslat(", 1)[1].split(", ", 1)[1].rsplit(", ", 1)[0])
+    assert arg["konu"] == "hint" and "hot hits hindi" in arg["sorgular"] and arg["zengin"] == bulucu.LISTE_ZENGINLESTIR
+    import re
+
+    konu = re.compile(arg["suzgec"], re.I)  # canlı denemede araya karışan Türkiye listeleri elenir
+    assert all(konu.search(x) for x in ("Hot Hits Hindi", "Bollywood Top 50", "This Is Arijit Singh", "Desi Hits"))
+    assert not any(konu.search(x) for x in ("Hot Hits Türkiye", "Yabancı Pop", "TR-Pop", "just hits", "Latam Hits",
+                                            "Design Focus", "Audit Beats"))
+    assert bulucu.gecmis(tmp_path)[0]["sayi"] == "2 liste"
+    # taranmış liste: kalkmış sayısıyla işaretlenir
+    bulucu.sonuc_yaz(tmp_path, {"tur": "playlist", "id": PID, "ad": "Hot Hits Hindi", "toplam": 50,
+                                "satirlar": [_satir("3Lnrri5QqhZrpkPIwZawKc", "A")]})
+    oda = TestClient(sunucu.uygulama(ayarlar.yukle(), tmp_path, gorev_oku=lambda: {}, bulucu_isci=b), base_url=ODA)
+    v = oda.get("/api/bulucu/sonuc/listeler-hint").json()
+    assert [p["tarandi"] and p["tarandi"]["kalkmis"] for p in v["sonuclar"]] == [1, None]
+    assert {"kimlik": "hint", "ad": "Hint şarkıları (Bollywood)"} in oda.get("/api/bulucu").json()["konular"]

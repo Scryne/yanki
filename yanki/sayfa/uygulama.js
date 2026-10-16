@@ -1401,7 +1401,7 @@ function dagitimAyarPaneli(s) {
 
 // ---- bulucu: STILLMORE FINDER'ın motoruyla Spotify araması (yanki/bulucu.py; Spotify uygulamasının içinden okur) ----
 const SPOTIFY = "https://open.spotify.com";
-const BTUR = { parca: "Parça", playlist: "Playlist", sanatci: "Sanatçı", katalog: "Katalog", album: "Albüm", isrc: "ISRC", upc: "UPC", baglan: "Spotify bağlantısı" };
+const BTUR = { parca: "Parça", playlist: "Playlist", sanatci: "Sanatçı", katalog: "Katalog", album: "Albüm", isrc: "ISRC", upc: "UPC", listeler: "Liste keşfi", baglan: "Spotify bağlantısı" };
 const SP_YOL = { parca: "track", playlist: "playlist", sanatci: "artist", katalog: "artist", album: "album" };
 const tamSayi = (n) => n == null ? "—" : Number(n).toLocaleString("tr-TR");
 const spLink = (tur, id, metin = "Spotify'da aç", sinif = "dugme kucuk") =>
@@ -1475,7 +1475,7 @@ async function bulucuGoster() {
     aramaFormu(d.baglanti, suruyor),
     el("div", { class: "pano-izgara" },
       el("div", { class: "pano-sol" }, isSeridi(d.is), v ? sonucCiz(v, suruyor) : bulucuBos(d)),
-      el("div", { class: "pano-sag" }, baglantiPaneli(d.baglanti, suruyor), gecmisPaneli(d.gecmis), izlenenPaneli(d.izlenen, suruyor))));
+      el("div", { class: "pano-sag" }, baglantiPaneli(d.baglanti, suruyor), konuPaneli(d.konular, !!d.baglanti.stillmore, suruyor), gecmisPaneli(d.gecmis), izlenenPaneli(d.izlenen, suruyor))));
   $("#g-bulucu").textContent = suruyor ? "•" : "";
   if (suruyor) bulucuTakip();
 }
@@ -1592,8 +1592,40 @@ function izlenenPaneli(liste, suruyor) {
 }
 
 function sonucCiz(v, suruyor) {
-  const ciz = { playlist: playlistSonuc, parca: parcaSonuc, sanatci: sanatciSonuc, katalog: katalogSonuc, album: albumSonuc, isrc: aramaSonuc, upc: aramaSonuc }[v.tur];
+  const ciz = { playlist: playlistSonuc, parca: parcaSonuc, sanatci: sanatciSonuc, katalog: katalogSonuc, album: albumSonuc, isrc: aramaSonuc, upc: aramaSonuc, listeler: listelerSonuc }[v.tur];
   return ciz ? ciz(v, suruyor) : el("p", { class: "bos-kutu" }, "Bu kayıt okunamadı.");
+}
+
+// liste keşfi: konu sorgularıyla bulunan playlist'ler, en çok takipçili önce; her biri tek tıkla taranır
+function listelerSonuc(v, suruyor) {
+  const sahipSpotify = (p) => (p.sahip || "").toLowerCase() === "spotify";
+  return el("section", { class: "bulucu-sonuc", "aria-label": v.ad },
+    sonucBasi(v, `${v.sonuclar.length} liste · ${v.sorgular.length} aramadan · en çok takipçili önce`,
+      [yenidenOku(v, suruyor, "Yeniden ara")]),
+    el("p", { class: "ipucu" }, "Taramak istediğin listede \"Tara\"ya bas: kalkmış şarkıları dinlenmeleriyle çıkar. Spotify'ın kendi listeleri (editoryal) işaretli."),
+    v.sonuclar.length ? el("ul", { class: "kayitlar" }, ...v.sonuclar.map((p) => el("li", { class: "kayit kapakli" },
+      disKapak(p.resim),
+      el("div", { class: "kayit-ad" },
+        el("button", { class: "ad bag-dugme", type: "button", disabled: suruyor, onclick: () => p.tarandi ? kayitAc("playlist", p.id) : bulucuAc("playlist", p.id) }, p.ad),
+        el("span", { class: "sanatci" }, p.sahip || "—")),
+      el("div", { class: "olculer" },
+        el("span", { title: "Takipçi" }, "takipçi ", el("b", {}, kisaSayi(p.takipci))),
+        p.toplam != null ? el("span", {}, el("b", {}, String(p.toplam)), " parça") : null,
+        sahipSpotify(p) ? el("span", { class: "rozet gumus", title: "Spotify'ın editoryal listesi" }, "Spotify") : null,
+        p.tarandi ? el("span", { class: "rozet " + (p.tarandi.kalkmis ? "amber" : "") }, `tarandı · ${p.tarandi.kalkmis} kalkmış`) : null),
+      el("div", { class: "kayit-eylem" },
+        spLink("playlist", p.id),
+        p.tarandi ? el("button", { class: "dugme kucuk", type: "button", disabled: suruyor, onclick: () => kayitAc("playlist", p.id) }, "Aç")
+          : el("button", { class: "dugme kucuk", type: "button", disabled: suruyor, onclick: () => bulucuAc("playlist", p.id) }, "Tara")))))
+      : el("p", { class: "bos-kutu" }, "Liste bulunamadı; Spotify köprüsünü yeniden bağlayıp tekrar dene."));
+}
+
+function konuPaneli(konular, bagli, suruyor) {
+  if (!konular?.length) return null;
+  return el("section", { class: "cam yan-panel", "aria-label": "Liste keşfi" }, el("h2", {}, "Liste keşfi"),
+    el("p", { class: "ipucu kucuk-ipucu" }, "Konuya göre popüler playlist'leri bulur (Spotify'ın kendi araması, kota harcamaz); en çok takipçili önce, her biri tek tıkla taranır."),
+    ...konular.map((k) => el("button", { class: "dugme ikincil kucuk genis-dugme", type: "button", disabled: !bagli || suruyor || null,
+      onclick: () => kayitAc("listeler", k.kimlik) }, `${k.ad} listelerini bul`)));
 }
 
 // sonucun başı: kapak, ad, alt satır, eylemler
