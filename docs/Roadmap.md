@@ -931,5 +931,8 @@ tema) canlı verinin kopyasıyla doğrulandı.
   kanalında 292 sn'lik "Orchestral Version" vardı → kanal kademesi (Topic, sanatçı/VEVO, diğer) ve sürüm sözcüğü
   süzgeci; seçilen sanatçının kanalı 293,7 sn (+0,8). YouTube sesi 0 dBFS'e dayanıyordu → −1 dB. iTunes'un asıl kapağı
   1500 px'ti (büyütülür, uyarılır). Spotify o parçada yazar vermiyordu ("Not Documented"): besteci elle yazılır.
-- 619 test.
+- İlk gerçek deneme (knownbyC — Slow Fall, 2:17, Ditto): YouTube'da kopyası yok; boş arama sorgunun kendisini 0:00
+  aday sayıyordu (`kaynak.youtube_adaylari`, hazırlıkta da) → düzeldi. SoundCloud'daki dağıtıcı kopyaları DRM'li
+  (yol değil). iTunes'ta yok, Deezer'daki kapak kaldırılmış (boş md5 yer tutucusu) → kapakta Pinterest yedeği (Scryne:
+  "AI cover'larda Pinterest'ten buluyorduk, ondan olmaz mı"). 623 test.
 
