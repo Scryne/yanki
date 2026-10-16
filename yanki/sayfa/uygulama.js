@@ -1862,7 +1862,8 @@ async function yukleGoster() {
   let d;
   try { d = await api("/api/elle"); } catch (e) { doldur(ana, bosEkran("Yükleme açılamadı", e.message)); return; }
   elleSecenek = d.secenek;
-  if (elleAcik === undefined) elleAcik = depo.oku("elle.acik", null);
+  // oda açılınca son taslak değil liste (oluşturma düğmeleriyle); taslak bir bağlantı ya da kenar listesiyle açılır
+  if (elleAcik === undefined) elleAcik = null;
   if (elleAcik && !d.liste.some((x) => x.kimlik === elleAcik)) { elleAcik = null; depo.yaz("elle.acik", null); }
   $("#g-yukle").textContent = d.is?.suruyor && String(d.is.ad || "").startsWith("elle") ? "•" : "";
   if (elleAcik) return elleDuzenle(elleAcik, d.is);
@@ -2361,6 +2362,12 @@ function yuzAyarla(kimlik) {
   depo.yaz("yuz", yuz);
   return yuz;
 }
+// menüdeki "Taslaklar" her zaman listeyi (ve "Yeni şarkı"/"Boş taslak" düğmelerini) açar, son açılan taslağı değil
+$('[data-g="_yukle"]').addEventListener("click", (e) => {
+  elleBekleyeniGonder();
+  elleAcik = null; depo.yaz("elle.acik", null);
+  if (location.hash === "#_yukle") { e.preventDefault(); yukleGoster(); taslakListesiCiz(); scrollTo(0, 0); }
+});
 for (const b of document.querySelectorAll("[data-yuz-sec]")) b.addEventListener("click", () => {
   const yuz = b.dataset.yuzSec;
   if (yuzBul(acikKimlik()) === yuz) return;
