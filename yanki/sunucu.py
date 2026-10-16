@@ -2,8 +2,9 @@
 reddeder; keşif adaylarını listeye ekler ya da eler; yüklenenlerin yayın durumunu, hattın panosunu, kapakları görür;
 Sanatçı görünümünden RouteNote taslağı ve gönderimi başlatır (iş ayrı süreçte, `yanki/sanatci.py → Isci`).
 
-Sunucu motoru çalıştırmaz ve Spotify'a istek atmaz (kota dar; ölçümleri gece koşusu yapar). Dışarıya yalnız Scryne
-"başka kapak" deyince Pinterest (dağıtımcı Tunearo seçiliyse kazanç da). Onarım ve yeniden üretim istekleri
+Sunucu motoru çalıştırmaz ve Spotify Web API'sine istek atmaz (kota dar; ölçümleri gece koşusu yapar). Dışarıya yalnız
+Scryne "başka kapak" deyince Pinterest (dağıtımcı Tunearo seçiliyse kazanç da); Bulucu'da arama yapınca Spotify
+istemcisinin içindeki STILLMORE (`yanki/bulucu.py`, CDP; Web API kotası harcamaz). Onarım ve yeniden üretim istekleri
 durum.json'a, keşif kararları calisma/kesif/adaylar.json'a ve girdi/liste.toml'a yazılır.
 """
 
@@ -77,6 +78,24 @@ class GonderimSonucu(BaseModel):
 
 class GonderOnayi(BaseModel):
     onay: str = Field(max_length=300)  # şarkının adı, elle yazılır: geri alınamaz gönderimin onayı
+
+
+class BulucuArama(BaseModel):
+    girdi: str = Field(max_length=500)
+
+
+class BulucuBaglan(BaseModel):
+    zorla: bool = False  # Spotify çalıyorken de yeniden başlat (müzik durur)
+
+
+class BulucuKesfe(BaseModel):
+    anahtar: str = Field(max_length=60)
+    parcalar: list[str] = Field(min_length=1, max_length=1000)
+
+
+class BulucuIzle(BaseModel):
+    playlist: str = Field(max_length=40)
+    izle: bool
 
 
 class KulakOyu(BaseModel):
@@ -281,7 +300,7 @@ GUVENLI_YONTEMLER = ("GET", "HEAD", "OPTIONS")
 GOREV_ONBELLEK_SN = 600  # pano her 30 sn'de soruluyor; görev hâli PowerShell'le ~1 sn
 
 
-def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None, gorev_oku=None) -> FastAPI:
+def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None, gorev_oku=None, bulucu_isci=None) -> FastAPI:
     app = FastAPI(title="Yanki dinleme", docs_url=None, redoc_url=None)
     gorev_onbellek: dict = {}
 
@@ -676,6 +695,118 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None, gorev_ok
     @app.get("/api/sanatci/is")
     def sanatci_is():
         return isci.durum() or {}
+
+    # ---- bulucu: STILLMORE motoruyla Spotify araması (yanki/bulucu.py) ----
+    from yanki import bulucu, stillmore
+
+    bul = bulucu_isci or bulucu.Bulucu(calisma)
+
+    def bulucu_sonucu(anahtar: str) -> dict:
+        try:
+            v = bulucu.sonuc_oku(calisma, anahtar)
+        except bulucu.GirdiHatasi as e:
+            raise HTTPException(404, str(e)) from e
+        if v is None:
+            raise HTTPException(404, "kayıt bulunamadı; aramayı yeniden yap")
+        return v
+
+    def izlenen_ozet() -> list[dict]:
+        """Gece taranan STILLMORE havuzu (en yeni tarama önce) ve odadan izlenenler."""
+        izlenen = bulucu.izlenenler(calisma)
+        try:
+            havuz = stillmore.havuz_oku(calisma)
+        except (OSError, ValueError):
+            havuz = {}
+        kayitlar = {**{k: {"ad": v.get("ad"), "toplam": v.get("toplam"), "kaynak": "bulucu"}
+                       for k, v in izlenen.items()}, **havuz}
+        sonuc = [{"id": k, "ad": v.get("ad") or k, "toplam": v.get("toplam"), "son_tarama": v.get("son_tarama"),
+                  "calinamayan": v.get("calinamayan"), "aday": v.get("aday"), "kaynak": v.get("kaynak"),
+                  "izleniyor": k in izlenen} for k, v in kayitlar.items()]
+        sonuc.sort(key=lambda x: x["son_tarama"] or "", reverse=True)  # hiç taranmamış en sonda
+        sonuc.sort(key=lambda x: not x["izleniyor"])  # odadan izlenenler başta (sıralama kararlı)
+        return sonuc
+
+    @app.get("/api/bulucu")
+    def bulucu_ozet():
+        return {"baglanti": bul.baglanti(), "is": bul.durum(), "gecmis": bulucu.gecmis(calisma),
+                "izlenen": izlenen_ozet()}
+
+    @app.post("/api/bulucu/baglan")
+    def bulucu_baglan(istek: BulucuBaglan):
+        """Spotify'ı STILLMORE köprüsüyle (CDP) açar. Bayraksız açıksa yeniden başlatılır: çalıyorsa önce sorulur."""
+        if not stillmore.cdp_acik() and stillmore.calisiyor_mu() and not istek.zorla and stillmore.caliyor_mu():
+            raise HTTPException(409, "Spotify şu an çalıyor; bağlanmak için yeniden başlatılması gerek (müzik durur)")
+        try:
+            return bul.baslat("baglan")
+        except RuntimeError as e:
+            raise HTTPException(409, str(e)) from e
+
+    @app.post("/api/bulucu/ara")
+    def bulucu_ara(istek: BulucuArama):
+        try:
+            tur, kimlik = bulucu.coz(istek.girdi)
+            if not stillmore.cdp_acik():
+                raise HTTPException(409, "Spotify bağlı değil: önce \"Spotify'a bağlan\"")
+            return bul.baslat(tur, kimlik)
+        except bulucu.GirdiHatasi as e:
+            raise HTTPException(422, str(e)) from e
+        except RuntimeError as e:
+            raise HTTPException(409, str(e)) from e
+
+    @app.post("/api/bulucu/ac/{tur}/{kimlik}")
+    def bulucu_ac(tur: str, kimlik: str):
+        """Sonuçtaki bir bağlantıdan yeni arama (playlist'teki parça, sanatçının listesi, ISRC sonucu)."""
+        if not bulucu.gecerli(tur, kimlik):
+            raise HTTPException(422, "geçersiz arama")
+        if not stillmore.cdp_acik():
+            raise HTTPException(409, "Spotify bağlı değil: önce \"Spotify'a bağlan\"")
+        try:
+            return bul.baslat(tur, kimlik)
+        except RuntimeError as e:
+            raise HTTPException(409, str(e)) from e
+
+    @app.get("/api/bulucu/is")
+    def bulucu_is():
+        return bul.durum() or {}
+
+    @app.get("/api/bulucu/sonuc/{anahtar}")
+    def bulucu_sonuc(anahtar: str):
+        v = bulucu_sonucu(anahtar)
+        satirlar = v.get("satirlar") if v.get("tur") == "playlist" else [v] if v.get("tur") == "parca" else []
+        bulucu.yanki_durumu(satirlar, calisma, liste_yolu, a.kok)
+        if v.get("tur") == "playlist":
+            v["izleniyor"] = v.get("id") in bulucu.izlenenler(calisma)
+        return v
+
+    @app.post("/api/bulucu/kesfe")
+    def bulucu_kesfe(istek: BulucuKesfe):
+        """Seçilen kalkmış şarkılar gece keşfinin girdisine: aynı elemelerden geçer, uyan listeye girer."""
+        v = bulucu_sonucu(istek.anahtar)
+        satirlar = v.get("satirlar") if v.get("tur") == "playlist" else [v] if v.get("tur") == "parca" else []
+        istenen = set(istek.parcalar)
+        secilen = [s for s in satirlar if s.get("id") in istenen]
+        if not secilen:
+            raise HTTPException(404, "seçilen şarkılar bu kayıtta yok")
+        try:
+            eklenen, atlanan = bulucu.kesfe_gonder(a.kok, secilen, f"bulucu:{istek.anahtar}")
+        except OSError as e:
+            raise HTTPException(409, f"keşif girdisi yazılamadı ({e.strerror or e}); birazdan yeniden dene") from e
+        return {"eklenen": eklenen, "atlanan": atlanan}
+
+    @app.post("/api/bulucu/izle")
+    def bulucu_izle(istek: BulucuIzle):
+        """Playlist gece STILLMORE taramasına alınır ya da bırakılır (havuzu gece koşusu günceller)."""
+        v = bulucu.sonuc_oku(calisma, f"playlist-{istek.playlist}") if bulucu.SPOTIFY_ID.fullmatch(istek.playlist) \
+            else None
+        onceki = bulucu.izlenenler(calisma).get(istek.playlist) or {}
+        try:
+            bulucu.izle(calisma, istek.playlist, (v or {}).get("ad") or onceki.get("ad") or "",
+                        (v or {}).get("toplam") or onceki.get("toplam"), istek.izle)
+        except bulucu.GirdiHatasi as e:
+            raise HTTPException(422, str(e)) from e
+        except OSError as e:
+            raise HTTPException(409, f"kayıt yazılamadı ({e.strerror or e}); birazdan yeniden dene") from e
+        return {"izlenen": izlenen_ozet()}
 
     # ---- pano ----
     @app.get("/api/pano")

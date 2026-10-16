@@ -1328,6 +1328,432 @@ function dagitimAyarPaneli(s) {
       el("p", { class: "ipucu" }, "İlk parça yayına girince profil adresindeki kimliği yaz; sonraki yüklemeler ayrı profil açmaz.")));
 }
 
+// ---- bulucu: STILLMORE FINDER'ın motoruyla Spotify araması (yanki/bulucu.py; Spotify uygulamasının içinden okur) ----
+const SPOTIFY = "https://open.spotify.com";
+const BTUR = { parca: "Parça", playlist: "Playlist", sanatci: "Sanatçı", katalog: "Katalog", album: "Albüm", isrc: "ISRC", upc: "UPC", baglan: "Spotify bağlantısı" };
+const SP_YOL = { parca: "track", playlist: "playlist", sanatci: "artist", katalog: "artist", album: "album" };
+const tamSayi = (n) => n == null ? "—" : Number(n).toLocaleString("tr-TR");
+const spLink = (tur, id, metin = "Spotify'da aç", sinif = "dugme kucuk") =>
+  el("a", { class: sinif, href: `${SPOTIFY}/${SP_YOL[tur]}/${id}`, target: "_blank", rel: "noopener" }, metin);
+let bulucuAcik, bulucuIzle = null, bulucuGirdi = "", bulucuSuzgec = "bosluk";
+
+// yapıştırılanın türü: yalnız önizleme, karar sunucuda (bulucu.coz)
+function girdiTuru(m) {
+  m = (m || "").trim();
+  const b = /(?:open\.spotify\.com\/(?:intl-[a-z-]+\/)?(?:embed\/)?|spotify:)(track|playlist|artist|album)[/:]([A-Za-z0-9]{22})/.exec(m);
+  if (b) return { track: "parca", artist: "sanatci" }[b[1]] || b[1];
+  const s = m.replace(/[\s-]/g, "").toUpperCase();
+  if (/^[A-Z]{2}[A-Z0-9]{3}\d{7}$/.test(s)) return "isrc";
+  if (/^\d{12,14}$/.test(s)) return "upc";
+  return null;
+}
+
+// Spotify kalkmış parçanın sayacını 90 gün tutar; STILLMORE kalkış tarihini aralığa sıkıştırır (windowText'in karşılığı)
+function pencereYazi(w) {
+  if (!w) return null;
+  const r = (a, b) => a != null && b != null && a !== b ? `${Math.max(0, a)}–${Math.max(0, b)}` : String(Math.max(0, b ?? a));
+  switch (w.durum) {
+    case "expired": return ["90 gün doldu", "no"];
+    case "maybe-expired": return ["dolmuş olabilir", "amber"];
+    case "soon": return [w.en_az == null ? `en çok ${Math.max(0, w.en_cok)} gün` : `${r(w.en_az, w.en_cok)} gün kaldı`, "amber"];
+    case "within": return [w.en_az == null ? `en çok ${Math.max(0, w.en_cok)} gün` : `${r(w.en_az, w.en_cok)} gün kaldı`, "ok"];
+    case "retained": return ["sayaç duruyor", "ok"];
+    case "likely-expired": return ["muhtemelen doldu", "no"];
+    default: return null;
+  }
+}
+
+function disKapak(url, sinif = "kapak-orta") {
+  if (!url) return el("span", { class: `kapak-kucuk ${sinif} bos`, "aria-hidden": "true" }, dalgaIsareti());
+  return el("img", { class: `kapak-kucuk ${sinif}`, src: url, alt: "", loading: "lazy", decoding: "async", referrerpolicy: "no-referrer", width: 44, height: 44 });
+}
+
+async function kopyala(metin, ne) {
+  try { await navigator.clipboard.writeText(metin); bildir(`${ne} kopyalandı.`); } catch { bildir(`${ne} kopyalanamadı.`, true); }
+}
+const kopyaDugmesi = (metin, ne) => metin ? el("button", { class: "dugme kucuk", type: "button", onclick: () => kopyala(metin, ne) }, `${ne} kopyala`) : null;
+// credits'te boş rol "Not Documented" geliyor
+const belgeli = (adlar) => (adlar || []).filter((x) => !/^not documented$/i.test(x));
+
+async function bulucuIs(yol, govde = {}) {
+  try { await api(yol, govde); } catch (e) { bildir(e.message, true); return; }
+  bulucuGoster();
+}
+const bulucuAc = (tur, id) => bulucuIs(`/api/bulucu/ac/${tur}/${encodeURIComponent(id)}`);
+
+// kaydı varsa açar (anında), yoksa okur
+async function kayitAc(tur, id) {
+  try { await api(`/api/bulucu/sonuc/${tur}-${encodeURIComponent(id)}`); bulucuAcik = `${tur}-${id}`; depo.yaz("bulucu.acik", bulucuAcik); bulucuGoster(); scrollTo(0, 0); }
+  catch { bulucuAc(tur, id); }
+}
+
+async function bulucuGoster() {
+  const ana = $("#ana");
+  let d;
+  try { d = await api("/api/bulucu"); } catch (e) { doldur(ana, bosEkran("Bulucu açılamadı", e.message)); return; }
+  // ilk açılışta son açılan kayıt, yoksa en son arama: kaldığın yerden
+  if (bulucuAcik === undefined) bulucuAcik = depo.oku("bulucu.acik", null) ?? d.gecmis[0]?.anahtar ?? null;
+  let v = null;
+  if (bulucuAcik) {
+    try { v = await api(`/api/bulucu/sonuc/${encodeURIComponent(bulucuAcik)}`); } catch { bulucuAcik = null; depo.yaz("bulucu.acik", null); }
+  }
+  const suruyor = d.is?.durum === "suruyor";
+  doldur(ana,
+    el("header", { class: "sayfa-ust" }, el("h1", {}, "Bulucu"),
+      el("p", { class: "ipucu" }, "STILLMORE FINDER'ın motoru: Spotify'dan kalkmış şarkıları, distribütörü, ISRC/UPC'yi ve dinlenmeyi bulur. Spotify uygulamasının içinden okur, Web API kotası harcamaz.")),
+    aramaFormu(d.baglanti, suruyor),
+    el("div", { class: "pano-izgara" },
+      el("div", { class: "pano-sol" }, isSeridi(d.is), v ? sonucCiz(v, suruyor) : bulucuBos(d)),
+      el("div", { class: "pano-sag" }, baglantiPaneli(d.baglanti, suruyor), gecmisPaneli(d.gecmis), izlenenPaneli(d.izlenen, suruyor))));
+  $("#g-bulucu").textContent = suruyor ? "•" : "";
+  if (suruyor) bulucuTakip();
+}
+
+function bulucuTakip() {
+  clearTimeout(bulucuIzle);
+  bulucuIzle = setTimeout(async () => {
+    if (location.hash !== "#_bulucu") { $("#g-bulucu").textContent = ""; return; }
+    let is;
+    try { is = await api("/api/bulucu/is"); } catch { bulucuTakip(); return; }
+    if (is.durum === "suruyor") { $("#bulucu-is")?.replaceWith(isSeridi(is)); bulucuTakip(); return; }
+    if (is.durum === "bitti" && is.anahtar) { bulucuAcik = is.anahtar; depo.yaz("bulucu.acik", is.anahtar); bildir(`${BTUR[is.tur] || "Arama"} hazır.`); scrollTo(0, 0); }
+    else if (is.durum === "bitti") bildir("Spotify köprüsü bağlandı; arama yapabilirsin.");
+    else if (is.durum === "hata") bildir(is.hata || "Bulucu işi hata verdi", true);
+    bulucuGoster();
+  }, 1200);
+}
+
+function aramaFormu(b, suruyor) {
+  const tur = el("span", { class: "tur-cip", "aria-live": "polite" });
+  const kutu = el("input", { id: "bulucu-girdi", type: "search", value: bulucuGirdi, autocomplete: "off", spellcheck: "false",
+    placeholder: "Spotify linki, ISRC ya da UPC yapıştır", "aria-describedby": "bulucu-ipucu" });
+  const turYaz = () => { const t = girdiTuru(kutu.value); tur.textContent = t ? BTUR[t] : ""; tur.hidden = !t; };
+  kutu.addEventListener("input", () => { bulucuGirdi = kutu.value; turYaz(); });
+  turYaz();
+  const bagli = !!b.stillmore;
+  return el("form", { class: "cam bulucu-ara", role: "search", onsubmit: (e) => {
+    e.preventDefault();
+    if (!kutu.value.trim()) { kutu.focus(); return; }
+    bulucuIs("/api/bulucu/ara", { girdi: kutu.value });
+  } },
+    el("label", { for: "bulucu-girdi", class: "gizli" }, "Spotify linki, ISRC ya da UPC"),
+    el("div", { class: "bulucu-satir" }, kutu, tur,
+      bagli || suruyor ? el("button", { class: "dugme birincil", type: "submit", disabled: suruyor }, suruyor ? "Sürüyor…" : "Bul")
+        : el("button", { class: "dugme birincil", type: "button", onclick: () => spotifyBaglan() }, b.spotify ? "Spotify'a bağlan" : "Spotify'ı aç ve bağlan")),
+    el("p", { id: "bulucu-ipucu", class: "ipucu kucuk-ipucu" }, bagli
+      ? "Playlist: kalkmış şarkılar ve dinlenmeleri · Parça: distribütör, ISRC, UPC, dinlenme · Sanatçı: dinleyici ve yer aldığı listeler · Albüm · ISRC · UPC"
+      : "Arama Spotify uygulamasının içinden yapılır: önce bağlan. Spotify çalıyorsa yeniden başlatmadan önce sorulur."));
+}
+
+function isSeridi(is) {
+  if (!is || is.durum === "bitti" || !is.durum) return el("div", { id: "bulucu-is", hidden: true });
+  if (is.durum === "hata") return el("p", { id: "bulucu-is", class: "uyari", role: "alert" }, el("b", {}, `${BTUR[is.tur] || "İş"} yarıda kaldı: `), is.hata || "bilinmeyen hata");
+  const i = is.ilerleme || {};
+  const oran = i.toplam ? Math.min(1, i.bitti / i.toplam) : 0;
+  return el("section", { id: "bulucu-is", class: "simdi-serit canli bulucu-is", "aria-live": "polite", "aria-busy": "true" },
+    el("div", { class: "simdi-baslik" }, el("span", { class: "nabiz", "aria-hidden": "true" }),
+      el("div", {}, el("b", {}, `${BTUR[is.tur] || "İş"} sürüyor`),
+        el("span", { class: "ipucu" }, [i.etiket, i.toplam ? `${i.bitti}/${i.toplam}` : null].filter(Boolean).join(" · ") || "başlıyor…"))),
+    el("div", { class: "ilerleme bulucu-ilerleme", role: "progressbar", "aria-valuemin": "0", "aria-valuemax": "100", "aria-valuenow": String(Math.round(oran * 100)) },
+      el("span", { class: "ilerleme-dolu", style: { transform: `scaleX(${i.toplam ? oran : 0.04})` } })));
+}
+
+function bulucuBos(d) {
+  const ornek = d.izlenen.find((x) => x.calinamayan);
+  return el("section", { class: "bos-kutu bulucu-bos" },
+    el("h2", { class: "bolum-baslik" }, "Nereden başlamalı"),
+    el("ul", { class: "bulucu-ornekler" },
+      el("li", {}, el("b", {}, "Playlist linki: "), "içindeki kalkmış şarkılar, kalkmadan önceki dinlenmeleriyle sıralanır. Boşluğu olanları (aynı ISRC'nin çalınan kopyası yok) tek tıkla keşfe gönderirsin."),
+      el("li", {}, el("b", {}, "Parça linki: "), "distribütör (licensor UUID), ISRC, UPC, label, dinlenme, yazarlar, pazarlar ve aynı ISRC'li yüklemeler."),
+      el("li", {}, el("b", {}, "Sanatçı linki: "), "aylık dinleyici, şehirler ve sanatçının yer aldığı playlist'ler; oradan listeleri tek tek tarayabilirsin.")),
+    ornek ? el("p", { class: "ipucu" }, "Gece taranan bir listeyle dene: ",
+      el("button", { class: "dugme kucuk ikincil", type: "button", disabled: !d.baglanti.stillmore, onclick: () => kayitAc("playlist", ornek.id) }, ornek.ad)) : null);
+}
+
+// Spotify köprüyle (CDP) açılır; bayraksız açıksa yeniden başlar; çalıyorsa önce sorulur (sunucu da 409 verir)
+async function spotifyBaglan(zorla = false) {
+  try { await api("/api/bulucu/baglan", { zorla }); bildir("Spotify köprüyle açılıyor…"); bulucuGoster(); }
+  catch (e) {
+    if (!zorla && /çalıyor/.test(e.message)) {
+      const dlg = pencere("Spotify şu an çalıyor", [el("p", {}, "Köprü için Spotify yeniden başlatılır; çalan şarkı durur, sonra kaldığın yerden sürdürebilirsin.")],
+        [el("button", { class: "dugme ikincil", type: "button", onclick: () => dlg.close() }, "Vazgeç"),
+          el("button", { class: "dugme birincil", type: "button", onclick: () => { dlg.close(); spotifyBaglan(true); } }, "Yeniden başlat ve bağlan")]);
+    } else bildir(e.message, true);
+  }
+}
+
+function baglantiPaneli(b, suruyor) {
+  const [ad, nokta, metin] = b.stillmore ? [`STILLMORE ${b.stillmore}`, "", `Bağlı${b.ulke ? ` · hesap ülkesi ${b.ulke}` : ""}`]
+    : b.cdp ? ["Köprü açık", "sorun", b.hata || "STILLMORE yanıt vermiyor"]
+    : b.spotify ? ["Spotify açık", "bekliyor", "Köprü kapalı: bağlanınca Spotify köprüyle yeniden açılır."]
+    : ["Spotify kapalı", "bekliyor", "Bağlanınca Spotify köprüyle açılır."];
+  return el("section", { class: "cam yan-panel", "aria-label": "Spotify köprüsü" }, el("h2", {}, "Spotify köprüsü"),
+    el("p", { class: "gece-satir" }, el("span", { class: `nokta ${nokta}` }), el("b", {}, ad)),
+    el("p", { class: "ipucu kucuk-ipucu" }, metin),
+    b.stillmore ? null : el("button", { class: "dugme ikincil bulucu-baglan", type: "button", disabled: suruyor, onclick: () => spotifyBaglan() },
+      b.spotify ? "Spotify'a bağlan" : "Spotify'ı aç ve bağlan"),
+    el("p", { class: "ipucu kucuk-ipucu bulucu-not" }, "Köprü yalnız bu bilgisayardan erişilir; gece keşfi de aynı köprüyle tarar."));
+}
+
+function gecmisPaneli(liste) {
+  return el("section", { class: "cam yan-panel", "aria-label": "Son aramalar" }, el("h2", {}, "Son aramalar"),
+    liste.length ? el("ul", { class: "gecmis-liste" }, ...liste.slice(0, 14).map((x) => el("li", {},
+      el("button", { type: "button", "aria-current": x.anahtar === bulucuAcik ? "true" : false,
+        onclick: () => { bulucuAcik = x.anahtar; depo.yaz("bulucu.acik", x.anahtar); bulucuGoster(); scrollTo(0, 0); } },
+        disKapak(x.resim, "kapak-kucuk"),
+        el("span", { class: "ad" }, x.ad || "—"),
+        el("span", { class: "alt" }, el("span", { class: "tur-etiket" }, BTUR[x.tur] || x.tur), x.sayi ? el("span", {}, x.sayi) : null, el("span", {}, saatDakika(x.zaman)))))))
+      : el("p", { class: "ipucu kucuk-ipucu" }, "Henüz arama yok."));
+}
+
+function izlenenPaneli(liste, suruyor) {
+  const kaynak = (k) => k === "bulucu" ? "senin eklediğin" : k === "config" ? "ayarlardan" : k?.startsWith("arama:") ? `arama: ${k.slice(6)}` : k || "";
+  const satir = (x) => el("li", {},
+    el("div", { class: "izlenen-ad" }, el("span", { class: "ad" }, x.ad), el("span", { class: "alt" },
+      x.son_tarama ? `${tarih(x.son_tarama)} · ${x.calinamayan ?? 0} kalkmış · ${x.aday ?? 0} aday` : "henüz taranmadı",
+      x.kaynak ? ` · ${kaynak(x.kaynak)}` : "")),
+    el("button", { class: "dugme kucuk", type: "button", disabled: suruyor, onclick: () => kayitAc("playlist", x.id), "aria-label": `${x.ad} listesini aç` }, "Aç"));
+  const ilk = liste.slice(0, 8), kalan = liste.slice(8);
+  return el("section", { class: "cam yan-panel", "aria-label": "Gece taranan playlist'ler" }, el("h2", {}, "Gece taranan listeler"),
+    el("p", { class: "ipucu kucuk-ipucu bulucu-not" }, `Gece keşfi bu havuzdan her gece birkaç listeyi STILLMORE'la tarar (${liste.length} liste). Bir playlist sonucunda "Gece taransın"ı açınca buraya girer.`),
+    liste.length ? el("ul", { class: "izlenen-liste" }, ...ilk.map(satir)) : null,
+    kalan.length ? el("details", { class: "izlenen-tumu" }, el("summary", {}, `${kalan.length} liste daha`), el("ul", { class: "izlenen-liste" }, ...kalan.map(satir))) : null);
+}
+
+function sonucCiz(v, suruyor) {
+  const ciz = { playlist: playlistSonuc, parca: parcaSonuc, sanatci: sanatciSonuc, katalog: katalogSonuc, album: albumSonuc, isrc: aramaSonuc, upc: aramaSonuc }[v.tur];
+  return ciz ? ciz(v, suruyor) : el("p", { class: "bos-kutu" }, "Bu kayıt okunamadı.");
+}
+
+// sonucun başı: kapak, ad, alt satır, eylemler
+function sonucBasi(v, alt, eylemler, yuvarlak = false) {
+  return el("header", { class: "sonuc-ust" },
+    v.resim ? el("img", { class: "sonuc-kapak" + (yuvarlak ? " yuvarlak" : ""), src: v.resim, alt: "", referrerpolicy: "no-referrer", width: 112, height: 112 })
+      : el("span", { class: "sonuc-kapak bos", "aria-hidden": "true" }, dalgaIsareti(28)),
+    el("div", { class: "sonuc-kimlik" },
+      el("p", { class: "ust-satir ipucu" }, el("span", { class: "tur-etiket" }, BTUR[v.tur]), v.zaman ? el("span", {}, `okundu ${saatDakika(v.zaman)}`) : null),
+      el("h2", { class: "sonuc-ad" }, v.ad || v.id),
+      alt ? el("p", { class: "ipucu sonuc-alt" }, alt) : null,
+      el("div", { class: "sonuc-eylem" }, ...eylemler.filter(Boolean))));
+}
+const yenidenOku = (v, suruyor, metin = "Yeniden oku") => el("button", { class: "dugme kucuk", type: "button", disabled: suruyor, onclick: () => bulucuAc(v.tur, v.id) }, metin);
+
+function yankiRozeti(y) {
+  if (!y) return null;
+  if (y.listede) return el("span", { class: "rozet ok", title: "Şarkı listede ya da hatta" }, "listede");
+  if (y.duzenleme) return el("span", { class: "rozet", title: "Remix, sped up gibi düzenlemeler keşifte sorulmaz" }, "düzenleme");
+  if (y.hal) return el("span", { class: "rozet " + (y.puan ? "gumus" : "no"), title: "Keşif kaydındaki hali" }, `keşif: ${y.hal}${y.puan ? ` · ${kisaSayi(y.puan)}` : ""}`);
+  if (y.gonderildi) return el("span", { class: "rozet gumus", title: "Gece keşfi bu gece ölçecek" }, "keşfe gönderildi");
+  return null;
+}
+
+async function kesfeGonder(v, idler, dugme) {
+  if (dugme) { dugme.disabled = true; dugme.setAttribute("aria-busy", "true"); }
+  try {
+    const r = await api("/api/bulucu/kesfe", { anahtar: v.anahtar, parcalar: idler });
+    bildir(r.eklenen ? `${r.eklenen} şarkı keşfe gönderildi; gece keşfi ölçüp uyanı listeye alır.${r.atlanan ? ` ${r.atlanan} tanesi zaten gönderilmişti.` : ""}` : "Seçilenler zaten keşfe gönderilmiş.");
+  } catch (e) { bildir(e.message, true); }
+  bulucuGoster();
+}
+
+const PL_SUZGEC = {
+  bosluk: { ad: "Boşluk var", f: (x) => !x.kopyalar.length, bos: "Bütün kalkmış şarkıların çalınan bir kopyası var: boşluk yok." },
+  kopya: { ad: "Yeniden yüklenmiş", f: (x) => x.kopyalar.length > 0, bos: "Yeniden yüklenmiş şarkı yok." },
+  hepsi: { ad: "Tümü", f: () => true, bos: "Bu listede kalkmış şarkı yok." },
+};
+
+function playlistSonuc(v, suruyor) {
+  const satirlar = [...v.satirlar].sort((a, b) => (b.dinlenme ?? -1) - (a.dinlenme ?? -1));
+  const bosluk = satirlar.filter(PL_SUZGEC.bosluk.f);
+  const gonderilebilir = bosluk.filter((x) => !(x.yanki?.listede || x.yanki?.hal || x.yanki?.gonderildi || x.yanki?.duzenleme));
+  const gorunen = satirlar.filter(PL_SUZGEC[bulucuSuzgec].f);
+  const izle = el("button", { class: "anahtar", type: "button", role: "switch", "aria-checked": v.izleniyor ? "true" : "false", "aria-labelledby": "izle-ad",
+    onclick: async () => {
+      try { await api("/api/bulucu/izle", { playlist: v.id, izle: !v.izleniyor }); bildir(v.izleniyor ? "Liste gece taramasından çıkarıldı." : "Liste gece taramasına alındı; keşif haftada bir tarar."); }
+      catch (e) { bildir(e.message, true); }
+      bulucuGoster();
+    } }, el("span", { "aria-hidden": "true" }));
+  const csvIndir = () => {
+    const q = (s) => { s = s == null ? "" : String(s); return /[",;\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+    const sut = [["Parça", (x) => x.ad], ["Sanatçı", (x) => x.sanatci], ["Dinlenme", (x) => x.dinlenme], ["Durum", (x) => x.neden === "country" ? "Ülkende kapalı" : "Kaldırılmış"],
+      ["Distribütör", (x) => x.distributor], ["ISRC", (x) => x.isrc], ["Çıkış", (x) => x.cikis], ["Yeniden yüklenmiş", (x) => x.kopyalar.map((k) => k.id).join(" ")], ["Spotify ID", (x) => x.id]];
+    const metin = "﻿" + [sut.map((s) => q(s[0])).join(","), ...satirlar.map((x) => sut.map((s) => q(s[1](x))).join(","))].join("\n");
+    const a = el("a", { href: URL.createObjectURL(new Blob([metin], { type: "text/csv" })), download: `${(v.ad || v.id).replace(/[\\/:*?"<>|]+/g, " ").trim()} - kalkmis.csv` });
+    a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  };
+  const toplamDinlenme = satirlar.reduce((n, x) => n + (x.dinlenme || 0), 0);
+  return el("section", { class: "bulucu-sonuc", "aria-label": `${v.ad} taraması` },
+    sonucBasi(v, [v.sahip, `${tamSayi(v.toplam)} parça`, v.takipci ? `${kisaSayi(v.takipci)} beğeni` : null].filter(Boolean).join(" · "),
+      [spLink("playlist", v.id), yenidenOku(v, suruyor, "Yeniden tara"), satirlar.length ? el("button", { class: "dugme kucuk", type: "button", onclick: csvIndir }, "CSV indir") : null]),
+    el("div", { class: "sonuc-olcu cam" },
+      el("div", {}, el("span", { class: "olcu-sayi gumus-yazi" }, String(satirlar.length)), el("span", { class: "olcu-ad" }, "kalkmış")),
+      el("div", {}, el("span", { class: "olcu-sayi" + (bosluk.length ? " gumus-yazi" : "") }, String(bosluk.length)), el("span", { class: "olcu-ad" }, "boşluk var")),
+      el("div", {}, el("span", { class: "olcu-sayi" }, kisaSayi(toplamDinlenme)), el("span", { class: "olcu-ad" }, "toplam dinlenme")),
+      el("div", { class: "ayar-satir izle-satir" }, el("div", {}, el("b", { id: "izle-ad" }, "Gece taransın"),
+        el("p", { class: "ipucu" }, v.izleniyor ? "Gece keşfi bu listeyi haftada bir tarar." : "Açınca gece keşfi haftada bir tarar.")), izle)),
+    satirlar.length ? el("div", { class: "kesitler", role: "group", "aria-label": "Süzgeç" }, ...Object.entries(PL_SUZGEC).map(([k, s]) =>
+      el("button", { class: "kesit", type: "button", "aria-pressed": k === bulucuSuzgec ? "true" : "false", onclick: () => { bulucuSuzgec = k; bulucuGoster(); } },
+        s.ad, el("span", { class: "kesit-zaman" }, String(satirlar.filter(s.f).length)))),
+      gonderilebilir.length && bulucuSuzgec !== "kopya" ? el("button", { class: "dugme ikincil kucuk toplu", type: "button", onclick: (e) => kesfeGonder(v, gonderilebilir.map((x) => x.id), e.currentTarget) },
+        `Boşluğu olanları keşfe gönder (${gonderilebilir.length})`) : null) : null,
+    gorunen.length ? el("ul", { class: "kayitlar" }, ...gorunen.map((x) => kalkmisSatiri(v, x, suruyor)))
+      : el("p", { class: "bos-kutu" }, PL_SUZGEC[bulucuSuzgec].bos));
+}
+
+function kalkmisSatiri(v, x, suruyor) {
+  const p = pencereYazi(x.pencere);
+  const y = x.yanki;
+  const gonderilir = !x.kopyalar.length && !(y?.listede || y?.hal || y?.gonderildi || y?.duzenleme);
+  return el("li", { class: "kayit kapakli" + (x.kopyalar.length ? " soluk" : "") },
+    disKapak(x.resim),
+    el("div", { class: "kayit-ad" },
+      el("button", { class: "ad bag-dugme", type: "button", disabled: suruyor, onclick: () => kayitAc("parca", x.id), title: "Parçanın ayrıntısı" }, x.ad),
+      el("span", { class: "sanatci" }, x.sanatci, x.sanatci_dinleyici != null ? ` · ${kisaSayi(x.sanatci_dinleyici)} aylık dinleyici` : "")),
+    el("div", { class: "olculer" },
+      el("span", { title: "Kalkmadan önceki Spotify dinlenmesi" }, "dinlenme ", el("b", {}, kisaSayi(x.dinlenme))),
+      el("span", { class: "rozet " + (x.neden === "country" ? "amber" : "no") }, x.neden === "country" ? "ülkende kapalı" : "kalktı"),
+      p ? el("span", { class: `rozet ${p[1]}`, title: "Spotify kalkmış şarkının sayacını 90 gün tutar" }, p[0]) : null,
+      x.distributor ? el("span", { title: "Kalkmadan önceki distribütör" }, el("b", {}, x.distributor)) : null,
+      x.cikis ? el("span", { title: "Çıkış tarihi" }, x.cikis.slice(0, 4)) : null,
+      x.isrc ? el("code", { title: "ISRC" }, x.isrc) : null,
+      x.kopyalar.length ? el("span", { class: "rozet gumus", title: x.kopyalar.map((k) => [k.album, k.distributor].filter(Boolean).join(" · ")).join("\n") },
+        `${x.kopyalar.length} çalınan kopya`) : null,
+      yankiRozeti(y)),
+    el("div", { class: "kayit-eylem" },
+      x.kopyalar.length ? spLink("parca", x.kopyalar[0].id, "Kopyayı aç") : null,
+      gonderilir ? el("button", { class: "dugme ikincil kucuk", type: "button", onclick: (e) => kesfeGonder(v, [x.id], e.currentTarget) }, "Keşfe gönder") : null,
+      el("a", { class: "dugme kucuk", href: `https://www.youtube.com/results?search_query=${encodeURIComponent(`${x.sanatci} ${x.ad}`)}`, target: "_blank", rel: "noopener" }, "Dinle")));
+}
+
+function bilgi(ad, deger, ek) {
+  if (deger == null || deger === "" || (Array.isArray(deger) && !deger.length)) return [];
+  return [el("dt", {}, ad), el("dd", {}, Array.isArray(deger) ? deger.join(", ") : deger, ek ? el("span", { class: "ipucu" }, ek) : null)];
+}
+
+function parcaSonuc(v, suruyor) {
+  const p = pencereYazi(v.pencere);
+  const y = v.yanki;
+  const kalkmis = v.calinir === false;
+  const ib = v.isrc_bilgi;
+  return el("section", { class: "bulucu-sonuc", "aria-label": `${v.ad} ayrıntısı` },
+    sonucBasi(v, null, [spLink("parca", v.id), yenidenOku(v, suruyor),
+      kalkmis && !(y?.listede || y?.hal || y?.gonderildi || y?.duzenleme) && !v.kopyalar.some((k) => k.calinir !== false)
+        ? el("button", { class: "dugme ikincil kucuk", type: "button", onclick: (e) => kesfeGonder(v, [v.id], e.currentTarget) }, "Keşfe gönder") : null]),
+    el("div", { class: "parca-sanatcilar" },
+      ...(v.sanatcilar.length ? v.sanatcilar : [{ id: null, name: v.sanatci }]).map((s) => s.id
+        ? el("button", { class: "dugme kucuk", type: "button", disabled: suruyor, onclick: () => kayitAc("sanatci", s.id) }, s.name) : el("span", { class: "ipucu" }, s.name)),
+      v.album_id ? el("button", { class: "dugme kucuk", type: "button", disabled: suruyor, onclick: () => kayitAc("album", v.album_id) }, `Albüm: ${v.album}`) : null),
+    el("div", { class: "cipler" },
+      el("span", { class: "rozet " + (kalkmis ? "no" : v.calinir ? "ok" : "") }, kalkmis ? `çalınamıyor${v.calinma_nedeni ? ` · ${v.calinma_nedeni.toLowerCase().replace(/_/g, " ")}` : ""}` : v.calinir ? "çalınabilir" : "çalınabilirlik bilinmiyor"),
+      p && kalkmis ? el("span", { class: `rozet ${p[1]}`, title: "Spotify kalkmış şarkının sayacını 90 gün tutar" }, p[0]) : null,
+      v.acik_icerik ? el("span", { class: "rozet amber" }, "açık içerik") : null,
+      v.album_turu ? el("span", { class: "rozet" }, v.album_turu) : null,
+      yankiRozeti(y)),
+    el("div", { class: "sonuc-olcu cam" },
+      el("div", {}, el("span", { class: "olcu-sayi gumus-yazi" }, kisaSayi(v.dinlenme)), el("span", { class: "olcu-ad" }, `dinlenme${v.dinlenme != null ? ` · ${tamSayi(v.dinlenme)}` : ""}`)),
+      el("div", { class: "olcu-dist" }, el("span", { class: "olcu-sayi kucuk" }, v.distributor || "bilinmiyor"), el("span", { class: "olcu-ad" }, `distribütör · ${v.guven}`))),
+    el("dl", { class: "bilgi-izgara" },
+      ...bilgi("ISRC", v.isrc, ib ? ` ${[ib.ulke, ib.kayit, ib.yil].filter(Boolean).join(" · ")}` : null),
+      ...bilgi("UPC", v.upc),
+      ...bilgi("Label", v.label),
+      ...bilgi("Çıkış", v.cikis), ...bilgi("İlk yayın", v.ilk_yayin),
+      ...bilgi("Süre", v.sure_ms ? sure(v.sure_ms / 1000) : null),
+      ...bilgi("Tempo", v.tempo ? `${Math.round(v.tempo)} BPM` : null), ...bilgi("Ton", v.ton),
+      ...bilgi("Dil", v.diller),
+      ...bilgi("Yazarlar", belgeli(v.yazarlar)), ...bilgi("Yapımcılar", belgeli(v.yapimcilar)),
+      ...bilgi("Pazar", v.pazar), ...bilgi("℗", v.telif_p), ...bilgi("©", v.telif_c),
+      ...bilgi("Licensor", v.licensor ? el("code", {}, v.licensor) : null),
+      ...bilgi("Öneri", v.oneri, " credits kaynak satırı")),
+    el("div", { class: "satir-ici bulucu-arac" },
+      v.isrc ? kopyaDugmesi(v.isrc, "ISRC") : null, v.isrc ? el("button", { class: "dugme kucuk", type: "button", disabled: suruyor, onclick: () => kayitAc("isrc", v.isrc) }, "ISRC'yi ara") : null,
+      v.upc ? kopyaDugmesi(v.upc, "UPC") : null, v.upc ? el("button", { class: "dugme kucuk", type: "button", disabled: suruyor, onclick: () => kayitAc("upc", v.upc) }, "UPC'yi ara") : null),
+    v.kopyalar.length ? el("section", { class: "bolum" }, el("h2", { class: "bolum-baslik" }, "Aynı ISRC'li yüklemeler", el("span", { class: "g-sayi" }, String(v.kopyalar.length))),
+      el("ul", { class: "kayitlar" }, ...v.kopyalar.map((k) => el("li", { class: "kayit kapakli" },
+        disKapak(k.resim), el("div", { class: "kayit-ad" }, el("span", { class: "ad" }, k.ad), el("span", { class: "sanatci" }, k.sanatci)),
+        el("div", { class: "olculer" }, el("span", { class: "duz" }, k.album), el("span", { class: "rozet " + (k.calinir === false ? "no" : "ok") }, k.calinir === false ? "çalınamıyor" : "çalınıyor")),
+        el("div", { class: "kayit-eylem" }, el("button", { class: "dugme kucuk", type: "button", disabled: suruyor, onclick: () => kayitAc("parca", k.id) }, "Ayrıntı"), spLink("parca", k.id, "Aç")))))) : null);
+}
+
+function sanatciSonuc(v, suruyor) {
+  const enCok = Math.max(1, ...v.sehirler.map((s) => s.dinleyici || 0));
+  return el("section", { class: "bulucu-sonuc", "aria-label": `${v.ad} özeti` },
+    sonucBasi(v, [v.dogrulanmis ? "doğrulanmış sanatçı" : null, v.yayin_sayisi != null ? `${v.yayin_sayisi} yayın (${v.album_sayisi ?? 0} albüm, ${v.single_sayisi ?? 0} single)` : null].filter(Boolean).join(" · "),
+      [spLink("sanatci", v.id), yenidenOku(v, suruyor),
+        el("button", { class: "dugme ikincil kucuk", type: "button", disabled: suruyor, onclick: () => kayitAc("katalog", v.id), title: "Her yayının distribütörü, dinlenmesi ve aynı ISRC'li kopyalar; büyük katalogda birkaç dakika" }, "Kataloğu tara")], true),
+    el("div", { class: "sonuc-olcu cam" },
+      el("div", {}, el("span", { class: "olcu-sayi gumus-yazi" }, kisaSayi(v.dinleyici)), el("span", { class: "olcu-ad" }, "aylık dinleyici")),
+      el("div", {}, el("span", { class: "olcu-sayi" }, kisaSayi(v.takipci)), el("span", { class: "olcu-ad" }, "takipçi")),
+      v.dunya_sirasi ? el("div", {}, el("span", { class: "olcu-sayi" }, `#${v.dunya_sirasi}`), el("span", { class: "olcu-ad" }, "dünya sırası")) : null,
+      v.son_yayin ? el("div", { class: "olcu-dist" }, el("button", { class: "bag-dugme olcu-sayi kucuk", type: "button", disabled: suruyor, onclick: () => kayitAc("album", v.son_yayin.id) }, v.son_yayin.ad),
+        el("span", { class: "olcu-ad" }, `son yayın · ${[v.son_yayin.tur, v.son_yayin.tarih].filter(Boolean).join(" · ").toLowerCase()}`)) : null),
+    v.sehirler.length ? el("section", { class: "bolum" }, el("h2", { class: "bolum-baslik" }, "En çok dinlenen şehirler"),
+      el("ul", { class: "cubuklar sehirler" }, ...v.sehirler.map((s) => el("li", {}, el("span", {}, `${s.sehir}, ${s.ulke}`), el("b", {}, kisaSayi(s.dinleyici)),
+        el("span", { class: "cubuk" }, el("i", { style: { width: `${Math.round(100 * (s.dinleyici || 0) / enCok)}%` } })))))) : null,
+    v.listeler.length ? el("section", { class: "bolum" }, el("h2", { class: "bolum-baslik" }, "Yer aldığı listeler", el("span", { class: "g-sayi" }, String(v.listeler.length))),
+      el("p", { class: "ipucu bolum-not" }, "Sanatçının dinleyicilerinin bulduğu listeler. Tara: içindeki kalkmış şarkılar."),
+      el("ul", { class: "kayitlar" }, ...v.listeler.map((l) => el("li", { class: "kayit kapakli" }, disKapak(l.resim),
+        el("div", { class: "kayit-ad" }, el("span", { class: "ad" }, l.ad), el("span", { class: "sanatci" }, l.sahip)), el("div", { class: "olculer" }),
+        el("div", { class: "kayit-eylem" }, el("button", { class: "dugme ikincil kucuk", type: "button", disabled: suruyor, onclick: () => kayitAc("playlist", l.id) }, "Tara"), spLink("playlist", l.id, "Aç")))))) : null);
+}
+
+function katalogSonuc(v, suruyor) {
+  const dist = {};
+  v.yayinlar.forEach((y) => y.parcalar.forEach((t) => { const k = t.distributor || "bilinmiyor"; dist[k] = (dist[k] || 0) + 1; }));
+  const distSira = Object.entries(dist).sort((a, b) => b[1] - a[1]);
+  const enCok = Math.max(1, ...distSira.map((x) => x[1]));
+  const yayinDist = (y) => { const c = {}; y.parcalar.forEach((t) => { const k = t.distributor || "bilinmiyor"; c[k] = (c[k] || 0) + 1; }); return Object.entries(c).sort((a, b) => b[1] - a[1])[0]?.[0]; };
+  return el("section", { class: "bulucu-sonuc", "aria-label": `${v.ad} kataloğu` },
+    sonucBasi(v, `${v.yayinlar.length} yayın · ${tamSayi(v.parca_sayisi)} parça`, [spLink("katalog", v.id), yenidenOku(v, suruyor, "Yeniden tara"),
+      el("button", { class: "dugme kucuk", type: "button", disabled: suruyor, onclick: () => kayitAc("sanatci", v.id) }, "Sanatçı özeti")], true),
+    el("div", { class: "sonuc-olcu cam" },
+      el("div", {}, el("span", { class: "olcu-sayi gumus-yazi" }, kisaSayi(v.toplam_dinlenme)), el("span", { class: "olcu-ad" }, "toplam dinlenme")),
+      el("div", {}, el("span", { class: "olcu-sayi" }, v.ortalama_ara != null ? `${v.ortalama_ara} gün` : "—"), el("span", { class: "olcu-ad" }, "yayın arası (ort.)")),
+      el("div", {}, el("span", { class: "olcu-sayi" }, v.son_yayindan != null ? `${v.son_yayindan} gün` : "—"), el("span", { class: "olcu-ad" }, "son yayından beri"))),
+    el("section", { class: "bolum" }, el("h2", { class: "bolum-baslik" }, "Distribütörler (parça sayısı)"),
+      el("ul", { class: "cubuklar" }, ...distSira.map(([ad, n]) => el("li", {}, el("span", {}, ad), el("b", {}, String(n)),
+        el("span", { class: "cubuk" }, el("i", { style: { width: `${Math.round(100 * n / enCok)}%` } })))))),
+    v.zaman_cizelgesi.length > 1 ? el("details", { class: "stil-duzen katlanir" }, el("summary", {}, "Yıllara göre distribütör (yayın sayısı)"),
+      el("ul", { class: "olaylar" }, ...v.zaman_cizelgesi.map((y) => el("li", {}, el("span", { class: "olay-zaman" }, y.yil),
+        el("span", {}, y.dagilim.map((d) => `${d.ad} ${d.sayi}`).join(" · ")))))) : null,
+    v.kopyalar.length ? el("details", { class: "stil-duzen katlanir" }, el("summary", {}, `Birden çok kez yüklenenler (${v.kopyalar.length})`),
+      el("p", { class: "ipucu kucuk-ipucu" }, "Aynı ISRC ya da aynı ses dosyası birden çok yayında: derleme, yeniden basım ya da kopya."),
+      el("ul", { class: "olaylar" }, ...v.kopyalar.slice(0, 60).map((k) => el("li", {}, el("span", { class: "olay-zaman" }, k.tur === "isrc" ? "aynı ISRC" : "aynı ses"),
+        el("span", {}, k.parcalar.map((t) => `${t.ad}${t.yayin ? ` (${t.yayin})` : ""}`).join(" · ")))))) : null,
+    el("section", { class: "bolum" }, el("h2", { class: "bolum-baslik" }, "Yayınlar", el("span", { class: "g-sayi" }, String(v.yayinlar.length))),
+      el("ul", { class: "kayitlar" }, ...v.yayinlar.map((y) => el("li", { class: "kayit kapakli katalog-yayin" }, disKapak(y.resim),
+        el("div", { class: "kayit-ad" }, el("button", { class: "ad bag-dugme", type: "button", disabled: suruyor, onclick: () => kayitAc("album", y.id) }, y.ad),
+          el("span", { class: "sanatci" }, [y.tur?.toLowerCase(), y.tarih].filter(Boolean).join(" · "))),
+        el("div", { class: "olculer" }, el("span", {}, "dinlenme ", el("b", {}, kisaSayi(y.parcalar.reduce((n, t) => n + (t.dinlenme || 0), 0)))),
+          yayinDist(y) ? el("span", {}, el("b", {}, yayinDist(y))) : null, y.label ? el("span", { class: "duz" }, y.label) : null, y.upc ? el("code", { title: "UPC" }, y.upc) : null),
+        el("div", { class: "kayit-eylem" }, spLink("album", y.id, "Aç")))))));
+}
+
+function albumSonuc(v, suruyor) {
+  return el("section", { class: "bulucu-sonuc", "aria-label": `${v.ad} albümü` },
+    sonucBasi(v, [v.sanatci, v.album_turu, v.cikis, v.label].filter(Boolean).join(" · "), [spLink("album", v.id), yenidenOku(v, suruyor), v.upc ? kopyaDugmesi(v.upc, "UPC") : null]),
+    el("dl", { class: "bilgi-izgara" }, ...bilgi("UPC", v.upc), ...bilgi("Label", v.label), ...bilgi("Çıkış", v.cikis), ...bilgi("℗", v.telif_p)),
+    el("section", { class: "bolum" }, el("h2", { class: "bolum-baslik" }, "Parçalar", el("span", { class: "g-sayi" }, String(v.satirlar.length))),
+      el("ul", { class: "kayitlar" }, ...v.satirlar.map((t) => el("li", { class: "kayit" },
+        el("div", { class: "kayit-ad" }, el("button", { class: "ad bag-dugme", type: "button", disabled: suruyor, onclick: () => kayitAc("parca", t.id) }, `${t.no}. ${t.ad}`),
+          el("span", { class: "sanatci" }, t.sanatci)),
+        el("div", { class: "olculer" }, el("span", {}, "dinlenme ", el("b", {}, kisaSayi(t.dinlenme))), t.distributor ? el("span", {}, el("b", {}, t.distributor)) : null,
+          t.isrc ? el("code", { title: "ISRC" }, t.isrc) : null),
+        el("div", { class: "kayit-eylem" }, spLink("parca", t.id, "Aç")))))));
+}
+
+function aramaSonuc(v, suruyor) {
+  return el("section", { class: "bulucu-sonuc", "aria-label": `${v.tur} araması` },
+    sonucBasi(v, `${v.sonuclar.length} sonuç`, [yenidenOku(v, suruyor, "Yeniden ara"), kopyaDugmesi(v.id, BTUR[v.tur])]),
+    v.sonuclar.length ? el("ul", { class: "kayitlar" }, ...v.sonuclar.map((x) => el("li", { class: "kayit kapakli" }, disKapak(x.resim),
+      el("div", { class: "kayit-ad" }, el("span", { class: "ad" }, x.ad), el("span", { class: "sanatci" }, x.sanatci)),
+      el("div", { class: "olculer" }, x.album ? el("span", { class: "duz" }, x.album) : null,
+        x.calinir == null ? null : el("span", { class: "rozet " + (x.calinir ? "ok" : "no") }, x.calinir ? "çalınıyor" : "çalınamıyor")),
+      el("div", { class: "kayit-eylem" }, el("button", { class: "dugme kucuk", type: "button", disabled: suruyor, onclick: () => kayitAc(x.tur, x.id) }, "Ayrıntı"), spLink(x.tur, x.id, "Aç")))))
+      : el("p", { class: "bos-kutu" }, v.tur === "upc"
+        ? "Spotify araması bu UPC'ye sonuç vermedi. Albüm henüz yayında olmayabilir ya da kalkmış olabilir; Spotify'ın UPC araması her albümü de bulmuyor. Albüm linkiyle dene."
+        : "Spotify araması bu ISRC'ye sonuç vermedi: parça yayında değil ya da kalkmış."));
+}
+
 // ---- kenar çubuğu: şarkılar aşama gruplarında, aranabilir ----
 const GRUPLAR = [
   { k: "dinleme", ad: "Dinlemende", asamalar: ["uretildi", "onarim"], acik: true },
@@ -1377,7 +1803,7 @@ function listeCiz(secili = decodeURIComponent(location.hash.slice(1)) || "_pano"
   doldur($("#liste"), ...(gruplar.length ? gruplar : [el("p", { class: "ipucu kucuk-ipucu" }, `"${aramaMetni}" ile eşleşen şarkı yok.`)]));
 }
 
-const GORUNUM = { _pano: panoGoster, _kesif: kesifGoster, _yayin: yayinGoster, _kulak: kulakGoster, _sanatci: sanatciGoster };
+const GORUNUM = { _pano: panoGoster, _kesif: kesifGoster, _bulucu: bulucuGoster, _yayin: yayinGoster, _kulak: kulakGoster, _sanatci: sanatciGoster };
 function acikKimlik() {
   try { return decodeURIComponent(location.hash.slice(1)) || "_pano"; } catch { return "_pano"; }
 }

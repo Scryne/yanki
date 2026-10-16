@@ -41,9 +41,11 @@ durur ve "giriş yap" bildirilir. S34 (dikkat + MLP LoRA) Scryne söyleyince. Tu
 5. Onaylanan şarkı paketlenir: `calisma/<kimlik>/paket/` (FLAC, 3000×3000 JPG, `metadata.json`, `YUKLE.md`). Kapak
    şarkının moduna göre Pinterest'ten (insansız, yazısız; her yeni kapak bildirilir); beğenmezsen `yanki kapak
    <kimlik> --yeni`, kendi görselin için şarkı klasörüne `kapak_ozel.jpg`.
-6. **RouteNote'a yükleme (`yanki/routenote.py`, tarayıcıyla; API yok):** dinleme odası → **Sanatçı**: "Taslağı
-   hazırla" formun dört adımını (albüm, ses + parça, kapak, mağaza/bölge) doldurur, göndermez; "Gönder…" şarkının adı
-   yazılınca "Distribute"a basar (geri alınamaz). Elle: `yanki yukle <kimlik>` (taslak), `--gonder` (gönderim).
+6. **RouteNote'a yükleme (`yanki/routenote.py`, tarayıcıyla; API yok):** dinleme odası → **Sanatçı**: "Yükle ve
+   gönder…" formun dört adımını (albüm, ses + parça, kapak, mağaza/bölge) doldurur ve şarkının adı yazılınca aynı
+   oturumda "Distribute"a basar (geri alınamaz). RouteNote'un yayın sayfası yalnız taslağı dolduran tarayıcı
+   oturumunda dolu: önceki oturumda hazırlanmış taslak panelden elle gönderilir, sonra odada **Panelde gönderdim**
+   (ya da `yanki routenote gonderildi <kimlik>`). Elle: `yanki yukle <kimlik>` (taslak), `--gonder` (gönderim).
    Taslak açılmadan önce yazar ad/soyadı, açık içerik, dil ve dosya boyutu denetlenir; yarıda kalan taslak kaldığı
    adımdan sürer. Oturum birkaç saatte düşer: odada "RouteNote'a giriş yap" ya da `yanki routenote giris` (şifre
    tutulmaz). Son tıktan sonra iş düşerse hat yeniden göndermez; Sanatçı'da **Kontrol et** çıkar, panelde gördüğünü
@@ -66,7 +68,22 @@ Spotify kotası dar (geliştirici API'si, 2026-10-09'da ~1.000 istekte 23 saatli
 istek. Takip API'yi neredeyse hiç kullanmaz: canlılık ve Türkiye'deki arama sırası her gece Spotify uygulamasının
 kendi aramasıyla (STILLMORE köprüsü, kotasız), diğer pazarların sırası şarkı başına haftada bir API'den
 (`config/kesif.toml` → `[takip]`). Uygulama açılamazsa (o an bir şey çalıyorsa) takip API'yle sürer. Dinleme
-odası Spotify'a hiç istek atmaz.
+odası Spotify Web API'sine hiç istek atmaz.
+
+**Bulucu (dinleme odası → Bulucu, `yanki/bulucu.py`):** STILLMORE FINDER'ın motoru odada. Spotify linki, ISRC ya da
+UPC yapıştırılır; okuma Spotify uygulamasının içinden yapılır (STILLMORE köprüsü, kotasız):
+- **Playlist:** kalkmış şarkılar, kalkmadan önceki dinlenmeleri, distribütör, 90 günlük sayaç penceresi, aynı
+  ISRC'nin çalınan kopyası ve şarkının hattaki yeri (listede, keşifte, düzenleme). Boşluğu olanlar tek tıkla keşfe
+  gönderilir (`girdi/kesif/bulucu.csv`; gece keşfi aynı elemelerden geçirir). "Gece taransın" listeyi STILLMORE
+  havuzuna alır (`calisma/kesif/bulucu_izlenen.json`).
+- **Parça:** distribütör (licensor UUID, güven), ISRC/UPC, label, dinlenme, süre, tempo/ton, yazarlar, pazarlar ve
+  aynı ISRC'li yüklemeler.
+- **Sanatçı:** dinleyici, şehirler ve yer aldığı listeler (her biri taranabilir); **Katalog**: her yayının
+  distribütörü ve dinlenmesi, birden çok kez yüklenenler.
+- **Albüm**, **ISRC**, **UPC** araması.
+
+Köprü kapalıysa odadaki "Spotify'a bağlan" Spotify'ı hata ayıklama portuyla (yalnız 127.0.0.1) yeniden açar; bir şey
+çalıyorsa önce sorar. Sonuçlar `calisma/bulucu/`'da kalır, "Son aramalar"dan yeniden açılır.
 
 Bildirimler `calisma/olaylar.jsonl`'a da yazılır (aynı olay bir kez). Gece koşusu sonunda dış servislerin (YouTube,
 LRCLIB, MusicBrainz, Deezer, Spotify) istek/hata sayısı günlüğe, günlük toplamı `calisma/gunluk/servisler.json`'a.

@@ -531,13 +531,14 @@ def _stillmore_tara(args, kok: Path, calisma: Path, st: dict, sp, dogrula: bool,
     import subprocess
     from datetime import datetime
 
-    from yanki import spotify, stillmore
+    from yanki import bulucu, spotify, stillmore
 
     if not st.get("acik") or getattr(args, "stillmoresuz", False):
         return
     havuz = stillmore.havuz_oku(calisma)
     for pid in st.get("playlistler", []):
         stillmore.havuza_ekle(havuz, spotify.kimlik_ayikla(pid), "", "config")
+    bulucu.havuza_isle(havuz, bulucu.izlenenler(calisma))  # odadaki Bulucu'dan "gece taransın" denenler
     sorgular = st.get("arama", [])
     if dogrula and sorgular:  # her gece sıradaki birkaç sorgu (döner)
         sira = int(datetime.now().strftime("%j"))

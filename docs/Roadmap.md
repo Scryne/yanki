@@ -823,3 +823,20 @@ genişlik × 2 tema) bir hata daha buldu.
 - **Bütçe:** RunPod bakiyesi 0,09 $ + 1,78 $, ayın harcaması 27,55 / 30 $. `en_az_bakiye` 3 → 1: bir 8 şarkılık koşu
   (~0,9 $). Sürekli üretim için bakiye yüklemesi gerekiyor.
 - `\Yanki\Surekli` ve `\Yanki\Gece` yeniden açıldı; ilk koşu 18:40.
+
+## Bulucu ve STILLMORE güncellemesi (2026-10-16, Scryne: "distro-finder-bulmaca'yı güncelle, sonra bizim sitemize de bu repo gibi bir şey yap")
+
+- **STILLMORE 12.5 → 12.13.0** (`C:\df-archive` pull, Spicetify'a yeniden kuruldu). Yanki'nin dayandığı
+  `Stillmore.playlist.scan` satır alanları değişmedi. 12.13'te bulunan hata: protobuf metadata'daki `duration`,
+  `number`, `disc_number` sint32 (zigzag) olduğu halde çözülmeden okunuyor; her süre iki katı, parça/disk numarası
+  yanlış (Never Gonna Give You Up 7:07, 2. disk 2. parça). Bulucu süreyi ses özelliklerinden alır.
+- **Dinleme odası → Bulucu** (`yanki/bulucu.py`, `yanki/bulucu_yardimci.js`): STILLMORE'un motoru odada; playlist,
+  parça, sanatçı, katalog, albüm, ISRC, UPC. İş Spotify sayfasında arka planda koşar, oda saniyede bir ilerlemeyi
+  okur. Kalkmış şarkı tek tıkla keşfe (`girdi/kesif/bulucu.csv`, STILLMORE CSV biçimi) ve playlist gece taramasına
+  (`bulucu_izlenen.json` → havuz) gider; iki dosyayı yalnız oda yazar. Canlı: 648 parçalık liste 6 sn, 58 yayınlık
+  katalog 20 sn.
+- Son başarılı gece STILLMORE taraması 2026-10-13. 10-15 keşfinde "eklenti yüklenmedi" (onar.log yamayı yerinde
+  gösteriyordu; sebebi bulunamadı); 12.13 kurulup Spotify köprüyle açılınca yüklendi. Odadan açılan köprü açık
+  kalıyor, gece koşusu onu kullanır.
+- RouteNote: odadaki ayrı "Taslağı hazırla" + "Gönder" iki oturum açıyordu (yayın sayfası ikincisinde boş, lovely);
+  kuyrukta yalnız "Yükle ve gönder…", hazır taslak için "Panelde gönderdim".
