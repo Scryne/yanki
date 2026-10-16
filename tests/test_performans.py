@@ -194,19 +194,23 @@ def test_eposta_hatta_islenir_bir_kez(tmp_path):
     iletiler = [eposta.ayristir(_ileti("Release approved", "Numb has been approved", mid="<a>")),
                 eposta.ayristir(_ileti("Release declined", "lovely was declined: misleading artist name", mid="<b>")),
                 eposta.ayristir(_ileti("Approved", "Elle Gonderilen is approved", mid="<c>")),
-                eposta.ayristir(_ileti("Hello", "Check our blog", mid="<d>"))]
+                eposta.ayristir(_ileti("Profile Code", "Here is your access code: abc123", mid="<d>")),
+                eposta.ayristir(_ileti("Update", "We have news about your release", mid="<e>"))]
     sonuc = eposta.isle(c, iletiler, bildir=lambda *a: bildirimler.append(a))
     assert [(x["sinif"], x["kimlik"]) for x in sonuc] == [("onay", "numb"), ("red", "lovely"), ("onay", "elle"),
-                                                          (None, None)]
+                                                          (None, None), (None, None)]
+    assert sonuc[3]["eylem"].startswith("ilgisiz")
     assert takip.yukleme_bilgisi(c, "numb")["dagitim_durumu"] == "approved"
     lovely = durum.oku(c, "lovely")
     assert lovely.asama == "paketlendi" and dagitim.RED_ONEKI in (lovely.gecmis[-1].get("hata") or "")
     meta = json.loads((durum.klasor(c, "lovely") / "paket" / "metadata.json").read_text(encoding="utf-8"))
     assert "routenote" not in meta and meta["routenote_gecmisi"][0]["upc"] == "5064149247325"
     assert durum.oku(c, "elle").asama == "yuklendi"  # elle gönderilmiş, onay e-postasıyla kaydedildi
-    assert [b[1] for b in bildirimler][-1].startswith("RouteNote e-postası")
+    assert [b[1] for b in bildirimler][-1].startswith("RouteNote e-postası")  # yayınla ilgili, tanınmadı
+    assert not any("Profile Code" in b[2] for b in bildirimler)  # hesap iletisi bildirilmez
     assert eposta.isle(c, iletiler, bildir=lambda *a: bildirimler.append(a)) == []  # ikinci kez işlenmez
-    assert len(list((c / "eposta" / "ornek").glob("*.txt"))) == 4
+    ornekler = [p.read_text(encoding="utf-8") for p in (c / "eposta" / "ornek").glob("*.txt")]
+    assert len(ornekler) == 4 and not any("abc123" in o for o in ornekler)  # giriş kodu diske yazılmaz
 
 
 class _Imap:
@@ -272,3 +276,10 @@ def test_odada_performans_ve_kazanc(tmp_path, monkeypatch):
     assert p["eposta"] == {"ayarli": False, "son": []}
     y = istemci.get("/api/yayin").json()["sarkilar"][0]
     assert y["dinlenme"] == 1000 + 120 * 28 and y["gunluk"] == 120.0
+
+
+def test_eposta_metni_temizlenir():
+    for charset in ("", "; charset=iso-8859-1"):  # charset yok ya da yanlış: UTF-8 baytlar latin-1 çözülür
+        ham = (f"From: noreply@routenote.com\r\nSubject: Welcome\r\nContent-Type: text/html{charset}\r\n\r\n"
+               .encode() + "<!-- tag needs inline styles --><p>we’ll help</p>".encode())
+        assert eposta.ayristir(ham).metin == "we’ll help"

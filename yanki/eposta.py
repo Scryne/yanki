@@ -35,6 +35,12 @@ AKSIYON = re.compile(r"action needed|action required|sent (it |your release )?ba
 ONAY = re.compile(r"\bapproved\b|has been accepted|on its way to (the )?stores|sent to (the )?stores|"
                   r"delivered to (the )?stores|is now live|congratulations", re.I)
 UPC = re.compile(r"(?<!\d)\d{12,13}(?!\d)")
+# yayınla ilgisi olmayan hesap iletileri: sessizce geçilir (2026-10-16 ilk okuma: "Welcome aboard! Activate your New
+# Account.", "Profile Code" — ikisi de noreply@routenote.com)
+ILGISIZ = re.compile(r"welcome aboard|activate your|access code|profile code|password|verify your|verification|"
+                     r"newsletter|special offer|webinar|survey|referral", re.I)
+ILGILI = re.compile(r"release|single|album|\btrack|moderat|distribut|\bstores?\b|\bupc\b|isrc|takedown|approv|"
+                    r"declin|reject|action needed", re.I)
 BASLIK_UZUNLUGU = 4000
 
 
@@ -63,12 +69,23 @@ def ayar(kok: Path) -> dict | None:
 def _metin(mesaj) -> str:
     """Düz metin parça varsa o, yoksa HTML'den etiketsiz metin."""
     parca = mesaj.get_body(preferencelist=("plain", "html")) if mesaj.is_multipart() else mesaj
-    try:
-        icerik = parca.get_content() if parca is not None else ""
-    except (LookupError, ValueError):
-        icerik = (parca.get_payload(decode=True) or b"").decode("utf-8", "replace") if parca is not None else ""
-    if parca is not None and parca.get_content_type() == "text/html":
-        icerik = re.sub(r"(?is)<(script|style).*?</\1>", " ", icerik)
+    if parca is None:
+        return ""
+    # baytlar önce UTF-8 denenir: RouteNote'un HTML'i charset bildirmeden ya da yanlış bildirip UTF-8 gönderiyor
+    # (2026-10-16: "weâll"); geçerli UTF-8 Latin metinde yanlışlıkla tutmaz
+    ham = parca.get_payload(decode=True) or b""
+    for kod in ("utf-8", parca.get_content_charset(), "cp1252"):
+        try:
+            icerik = ham.decode(kod) if kod else None
+        except (UnicodeDecodeError, LookupError):
+            icerik = None
+        if icerik is not None:
+            break
+    else:
+        icerik = ham.decode("utf-8", "replace")
+    if parca.get_content_type() == "text/html":
+        icerik = re.sub(r"(?s)<!--.*?-->", " ", icerik)
+        icerik = re.sub(r"(?is)<(script|style|head|title).*?</\1>", " ", icerik)
         icerik = re.sub(r"(?i)<br\s*/?>|</p>|</div>|</tr>", "\n", icerik)
         icerik = html.unescape(re.sub(r"<[^>]+>", " ", icerik))
     return re.sub(r"[ \t\xa0]+", " ", re.sub(r"\n\s*\n+", "\n", icerik)).strip()
@@ -86,12 +103,25 @@ def ayristir(ham: bytes) -> Ileti:
                  metin=metin[:BASLIK_UZUNLUGU * 4])
 
 
+def _tum_postalar(baglanti) -> str:
+    """Gmail'in "Tüm Postalar"ı (arşivlenen de içinde; adı dile göre değişir: `\\All` bayrağından), yoksa INBOX."""
+    try:
+        _, kutular = baglanti.list()
+    except (OSError, imaplib.IMAP4.error, AttributeError):
+        return "INBOX"
+    for k in kutular or []:
+        s = k.decode(errors="replace") if isinstance(k, bytes) else str(k)
+        if "\\All" in s and (ad := re.search(r'"([^"]+)"\s*$|(\S+)\s*$', s)):
+            return f'"{ad[1] or ad[2]}"'
+    return "INBOX"
+
+
 def getir(a: dict, gun: int = 21, imap=imaplib.IMAP4_SSL) -> list[Ileti]:
     """Son `gun` günde gönderende "routenote" geçen iletiler (salt okunur, `BODY.PEEK`)."""
     baglanti = imap(a["sunucu"])
     try:
         baglanti.login(a["kullanici"], a["sifre"])
-        baglanti.select("INBOX", readonly=True)
+        baglanti.select(_tum_postalar(baglanti), readonly=True)
         once = (date.today() - timedelta(days=gun)).strftime("%d-%b-%Y")
         _, veri = baglanti.search(None, "FROM", '"routenote"', "SINCE", once)
         iletiler = []
@@ -168,10 +198,13 @@ def isle(calisma: Path, iletiler: list[Ileti], bildir=None) -> list[dict]:
         if i.kimlik in kayit:
             continue
         ozet_kimlik = hashlib.sha1(i.kimlik.encode()).hexdigest()
-        ornek = calisma / "eposta" / "ornek" / f"{(i.tarih or 'tarihsiz')[:10]}-{ozet_kimlik[:8]}.txt"
-        ornek.parent.mkdir(parents=True, exist_ok=True)
-        dosya.yaz(ornek, f"Kimden: {i.gonderen}\nKonu: {i.konu}\nTarih: {i.tarih}\n\n{i.metin}")
         tur, sarki = sinif(i), eslestir(i, liste)
+        bas = f"{i.konu}\n{i.metin[:BASLIK_UZUNLUGU]}"
+        ilgisiz = tur is None and bool(ILGISIZ.search(i.konu) or not ILGILI.search(bas))
+        if not ilgisiz:  # hesap iletilerinin gövdesi (giriş kodu, etkinleştirme bağlantısı) diske yazılmaz
+            ornek = calisma / "eposta" / "ornek" / f"{(i.tarih or 'tarihsiz')[:10]}-{ozet_kimlik[:8]}.txt"
+            ornek.parent.mkdir(parents=True, exist_ok=True)
+            dosya.yaz(ornek, f"Kimden: {i.gonderen}\nKonu: {i.konu}\nTarih: {i.tarih}\n\n{i.metin}")
         eylem = "bildirildi"
         anahtar = f"eposta:{ozet_kimlik[:12]}"
         if tur in ("onay", "aksiyon") and sarki and sarki["asama"] == "paketlendi":
@@ -183,7 +216,9 @@ def isle(calisma: Path, iletiler: list[Ileti], bildir=None) -> list[dict]:
                 sarki = {**sarki, "asama": "yuklendi"}
             except ValueError:
                 pass  # RouteNote kaydı hazır değil (eski taslak): yalnız bildirilir
-        if tur is None or sarki is None:
+        if ilgisiz:
+            eylem = "ilgisiz (hesap iletisi)"  # hoş geldin, giriş kodu: bildirilmez
+        elif tur is None or sarki is None:
             neden = "türü anlaşılmadı" if tur is None else "hangi şarkı olduğu bulunamadı"
             bildir("dagitim", f"RouteNote e-postası ({neden})", f"Konu: {i.konu}. {_ozet(i, 300)}", anahtar)
         elif tur == "onay":
