@@ -1838,11 +1838,21 @@ async function yukleGoster() {
     e.currentTarget.disabled = true;
     try { const m = await api("/api/elle", { baslik: "" }); elleAc(m.kimlik); } catch (err) { bildir(err.message, true); e.currentTarget.disabled = false; }
   } }, "Yeni yayın");
+  const kendi = el("button", { class: "dugme", type: "button", title: "Senin adınla, yapay zekâsız, FreshTunes'ta (Orvane'den ayrı)", onclick: async (e) => {
+    e.currentTarget.disabled = true;
+    try { const m = await api("/api/elle", { baslik: "", sablon: "freshtunes" }); elleAc(m.kimlik); } catch (err) { bildir(err.message, true); e.currentTarget.disabled = false; }
+  } }, "Kendi şarkım (FreshTunes)");
+  const ft = d.freshtunes;
+  const ftSerit = ft ? el("p", { class: ft.hatirlat ? "uyari" : "ipucu ft-serit" },
+    ft.kalan < 0 ? `FreshTunes: son giriş/gönderim ${ft.gun} gün önce, 90 günlük süre doldu; hesap askıya alınmış olabilir (açmak 50 $). ` :
+      `FreshTunes: son giriş/gönderim ${ft.gun} gün önce; ${ft.kalan} gün içinde giriş şart (yoksa askı, açmak 50 $). `,
+    el("button", { class: "dugme ikincil kucuk", type: "button", onclick: async () => { try { bildir((await api("/api/elle-freshtunes/girdim", {})).mesaj); } catch (e) { bildir(e.message, true); } yukleGoster(); } }, "Bugün girdim")) : null;
   doldur(ana,
     el("header", { class: "pano-ust" },
       el("div", {}, el("h1", {}, "Yükle"),
-        el("p", { class: "ipucu" }, "Kendi şarkını ya da hazırladığın bir kaydı yayınla: bilgileri doldur, sesi ve kapağı bilgisayarından seç, dağıtıcıyı seç. RouteNote'a hat kendisi gönderir.")),
-      yeni),
+        el("p", { class: "ipucu" }, "Kendi şarkını ya da hazırladığın bir kaydı yayınla: bilgileri doldur, sesi ve kapağı bilgisayarından seç, dağıtıcıyı seç. AI cover'ları RouteNote'a hat kendisi gönderir; kendi şarkıların FreshTunes'a (paket hazır, formu sen doldurursun).")),
+      el("div", { class: "satir-ici" }, kendi, yeni)),
+    ftSerit,
     d.liste.length ? el("ul", { class: "kayitlar" }, ...d.liste.map((x) => el("li", { class: "kayit kapakli" },
       x.kapak ? el("img", { class: "kapak-kucuk kapak-orta", src: `/elle/${x.kimlik}/kapak?boyut=96`, alt: "", width: 44, height: 44 }) : el("span", { class: "kapak-kucuk kapak-orta bos", "aria-hidden": "true" }, dalgaIsareti()),
       el("div", { class: "kayit-ad" }, el("button", { class: "ad bag-dugme", type: "button", onclick: () => elleAc(x.kimlik) }, x.baslik), el("span", { class: "sanatci" }, x.sanatci || "—")),
@@ -1864,6 +1874,23 @@ function elleAc(kimlik) { elleAcik = kimlik; depo.yaz("elle.acik", kimlik); yukl
 function elleKapat() { elleAcik = null; depo.yaz("elle.acik", null); clearTimeout(elleIzle); yukleGoster(); scrollTo(0, 0); }
 
 // alan bileşenleri: her biri `data-alan` taşır, `elleTopla` değeri okur
+// alan açıklamaları seçili dağıtıcıya göre (RouteNote: AI cover hattı; FreshTunes: kendi şarkıların); dağıtıcı
+// değişince `elleKaydet` yeniler
+function elleNotlari(m) {
+  const d = m.dagiticilar || [], ft = d.includes("freshtunes") && !d.includes("routenote");
+  return ft ? {
+    spotify_sanatci_id: "Daha önce yayının varsa profil linkini yapıştır (sanatçı adı profildekiyle birebir aynı olmalı). İlk yayında boş bırak: profil yayından sonra açılır.",
+    upc: "Yayının barkodu. Boşsa FreshTunes ücretsiz atar.",
+    yayin_tarihi: "FreshTunes'ta zorunlu: en erken 7 gün sonrası, 14–28 gün önerilir (\"onaylanınca\" seçeneği yok).",
+    yapay_zeka: "FreshTunes yapay zekâyla üretilmiş kaydı almıyor: açıksa FreshTunes paketi inmez (AI kaydı RouteNote'tan).",
+  } : {
+    spotify_sanatci_id: "Yayın bu profile bağlanır. Boşsa RouteNote hesaptaki aynı adlı profili kullanır, yoksa yeni profil açar.",
+    upc: "Yayının barkodu. RouteNote kendi atar; başka dağıtıcı için.",
+    yayin_tarihi: "Boş: dağıtıcı onaylar onaylamaz yayında (en erken). Tarih seçersen RouteNote için en az 10 gün sonrası.",
+    yapay_zeka: "Açıkken Amazon ve Kore mağazaları (Melon, Bugs!, FLO, Genie) kapatılır: yapay zekâ içeriği almıyorlar.",
+  };
+}
+
 function alanMetin(m, ad, etiket, ek = {}) {
   const kimlik = `elle-${ad}`;
   return el("div", { class: "alan" + (ek.genis ? " genis" : "") },
@@ -1893,7 +1920,7 @@ const grup_secili = (deger, v) => (deger === true && v === "1") || (deger === fa
 function alanAnahtar(m, ad, etiket, not) {
   const kimlik = `elle-${ad}`;
   return el("div", { class: "ayar-satir alan-anahtar" },
-    el("div", {}, el("b", { id: `${kimlik}-ad` }, etiket), not ? el("p", { class: "ipucu" }, not) : null),
+    el("div", {}, el("b", { id: `${kimlik}-ad` }, etiket), not ? el("p", { class: "ipucu", id: `${kimlik}-not` }, not) : null),
     el("button", { class: "anahtar", type: "button", role: "switch", "data-alan": ad, "data-anahtar": "1", "aria-checked": m[ad] ? "true" : "false", "aria-labelledby": `${kimlik}-ad`,
       onclick: (e) => { const b = e.currentTarget; b.setAttribute("aria-checked", b.getAttribute("aria-checked") === "true" ? "false" : "true"); elleDegisti(true); } },
       el("span", { "aria-hidden": "true" })));
@@ -1965,6 +1992,7 @@ async function elleKaydet(kimlik = elleAcik) {
     if (cover) cover.hidden = !m.cover;
     const soz = document.querySelector("#elle-soz-alanlar");
     if (soz) soz.hidden = !m.soz_var || m.soz_ayni !== false;
+    for (const [ad, metin] of Object.entries(elleNotlari(m))) { const n = document.getElementById(`elle-${ad}-not`); if (n) n.textContent = metin; }
   } catch (e) { if (durum) { durum.textContent = `Kaydedilemedi: ${e.message}`; durum.dataset.d = "hata"; } }
 }
 
@@ -2027,7 +2055,7 @@ async function elleDuzenle(kimlik, is) {
         alanMetin(m, "surum", "Sürüm", { ipucu: "Acoustic, Remix, Live… (yoksa boş)", uzunluk: 100 }),
         alanMetin(m, "sanatci", "Ana sanatçı", { zorunlu: true, uzunluk: 120 }),
         alanMetin(m, "spotify_sanatci_id", "Spotify sanatçı profili", { ipucu: "Profil linki ya da kimlik (yoksa boş)", uzunluk: 200,
-          not: "Yayın bu profile bağlanır. Boşsa RouteNote hesaptaki aynı adlı profili kullanır, yoksa yeni profil açar." }),
+          not: elleNotlari(m).spotify_sanatci_id }),
         alanSecim(m, "dil", "Dil", diller, { zorunlu: true }),
         alanSecim(m, "tur", "Tür", s.turler.map((t) => [t, t]), { zorunlu: true }),
         alanEvetHayir(m, "acik_icerik", "Açık içerik (küfür, argo)", { zorunlu: true, not: "Mağazalar \"E\" (explicit) etiketi koyar." }),
@@ -2053,12 +2081,12 @@ async function elleDuzenle(kimlik, is) {
     el("fieldset", { class: "form-bolum", disabled: kilit || null }, el("legend", {}, "Kodlar ve tarih"),
       el("div", { class: "alanlar" },
         alanMetin(m, "isrc", "ISRC", { ipucu: "TR-A1B-26-00001", uzunluk: 15, not: "Kaydın kodu. Yoksa boş bırak: dağıtıcı atar." }),
-        alanMetin(m, "upc", "UPC / EAN", { ipucu: "12–13 rakam", uzunluk: 13, inputmode: "numeric", not: "Yayının barkodu. RouteNote kendi atar; başka dağıtıcı için." }),
-        alanMetin(m, "yayin_tarihi", "Yayın tarihi", { tur: "date", uzunluk: 10, not: "Boş: dağıtıcı onaylar onaylamaz yayında (en erken). Tarih seçersen RouteNote için en az 10 gün sonrası." }),
+        alanMetin(m, "upc", "UPC / EAN", { ipucu: "12–13 rakam", uzunluk: 13, inputmode: "numeric", not: elleNotlari(m).upc }),
+        alanMetin(m, "yayin_tarihi", "Yayın tarihi", { tur: "date", uzunluk: 10, not: elleNotlari(m).yayin_tarihi }),
         alanMetin(m, "orijinal_tarih", "Daha önce yayınlandıysa ilk tarih", { tur: "date", uzunluk: 10 }),
         alanMetin(m, "onizleme", "Önizleme başlangıcı", { ipucu: "1:05", uzunluk: 5, inputmode: "numeric", not: "TikTok ve mağaza önizlemesi buradan başlar (dk:sn)." }))),
     el("fieldset", { class: "form-bolum", disabled: kilit || null }, el("legend", {}, "Mağazalar"),
-      alanAnahtar(m, "yapay_zeka", "Ses yapay zekâyla üretildi", "Açıkken Amazon ve Kore mağazaları (Melon, Bugs!, FLO, Genie) kapatılır: yapay zekâ içeriği almıyorlar."),
+      alanAnahtar(m, "yapay_zeka", "Ses yapay zekâyla üretildi", elleNotlari(m).yapay_zeka),
       alanAnahtar(m, "content_id", "YouTube Content ID", "Kaydını YouTube'da başkasının videosunda tanır ve gelir toplar. Cover ya da yapay zekâ içeriğinde kapalı tut."),
       el("div", { class: "alanlar" }, alanMetin(m, "notlar", "Notlar (kendin için)", { cok: true, uzunluk: 2000, genis: true, yazim: true }))));
   const onizleme = form.querySelector("#elle-onizleme");
@@ -2101,6 +2129,21 @@ function elleYan(m, is) {
       onclick: async () => { try { await api(`/api/elle/${m.kimlik}/gonder`, { gonder: false }); bildir("RouteNote taslağı hazırlanıyor; gönderilmeyecek."); elleTakip(); yukleGoster(); } catch (e) { bildir(e.message, true); } } },
       "Yalnız RouteNote taslağı aç"));
   }
+  const ft = m.freshtunes || {};
+  if (ft.adim === "gonderildi") eylemler.push(el("p", { class: "not canli" }, el("span", { class: "nokta" }), `FreshTunes'a gönderildi (${tarih(ft.gonderim)}); yayın ${ft.yayin_tarihi ? tarih(ft.yayin_tarihi) : "—"}. Reddedilirse aşağıdan kaydı sıfırla, düzeltip yeniden gönder.`));
+  else if (secili.includes("freshtunes")) {
+    // FreshTunes şartları botu yasaklıyor (ToS §9g): paket hatta hazırlanır, form Scryne'da
+    const ftHazir = hazir("freshtunes");
+    eylemler.push(el("ol", { class: "ft-adimlar ipucu" },
+      el("li", {}, "Paketi indir: ses, kapak ve formun alanları (FRESHTUNES.txt) içinde."),
+      el("li", {}, "FreshTunes'ta yeni yayın aç, alanları listeden kopyala, dosyaları yükle."),
+      el("li", {}, "Gönderince buradan kaydet: taslak kilitlenir.")),
+    el("a", { class: "dugme birincil genis-dugme" + (ftHazir ? "" : " pasif"), href: ftHazir ? `/elle/${m.kimlik}/paket.zip?dagitici=freshtunes` : null,
+      "aria-disabled": ftHazir ? null : "true", title: ftHazir ? "" : "Önce eksikleri tamamla", download: "" }, "FreshTunes paketini indir (ZIP)"),
+    el("div", { class: "satir-ici" },
+      el("a", { class: "dugme ikincil kucuk", href: s.freshtunes_url, target: "_blank", rel: "noopener" }, "FreshTunes'u aç"),
+      el("button", { class: "dugme kucuk", type: "button", disabled: !ftHazir || null, onclick: () => ftGonderildiSor(m) }, "FreshTunes'a gönderdim")));
+  }
   if (secili.includes("elle")) eylemler.push(el("a", { class: "dugme ikincil genis-dugme" + (m.dosya.ses && m.dosya.kapak ? "" : " pasif"), href: m.dosya.ses && m.dosya.kapak ? `/elle/${m.kimlik}/paket.zip` : null,
     "aria-disabled": m.dosya.ses && m.dosya.kapak ? null : "true", download: "" }, "Paketi indir (ZIP)"));
   return el("aside", { id: "elle-yan", class: "pano-sag elle-yan" },
@@ -2117,10 +2160,22 @@ function elleYan(m, is) {
       rn.upc && rn.adim !== "gonderildi" && rn.adim !== "gonderiliyor" ? el("details", { class: "elle-ileri" }, el("summary", {}, "RouteNote taslağını panelden sildim"),
         el("p", { class: "ipucu kucuk-ipucu" }, "Kayıt sıfırlanır, form yeniden düzenlenebilir; sonraki gönderim yeni taslak açar."),
         el("button", { class: "dugme tehlike kucuk", type: "button", onclick: async () => { try { bildir((await api(`/api/elle/${m.kimlik}/sifirla`, {})).mesaj); } catch (e) { bildir(e.message, true); } yukleGoster(); } }, "Kaydı sıfırla")) : null,
-      !rn.upc ? el("details", { class: "elle-ileri" }, el("summary", {}, "Taslağı sil"),
+      ft.adim === "gonderildi" ? el("details", { class: "elle-ileri" }, el("summary", {}, "FreshTunes reddetti / yanlışlıkla kaydettim"),
+        el("p", { class: "ipucu kucuk-ipucu" }, "Kayıt geçmişe taşınır, form yeniden düzenlenebilir. FreshTunes'taki yayına dokunulmaz."),
+        el("button", { class: "dugme tehlike kucuk", type: "button", onclick: async () => { try { bildir((await api(`/api/elle/${m.kimlik}/sifirla?dagitici=freshtunes`, {})).mesaj); } catch (e) { bildir(e.message, true); } yukleGoster(); } }, "FreshTunes kaydını sıfırla")) : null,
+      !rn.upc && ft.adim !== "gonderildi" ? el("details", { class: "elle-ileri" }, el("summary", {}, "Taslağı sil"),
         el("button", { class: "dugme tehlike kucuk", type: "button", onclick: async () => { try { await api(`/api/elle/${m.kimlik}/sil`, {}); bildir("Taslak silindi."); elleKapat(); } catch (e) { bildir(e.message, true); } } }, "Kalıcı olarak sil")) : null),
     is && String(is.ad || "").startsWith("elle") ? isPaneli(is) : null);
 }
+function ftGonderildiSor(m) {
+  const dlg = pencere(`"${elleAdi(m)}" FreshTunes'a gönderildi diye kaydedilsin mi?`, [
+    el("p", { class: "ipucu" }, "Yalnız FreshTunes'ta yayını gönderdiysen (moderasyonda görünüyorsa). Taslak kilitlenir; bilgiler artık FreshTunes panelinden değişir. Hesap etkinliği de sayılır (3 ayda bir giriş şartı)."),
+  ], [
+    el("button", { class: "dugme", type: "button", onclick: () => dlg.close() }, "Vazgeç"),
+    el("button", { class: "dugme punch", type: "button", onclick: async () => { dlg.close(); try { bildir((await api(`/api/elle/${m.kimlik}/freshtunes-gonderildi`, {})).mesaj); } catch (e) { bildir(e.message, true); } yukleGoster(); } }, "Gönderildi, kaydet"),
+  ]);
+}
+
 function elleGonderPenceresi(m) {
   const kutu = el("input", { id: "elle-onay", type: "text", autocomplete: "off", spellcheck: "false", placeholder: m.baslik });
   const sade = (x) => x.trim().replace(/[Iİı]/g, "i").toLowerCase();

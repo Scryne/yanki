@@ -102,10 +102,18 @@ taslak. Form yazdıkça kaydedilir (`calisma/elle/<kimlik>/`):
   cover mı (cover: orijinal sanatçı, mekanik lisans yoksa ABD/Kanada/Meksika/Hindistan/Pakistan hariç), besteciler ve söz
   yazarları (ad + soyad), yapımcı, ©/℗, label, ISRC (boşsa dağıtıcı atar), UPC, yayın tarihi (boş: onaylanınca), ilk
   yayın tarihi, önizleme başlangıcı, yapay zekâ (Amazon ve Kore mağazaları kapanır), YouTube Content ID.
-- **Dağıtıcı:** *RouteNote* (otomatik: form tarayıcıyla doldurulur ve aynı oturumda gönderilir; onay için şarkının adı
-  yazılır; `yanki elle-yukle <kimlik> --gonder`) ya da *başka dağıtıcı (elle)*: DistroKid, TuneCore vb. otomasyonu
-  yasakladığı için ses + kapak + `BILGILER.txt` tek ZIP'te iner. Sağ panel eksikleri listeler; tamamlanmadan gönder
-  düğmesi açılmaz. Gönderilen taslak kilitlenir.
+- **Dağıtıcı:** *RouteNote* (AI cover'lar, Orvane; otomatik: form tarayıcıyla doldurulur ve aynı oturumda gönderilir;
+  onay için şarkının adı yazılır; `yanki elle-yukle <kimlik> --gonder`), *FreshTunes* (Scryne'ın kendi şarkıları, kendi
+  adıyla; aşağıda) ya da *başka dağıtıcı (elle)*: DistroKid, TuneCore vb. otomasyonu yasakladığı için ses + kapak +
+  `BILGILER.txt` tek ZIP'te iner. Aynı kayıt RouteNote ve FreshTunes'a birlikte gönderilemez (mağazada iki kopya).
+  Sağ panel eksikleri listeler; tamamlanmadan gönder düğmesi açılmaz. Gönderilen taslak kilitlenir.
+- **Kendi şarkıların: FreshTunes** (ücretsiz, akış gelirinin %100'ü; `docs/arastirma/09`). Yükle → **Kendi şarkım
+  (FreshTunes)**: sanatçı, profil, label ve yazarlar son FreshTunes taslağından gelir, yapay zekâ kapalı, yayın tarihi
+  14 gün sonrası. FreshTunes yapay zekâ kaydını ve botu yasaklıyor: hat denetler (yapay zekâ, Orvane adı, yayın tarihi
+  en erken 7 gün, başta/sonda en çok 5 sn sessizlik, kırpılma) ve **FreshTunes paketini** (`audio.flac`, `artwork.jpg`,
+  kontrol listesi ve form alanlarıyla `FRESHTUNES.txt`) indirir; formu sen doldurursun, sonra **FreshTunes'a
+  gönderdim**. FreshTunes 3 ayda bir giriş istiyor (yoksa askı, açmak 50 $): 75. günden itibaren haftada bir bildirim
+  gelir, Yükle'de **Bugün girdim** sayacı sıfırlar. Para Payoneer'la çekilir (en az 25 $).
 
 **Yayından sonra (dinleme odası → Yayın → Performans, `yanki performans`):** RouteNote paneli botla okunmaz (site
 şartları madde 2: "collecting data … using bots … or other automated data gathering methods"). Onun yerine:

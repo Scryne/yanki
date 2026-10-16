@@ -757,3 +757,9 @@ a.dugme.pasif { opacity: .45; pointer-events: none; }
   border-radius: var(--r-kucuk); padding: 6px var(--s3); width: 100%; }
 .kulak-not:focus { border-color: var(--cizgi-gumus); outline: none; }
 .kulak-not:focus-visible { outline: 2px solid var(--oynatma); outline-offset: 1px; }
+
+/* Yükle: FreshTunes (elle gönderim adımları, başlıkta iki düğme, giriş hatırlatıcısı) */
+.pano-ust .satir-ici { flex-wrap: wrap; justify-content: flex-end; }
+.ft-adimlar { margin: 0 0 var(--s2); padding-left: 1.2em; }
+.ft-adimlar li { margin: 2px 0; }
+.ft-serit { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); }

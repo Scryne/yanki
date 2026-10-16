@@ -911,3 +911,15 @@ tema) canlı verinin kopyasıyla doğrulandı.
   **Karar Scryne'da** (kapatmak, süreyi uzatmak ya da olduğu gibi bırakmak).
 - **Kalan (karar Scryne'da):** RunPod bakiyesi (0,80 $ < `en_az_bakiye` 1 $: üretim duruyor); yedeği ikinci diske
   almak (`config/operasyon.toml` → `yedek.klasor`).
+
+## Kendi şarkılar için FreshTunes (2026-10-16, Scryne: "normal şarkıları da paylaşabileceğim bir dağıtıcı lazım, para vermeden"; "FreshTunes la ilerleyelim")
+
+- Araştırma `docs/arastirma/09`: 2026'da gerçekten ücretsiz kalanlar RouteNote Free, FreshTunes Free, Freecords ve
+  (Türkiye'de doğrulanamayan) SoundOn; TuneCore ve Amuse ücretsiz planı kapattı. RouteNote'ta hesap başına tek Spotify
+  profili (Orvane'de) ve AI Persona yüzünden kendi şarkılar ayrı dağıtıcıda.
+- Odada Yükle → **Kendi şarkım (FreshTunes)**, FreshTunes denetimi ve paketi, "FreshTunes'a gönderdim" (kilit),
+  "FreshTunes kaydını sıfırla", 3 aylık giriş hatırlatıcısı (gece koşusu + "Bugün girdim"). Yükleme sırasında ses
+  ölçülür (baş/son sessizlik, tepe, kırpılma). 608 test.
+- **Açık:** FreshTunes formunun alan sırası, tür/dil listeleri giriş yapmadan görülemedi; ilk yüklemede formun ekran
+  görüntüsüyle `elle.freshtunes_metni` sıkılaştırılacak. İlk gerçek FreshTunes yayını bekleniyor.
+

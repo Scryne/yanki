@@ -15,6 +15,7 @@ import threading
 import tomllib
 from dataclasses import asdict
 from pathlib import Path
+from typing import Literal
 
 import numpy as np
 from fastapi import FastAPI, HTTPException, Request
@@ -91,6 +92,7 @@ class GonderOnayi(BaseModel):
 
 class ElleYeni(BaseModel):
     baslik: str = Field(default="", max_length=200)
+    sablon: Literal["freshtunes"] | None = None  # "kendi şarkım": Orvane değil, yapay zekâ yok, FreshTunes
 
 
 class ElleGonder(BaseModel):
@@ -782,11 +784,19 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None, gorev_ok
         return {"liste": elle.liste(calisma), "secenek": {
             "diller": list(routenote.RN_DILLER), "turler": list(routenote.RN_TURLER),
             "dagiticilar": elle.DAGITICILAR, "varsayilan": elle.varsayilanlar(a.kok),
-            "mekanik_ulkeler": list(elle.MEKANIK_LISANS_ULKELER)}, "is": isci.durum()}
+            "mekanik_ulkeler": list(elle.MEKANIK_LISANS_ULKELER), "freshtunes_url": elle.FRESHTUNES_URL},
+            "freshtunes": elle.freshtunes_durumu(calisma), "is": isci.durum()}
+
+    @app.post("/api/elle-freshtunes/girdim")
+    def elle_freshtunes_girdim():
+        """FreshTunes hesabına girildi: 3 aylık hareketsizlik sayacı sıfırlanır (ToS §4: askı, açmak 50 $)."""
+        elle.freshtunes_girdim(calisma)
+        return {"mesaj": "FreshTunes girişi kaydedildi; sonraki hatırlatma 75 gün sonra",
+                "freshtunes": elle.freshtunes_durumu(calisma)}
 
     @app.post("/api/elle")
     def elle_yeni(istek: ElleYeni):
-        return elle_ozet(elle.yeni(calisma, a.kok, istek.baslik)["kimlik"])
+        return elle_ozet(elle.yeni(calisma, a.kok, istek.baslik, istek.sablon)["kimlik"])
 
     @app.get("/api/elle/{kimlik}")
     def elle_ac(kimlik: str):
@@ -862,13 +872,13 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None, gorev_ok
         return FileResponse(yol, media_type="audio/flac")
 
     @app.get("/elle/{kimlik}/paket.zip")
-    def elle_paket(kimlik: str):
+    def elle_paket(kimlik: str, dagitici: Literal["elle", "freshtunes"] = "elle"):
         from urllib.parse import quote
 
         from fastapi.responses import Response
 
         try:
-            veri, ad = elle.paket_zip(calisma, kimlik)
+            veri, ad = elle.paket_zip(calisma, kimlik, dagitici)
         except elle.Hata as e:
             raise elle_hata(e) from e
         return Response(veri, media_type="application/zip",
@@ -898,10 +908,18 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None, gorev_ok
         except elle.Hata as e:
             raise HTTPException(409, str(e)) from e
 
-    @app.post("/api/elle/{kimlik}/sifirla")
-    def elle_sifirla(kimlik: str):
+    @app.post("/api/elle/{kimlik}/freshtunes-gonderildi")
+    def elle_freshtunes_gonderildi(kimlik: str):
+        """Scryne formu FreshTunes'ta doldurup gönderdi (şartlar botu yasaklıyor: gönderim elle): kayıt kilitlenir."""
         try:
-            return {"mesaj": elle.sifirla(calisma, kimlik)}
+            return {"mesaj": elle.freshtunes_gonderildi(calisma, kimlik)}
+        except elle.Hata as e:
+            raise HTTPException(409, str(e)) from e
+
+    @app.post("/api/elle/{kimlik}/sifirla")
+    def elle_sifirla(kimlik: str, dagitici: Literal["routenote", "freshtunes"] = "routenote"):
+        try:
+            return {"mesaj": elle.sifirla(calisma, kimlik, dagitici)}
         except elle.Hata as e:
             raise HTTPException(409, str(e)) from e
 

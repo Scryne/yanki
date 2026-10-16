@@ -1135,6 +1135,9 @@ def _takvim_hatirlat(kok: Path) -> int:
     ad = paket.yayin_ayarlari(kok / "config" / "yayin.toml").dagitimci
     p = dagitim.plan(calisma, dagitim.takvim_oku(kok / "config" / "yayin.toml"), dagitimci=ad)
     bildir = _bildirici(calisma)
+    from yanki import elle
+
+    elle.freshtunes_hatirlatma(calisma, bildir)  # kendi şarkıları: FreshTunes 3 ayda bir giriş ister (askı 50 $)
     for kimlik in p.yazarsiz:  # kaynakta yazar yok (MusicBrainz'de kaydı olmayan şarkı): Scryne'a bir kez
         s = durum.oku(calisma, kimlik)
         print(f"takvim: {s.sanatci} — {s.ad} yazarsız, bekliyor (girdi/liste.toml → yazarlar)")
