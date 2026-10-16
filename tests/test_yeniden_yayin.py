@@ -280,15 +280,35 @@ def test_pinterest_kapagi_buyuk_ve_kullanilmamis_pin(tmp_path, kok):
                 "images": {"orig": {"url": f"https://p/{no}.jpg", "width": en, "height": en}}}
 
     b = io.BytesIO()
-    Image.new("RGB", (2000, 2000), (10, 20, 30)).save(b, "JPEG")
+    Image.new("RGB", (1080, 1080), (10, 20, 30)).save(b, "JPEG")
     sorgular, inen = [], []
     satir = yeniden_yayin.pinterest_kapak(
-        c, k, arayici=lambda q: sorgular.append(q) or [pin("1", 3000), pin("2", 900), pin("3", 2000)],
+        c, k, arayici=lambda q: sorgular.append(q) or [pin("1", 3000), pin("2", 900), pin("3", 1080)],
         indirici=lambda u: inen.append(u) or b.getvalue())
-    assert "Pinterest" in satir and inen == ["https://p/3.jpg"]  # 1 kullanılmış, 2 küçük (FreshTunes en az 1400)
+    assert "Pinterest" in satir and inen == ["https://p/3.jpg"]  # 1 kullanılmış, 2 küçük (en az 1000, 3000'e büyür)
     m = elle.oku(c, k)
     assert m["kapak"]["kaynak"] == "pinterest" and any("Pinterest" in x for x in elle.kontrol(c, k)["uyari"])
     kaynak_ = json.loads((elle.klasor(c, k) / "kapak_kaynak.json").read_text(encoding="utf-8"))
     assert kaynak_["pin_id"] == "3"
     with pytest.raises(yeniden_yayin.Hata, match="Pinterest'te"):
-        yeniden_yayin.pinterest_kapak(c, k, arayici=lambda q: [pin("3", 2000)], indirici=lambda u: b.getvalue())
+        yeniden_yayin.pinterest_kapak(c, k, arayici=lambda q: [pin("3", 1080)], indirici=lambda u: b.getvalue())
+    # "Başka kapak": önceki pin (3) reddedilmiş sayılır, sıradaki gelir; ikinci değişimde de 3 dönmez
+    yeniden_yayin.pinterest_kapak(c, k, arayici=lambda q: [pin("3", 1080), pin("4", 1080)],
+                                  indirici=lambda u: b.getvalue())
+    yeniden_yayin.pinterest_kapak(c, k, arayici=lambda q: [pin("3", 1080), pin("4", 1080), pin("5", 1080)],
+                                  indirici=lambda u: b.getvalue())
+    kaynak_ = json.loads((elle.klasor(c, k) / "kapak_kaynak.json").read_text(encoding="utf-8"))
+    assert kaynak_["pin_id"] == "5" and {"3", "4"} <= set(kaynak_["onceki"])
+
+
+def test_odada_baska_kapak(tmp_path, kok, monkeypatch):
+    c = tmp_path / "calisma"
+    k = yeniden_yayin.taslak_kur(c, kok, _parca(), ["Scryne"])["kimlik"]
+    cagri = []
+    monkeypatch.setattr(yeniden_yayin, "pinterest_kapak", lambda c_, k_: cagri.append(k_) or "kapak: Pinterest (x)")
+    oda = TestClient(sunucu.uygulama(replace(ayarlar.yukle(), kok=kok), c), base_url="http://127.0.0.1:8765")
+    r = oda.post(f"/api/elle/{k}/pinterest", json={})
+    assert r.status_code == 200 and r.json()["mesaj"].startswith("kapak: Pinterest") and cagri == [k]
+    monkeypatch.setattr(yeniden_yayin, "pinterest_kapak",
+                        lambda *a: (_ for _ in ()).throw(yeniden_yayin.Hata("Pinterest'te uygun görsel yok")))
+    assert oda.post(f"/api/elle/{k}/pinterest", json={}).status_code == 422

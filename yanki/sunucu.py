@@ -817,6 +817,22 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None, gorev_ok
             raise HTTPException(409, elle.kilitli(meta))
         return is_baslat("elle_kaynak", kimlik)
 
+    @app.post("/api/elle/{kimlik}/pinterest")
+    async def elle_pinterest(kimlik: str):
+        """Pinterest'ten (yeni) kapak: beğenilmeyen pin bir daha seçilmez (`yeniden_yayin.pinterest_kapak`)."""
+        from starlette.concurrency import run_in_threadpool
+
+        from yanki import yeniden_yayin
+
+        try:
+            if neden := elle.kilitli(elle.oku(calisma, kimlik)):
+                raise HTTPException(409, neden)
+            return {"mesaj": await run_in_threadpool(yeniden_yayin.pinterest_kapak, calisma, kimlik)}
+        except (elle.Hata, yeniden_yayin.Hata) as e:
+            raise HTTPException(422, str(e)) from e
+        except OSError as e:
+            raise HTTPException(502, f"Pinterest'e ulaşılamadı ({e})") from e
+
     @app.post("/api/elle-freshtunes/girdim")
     def elle_freshtunes_girdim():
         """FreshTunes hesabına girildi: 3 aylık hareketsizlik sayacı sıfırlanır (ToS §4: askı, açmak 50 $)."""

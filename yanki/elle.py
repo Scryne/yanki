@@ -321,7 +321,7 @@ def ses_olcumu(yol: Path) -> dict:
             "tepe_db": round(20 * math.log10(tepe / 32768), 1), "kirpik": kirpik / n}
 
 
-def kapak_kaydet(calisma: Path, kimlik: str, ad: str, veri: bytes) -> dict:
+def kapak_kaydet(calisma: Path, kimlik: str, ad: str, veri: bytes, en_az: int = KAPAK_EN_AZ) -> dict:
     """Bilgisayardan seçilen görsel → `kapak.jpg`: ortadan kare, 3000×3000, RGB, JPG (RouteNote kuralı; diğer
     dağıtıcılar da kabul eder). 1400'den küçük reddedilir; 3000'den küçük büyütülür ve uyarılır."""
     from PIL import Image, ImageOps, UnidentifiedImageError
@@ -335,8 +335,8 @@ def kapak_kaydet(calisma: Path, kimlik: str, ad: str, veri: bytes) -> dict:
         with Image.open(io.BytesIO(veri)) as im:
             im = ImageOps.exif_transpose(im)
             en, boy = im.size
-            if min(en, boy) < KAPAK_EN_AZ:
-                raise Hata(f"kapak en az {KAPAK_EN_AZ}×{KAPAK_EN_AZ} olmalı ({en}×{boy})")
+            if min(en, boy) < en_az:
+                raise Hata(f"kapak en az {en_az}×{en_az} olmalı ({en}×{boy})")
             kenar = min(en, boy)
             kare = im.convert("RGB").crop(((en - kenar) // 2, (boy - kenar) // 2, (en + kenar) // 2,
                                            (boy + kenar) // 2)).resize((3000, 3000), Image.Resampling.LANCZOS)

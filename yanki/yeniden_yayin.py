@@ -276,14 +276,26 @@ def pinterest_sorgusu(kp: dict) -> str:
     return f"{' '.join(mod)} scenery aesthetic"
 
 
+# Pinterest pinlerinin kısa kenarı çoğunlukla 1000–1126 px (2026-10-16 ölçümü: 46 uygun pinde 1400'ü geçen yok); görsel
+# 3000×3000'e büyütülür (Yanki cover'larında alt sınır 600). FreshTunes'a giden dosya 3000 px.
+PINTEREST_EN_AZ = 1000
+
+
 def pinterest_kapak(calisma: Path, kimlik: str, arayici=None, indirici=None) -> str:
-    """Yanki'nin cover kapaklarındaki gibi Pinterest'ten (insansız, yazısız, kullanılmamış pin); FreshTunes için
-    kısa kenarı en az `elle.KAPAK_EN_AZ`. Kaynak taslakta `kapak_kaynak.json` (pin iki yayında kullanılmaz)."""
+    """Yanki'nin cover kapaklarındaki gibi Pinterest'ten (insansız, yazısız, kullanılmamış pin), kısa kenarı en az
+    `PINTEREST_EN_AZ`. Kaynak taslakta `kapak_kaynak.json` (pin iki yayında kullanılmaz)."""
+
+    import json
 
     from yanki import dosya, pinterest
 
     arayici, indirici = arayici or pinterest.ara, indirici or pinterest._indir
     meta = elle.oku(calisma, kimlik)
+    try:  # "başka kapak": beğenilmeyen pinler bir daha seçilmez (`pinterest.kullanilanlar` `onceki`yi de sayar)
+        onceki = json.loads((elle.klasor(calisma, kimlik) / "kapak_kaynak.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        onceki = {}
+    reddedilen = [*onceki.get("onceki", []), *[x for x in (onceki.get("pin_id"), onceki.get("imza")) if x]]
     kullanilan = pinterest.kullanilanlar(calisma) | pinterest.kullanilanlar(elle.kok_klasor(calisma))
     q = pinterest_sorgusu(meta.get("kaynak_parca") or {})
     for sorgu in (q, "moody scenery aesthetic"):
@@ -293,23 +305,23 @@ def pinterest_kapak(calisma: Path, kimlik: str, arayici=None, indirici=None) -> 
             continue
         buyuk = [p for p in pinterest.sirali_adaylar(adaylar, kullanilan)
                  if min(pinterest._gorsel(p).get("width") or 0, pinterest._gorsel(p).get("height") or 0)
-                 >= elle.KAPAK_EN_AZ]
+                 >= PINTEREST_EN_AZ]
         for pin in buyuk[:pinterest.INDIRME_DENEME]:
             g = pinterest._gorsel(pin)
             try:
-                elle.kapak_kaydet(calisma, kimlik, "pinterest.jpg", indirici(g["url"]))
+                elle.kapak_kaydet(calisma, kimlik, "pinterest.jpg", indirici(g["url"]), en_az=PINTEREST_EN_AZ)
             except (OSError, elle.Hata):
                 continue
             dosya.json_yaz(elle.klasor(calisma, kimlik) / "kapak_kaynak.json", {
                 "pin_id": pin["id"], "imza": pin.get("image_signature"), "url": g["url"],
                 "pin": f"https://www.pinterest.com/pin/{pin['id']}/", "aciklama": pin.get("seo_alt_text"),
-                "boyut": [g["width"], g["height"]], "sorgu": sorgu})
+                "boyut": [g["width"], g["height"]], "sorgu": sorgu, "onceki": reddedilen})
             meta = elle.oku(calisma, kimlik)
             meta["kapak"] = {**(meta.get("kapak") or {}), "kaynak": "pinterest",
                              "pin": f"https://www.pinterest.com/pin/{pin['id']}/"}
             elle._yaz(calisma, kimlik, meta)
             return f"kapak: Pinterest ({pin.get('seo_alt_text') or pin['id']}; sorgu: {sorgu})"
-    raise Hata(f"Pinterest'te {elle.KAPAK_EN_AZ} px'lik uygun görsel bulunamadı (sorgu: {q})")
+    raise Hata(f"Pinterest'te {PINTEREST_EN_AZ} px'lik uygun görsel bulunamadı (sorgu: {q}); kapağı kendin sürükle")
 
 
 def kapak_indir(calisma: Path, kimlik: str, bul=None, al=None, deezer=None, pinterest_=None) -> str:

@@ -2186,6 +2186,13 @@ function elleYan(m, is) {
     `Bulucu'dan: kalkmış yayın${kp.isrc ? ` (ISRC ${kp.isrc})` : ""}. ${!m.dosya.ses && !m.dosya.kapak ? "Ses ve kapak" : !m.dosya.ses ? "Ses" : "Kapak"} henüz yok:`),
     el("button", { class: "dugme ikincil kucuk", type: "button", disabled: is?.suruyor || null, onclick: async () => {
       try { await api(`/api/elle/${m.kimlik}/kaynak`, {}); bildir("Ses ve kapak aranıyor; iş panelinden izle."); elleTakip(); yukleGoster(); } catch (e) { bildir(e.message, true); } } }, "Sesi ve kapağı bul"));
+  if (!m.kilit && m.kapak?.kaynak === "pinterest") eylemler.push(el("div", { class: "satir-ici" },
+    el("span", { class: "ipucu kucuk-ipucu" }, "Kapak Pinterest'ten."),
+    m.kapak.pin ? el("a", { class: "dugme ikincil kucuk", href: m.kapak.pin, target: "_blank", rel: "noopener" }, "Pin'i aç") : null,
+    el("button", { class: "dugme ikincil kucuk", type: "button", onclick: async (e) => {
+      const b = e.currentTarget; b.disabled = true; b.setAttribute("aria-busy", "true");
+      try { bildir((await api(`/api/elle/${m.kimlik}/pinterest`, {})).mesaj); } catch (err) { bildir(err.message, true); }
+      yukleGoster(); } }, "Başka kapak")));
   if (ft.adim === "gonderildi") eylemler.push(el("p", { class: "not canli" }, el("span", { class: "nokta" }), `FreshTunes'a gönderildi (${tarih(ft.gonderim)}); yayın ${ft.yayin_tarihi ? tarih(ft.yayin_tarihi) : "—"}. Reddedilirse aşağıdan kaydı sıfırla, düzeltip yeniden gönder.`));
   else if (secili.includes("freshtunes")) {
     // FreshTunes şartları botu yasaklıyor (ToS §9g): paket hatta hazırlanır, form Scryne'da
