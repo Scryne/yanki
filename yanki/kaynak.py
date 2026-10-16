@@ -92,9 +92,11 @@ def youtube_adaylari(sorgu: str, adet: int = 8) -> list[Aday]:
         sayac.say("YouTube", False)
         raise
     sayac.say("YouTube", True)
-    girdiler = bilgi.get("entries") or [bilgi]
+    # arama boş dönünce `entries` boş: arama nesnesinin kendisi (kimliği sorgu, süresi yok) aday sayılıyordu
+    # (2026-10-16: "knownbyC Slow Fall official audio" 0:00 diye listelendi); tek video adresinde nesne videodur
+    girdiler = bilgi.get("entries") if "entries" in bilgi or not hedef.startswith("http") else [bilgi]
     return [Aday(g["id"], g.get("title") or "", g.get("duration"), g.get("channel") or g.get("uploader") or "")
-            for g in girdiler if g]
+            for g in girdiler or [] if g and g.get("id")]
 
 
 def youtube_indir(video_id: str, hedef: Path, deneme: int = 3, bekleme_sn: float = 10.0, bicim: str = BICIM) -> Path:

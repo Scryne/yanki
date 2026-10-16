@@ -10,7 +10,8 @@ Yalnız Scryne'ın kendi kataloğu: parçanın sanatçısı kayıtlı kendi sana
 - `taslak_kur` (ağsız, anında): Bulucu'nun parça ayrıntısından (`calisma/bulucu/parca-<id>.json`) künye.
 - `kaynak_doldur` (oda işi `yanki elle-kaynak <kimlik>`, ağ): ses YouTube'dan, süresi Spotify'daki süreye en çok
   `SURE_TOLERANS_SN` uzak kayıt; önce sanatçının "- Topic" kanalı (dağıtımcının yüklediği kayıt), sonra resmî ses. Kapak
-  iTunes'tan 3000×3000 (Spotify'ın kapağı 640 px, FreshTunes en az 1400 istiyor). Bulunamayan elle sürüklenir.
+  yayının kendisinden (iTunes, Deezer), yoksa Pinterest'ten (Spotify'ınki 640 px, FreshTunes en az 1400 istiyor).
+  Bulunamayan elle sürüklenir.
 """
 
 import re
@@ -83,7 +84,7 @@ def taslak_kur(calisma: Path, kok: Path, parca: dict, kendi: list[str]) -> dict:
                    "kalkmış yayınların yeniden yayınlanır")
     if not parca.get("sure_ms"):
         raise Hata("parçanın süresi okunamadı (Bulucu'da parçayı yeniden oku)")
-    m = elle.yeni(calisma, kok, parca.get("ad") or "", sablon="freshtunes")
+    m = elle.yeni(calisma, kok, parca.get("ad") or "", sablon="freshtunes", sanatci=sanatci)
     k = m["kimlik"]
     sid = next((x.get("id") for x in parca.get("sanatcilar") or []
                 if isinstance(x, dict) and _sade(x.get("name", "")) == _sade(sanatci)), None)
@@ -123,7 +124,8 @@ def taslak_kur(calisma: Path, kok: Path, parca: dict, kendi: list[str]) -> dict:
     meta["kaynak_parca"] = {"spotify_id": parca.get("id"), "sure_sn": parca["sure_ms"] / 1000,
                             "ad": parca.get("ad"), "sanatci": sanatci, "isrc": parca.get("isrc"),
                             "resim": parca.get("resim"), "cikis": parca.get("cikis"), "label": parca.get("label"),
-                            "distributor": parca.get("distributor")}
+                            "distributor": parca.get("distributor"), "ton": parca.get("ton"),
+                            "tempo": parca.get("tempo")}
     meta["notlar"] = (f"Kalkmış yayının yeniden yayını (Bulucu): spotify:track:{parca.get('id')} · "
                       f"{parca.get('distributor') or 'distribütör ?'} · {parca.get('label') or 'label ?'}")
     return elle._yaz(calisma, k, meta)
@@ -179,10 +181,12 @@ def ses_indir(calisma: Path, kimlik: str, adaylar=None, indir=None) -> str:
         if secilen := ses_sec(list(gorulen.values()), sanatci, sure, ad):
             break
     if secilen is None:
-        yakin = sorted(gorulen.values(), key=lambda a: abs((a.sure_sn or 0) - sure))[:3]
-        raise Hata(f"YouTube'da {int(sure) // 60}:{int(sure) % 60:02d} süreli kayıt bulunamadı (en yakınlar: "
-                   + ", ".join(f"{a.baslik[:40]} {int(a.sure_sn or 0) // 60}:{int(a.sure_sn or 0) % 60:02d}"
-                               for a in yakin) + "); sesi kendin sürükle")
+        yakin = sorted((a for a in gorulen.values() if a.sure_sn), key=lambda a: abs(a.sure_sn - sure))[:3]
+        ne = ("en yakınlar: " + ", ".join(f"{a.baslik[:40]} {int(a.sure_sn) // 60}:{int(a.sure_sn) % 60:02d}"
+                                           for a in yakin)) if yakin else "aramada hiç sonuç yok"
+        raise Hata(f"YouTube'da {int(sure) // 60}:{int(sure) % 60:02d} süreli kayıt bulunamadı ({ne}). Kalkmış "
+                   "yayının herkese açık kopyası kalmamış olabilir (SoundCloud'daki dağıtıcı kopyaları DRM'li): "
+                   "master dosyanı (WAV/FLAC) sürükle")
     gecici = elle.klasor(calisma, kimlik) / ".youtube.indirilen"
     try:
         (indir or kaynak.youtube_indir)(secilen.id, gecici)
@@ -247,16 +251,85 @@ def kapak_bul(sanatci: str, ad: str, sure_sn: float, ara=None) -> str | None:
     return None
 
 
-def kapak_indir(calisma: Path, kimlik: str, bul=None, al=None) -> str:
+DEEZER_BOS = "d41d8cd98f00b204e9800998ecf8427e"  # boş dizginin md5'i: kapağı kaldırılmış yayının yer tutucusu
+
+
+def deezer_kapak(isrc: str | None, al=None) -> str | None:
+    """Deezer'da aynı ISRC'li parçanın kapağı (CDN istenen boyutta verir; kaldırılmış yayında yer tutucuya döner)."""
+    if not isrc:
+        return None
+    try:
+        d = (al or ag.json_al)(f"https://api.deezer.com/track/isrc:{isrc}")
+    except (OSError, ValueError, ag.Bulunamadi):
+        return None
+    md5 = ((d or {}).get("album") or {}).get("md5_image") if isinstance(d, dict) and not d.get("error") else None
+    if not md5 or md5 == DEEZER_BOS:
+        return None
+    return f"https://cdn-images.dzcdn.net/images/cover/{md5}/3000x3000-000000-80-0-0.jpg"
+
+
+def pinterest_sorgusu(kp: dict) -> str:
+    """Kendi şarkında stil betimi yok: mod Spotify'ın ton ve temposundan (minör → melankolik; yavaş → sakin)."""
+    ton, tempo = (kp.get("ton") or "").casefold(), kp.get("tempo") or 0
+    mod = ["melancholic" if "minor" in ton else "dreamy" if ton else "moody"]
+    mod.append("calm" if tempo and tempo < 95 else "cinematic" if tempo and tempo > 125 else "atmospheric")
+    return f"{' '.join(mod)} scenery aesthetic"
+
+
+def pinterest_kapak(calisma: Path, kimlik: str, arayici=None, indirici=None) -> str:
+    """Yanki'nin cover kapaklarındaki gibi Pinterest'ten (insansız, yazısız, kullanılmamış pin); FreshTunes için
+    kısa kenarı en az `elle.KAPAK_EN_AZ`. Kaynak taslakta `kapak_kaynak.json` (pin iki yayında kullanılmaz)."""
+
+    from yanki import dosya, pinterest
+
+    arayici, indirici = arayici or pinterest.ara, indirici or pinterest._indir
+    meta = elle.oku(calisma, kimlik)
+    kullanilan = pinterest.kullanilanlar(calisma) | pinterest.kullanilanlar(elle.kok_klasor(calisma))
+    q = pinterest_sorgusu(meta.get("kaynak_parca") or {})
+    for sorgu in (q, "moody scenery aesthetic"):
+        try:
+            adaylar = arayici(sorgu)
+        except (OSError, LookupError, ValueError):
+            continue
+        buyuk = [p for p in pinterest.sirali_adaylar(adaylar, kullanilan)
+                 if min(pinterest._gorsel(p).get("width") or 0, pinterest._gorsel(p).get("height") or 0)
+                 >= elle.KAPAK_EN_AZ]
+        for pin in buyuk[:pinterest.INDIRME_DENEME]:
+            g = pinterest._gorsel(pin)
+            try:
+                elle.kapak_kaydet(calisma, kimlik, "pinterest.jpg", indirici(g["url"]))
+            except (OSError, elle.Hata):
+                continue
+            dosya.json_yaz(elle.klasor(calisma, kimlik) / "kapak_kaynak.json", {
+                "pin_id": pin["id"], "imza": pin.get("image_signature"), "url": g["url"],
+                "pin": f"https://www.pinterest.com/pin/{pin['id']}/", "aciklama": pin.get("seo_alt_text"),
+                "boyut": [g["width"], g["height"]], "sorgu": sorgu})
+            meta = elle.oku(calisma, kimlik)
+            meta["kapak"] = {**(meta.get("kapak") or {}), "kaynak": "pinterest",
+                             "pin": f"https://www.pinterest.com/pin/{pin['id']}/"}
+            elle._yaz(calisma, kimlik, meta)
+            return f"kapak: Pinterest ({pin.get('seo_alt_text') or pin['id']}; sorgu: {sorgu})"
+    raise Hata(f"Pinterest'te {elle.KAPAK_EN_AZ} px'lik uygun görsel bulunamadı (sorgu: {q})")
+
+
+def kapak_indir(calisma: Path, kimlik: str, bul=None, al=None, deezer=None, pinterest_=None) -> str:
+    """Kapak sırası: yayının kendi kapağı (iTunes 3000, Deezer ISRC'yle), yoksa Pinterest (Scryne 2026-10-16:
+    "AI cover'larda Pinterest'ten buluyorduk, ondan olmaz mı"). Spotify'ınki 640 px: FreshTunes en az 1400 istiyor."""
     meta = elle.oku(calisma, kimlik)
     kp = meta.get("kaynak_parca") or {}
-    url = (bul or kapak_bul)(kp.get("sanatci") or meta.get("sanatci"), kp.get("ad") or meta.get("baslik"),
-                             kp.get("sure_sn") or 0)
-    if not url:
-        raise Hata("kapak iTunes'ta bulunamadı (Spotify'ınki 640 px, FreshTunes en az 1400 istiyor); kapağı kendin "
-                   "sürükle")
-    elle.kapak_kaydet(calisma, kimlik, "itunes.jpg", (al or _bayt_al)(url))
-    return f"kapak: iTunes ({url.rsplit('/', 2)[-2] if '/' in url else url})"
+    al = al or _bayt_al
+    adaylar = [("iTunes", lambda: (bul or kapak_bul)(kp.get("sanatci") or meta.get("sanatci"),
+                                                     kp.get("ad") or meta.get("baslik"), kp.get("sure_sn") or 0)),
+               ("Deezer", lambda: (deezer or deezer_kapak)(kp.get("isrc") or meta.get("isrc")))]
+    for kaynak_adi, bul_ in adaylar:
+        if not (url := bul_()):
+            continue
+        try:
+            elle.kapak_kaydet(calisma, kimlik, f"{kaynak_adi.casefold()}.jpg", al(url))
+        except (OSError, elle.Hata):  # indirilemedi ya da 1400'den küçük: sıradaki kaynak
+            continue
+        return f"kapak: {kaynak_adi} (yayının kendi kapağı)"
+    return (pinterest_ or pinterest_kapak)(calisma, kimlik)
 
 
 def kaynak_doldur(calisma: Path, kimlik: str, ses=ses_indir, kapak=kapak_indir) -> list[str]:

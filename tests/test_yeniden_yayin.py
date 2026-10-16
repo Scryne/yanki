@@ -211,3 +211,84 @@ def test_youtube_sesinde_kirpilma_bir_db_dusurulur(tmp_path):
     assert elle.ses_olcumu(yol)["kirpik"] > yeniden_yayin.KIRPIK_ESIGI
     o = yeniden_yayin._tepe_indir(yol)
     assert o["kirpik"] == 0 and -1.2 < o["tepe_db"] < -0.8 and o["kazanc_db"] == -1.0
+
+
+def test_taslak_kimligi_sanatci_adiyla(tmp_path, kok):
+    """Önce "taslak-slow-fall" (kimlik sanatçı yazılmadan kuruluyordu)."""
+    m = yeniden_yayin.taslak_kur(tmp_path / "calisma", kok, _parca(ad="Slow Fall"), ["Scryne"])
+    assert m["kimlik"] == "scryne-slow-fall"
+
+
+def test_youtube_bos_arama_sorguyu_aday_saymaz(monkeypatch):
+    """2026-10-16: arama boş dönünce sorgunun kendisi 0:00 süreli aday olarak listeleniyordu."""
+    import yt_dlp
+
+    class Sahte:
+        def __init__(self, *_a):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_a):
+            return False
+
+        def extract_info(self, hedef, download=False):
+            if hedef.startswith("http"):
+                return {"id": "abc", "title": "Video", "duration": 120, "channel": "K"}
+            return {"id": hedef.split(":", 1)[1], "title": hedef, "entries": []}
+
+    monkeypatch.setattr(yt_dlp, "YoutubeDL", Sahte)
+    assert kaynak.youtube_adaylari("knownbyC Slow Fall official audio") == []
+    assert [a.id for a in kaynak.youtube_adaylari("https://www.youtube.com/watch?v=abc")] == ["abc"]
+
+
+def test_kapak_sirasi_itunes_deezer_pinterest(tmp_path, kok):
+    c = tmp_path / "calisma"
+    k = yeniden_yayin.taslak_kur(c, kok, _parca(), ["Scryne"])["kimlik"]
+    b = io.BytesIO()
+    Image.new("RGB", (1600, 1600), (10, 20, 30)).save(b, "JPEG")
+    kucuk = io.BytesIO()
+    Image.new("RGB", (640, 640)).save(kucuk, "JPEG")
+    # iTunes yok, Deezer'daki 640 px (FreshTunes'a küçük) → Pinterest
+    satir = yeniden_yayin.kapak_indir(c, k, bul=lambda *a: None, deezer=lambda i: "https://dz/x.jpg",
+                                      al=lambda u: kucuk.getvalue(), pinterest_=lambda *a: "kapak: Pinterest")
+    assert satir == "kapak: Pinterest"
+    satir = yeniden_yayin.kapak_indir(c, k, bul=lambda *a: None, deezer=lambda i: "https://dz/x.jpg",
+                                      al=lambda u: b.getvalue(),
+                                      pinterest_=lambda *a: pytest.fail("Pinterest'e gitmemeli"))
+    assert "Deezer" in satir and (elle.klasor(c, k) / "kapak.jpg").exists()
+    # kaldırılmış yayının Deezer kapağı yer tutucu (boş md5)
+    assert yeniden_yayin.deezer_kapak("X", al=lambda u: {"album": {"md5_image": yeniden_yayin.DEEZER_BOS}}) is None
+    assert yeniden_yayin.deezer_kapak("X", al=lambda u: {"error": {"code": 800}}) is None
+    assert yeniden_yayin.deezer_kapak("X", al=lambda u: {"album": {"md5_image": "ab"}}).endswith(
+        "/ab/3000x3000-000000-80-0-0.jpg")
+
+
+def test_pinterest_kapagi_buyuk_ve_kullanilmamis_pin(tmp_path, kok):
+    import json
+
+    c = tmp_path / "calisma"
+    k = yeniden_yayin.taslak_kur(c, kok, _parca(ton="A minor", tempo=80), ["Scryne"])["kimlik"]
+    assert yeniden_yayin.pinterest_sorgusu(elle.oku(c, k)["kaynak_parca"]) == "melancholic calm scenery aesthetic"
+    # başka bir Yanki şarkısında kullanılmış pin yeniden seçilmez
+    (c / "a-b").mkdir(parents=True)
+    (c / "a-b" / "kapak_kaynak.json").write_text(json.dumps({"pin_id": "1"}), encoding="utf-8")
+
+    def pin(no, en):
+        return {"id": no, "type": "pin", "seo_alt_text": "misty forest lake at dusk", "image_signature": f"i{no}",
+                "images": {"orig": {"url": f"https://p/{no}.jpg", "width": en, "height": en}}}
+
+    b = io.BytesIO()
+    Image.new("RGB", (2000, 2000), (10, 20, 30)).save(b, "JPEG")
+    sorgular, inen = [], []
+    satir = yeniden_yayin.pinterest_kapak(
+        c, k, arayici=lambda q: sorgular.append(q) or [pin("1", 3000), pin("2", 900), pin("3", 2000)],
+        indirici=lambda u: inen.append(u) or b.getvalue())
+    assert "Pinterest" in satir and inen == ["https://p/3.jpg"]  # 1 kullanılmış, 2 küçük (FreshTunes en az 1400)
+    m = elle.oku(c, k)
+    assert m["kapak"]["kaynak"] == "pinterest" and any("Pinterest" in x for x in elle.kontrol(c, k)["uyari"])
+    kaynak_ = json.loads((elle.klasor(c, k) / "kapak_kaynak.json").read_text(encoding="utf-8"))
+    assert kaynak_["pin_id"] == "3"
+    with pytest.raises(yeniden_yayin.Hata, match="Pinterest'te"):
+        yeniden_yayin.pinterest_kapak(c, k, arayici=lambda q: [pin("3", 2000)], indirici=lambda u: b.getvalue())

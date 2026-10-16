@@ -95,8 +95,10 @@ UPC yapıştırılır; okuma Spotify uygulamasının içinden yapılır (STILLMO
   parçanın ayrıntısı okunur ve Yükle'de taslak açılır: ad, sanatçı, Spotify profilin, aynı ISRC ve UPC, ilk yayın tarihi,
   yazarlar, yapımcı, ©/℗, label, dil, açık içerik. Oda işi (`yanki elle-kaynak <kimlik>`) sesi YouTube'da Spotify'daki
   süreyle ±2 sn aynı kayıttan indirir (önce "- Topic" kanalı, sonra sanatçının/VEVO'nun kanalı; canlı, remix, orkestral
-  vb. sürümler elenir; 0 dBFS'e dayanan ses 1 dB düşürülür) ve kapağı iTunes'tan alır (en büyük boyutuyla). Bulunamayan
-  ses ya da kapak sürüklenir; master dosyan varsa YouTube kopyası yerine onu sürükle.
+  vb. sürümler elenir; 0 dBFS'e dayanan ses 1 dB düşürülür). Kapak: yayının kendisi (iTunes, Deezer ISRC'yle), yoksa
+  cover'lardaki gibi Pinterest (sorgu Spotify'ın ton ve temposundan, en az 1400 px, kullanılmamış pin; uyarıyla).
+  Kalkmış yayının YouTube kopyası çoğu zaman kalmıyor (SoundCloud'daki dağıtıcı kopyaları DRM'li): ses bulunamazsa
+  master dosyanı sürükle; varsa YouTube kopyası yerine de onu sürükle.
 
 Köprü kapalıysa odadaki "Spotify'a bağlan" Spotify'ı hata ayıklama portuyla (yalnız 127.0.0.1) yeniden açar; bir şey
 çalıyorsa önce sorar. Sonuçlar `calisma/bulucu/`'da kalır, "Son aramalar"dan yeniden açılır.

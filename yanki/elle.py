@@ -141,7 +141,7 @@ def _son_freshtunes(calisma: Path) -> dict:
     return son
 
 
-def yeni(calisma: Path, kok: Path, baslik: str = "", sablon: str | None = None) -> dict:
+def yeni(calisma: Path, kok: Path, baslik: str = "", sablon: str | None = None, sanatci: str | None = None) -> dict:
     """Yeni taslak. `sablon="freshtunes"`: Scryne'ın kendi şarkısı (Orvane değil, yapay zekâ yok, FreshTunes, yayın
     tarihi önerilen en erken gün)."""
     from yanki import liste
@@ -156,6 +156,8 @@ def yeni(calisma: Path, kok: Path, baslik: str = "", sablon: str | None = None) 
               "yayin_tarihi": (date.today() + timedelta(days=FRESHTUNES_YAYIN_ONERI_GUN)).isoformat()}
     elif sablon is not None:
         raise Hata("bilinmeyen şablon")
+    if sanatci:  # kimlik de bu adla ("taslak-<ad>" değil)
+        v = v | {"sanatci": sanatci}
     taban = liste.kimlik(v["sanatci"] or "taslak", baslik or f"taslak {datetime.now():%Y%m%d %H%M%S}")
     kimlik, n = taban, 2
     while kok_klasor(calisma).joinpath(kimlik).exists():
@@ -378,6 +380,9 @@ def kontrol(calisma: Path, kimlik: str) -> dict:
         uyari.append("Ses kayıplı biçimden (MP3/M4A) çevrildi; mümkünse WAV ya da FLAC yükle")
     if not (k / "kapak.jpg").exists():
         eksik.append("Kapak görseli")
+    elif (meta.get("kapak") or {}).get("kaynak") == "pinterest":
+        uyari.append("Kapak Pinterest'ten (yayının asıl kapağı değil); FreshTunes kapağın sende olmasını istiyor: "
+                     "orijinal kapağın varsa onu sürükle")
     elif (meta.get("kapak") or {}).get("buyutuldu"):
         uyari.append("Kapak 3000×3000'den küçüktü, büyütüldü: keskinlik düşebilir")
     yazarlar = _dolu_kisiler(meta.get("yazar_adlari"))
