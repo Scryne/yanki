@@ -226,3 +226,28 @@ def test_kesif_listesiz_kurulumda_dusmez(tmp_path):
 
     (tmp_path / "calisma" / "a-b").mkdir(parents=True)
     assert kesif.listedekiler(tmp_path / "liste.toml", tmp_path / "calisma") == {"a-b"}
+
+
+def test_spotify_baglan_izin_gelmezse_vazgecer(monkeypatch):
+    """Sekme kapatılınca `yanki spotify-baglan` dönüşü sonsuza kadar bekliyordu."""
+    import argparse
+    import http.server
+    import webbrowser
+
+    from yanki import cli, spotify
+
+    class SahteSunucu:
+        def __init__(self, *_a):
+            self.istek = 0
+
+        def handle_request(self):
+            self.istek += 1
+
+        def server_close(self):
+            pass
+
+    monkeypatch.setattr(spotify.Spotify, "baglanti_adresi", lambda self: ("https://accounts", "d", "s"))
+    monkeypatch.setattr(http.server, "HTTPServer", SahteSunucu)
+    monkeypatch.setattr(webbrowser, "open", lambda *_a: None)
+    monkeypatch.setattr(cli, "SPOTIFY_BAGLAN_SN", 0)
+    assert cli._spotify_baglan(argparse.Namespace()) == 1

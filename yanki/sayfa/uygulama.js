@@ -587,6 +587,19 @@ function pencere(baslik, govde, eylemler, sinif = "") {
   return dlg;
 }
 
+// RouteNote'ta ne gördüğünü kaydeden tek tıklar (gönderildi / taslakta) şarkıyı aşamadan aşamaya taşır; yanlış tık
+// takibi ve takvimi bozar, odadan geri alınmaz: önce ne olacağı söylenir
+function gonderimSonucuSor(ad, gonderildi, isle) {
+  const dlg = pencere(gonderildi ? `"${ad}" gönderildi diye kaydedilsin mi?` : `"${ad}" taslakta diye kaydedilsin mi?`, [
+    el("p", { class: "ipucu" }, gonderildi
+      ? "Yalnız RouteNote panelinde yayın incelemede görünüyorsa. Şarkı \"incelemede\"ye geçer, takip Spotify'da çıkmasını bekler; hat bu yayını bir daha göndermez."
+      : "Panelde yayın hâlâ taslaksa. Hat onu yine göndermez: panelden gönder ya da sil (sonra yanki routenote taslak-silindi)."),
+  ], [
+    el("button", { class: "dugme", type: "button", onclick: () => dlg.close() }, "Vazgeç"),
+    el("button", { class: "dugme punch", type: "button", onclick: () => { dlg.close(); isle(); } }, gonderildi ? "Gönderildi, kaydet" : "Taslakta, kaydet"),
+  ]);
+}
+
 const RET_NEDENLERI = ["vokal kötü", "beat/düzenleme kötü", "söz anlaşılmıyor", "orijinale fazla benziyor", "tür uymuyor", "kaynak ses kötü"];
 function reddet(d) {
   const metin = el("textarea", { id: "ret-neden", rows: 3, maxlength: 300, placeholder: "İsteğe bağlı; hattın neyi kaçırdığı sonraki ayarlara girer" });
@@ -1150,7 +1163,7 @@ function ayarPaneli(a, kota) {
       ...satir("Üretim", a.uretim_acik === false ? "duraklatıldı" : a.uretim || "—"),
       ...satir("Dağıtımcı", DAGITIMCI[a.dagitimci] || a.dagitimci || "seçilmedi"),
       ...satir("Takvim", !a.takvim_acik ? "kapalı" : a.haftada === 0 ? "açık · sınırsız" : a.haftada >= 7 ? "açık · her gün" : `açık · haftada ${a.haftada}`),
-      ...satir("Otomatik onay", a.oto_onay ? `${a.oto_onay_saat} sa` : "kapalı"),
+      ...satir("Otomatik onay", (a.oto_onay ? `${a.oto_onay_saat} sa` : "kapalı") + (a.oto_isabet?.sarki ? ` · isabet ${a.oto_isabet.isabet}/${a.oto_isabet.sarki}` : "")),
       ...satir("Kapak", a.kapak === "pinterest" ? "Pinterest" : "üretilen"),
       ...satir("Spotify", !kota?.bagli ? "bağlı değil" : kota.kilit_sn ? `kilitli · ${saatYazi(kota.kilit_sn)}` : `${kota.bugun}/${kota.tavan} istek`)));
 }
@@ -1230,11 +1243,10 @@ function defterSatiri(x, s, isSuruyor) {
       "Taslağı tamamla"));
   if (x.kimlik && x.hal === "kuyruk")
     eylem.push(el("button", { class: "dugme tehlike kucuk", type: "button", disabled: isSuruyor, onclick: () => gonderPenceresi(x, s) }, "Yükle ve gönder…"));
-  const sonuc = (gonderildi) => async (e) => {
-    e.currentTarget.disabled = true;
+  const sonuc = (gonderildi) => () => gonderimSonucuSor(x.ad, gonderildi, async () => {
     try { const r = await api(`/api/sanatci/${x.kimlik}/gonderim-sonucu`, { gonderildi }); bildir(r.mesaj); } catch (err) { bildir(err.message, true); }
     sanatciGoster();
-  };
+  });
   if (x.kimlik && x.hal === "taslak_hazir")
     eylem.push(el("button", { class: "dugme kucuk", type: "button", onclick: sonuc(true), title: "RouteNote panelinde Distribute'a bastım, yayın incelemede" }, "Panelde gönderdim"));
   if (x.kimlik && x.hal === "kontrol") {
@@ -2076,14 +2088,14 @@ function elleYan(m, is) {
   if (rn.adim === "gonderildi") eylemler.push(el("p", { class: "not canli" }, el("span", { class: "nokta" }), `RouteNote'a gönderildi${rn.gonderim ? ` (${tarih(rn.gonderim)})` : ""}. İnceleme 5–10 iş günü; onay ya da red e-postası gelince bildirilir.`));
   else if (rn.adim === "gonderiliyor") eylemler.push(el("p", { class: "uyari" }, "Son tıktan sonra iş yarıda kaldı. RouteNote panelinde yayına bak:"),
     el("div", { class: "satir-ici" }, ...[[true, "Gönderilmiş"], [false, "Taslakta duruyor"]].map(([g, yazi]) => el("button", { class: g ? "dugme kucuk" : "dugme ikincil kucuk", type: "button",
-      onclick: async () => { try { bildir((await api(`/api/elle/${m.kimlik}/gonderim-sonucu`, { gonderildi: g })).mesaj); } catch (e) { bildir(e.message, true); } yukleGoster(); } }, yazi))));
+      onclick: () => gonderimSonucuSor(elleAdi(m), g, async () => { try { bildir((await api(`/api/elle/${m.kimlik}/gonderim-sonucu`, { gonderildi: g })).mesaj); } catch (e) { bildir(e.message, true); } yukleGoster(); }) }, yazi))));
   else if (secili.includes("routenote")) {
     const yarim = rn.upc && rn.adim !== "hazir";
     // önceki oturumda hazırlanmış taslağın yayın sayfası yeni oturumda boş: otomasyon gönderemez, düğme yanıltmasın
     if (rn.adim !== "hazir") eylemler.push(el("button", { class: "dugme tehlike dolu genis-dugme", type: "button", disabled: !hazir("routenote") || is?.suruyor || null,
       title: hazir("routenote") ? "" : "Önce eksikleri tamamla", onclick: () => elleGonderPenceresi(m) }, yarim ? "Taslağı tamamla ve gönder…" : "RouteNote'a gönder…"));
     if (rn.adim === "hazir") eylemler.push(el("p", { class: "ipucu kucuk-ipucu" }, `Taslak RouteNote'ta hazır ama önceki bir oturumda açıldı; otomasyon bunu gönderemez. Panelde taslağı aç${rn.upc ? ` (UPC ${rn.upc})` : ""}, Distribute'a bas, sonra:`),
-      el("button", { class: "dugme kucuk", type: "button", onclick: async () => { try { bildir((await api(`/api/elle/${m.kimlik}/gonderim-sonucu`, { gonderildi: true })).mesaj); } catch (e) { bildir(e.message, true); } yukleGoster(); } }, "Panelde gönderdim"));
+      el("button", { class: "dugme kucuk", type: "button", onclick: () => gonderimSonucuSor(elleAdi(m), true, async () => { try { bildir((await api(`/api/elle/${m.kimlik}/gonderim-sonucu`, { gonderildi: true })).mesaj); } catch (e) { bildir(e.message, true); } yukleGoster(); }) }, "Panelde gönderdim"));
     if (!rn.upc) eylemler.push(el("button", { class: "dugme ikincil kucuk", type: "button", disabled: !hazir("routenote") || is?.suruyor || null,
       onclick: async () => { try { await api(`/api/elle/${m.kimlik}/gonder`, { gonder: false }); bildir("RouteNote taslağı hazırlanıyor; gönderilmeyecek."); elleTakip(); yukleGoster(); } catch (e) { bildir(e.message, true); } } },
       "Yalnız RouteNote taslağı aç"));

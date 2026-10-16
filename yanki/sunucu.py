@@ -1063,10 +1063,13 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None, gorev_ok
             from yanki import ayarlar as ayarlar_
             from yanki import uzak
 
+            isabet = onay.isabet(calisma)
             ayarlar = {"dagitimci": y.dagitimci, "kapak": y.kapak,
                        "uretim_acik": ayarlar_.operasyon_oku(a.kok).surekli_uretim,
                        "takvim_acik": t.acik, "haftada": t.haftada,
                        "oto_onay": ayar.acik, "oto_onay_saat": ayar.sure_saat,
+                       # öneri kuralının Scryne'ın kulak seçimlerini tutma oranı (Faz 12, `yanki isabet`)
+                       "oto_isabet": {k: isabet[k] for k in ("sarki", "isabet", "esik")},
                        "uretim": (f"kiralık GPU ({a.uzak.gpu.replace('NVIDIA ', '')})" if a.uzak.acik
                                   else "evdeki GPU"),
                        "uzak_ay_usd": uzak.bu_ay_harcama(a.kok) if a.uzak.acik else None,

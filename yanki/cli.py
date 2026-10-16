@@ -318,9 +318,13 @@ def _routenote(args: argparse.Namespace) -> int:
     return 0
 
 
+SPOTIFY_BAGLAN_SN = 600  # `yanki spotify-baglan` izni en çok bu kadar bekler
+
+
 def _spotify_baglan(_: argparse.Namespace) -> int:
     """Spotify hesabını bir kez bağla (PKCE): tarayıcıda izin → 127.0.0.1'e dönüş → token calisma/.spotify.json."""
     import http.server
+    import time
     import urllib.parse
     import webbrowser
 
@@ -351,9 +355,15 @@ def _spotify_baglan(_: argparse.Namespace) -> int:
     sunucu = http.server.HTTPServer((hedef.hostname, hedef.port), Donus)
     print(f"tarayıcıda Spotify izni açılıyor (dönüş adresi {sp.yonlendirme}) …")
     webbrowser.open(adres)
-    while "code" not in gelen and "error" not in gelen:
+    # sekme kapatılırsa ya da izin verilmezse komut sonsuza kadar asılı kalmasın: 10 dk sonra vazgeçilir
+    sunucu.timeout = 5
+    bitis = time.monotonic() + SPOTIFY_BAGLAN_SN
+    while "code" not in gelen and "error" not in gelen and time.monotonic() < bitis:
         sunucu.handle_request()
     sunucu.server_close()
+    if not gelen:
+        print(f"✗ bağlanmadı: {SPOTIFY_BAGLAN_SN // 60} dk içinde izin verilmedi (yeniden: yanki spotify-baglan)")
+        return 1
     if gelen.get("error") or gelen.get("state") != beklenen:
         print(f"✗ bağlanmadı: {gelen.get('error') or 'durum (state) eşleşmedi'}")
         return 1
@@ -1371,6 +1381,44 @@ def _dagitim_durum(args: argparse.Namespace) -> int:
     return 1 if any(yeni in ("hata", "bulunamadi") for _, yeni, _ in sonuc) else 0
 
 
+def _isabet(args: argparse.Namespace) -> int:
+    """Öneri kuralının Scryne'ın kulak seçimlerini tutma oranı (Faz 12). Ölçüm `calisma/dinleme/isabet.json`'a
+    eklenir (tarihli seri: kural değiştikçe ya da seçim verisi arttıkça karşılaştırılır)."""
+    import json
+    from datetime import datetime
+
+    from yanki import dosya, onay
+
+    a = ayarlar.yukle()
+    calisma = a.kok / "calisma"
+    o = onay.isabet(calisma)
+    if args.json:
+        print(json.dumps(o, ensure_ascii=False))
+    elif not o["sarki"]:
+        print("ölçülecek kulak seçimi yok (en az iki kapıdan geçmiş adayı olan, Scryne'ın seçtiği şarkı)")
+        return 0
+    else:
+        print(f"öneri kuralı {o['sarki']} şarkıda {o['isabet']} isabet (%{100 * o['oran']:.0f}); yalnız en düşük söz "
+              f"WER'i {o['yalniz_wer']}, rastgele beklenen {o['rastgele']:.1f}. Faz 12 eşiği %{100 * o['esik']:.0f}: "
+              + ("tuttu, veto penceresinde öneri varsayılan olabilir" if o["oran"] >= o["esik"] else "tutmadı"))
+        if args.ayrinti:
+            for s in o["satirlar"]:
+                isaret = "✓" if s["oneri"] == s["secilen"] else "✗"
+                print(f"  {isaret} {s['ad'][:40]:40} seçilen {s['secilen']}, öneri {s['oneri']}, "
+                      f"en düşük WER {s['en_dusuk_wer']} ({s['aday_sayisi']} aday)")
+    if o["sarki"]:
+        yol = calisma / "dinleme" / "isabet.json"
+        try:
+            seri = json.loads(yol.read_text(encoding="utf-8")) if yol.exists() else []
+        except (OSError, ValueError):
+            seri = []
+        kayit = {"zaman": datetime.now().isoformat(timespec="seconds"),
+                 **{k: o[k] for k in ("sarki", "isabet", "oran", "yalniz_wer", "rastgele")}}
+        if not seri or {k: seri[-1].get(k) for k in ("sarki", "isabet")} != {k: kayit[k] for k in ("sarki", "isabet")}:
+            dosya.json_yaz(yol, [*seri, kayit][-200:])  # aynı ölçüm tekrar yazılmaz
+    return 0
+
+
 def _dagitim_red(args: argparse.Namespace) -> int:
     from yanki import dagitim
 
@@ -1935,6 +1983,10 @@ def main(argv: list[str] | None = None) -> int:
     yd = alt.add_parser("yedekle", help="seçimlerin, yükleme bilgisinin ve keşif kaydının zip yedeği")
     yd.add_argument("--zorla", action="store_true", help="son yedek yeni olsa da al")
     yd.set_defaults(fn=_yedekle)
+    ib = alt.add_parser("isabet", help="öneri kuralı Scryne'ın kulak seçimlerini ne sıklıkla tutuyor (Faz 12)")
+    ib.add_argument("--ayrinti", action="store_true", help="şarkı şarkı")
+    ib.add_argument("--json", action="store_true")
+    ib.set_defaults(fn=_isabet)
     oz = alt.add_parser("ozet", help="hattın tek satırlık durumu (oturum açılış bildirimi)")
     oz.add_argument("--json", action="store_true")
     oz.set_defaults(fn=_ozet)

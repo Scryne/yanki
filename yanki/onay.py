@@ -154,3 +154,48 @@ def kulak_bekleyen(calisma: Path, ayar: Ayar) -> list[tuple[durum.Durum, str]]:
 def yaklasan(calisma: Path, ayar: Ayar, saat: float = 24, simdi: datetime | None = None) -> list[durum.Durum]:
     simdi = simdi or datetime.now()
     return [d for d in durum.hepsi(calisma) if (z := onay_zamani(d, ayar)) and z <= simdi + timedelta(hours=saat)]
+
+
+def _kulak_secimi(d: durum.Durum) -> durum.Aday | None:
+    """Scryne'ın kulakla seçtiği aday; seçim yoksa, aday dosyada yoksa ya da son seçim otomatik onaysa None."""
+    if d.secilen is None or d.asama in ("reddedildi",):
+        return None
+    secilen = next((a for a in d.adaylar if a.no == d.secilen), None)
+    if secilen is None:
+        return None
+    oto = [n["otomatik_onay"] for n in d.notlar if isinstance(n, dict) and isinstance(n.get("otomatik_onay"), dict)]
+    if oto and oto[-1].get("aday") == d.secilen:
+        # otomatik onaydan sonra Scryne başka aday seçmediyse seçim kulağın değil (sonradan aynı adayı seçmesi ayırt
+        # edilemez: ölçüme girmez)
+        return None
+    return secilen
+
+
+def isabet(calisma: Path) -> dict:
+    """Öneri kuralının (`oneri`) Scryne'ın kulak seçimlerini ne sıklıkla tuttuğu (Faz 12: ≥ %70 ise veto penceresinde
+    varsayılan). Yeniden üretim seçimi sıfırladığı için seçim, şarkının bugünkü adaylarının hepsi dinlenirken yapıldı:
+    kural da onları görür (otomatik onay o anda ne seçerdi). Karşılaştırma: yalnız en düşük söz WER'i (kapıdan geçmiş
+    bütün adaylarda) ve rastgele seçimin beklenen isabeti. Ağa çıkmaz."""
+    satirlar = []
+    for d in durum.hepsi(calisma):
+        if (secilen := _kulak_secimi(d)) is None:
+            continue
+        gecen = [a for a in d.adaylar if a.gecti and a.dosya]
+        if len(gecen) < 2 or secilen not in gecen:
+            continue  # tek aday (seçim yok) ya da seçilen kapıdan geçmemiş: kuralın sınanacağı bir karar değil
+        # bekleyen onarım seçimden sonra istenmiş olabilir: kural onarımsız hâli görür
+        kopya = durum.Durum(d.kimlik, d.sanatci, d.ad, adaylar=[durum.Aday(**{**a.__dict__, "onarimlar": []})
+                                                                  for a in gecen])
+        kural = oneri(kopya)
+        wer_sirali = sorted(gecen, key=lambda a: (_wer(a) if _wer(a) is not None else float("inf"), a.no))
+        satirlar.append({"kimlik": d.kimlik, "ad": d.ad, "aday_sayisi": len(gecen), "secilen": secilen.no,
+                         "oneri": kural.no if kural else None, "en_dusuk_wer": wer_sirali[0].no,
+                         "stil": (d.analiz.get("stil") or "")[:80]})
+    n = len(satirlar)
+    tutan = sum(s["oneri"] == s["secilen"] for s in satirlar)
+    return {"sarki": n, "isabet": tutan, "oran": tutan / n if n else None,
+            "yalniz_wer": sum(s["en_dusuk_wer"] == s["secilen"] for s in satirlar),
+            "rastgele": sum(1 / s["aday_sayisi"] for s in satirlar), "esik": ISABET_ESIGI, "satirlar": satirlar}
+
+
+ISABET_ESIGI = 0.70  # Faz 12: öneri bu oranda Scryne'ı tutarsa veto penceresinde varsayılan olur

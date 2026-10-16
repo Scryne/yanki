@@ -355,3 +355,72 @@ def test_pinterest_kaynaksiz_gorsel_yeniden_secilir_basarisiz_yeni_eskiyi_bozmaz
     with pytest.raises(pinterest.Bulunamadi):
         pinterest.getir(c, d, yeni=True, arayici=lambda q: [_pin(2)], indirici=bozuk)
     assert yol.read_bytes() == once and not list(k.glob(".*yaziliyor*"))
+
+
+def test_onay_epostasi_gecikme_olcutunu_onay_tarihine_baglar(tmp_path):
+    """Tarihsiz yayında gecikme ölçütü gönderim + 14 gündü: erken onaylanan parçanın teslim sorunu geç, geç onaylanan
+    parça teslim sürerken yanlış "yayın tarihi geçti" alarmı veriyordu."""
+    from tests.test_performans import _ileti as ham
+    from tests.test_performans import _sarki
+    from yanki import takip
+
+    c = tmp_path / "calisma"
+    _sarki(c, "numb", "Numb", asama="yuklendi", routenote={"upc": "5064149827466", "adim": "gonderildi"},
+           yukleme={"upc": "5064149827466", "dagitimci": "routenote", "en_gec_yayin": "2026-10-30"})
+    _sarki(c, "tarihli", "Tarihli", asama="yuklendi", routenote={"upc": "5064149827467", "adim": "gonderildi"},
+           yukleme={"upc": "5064149827467", "dagitimci": "routenote", "yayin_tarihi": "2026-11-20"})
+    eposta.isle(c, [eposta.ayristir(ham("Release approved", "Numb has been approved", mid="<a>")),
+                    eposta.ayristir(ham("Release approved", "Tarihli has been approved", mid="<b>"))])
+    numb = takip.yukleme_bilgisi(c, "numb")
+    assert numb["dagitim_durumu"] == "approved" and numb["en_gec_yayin"] == "2026-10-23"  # 16 Eki + 7
+    tarihli = takip.yukleme_bilgisi(c, "tarihli")
+    assert tarihli["dagitim_durumu"] == "approved" and "en_gec_yayin" not in tarihli
+
+
+def _secimli(c, kimlik, adaylar, secilen, oto=None):
+    """adaylar: (no, söz WER'i, CFG); CFG farkı tarifi ayırır (2026-10-15: CFG 7 → 10 yeniden üretimi)."""
+    d = durum.Durum(kimlik, "A", kimlik)
+    d.adaylar = [durum.Aday(no, f"adaylar/{no}.flac", no, {"soz_wer": {"deger": w}}, True,
+                            tarif={"model": "xl", "lora": "ep20", "ek": {"cfg": cfg},
+                                   "tarih": "2026-10-15T18:47" if cfg == 10 else "2026-10-13T16:14"})
+                 for no, w, cfg in adaylar]
+    d.secilen = secilen
+    if oto is not None:
+        d.notlar.append({"otomatik_onay": {"aday": oto}})
+    d.gec("onaylandi")
+    durum.yaz(c, d)
+
+
+def test_isabet_kulak_secimlerini_olcer(tmp_path):
+    """Faz 12 ölçütü: öneri kuralı kulak seçimini ne sıklıkla tutuyor; otomatik onaylar ölçüme girmez."""
+    from yanki import onay
+
+    c = tmp_path / "calisma"
+    _secimli(c, "tutan", [(1, 0.05, 10), (2, 0.02, 10)], secilen=2)
+    _secimli(c, "kacan", [(1, 0.05, 10), (2, 0.02, 10), (3, 0.09, 10)], secilen=3)
+    # eski tarifin adayını kulakla seçmiş: kural en yeni tarife bakar, ıska sayılır
+    _secimli(c, "eski", [(1, 0.01, 7), (5, 0.04, 10), (6, 0.03, 10)], secilen=1)
+    _secimli(c, "oto", [(1, 0.05, 10), (2, 0.02, 10)], secilen=2, oto=2)  # otomatik onay: ölçülmez
+    _secimli(c, "tek", [(1, 0.05, 10)], secilen=1)  # karar yok
+    o = onay.isabet(c)
+    assert o["sarki"] == 3 and o["isabet"] == 1 and o["yalniz_wer"] == 2
+    assert abs(o["rastgele"] - (1 / 2 + 1 / 3 + 1 / 3)) < 1e-9
+    assert {s["kimlik"]: s["oneri"] for s in o["satirlar"]} == {"tutan": 2, "kacan": 2, "eski": 6}
+
+
+def test_isabet_komutu_olcumu_bir_kez_kaydeder(tmp_path, monkeypatch, capsys):
+    import argparse
+    from dataclasses import replace
+
+    from yanki import ayarlar, cli
+
+    c = tmp_path / "calisma"
+    _secimli(c, "tutan", [(1, 0.05, 10), (2, 0.02, 10)], secilen=2)
+    asil = ayarlar.yukle
+    monkeypatch.setattr(cli.ayarlar, "yukle", lambda *a, **k: replace(asil(), kok=tmp_path))
+    for _ in range(2):
+        assert cli._isabet(argparse.Namespace(json=False, ayrinti=True)) == 0
+    cikti = capsys.readouterr().out
+    assert "1 şarkıda 1 isabet" in cikti and "✓ tutan" in cikti
+    seri = json.loads((c / "dinleme" / "isabet.json").read_text(encoding="utf-8"))
+    assert len(seri) == 1 and seri[0]["oran"] == 1.0

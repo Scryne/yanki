@@ -53,6 +53,25 @@ class Ileti:
     metin: str
 
 
+# Onaydan sonra mağazaya teslim süresi: tarihsiz ("onaylanınca") yayında takibin gecikme ölçütü gönderim + 14 gün
+# yerine onay + bu kadar gün olur (+ `takip.GECIKME_GUN`). Erken onaylanan parçanın teslim sorunu bir hafta erken
+# görünür, geç onaylanan parça teslim sürerken "yayın tarihi geçti" diye yanlış alarm vermez.
+ONAY_SONRASI_GUN = 7
+
+
+def _onay_bilgisi(calisma: Path, kimlik: str, ileti_tarihi: str | None) -> dict:
+    from yanki import takip
+
+    bilgi: dict = {"dagitim_durumu": "approved", "onay_tarihi": (ileti_tarihi or "")[:10] or None}
+    y = takip.yukleme_bilgisi(calisma, kimlik) or {}
+    if not y.get("yayin_tarihi"):  # tarihli yayında ölçüt yayın tarihinin kendisi
+        try:
+            gun = date.fromisoformat(bilgi["onay_tarihi"] or date.today().isoformat())
+        except ValueError:
+            gun = date.today()
+        bilgi["en_gec_yayin"] = (gun + timedelta(days=ONAY_SONRASI_GUN)).isoformat()
+    return bilgi
+
 def ayar(kok: Path) -> dict | None:
     from yanki import spotify
 
@@ -251,11 +270,11 @@ def isle(calisma: Path, iletiler: list[Ileti], bildir=None) -> list[dict]:
             bildir("dagitim", f"RouteNote e-postası ({neden})", f"Konu: {i.konu}. {_ozet(i, 300)}", anahtar)
         elif tur == "onay":
             if sarki["asama"] in ("yuklendi", "yayinda"):
-                takip.yukleme_kaydet(calisma, sarki["kimlik"], {"dagitim_durumu": "approved",
-                                                                "onay_tarihi": (i.tarih or "")[:10] or None})
+                takip.yukleme_kaydet(calisma, sarki["kimlik"], _onay_bilgisi(calisma, sarki["kimlik"], i.tarih))
                 eylem = "onay kaydedildi"
             bildir("dagitim", f"RouteNote onayladı: {sarki['ad']}",
-                   "Mağazalara teslim ediliyor; Spotify'da çoğunlukla 14 gün içinde çıkar (takip bildirecek).", anahtar)
+                   f"Mağazalara teslim ediliyor; onaydan {ONAY_SONRASI_GUN} gün sonra hâlâ Spotify'da yoksa takip "
+                   "bildirir.", anahtar)
         elif tur == "aksiyon":
             if sarki["asama"] in ("yuklendi", "yayinda"):
                 takip.yukleme_kaydet(calisma, sarki["kimlik"], {"dagitim_durumu": "action_needed"})
