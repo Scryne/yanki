@@ -415,7 +415,8 @@ def dagit(s, upc: str, son_tiktan_once=None) -> None:
         # hazırlanmış taslak) boş gövde dönüyor, Scryne'ın tarayıcısında açılıyor (2026-10-16, Shape of You, Lean On)
         raise RuntimeError("RouteNote yayın sayfası bu oturumda boş (taslak önceki bir oturumda hazırlandı); "
                            "gönderilmedi. Panelde taslağı sil ve `yanki routenote taslak-silindi <kimlik>`: sonraki "
-                           f"koşu yeniden açıp tek oturumda gönderir (ya da panelde kendin gönder; UPC {upc})")
+                           f"koşu yeniden açıp tek oturumda gönderir. Ya da panelde kendin gönder (UPC {upc}) ve "
+                           "`yanki routenote gonderildi <kimlik>` (odada \"Panelde gönderdim\")")
     if metin.count("Complete") < 4 or "Incomplete" in metin:
         raise RuntimeError("yayının dört adımı tamamlanmamış, gönderilmedi")
     _isaretle(s, "#submit_chk")
@@ -569,12 +570,13 @@ def _meta(calisma: Path, kimlik: str) -> tuple[Path, dict]:
 def gonderim_sonucu(calisma: Path, kimlik: str, gonderildi: bool) -> str:
     """Son tıktan sonra süreç düştüyse (`adim = gonderiliyor`) hat yeniden denemez; Scryne RouteNote panelinde
     (Discography) bakar ve sonucu söyler. Gönderildiyse yükleme kaydedilir ve şarkı `yuklendi`; gönderilmediyse
-    taslak yeniden gönderime hazır."""
+    taslak yeniden gönderime hazır. Hazır taslağı (`hazir`) Scryne panelde kendisi gönderdiyse de `gonderildi`
+    kaydedilir: önceki oturumda hazırlanmış taslağın yayın sayfası otomasyona boş geliyor (2026-10-16, lovely)."""
     from yanki import dosya, durum, takip
 
     yol, meta = _meta(calisma, kimlik)
     rn = meta.get("routenote") or {}
-    if rn.get("adim") != "gonderiliyor":
+    if rn.get("adim") != "gonderiliyor" and not (gonderildi and rn.get("adim") == "hazir"):
         raise ValueError(f"{kimlik}: yarıda kalan gönderim yok (adım: {rn.get('adim') or '—'})")
     if not gonderildi:
         rn["adim"] = "hazir"

@@ -1110,7 +1110,7 @@ function ayarPaneli(a, kota) {
 const RN = "https://www.routenote.com/rn";
 const HAL = {
   kontrol: { ad: "Kontrol et", rozet: ["gönderim yarıda", "amber"], aciklama: "Son tıktan sonra iş yarıda kaldı. RouteNote panelinde yayına bak ve ne gördüğünü seç; hat yeniden göndermez." },
-  taslak_hazir: { ad: "Gönderime hazır", rozet: ["taslak hazır", "gumus"], aciklama: "RouteNote'ta dört adımı tamam; \"Gönder\" ile incelemeye gider. Geri alınamaz." },
+  taslak_hazir: { ad: "Gönderime hazır", rozet: ["taslak hazır", "gumus"], aciklama: "RouteNote'ta dört adımı tamam. Önceki oturumda hazırlandığı için otomasyon gönderemez: \"RouteNote\" ile taslağı aç, Distribute'a bas, sonra \"Panelde gönderdim\"." },
   taslak_yarim: { ad: "Yarım taslak", rozet: ["yarım", "amber"], aciklama: "Bir adımda kaldı; tamamlayınca aynı taslaktan sürer, yeni taslak açılmaz." },
   kuyruk: { ad: "Kuyrukta", rozet: ["paket hazır", ""], aciklama: "Paketlendi, RouteNote'a dokunulmadı." },
   inceleme: { ad: "İncelemede", rozet: ["incelemede", ""], aciklama: "RouteNote'a gönderildi; yayın tarihinde mağazalara çıkar." },
@@ -1173,19 +1173,22 @@ function defterSatiri(x, s, isSuruyor) {
     try { await api(yol, {}); bildir(mesaj); } catch (err) { bildir(err.message, true); }
     sanatciGoster();
   };
-  if (x.kimlik && (x.hal === "kuyruk" || x.hal === "taslak_yarim"))
+  // RouteNote yayın sayfası yalnız taslağı dolduran oturumda dolu: ayrı "Taslağı hazırla" + "Gönder" ikinci adımda boş
+  // sayfaya düşer (2026-10-16, lovely). Kuyruktaki paket tek işte açılıp gönderilir; hazır taslak panelden gönderilir.
+  if (x.kimlik && x.hal === "taslak_yarim")
     eylem.push(el("button", { class: "dugme ikincil kucuk", type: "button", disabled: isSuruyor,
-      onclick: isBaslat(`/api/sanatci/${x.kimlik}/taslak`, `"${x.ad}" için RouteNote taslağı hazırlanıyor; bir tarayıcı penceresi açılabilir.`) },
-      x.hal === "kuyruk" ? "Taslağı hazırla" : "Taslağı tamamla"));
-  if (x.kimlik && (x.hal === "taslak_hazir" || x.hal === "kuyruk"))
-    eylem.push(el("button", { class: "dugme tehlike kucuk", type: "button", disabled: isSuruyor, onclick: () => gonderPenceresi(x, s) },
-      x.hal === "kuyruk" ? "Yükle ve gönder…" : "Gönder…"));
+      onclick: isBaslat(`/api/sanatci/${x.kimlik}/taslak`, `"${x.ad}" için RouteNote taslağı tamamlanıyor; bir tarayıcı penceresi açılabilir.`) },
+      "Taslağı tamamla"));
+  if (x.kimlik && x.hal === "kuyruk")
+    eylem.push(el("button", { class: "dugme tehlike kucuk", type: "button", disabled: isSuruyor, onclick: () => gonderPenceresi(x, s) }, "Yükle ve gönder…"));
+  const sonuc = (gonderildi) => async (e) => {
+    e.currentTarget.disabled = true;
+    try { const r = await api(`/api/sanatci/${x.kimlik}/gonderim-sonucu`, { gonderildi }); bildir(r.mesaj); } catch (err) { bildir(err.message, true); }
+    sanatciGoster();
+  };
+  if (x.kimlik && x.hal === "taslak_hazir")
+    eylem.push(el("button", { class: "dugme kucuk", type: "button", onclick: sonuc(true), title: "RouteNote panelinde Distribute'a bastım, yayın incelemede" }, "Panelde gönderdim"));
   if (x.kimlik && x.hal === "kontrol") {
-    const sonuc = (gonderildi) => async (e) => {
-      e.currentTarget.disabled = true;
-      try { const r = await api(`/api/sanatci/${x.kimlik}/gonderim-sonucu`, { gonderildi }); bildir(r.mesaj); } catch (err) { bildir(err.message, true); }
-      sanatciGoster();
-    };
     eylem.push(el("button", { class: "dugme kucuk", type: "button", onclick: sonuc(true), title: "Panelde incelemede görünüyor" }, "Gönderilmiş"),
       el("button", { class: "dugme ikincil kucuk", type: "button", onclick: sonuc(false), title: "Panelde hâlâ taslak" }, "Taslakta duruyor"));
   }
@@ -1225,7 +1228,7 @@ function gonderPenceresi(x, s) {
   const onaydaYayin = s.yeni_yayin_tarihi ? null : "RouteNote onaylayınca (5–10 iş günü)";
   const yakin = onaydaYayin || !x.yayin_tarihi || new Date(x.yayin_tarihi) < new Date(Date.now() + 10 * 864e5);
   const dlg = pencere(`"${x.ad}" RouteNote'a gönderilsin mi?`, [
-    el("p", {}, x.hal === "kuyruk" ? "Taslak açılır, dört adım doldurulur ve yayın incelemeye gönderilir." : "Hazır taslak incelemeye gönderilir.",
+    el("p", {}, "Taslak açılır, dört adım doldurulur ve yayın aynı oturumda incelemeye gönderilir.",
       " RouteNote'un şartları senin adına kabul edilir. Gönderdikten sonra ses ve playlist değiştirilemez; kaldırmak için panelden takedown gerekir."),
     el("dl", { class: "ayar-listesi gonder-ozet" },
       el("dt", {}, "Sanatçı"), el("dd", {}, s.ad),

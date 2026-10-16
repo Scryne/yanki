@@ -1148,7 +1148,9 @@ def _yukle(args: argparse.Namespace) -> int:
         return 1
     if not args.gonder:
         print(f"taslak hazır ({d.ad}): kapak, parça ve ses yüklendi, gönderilmedi (UPC {bilgi.get('upc') or '—'}). "
-              f"Göndermek: dinleme odası → Sanatçı → Gönder…, ya da yanki yukle {args.kimlik} --gonder")
+              f"Otomasyon bu taslağı artık gönderemez (yayın sayfası yalnız onu hazırlayan oturumda dolu): RouteNote "
+              f"panelinde gönder ve `yanki routenote gonderildi {args.kimlik}`. Otomatik gönderim için taslak açmadan "
+              f"`yanki yukle {args.kimlik} --gonder`")
     else:
         print(f"gönderildi ({d.ad}): yayın {_yayin_kimligi(bilgi)}, durum {bilgi.get('dagitim_durumu')}, "
               f"yayın tarihi {bilgi.get('yayin_tarihi')}")

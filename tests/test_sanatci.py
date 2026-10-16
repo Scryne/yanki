@@ -121,7 +121,20 @@ def test_yarida_kalan_gonderim_odadan_kaydedilir(oda, tmp_path):
     assert [x["hal"] for x in istemci.get("/api/sanatci").json()["katalog"]] == ["kontrol"]
     r = istemci.post("/api/sanatci/numb/gonderim-sonucu", json={"gonderildi": False})
     assert r.status_code == 200 and json.loads(meta_yolu.read_text(encoding="utf-8"))["routenote"]["adim"] == "hazir"
-    assert istemci.post("/api/sanatci/numb/gonderim-sonucu", json={"gonderildi": True}).status_code == 409
+    assert istemci.post("/api/sanatci/numb/gonderim-sonucu", json={"gonderildi": False}).status_code == 409
+
+
+def test_panelde_elle_gonderilen_hazir_taslak_kaydedilir(oda, tmp_path):
+    """Önceki oturumda hazırlanmış taslağı otomasyon gönderemez; Scryne panelde gönderir, oda bunu kaydeder."""
+    istemci, _ = oda
+    meta_yolu = tmp_path / "calisma" / "numb" / "paket" / "metadata.json"
+    meta = json.loads(meta_yolu.read_text(encoding="utf-8"))
+    meta["routenote"] = {"upc": "5064149247325", "adim": "hazir"}
+    meta_yolu.write_text(json.dumps(meta), encoding="utf-8")
+    assert [x["hal"] for x in istemci.get("/api/sanatci").json()["katalog"]] == ["taslak_hazir"]
+    assert istemci.post("/api/sanatci/numb/gonderim-sonucu", json={"gonderildi": True}).status_code == 200
+    assert json.loads(meta_yolu.read_text(encoding="utf-8"))["routenote"]["adim"] == "gonderildi"
+    assert [x["hal"] for x in istemci.get("/api/sanatci").json()["katalog"]] == ["inceleme"]
 
 
 def test_isci_tek_is_ve_gunluk(tmp_path, monkeypatch):
