@@ -79,7 +79,14 @@ kendi aramasıyla (STILLMORE köprüsü, kotasız), diğer pazarların sırası 
 (`config/kesif.toml` → `[takip]`). Uygulama açılamazsa (o an bir şey çalıyorsa) takip API'yle sürer. Dinleme
 odası Spotify Web API'sine hiç istek atmaz.
 
-**Bulucu (dinleme odası → Bulucu, `yanki/bulucu.py`):** STILLMORE FINDER'ın motoru odada. Spotify linki, ISRC ya da
+**Dinleme odasının iki yüzü** (kenar çubuğunun üstündeki düğme; her yüz son açtığın görünümü hatırlar):
+- **Orvane · AI cover hattı:** Pano, Karşılaştırma, Keşif, Yayın, Sanatçı ve kenarda şarkılar (aşağıdaki akışın tamamı).
+- **Kendi müziğim · FreshTunes:** *Kalkmış yayınlarım* (açılış): playlist linkini yapıştır → Tara; taranan bütün
+  listelerdeki kendi kalkmış yayınların tek listede, her birinde "FreshTunes taslağı" (taslağı varsa "Taslağı aç");
+  yanda FreshTunes hesabı, yayın adların, Spotify köprüsü, taranan listeler. *Taslaklar* (eski Yükle; boş taslaklar tek
+  tıkla silinir) ve *Bulucu*. Kenarda şarkılar yerine taslakların.
+
+**Bulucu (dinleme odası → Kendi müziğim → Bulucu, `yanki/bulucu.py`):** STILLMORE FINDER'ın motoru odada. Spotify linki, ISRC ya da
 UPC yapıştırılır; okuma Spotify uygulamasının içinden yapılır (STILLMORE köprüsü, kotasız):
 - **Playlist:** kalkmış şarkılar, kalkmadan önceki dinlenmeleri, distribütör, 90 günlük sayaç penceresi, aynı
   ISRC'nin çalınan kopyası ve şarkının hattaki yeri (listede, keşifte, düzenleme). Boşluğu olanlar tek tıkla keşfe
@@ -103,7 +110,7 @@ UPC yapıştırılır; okuma Spotify uygulamasının içinden yapılır (STILLMO
 Köprü kapalıysa odadaki "Spotify'a bağlan" Spotify'ı hata ayıklama portuyla (yalnız 127.0.0.1) yeniden açar; bir şey
 çalıyorsa önce sorar. Sonuçlar `calisma/bulucu/`'da kalır, "Son aramalar"dan yeniden açılır.
 
-**Elle yayın (dinleme odası → Yükle, `yanki/elle.py`):** kendi şarkın ya da hazırladığın herhangi bir kayıt için
+**Elle yayın (dinleme odası → Kendi müziğim → Taslaklar, `yanki/elle.py`):** kendi şarkın ya da hazırladığın herhangi bir kayıt için
 taslak. Form yazdıkça kaydedilir (`calisma/elle/<kimlik>/`):
 - **Dosyalar:** sesi (WAV/FLAC/AIFF/MP3) ve kapağı (JPG/PNG, en az 1400²) bilgisayarından sürükle; hat FLAC 44,1 kHz
   16 bit'e ve 3000×3000 RGB JPG'ye (ortadan kare) çevirir.

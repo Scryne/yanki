@@ -312,3 +312,31 @@ def test_odada_baska_kapak(tmp_path, kok, monkeypatch):
     monkeypatch.setattr(yeniden_yayin, "pinterest_kapak",
                         lambda *a: (_ for _ in ()).throw(yeniden_yayin.Hata("Pinterest'te uygun görsel yok")))
     assert oda.post(f"/api/elle/{k}/pinterest", json={}).status_code == 422
+
+
+def test_kendi_yuzu_kalkmis_yayinlarini_toplar(tmp_path, kok, monkeypatch):
+    """"Kendi müziğim" ana sayfası: taranan bütün listelerdeki kendi kalkmış yayınların (parça başına tek satır) ve
+    FreshTunes taslağının hâli; başkasının şarkısı ve Orvane girmez."""
+    c = tmp_path / "calisma"
+    monkeypatch.setattr(sanatci.Isci, "baslat", lambda self, ad, kimlik=None: {"ad": ad, "kimlik": kimlik})
+    oda = TestClient(sunucu.uygulama(replace(ayarlar.yukle(), kok=kok), c), base_url="http://127.0.0.1:8765")
+    satir = lambda i, ad, s, d: {"id": i, "ad": ad, "sanatci": s, "isrc": None, "dinlenme": d, "kopyalar": []}  # noqa
+    bulucu.sonuc_yaz(c, {"tur": "playlist", "id": "1pXViTb7efviU11zRaVM2y", "ad": "Kalkanlarım", "toplam": 3,
+                         "satirlar": [satir(PID, "Gece Yürüyüşü", "Scryne", 900), satir("y" * 22, "Eski", "Scryne", 50),
+                                      satir("x" * 22, "Başka", "Başkası", 10**6)]})
+    bulucu.sonuc_yaz(c, {"tur": "playlist", "id": "2o8ZUUVGgRvoJx6Jx0i7EY", "ad": "İkinci liste", "toplam": 1,
+                         "satirlar": [satir(PID, "Gece Yürüyüşü", "Scryne", 900)]})
+    d = oda.get("/api/kendi").json()
+    assert d["kalkmis"] == [] and d["kendi_sanatcilar"] == []  # ad kaydedilmeden liste yok
+    elle.kendi_sanatcilar_yaz(c, ["Scryne"], kok)
+    d = oda.get("/api/kendi").json()
+    assert [x["id"] for x in d["kalkmis"]] == [PID, "y" * 22]  # dinlenmeye göre; başkasınınki yok
+    assert {x["ad"] for x in d["kalkmis"][0]["listeler"]} == {"Kalkanlarım", "İkinci liste"}
+    assert d["sayilar"] == {"kalkmis": 2, "taslaksiz": 2, "taslak": 0, "gonderildi": 0}
+    bulucu.sonuc_yaz(c, _parca())
+    k = oda.post("/api/bulucu/freshtunes", json={"parca": PID}).json()["kimlik"]
+    d = oda.get("/api/kendi").json()
+    ilk = next(x for x in d["kalkmis"] if x["id"] == PID)
+    assert ilk["taslak"]["kimlik"] == k and ilk["taslak"]["hal"] == "taslak"
+    assert d["kalkmis"][0]["id"] == "y" * 22  # taslağı açılmamış olan önce
+    assert d["sayilar"]["taslaksiz"] == 1 and d["sayilar"]["taslak"] == 1

@@ -936,3 +936,12 @@ tema) canlı verinin kopyasıyla doğrulandı.
   (yol değil). iTunes'ta yok, Deezer'daki kapak kaldırılmış (boş md5 yer tutucusu) → kapakta Pinterest yedeği (Scryne:
   "AI cover'larda Pinterest'ten buluyorduk, ondan olmaz mı"). 623 test.
 
+## Odada iki yüz (2026-10-16, Scryne: "her şey çok karışık; bir yüzde AI cover'lar, diğer yüzde kendim playlistleri tarayıp otomatik taslağa gittiğim sayfa")
+
+- Kenar çubuğunun üstünde yüz düğmesi: **Orvane** (Pano, Karşılaştırma, Keşif, Yayın, Sanatçı, şarkı listesi) ve
+  **Kendi müziğim** (Kalkmış yayınlarım, Taslaklar, Bulucu; kenarda taslaklar). Yüzü görünüm adresi belirler, her yüz son
+  görünümünü hatırlar; açılışta son kullanılan yüz. DESIGN.md: tek yeni belirteç `kendi` (soluk lavanta), yalnız yüz işareti.
+- **Kalkmış yayınlarım** (`#_kendi`, `/api/kendi`, `yeniden_yayin.kalkmis_yayinlar`): playlist tara formu; taranan bütün
+  listelerdeki kendi kalkmış yayınların (parça başına tek satır, taslaksız olanlar önce) ve taslak hâlleri; üç duraklı
+  zincir (Kalkmış → Taslak → Gönderildi). Taslaklar sayfasında boş taslak temizliği (onay penceresiyle). 626 test.
+

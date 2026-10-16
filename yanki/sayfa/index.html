@@ -13,7 +13,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600&family=Space+Grotesk:wght@600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="stil.css">
 </head>
-<body>
+<body data-yuz="orvane">
   <div class="duzen">
     <nav class="kuyruk" aria-label="Gezinme">
       <a class="marka" href="#">
@@ -22,26 +22,33 @@
             <stop offset="0" stop-color="#F4F6F9"/><stop offset="1" stop-color="#8E98A8"/></linearGradient></defs>
           <path d="M6 16h3M11 10v12M16 6v20M21 11v10M26 15v2" stroke="url(#marka-g)" stroke-width="2.6" stroke-linecap="round" fill="none"/>
         </svg>
-        <span class="gumus-yazi">Yanki</span><small>Orvane</small>
+        <span class="gumus-yazi">Yanki</span><small id="marka-alt">Orvane</small>
       </a>
-      <p id="simdi" class="simdi" aria-live="polite"></p>
+      <!-- iki yüz: Orvane'in AI cover hattı ve Scryne'ın kendi şarkıları (FreshTunes); görünüm adresi yüzü belirler -->
+      <div class="yuz-sec" role="group" aria-label="Yüz">
+        <button type="button" data-yuz-sec="orvane" aria-pressed="true"><b>Orvane</b><span>AI cover hattı</span></button>
+        <button type="button" data-yuz-sec="kendi" aria-pressed="false"><b>Kendi müziğim</b><span>FreshTunes</span></button>
+      </div>
+      <p id="simdi" class="simdi" data-yuz="orvane" aria-live="polite"></p>
       <ul class="gorunumler" aria-label="Görünümler">
-        <li><a href="#" data-g="_pano"><span>Pano</span><span id="g-pano" class="g-sayi"></span></a></li>
-        <li><a href="#_kulak" data-g="_kulak"><span>Karşılaştırma</span><span id="g-kulak" class="g-sayi"></span></a></li>
-        <li><a href="#_kesif" data-g="_kesif"><span>Keşif</span><span id="g-kesif" class="g-sayi"></span></a></li>
-        <li><a href="#_bulucu" data-g="_bulucu"><span>Bulucu</span><span id="g-bulucu" class="g-sayi"></span></a></li>
-        <li><a href="#_yayin" data-g="_yayin"><span>Yayın</span><span id="g-yayin" class="g-sayi"></span></a></li>
-        <li><a href="#_sanatci" data-g="_sanatci"><span>Sanatçı</span><span id="g-sanatci" class="g-sayi"></span></a></li>
-        <li><a href="#_yukle" data-g="_yukle"><span>Yükle</span><span id="g-yukle" class="g-sayi"></span></a></li>
+        <li data-yuz="orvane"><a href="#" data-g="_pano"><span>Pano</span><span id="g-pano" class="g-sayi"></span></a></li>
+        <li data-yuz="orvane"><a href="#_kulak" data-g="_kulak"><span>Karşılaştırma</span><span id="g-kulak" class="g-sayi"></span></a></li>
+        <li data-yuz="orvane"><a href="#_kesif" data-g="_kesif"><span>Keşif</span><span id="g-kesif" class="g-sayi"></span></a></li>
+        <li data-yuz="orvane"><a href="#_yayin" data-g="_yayin"><span>Yayın</span><span id="g-yayin" class="g-sayi"></span></a></li>
+        <li data-yuz="orvane"><a href="#_sanatci" data-g="_sanatci"><span>Sanatçı</span><span id="g-sanatci" class="g-sayi"></span></a></li>
+        <li data-yuz="kendi"><a href="#_kendi" data-g="_kendi"><span>Kalkmış yayınlarım</span><span id="g-kendi" class="g-sayi"></span></a></li>
+        <li data-yuz="kendi"><a href="#_yukle" data-g="_yukle"><span>Taslaklar</span><span id="g-yukle" class="g-sayi"></span></a></li>
+        <li data-yuz="kendi"><a href="#_bulucu" data-g="_bulucu"><span>Bulucu</span><span id="g-bulucu" class="g-sayi"></span></a></li>
       </ul>
-      <div class="ara-kutu">
+      <div class="ara-kutu" data-yuz="orvane">
         <label for="ara" class="gizli">Şarkı ara</label>
         <input id="ara" type="search" placeholder="Şarkı ya da sanatçı ara" autocomplete="off" spellcheck="false">
         <kbd aria-hidden="true">/</kbd>
       </div>
-      <p id="sayac" class="sayac" aria-live="polite"></p>
-      <div id="liste" class="gruplar"></div>
-      <p id="liste-bos" class="ipucu" hidden>Henüz şarkı yok. Gece koşusu keşiften şarkı ekleyince burada görünür.</p>
+      <p id="sayac" class="sayac" data-yuz="orvane" aria-live="polite"></p>
+      <div id="liste" class="gruplar" data-yuz="orvane"></div>
+      <p id="liste-bos" class="ipucu" data-yuz="orvane" hidden>Henüz şarkı yok. Gece koşusu keşiften şarkı ekleyince burada görünür.</p>
+      <div id="taslak-listesi" class="gruplar" data-yuz="kendi"></div>
     </nav>
     <main id="ana" class="ana" tabindex="-1">
       <p class="ipucu bos-durum">Yükleniyor…</p>

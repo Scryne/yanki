@@ -176,3 +176,17 @@ def test_odadan_freshtunes_akisi(tmp_path, kok):
     assert r.status_code == 200 and r.json()["freshtunes"]["kalan"] == elle.FRESHTUNES_GIRIS_GUN
     assert oda.post(f"/api/elle/{k}/sifirla?dagitici=freshtunes", json={}).status_code == 200
     assert json.loads((elle.klasor(c, k) / "metadata.json").read_text(encoding="utf-8")).get("freshtunes") is None
+
+
+def test_bos_taslaklar_temizlenir(tmp_path, kok):
+    c = tmp_path / "calisma"
+    bos = [elle.yeni(c, kok)["kimlik"] for _ in range(3)]
+    adli = elle.yeni(c, kok, "Adı Var")["kimlik"]
+    kapakli = elle.yeni(c, kok)["kimlik"]
+    Image.new("RGB", (1500, 1500)).save(elle.klasor(c, kapakli) / "kapak.jpg", "JPEG")
+    assert elle.bos_taslaklar(c) == sorted(bos)
+    oda = TestClient(sunucu.uygulama(replace(ayarlar.yukle(), kok=kok), c), base_url="http://127.0.0.1:8765")
+    assert oda.get("/api/elle").json()["bos"] == 3
+    assert oda.post("/api/elle-bos-temizle", json={}).json()["silinen"] == 3
+    assert {x["kimlik"] for x in elle.liste(c)} == {adli, kapakli}
+

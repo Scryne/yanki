@@ -789,7 +789,7 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None, gorev_ok
 
     @app.get("/api/elle")
     def elle_liste():
-        return {"liste": elle.liste(calisma), "secenek": {
+        return {"liste": elle.liste(calisma), "bos": len(elle.bos_taslaklar(calisma)), "secenek": {
             "diller": list(routenote.RN_DILLER), "turler": list(routenote.RN_TURLER),
             "dagiticilar": elle.DAGITICILAR, "varsayilan": elle.varsayilanlar(a.kok),
             "mekanik_ulkeler": list(elle.MEKANIK_LISANS_ULKELER), "freshtunes_url": elle.FRESHTUNES_URL},
@@ -832,6 +832,11 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None, gorev_ok
             raise HTTPException(422, str(e)) from e
         except OSError as e:
             raise HTTPException(502, f"Pinterest'e ulaşılamadı ({e})") from e
+
+    @app.post("/api/elle-bos-temizle")
+    def elle_bos_temizle():
+        """Hiçbir şey girilmemiş taslakları siler (adı, sesi, kapağı, dağıtıcı kaydı yok)."""
+        return {"silinen": elle.bos_taslaklari_sil(calisma)}
 
     @app.post("/api/elle-freshtunes/girdim")
     def elle_freshtunes_girdim():
@@ -1006,6 +1011,22 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None, gorev_ok
         sonuc.sort(key=lambda x: x["son_tarama"] or "", reverse=True)  # hiç taranmamış en sonda
         sonuc.sort(key=lambda x: not x["izleniyor"])  # odadan izlenenler başta (sıralama kararlı)
         return sonuc
+
+    @app.get("/api/kendi")
+    def kendi_ozet():
+        """"Kendi müziğim" yüzünün ana sayfası: taranan playlist'lerdeki kendi kalkmış yayınların ve taslak hâlleri,
+        FreshTunes hesabı, Spotify köprüsü, Bulucu ve oda işleri. Ağa çıkmaz (köprü durumu 20 sn önbellekli)."""
+        from yanki import elle, yeniden_yayin
+
+        kendi = elle.kendi_sanatcilar(calisma)
+        kalkmis = yeniden_yayin.kalkmis_yayinlar(calisma, kendi)
+        taslaklar = elle.liste(calisma)
+        return {"kendi_sanatcilar": kendi, "kalkmis": kalkmis, "freshtunes": elle.freshtunes_durumu(calisma),
+                "freshtunes_url": elle.FRESHTUNES_URL, "baglanti": bul.baglanti(), "bulucu_is": bul.durum(),
+                "is": isci.durum(), "listeler": [x for x in bulucu.gecmis(calisma) if x.get("tur") == "playlist"][:8],
+                "sayilar": {"kalkmis": len(kalkmis), "taslaksiz": sum(x["taslak"] is None for x in kalkmis),
+                            "taslak": sum(x["hal"] != "gonderildi" for x in taslaklar),
+                            "gonderildi": sum(x["hal"] == "gonderildi" for x in taslaklar)}}
 
     @app.get("/api/bulucu")
     def bulucu_ozet():

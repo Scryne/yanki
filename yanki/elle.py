@@ -654,6 +654,36 @@ def sifirla(calisma: Path, kimlik: str, dagitici: str = "routenote") -> str:
     return "RouteNote kaydı sıfırlandı; form yeniden düzenlenebilir"
 
 
+def bos_mu(meta: dict, k: Path) -> bool:
+    """Hiçbir şey girilmemiş taslak: adı, sesi, kapağı, dağıtıcı kaydı yok ("Yeni şarkı"ya basılıp bırakılmış)."""
+    return (not (meta.get("baslik") or "").strip() and not (k / "ses.flac").exists() and not (k / "kapak.jpg").exists()
+            and not meta.get("routenote") and not meta.get("freshtunes") and not meta.get("kaynak_parca"))
+
+
+def bos_taslaklar(calisma: Path) -> list[str]:
+    sonuc = []
+    for yol in kok_klasor(calisma).glob("*/metadata.json"):
+        try:
+            if bos_mu(json.loads(yol.read_text(encoding="utf-8")), yol.parent):
+                sonuc.append(yol.parent.name)
+        except (OSError, ValueError):
+            continue
+    return sorted(sonuc)
+
+
+def bos_taslaklari_sil(calisma: Path) -> int:
+    import shutil
+
+    silinen = 0
+    for kimlik in bos_taslaklar(calisma):
+        try:
+            shutil.rmtree(klasor(calisma, kimlik))
+            silinen += 1
+        except OSError:
+            continue  # Windows: o an açık dosya; sonraki temizlikte
+    return silinen
+
+
 def sil(calisma: Path, kimlik: str) -> None:
     import shutil
 

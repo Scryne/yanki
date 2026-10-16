@@ -356,3 +356,53 @@ def kaynak_doldur(calisma: Path, kimlik: str, ses=ses_indir, kapak=kapak_indir) 
     if len(hatalar) == 2:
         raise Hata("; ".join(hatalar))
     return satirlar + hatalar
+
+
+# ── "Kendi müziğim" yüzü (oda `#_kendi`) ─────────────────────
+def kalkmis_yayinlar(calisma: Path, kendi: list[str]) -> list[dict]:
+    """Taranan bütün playlist'lerdeki (Bulucu kayıtları) kendi kalkmış yayınların: parça başına tek satır, hangi
+    listelerde olduğu ve FreshTunes taslağının hâli (taslak `kaynak_parca.spotify_id` ya da ISRC'yle eşleşir).
+    Ağa çıkmaz."""
+    import json
+
+    from yanki import bulucu
+
+    if not kendi:
+        return []
+    taslaklar = {}
+    for m in _taslak_metalari(calisma):
+        kp = m.get("kaynak_parca") or {}
+        for anahtar in (kp.get("spotify_id"), kp.get("isrc") or m.get("isrc")):
+            if anahtar:
+                taslaklar.setdefault(anahtar, {"kimlik": m["kimlik"], "hal": elle.hal(m),
+                                               "ses": bool(m.get("ses")), "kapak": bool(m.get("kapak"))})
+    satirlar: dict[str, dict] = {}
+    for yol in sorted(bulucu.klasor(calisma).glob("playlist-*.json"), key=lambda y: y.stat().st_mtime):
+        try:
+            v = json.loads(yol.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        for s in v.get("satirlar") or []:
+            if not s.get("id") or kendi_sanatci(sanatci_adlari(s.get("sanatci")), kendi) is None:
+                continue
+            x = satirlar.setdefault(s["id"], {**{k: s.get(k) for k in ("id", "ad", "sanatci", "resim", "isrc", "cikis",
+                                                                       "dinlenme", "neden", "distributor")},
+                                              "listeler": [], "taranma": v.get("zaman")})
+            x["listeler"].append({"id": v.get("id"), "ad": v.get("ad")})
+            x["taranma"] = v.get("zaman") or x["taranma"]
+    for x in satirlar.values():
+        x["taslak"] = taslaklar.get(x["id"]) or (taslaklar.get(x["isrc"]) if x.get("isrc") else None)
+    return sorted(satirlar.values(), key=lambda x: (x["taslak"] is not None, -(x.get("dinlenme") or 0)))
+
+
+def _taslak_metalari(calisma: Path) -> list[dict]:
+    import json
+
+    sonuc = []
+    for yol in elle.kok_klasor(calisma).glob("*/metadata.json"):
+        try:
+            sonuc.append({**json.loads(yol.read_text(encoding="utf-8")), "kimlik": yol.parent.name})
+        except (OSError, ValueError):
+            continue
+    return sonuc
+
