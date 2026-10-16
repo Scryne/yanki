@@ -1620,13 +1620,25 @@ function yankiRozeti(y) {
 
 // kendi kalkmış yayını → FreshTunes taslağı (yanki/yeniden_yayin.py): parçanın ayrıntısı (süre, ISRC, UPC, yazarlar)
 // kayıtlı değilse önce Bulucu okur, sonra taslak açılır; ses (YouTube, aynı süre) ve kapak (iTunes) oda işinde dolar
-function ftTaslakDugmesi(id, suruyor) {
+function ftTaslakDugmesi(x, suruyor) {
+  if (x.taslak) return el("a", { class: "dugme kucuk", href: "#_yukle", onclick: () => { elleAcik = x.taslak; depo.yaz("elle.acik", x.taslak); } }, "Taslağı aç");
   return el("button", { class: "dugme kucuk", type: "button", disabled: suruyor || null,
-    title: "Kendi kalkmış yayının: Yükle'de FreshTunes taslağı açılır; ses, kapak, ISRC ve künye kendiliğinden dolar",
-    onclick: (e) => freshtunesTaslagi(id, e.currentTarget) }, "FreshTunes taslağı");
+    title: "Kendi kalkmış yayının: FreshTunes taslağı açılır; künye, ISRC, ses ve kapak kendiliğinden dolar",
+    onclick: (e) => x.kendi ? freshtunesTaslagi(x.id, e.currentTarget, false) : kendiMiSor(x, e.currentTarget) }, "FreshTunes taslağı");
 }
 
-async function freshtunesTaslagi(id, dugme) {
+// sanatçı ilk kez: "senin adın mı?" (FreshTunes formundaki "haklar bende" beyanı); evet denince kaydedilir, bir daha sorulmaz
+function kendiMiSor(x, dugme) {
+  const ad = x.sanatcilar?.[0]?.name || String(x.sanatci || "").split(",")[0].trim() || "Bu sanatçı";
+  const dlg = pencere(`${ad} senin sanatçı adın mı?`, [
+    el("p", { class: "ipucu" }, "FreshTunes'a yalnız kendi yayınlarını yükleyebilirsin; formda hakların sende olduğunu beyan ediyorsun. \"Evet\" dersen bu ad kaydedilir, bu sanatçının diğer kalkmış şarkılarında bir daha sorulmaz."),
+  ], [
+    el("button", { class: "dugme", type: "button", onclick: () => dlg.close() }, "Vazgeç"),
+    el("button", { class: "dugme punch", type: "button", onclick: () => { dlg.close(); freshtunesTaslagi(x.id, dugme, true); } }, "Evet, benim"),
+  ]);
+}
+
+async function freshtunesTaslagi(id, dugme, kendi = false) {
   const yazi = dugme.textContent;
   const durum = (metin) => { dugme.textContent = metin; };
   dugme.disabled = true; dugme.setAttribute("aria-busy", "true");
@@ -1645,8 +1657,8 @@ async function freshtunesTaslagi(id, dugme) {
       }
     }
     durum("Taslak açılıyor…");
-    const r = await api("/api/bulucu/freshtunes", { parca: id });
-    bildir(r.uyari || "FreshTunes taslağı açıldı; ses ve kapak aranıyor (sağdaki iş panelinden izle).", !!r.uyari);
+    const r = await api("/api/bulucu/freshtunes", { parca: id, kendi });
+    bildir(r.uyari || (r.mevcut ? "Bu şarkının taslağı zaten var; o açıldı." : "FreshTunes taslağı açıldı; ses ve kapak aranıyor (sağdaki iş panelinden izle)."), !!r.uyari);
     elleAcik = r.kimlik; depo.yaz("elle.acik", r.kimlik);
     location.hash = "#_yukle";
   } catch (e) {
@@ -1704,8 +1716,6 @@ function playlistSonuc(v, suruyor) {
         s.ad, el("span", { class: "kesit-zaman" }, String(satirlar.filter(s.f).length)))),
       gonderilebilir.length && bulucuSuzgec !== "kopya" ? el("button", { class: "dugme ikincil kucuk toplu", type: "button", onclick: (e) => kesfeGonder(v, gonderilebilir.map((x) => x.id), e.currentTarget) },
         `Boşluğu olanları keşfe gönder (${gonderilebilir.length})`) : null) : null,
-    !v.kendi_ayarli && satirlar.length ? el("p", { class: "ipucu" }, "Bunlar senin kalkmış yayınlarınsa: ", el("a", { href: "#_yukle" }, "Yükle"),
-      "'de kendi sanatçı adını kaydet; o adın kalkmış şarkılarına \"FreshTunes taslağı\" düğmesi çıkar (ses, kapak ve ISRC kendiliğinden dolar).") : null,
     gorunen.length ? el("ul", { class: "kayitlar" }, ...gorunen.map((x) => kalkmisSatiri(v, x, suruyor)))
       : el("p", { class: "bos-kutu" }, PL_SUZGEC[bulucuSuzgec].bos));
 }
@@ -1731,7 +1741,8 @@ function kalkmisSatiri(v, x, suruyor) {
       yankiRozeti(y)),
     el("div", { class: "kayit-eylem" },
       x.kopyalar.length ? spLink("parca", x.kopyalar[0].id, "Kopyayı aç") : null,
-      x.kendi ? ftTaslakDugmesi(x.id, suruyor) : gonderilir ? el("button", { class: "dugme ikincil kucuk", type: "button", onclick: (e) => kesfeGonder(v, [x.id], e.currentTarget) }, "Keşfe gönder") : null,
+      ftTaslakDugmesi(x, suruyor),
+      !x.kendi && gonderilir ? el("button", { class: "dugme ikincil kucuk", type: "button", title: "Orvane'in AI cover hattına", onclick: (e) => kesfeGonder(v, [x.id], e.currentTarget) }, "Keşfe gönder") : null,
       el("a", { class: "dugme kucuk", href: `https://www.youtube.com/results?search_query=${encodeURIComponent(`${x.sanatci} ${x.ad}`)}`, target: "_blank", rel: "noopener" }, "Dinle")));
 }
 
@@ -1749,7 +1760,7 @@ function parcaSonuc(v, suruyor) {
     sonucBasi(v, null, [spLink("parca", v.id), yenidenOku(v, suruyor),
       kalkmis && !(y?.listede || y?.hal || y?.gonderildi || y?.duzenleme) && !v.kopyalar.some((k) => k.calinir !== false)
         ? el("button", { class: "dugme ikincil kucuk", type: "button", onclick: (e) => kesfeGonder(v, [v.id], e.currentTarget) }, "Keşfe gönder") : null,
-      kalkmis && v.kendi ? ftTaslakDugmesi(v.id, suruyor) : null]),
+      kalkmis ? ftTaslakDugmesi(v, suruyor) : null]),
     el("div", { class: "parca-sanatcilar" },
       ...(v.sanatcilar.length ? v.sanatcilar : [{ id: null, name: v.sanatci }]).map((s) => s.id
         ? el("button", { class: "dugme kucuk", type: "button", disabled: suruyor, onclick: () => kayitAc("sanatci", s.id) }, s.name) : el("span", { class: "ipucu" }, s.name)),
@@ -1931,22 +1942,6 @@ function ftHesapSeridi(ft, sonra) {
     el("button", { class: "dugme ikincil kucuk", type: "button", onclick: async () => { try { bildir((await api("/api/elle-freshtunes/girdim", {})).mesaj); } catch (e) { bildir(e.message, true); } sonra(); } }, "Bugün girdim"));
 }
 
-function kendiAdlarFormu(adlar, sonra) {
-  const kutu = el("input", { id: "kendi-sanatcilar", type: "text", value: (adlar || []).join(", "), maxlength: 600,
-    autocomplete: "off", spellcheck: "false", placeholder: "Yayın adın (virgülle birden çok)", "aria-describedby": "kendi-sanatcilar-not" });
-  return el("form", { class: "kendi-adlar", onsubmit: async (e) => {
-    e.preventDefault();
-    try {
-      const r = await api("/api/elle-freshtunes/sanatcilar", { adlar: kutu.value.split(",").map((x) => x.trim()).filter(Boolean) });
-      bildir(r.sanatcilar.length ? `Kendi adların: ${r.sanatcilar.join(", ")}.` : "Kendi sanatçı adı kaldırıldı.");
-      sonra();
-    } catch (err) { bildir(err.message, true); }
-  } },
-    el("label", { for: "kendi-sanatcilar" }, "Kendi sanatçı adların"),
-    el("div", { class: "satir-ici" }, kutu, el("button", { class: "dugme ikincil kucuk", type: "submit" }, "Kaydet")),
-    el("p", { class: "ipucu kucuk-ipucu", id: "kendi-sanatcilar-not" }, "Yalnız bu adlarla yayınlanmış kalkmış şarkılar listelenir ve FreshTunes'a yeniden yayınlanabilir. Orvane buraya girmez."));
-}
-
 // ---- Kendi müziğim → Kalkmış yayınlarım (#_kendi): playlist tara → kendi kalkmış yayınların → tek tıkla taslak ----
 let kendiIzle = null;
 async function kendiGoster() {
@@ -1967,14 +1962,14 @@ async function kendiGoster() {
     placeholder: "Kendi şarkılarını topladığın playlist'in Spotify linki", "aria-describedby": "kendi-playlist-not", disabled: !bagli || bulucuSuruyor || null });
   const tara = el("form", { class: "cam kendi-tara", role: "search", onsubmit: async (e) => {
     e.preventDefault();
-    try { await api("/api/bulucu/ara", { girdi: kutu.value.trim() }); bildir("Playlist taranıyor; kalkmış yayınların birazdan burada."); }
+    try { await api("/api/bulucu/ara", { girdi: kutu.value.trim(), kendi: true }); bildir("Playlist taranıyor; kalkmış yayınların birazdan burada."); }
     catch (err) { bildir(err.message, true); return; }
     kendiGoster();
   } },
     el("label", { for: "kendi-playlist" }, "Playlist tara"),
     el("div", { class: "satir-ici" }, kutu, el("button", { class: "dugme birincil", type: "submit", disabled: !bagli || bulucuSuruyor || null }, "Tara")),
     el("p", { class: "ipucu kucuk-ipucu", id: "kendi-playlist-not" }, bagli
-      ? "Spotify uygulamasının içinden okunur, kota harcamaz. Taranan bütün listelerdeki kalkmış yayınların aşağıda birleşir."
+      ? "Spotify uygulamasının içinden okunur, kota harcamaz. Buradan taradığın listelerin kalkmış şarkıları aşağıda birleşir."
       : "Önce sağdaki Spotify köprüsüne bağlan: tarama Spotify uygulamasının içinden yapılır."));
   const satirlar = d.kalkmis.map((x) => {
     const tk = x.taslak;
@@ -1992,9 +1987,8 @@ async function kendiGoster() {
         el("span", { class: "ipucu", title: "Bulunduğu playlist'ler" }, x.listeler.map((l) => l.ad).filter(Boolean).join(" · "))),
       el("div", { class: "kayit-eylem" }, tk
         ? el("a", { class: "dugme kucuk", href: "#_yukle", onclick: () => { elleAcik = tk.kimlik; depo.yaz("elle.acik", tk.kimlik); } }, "Taslağı aç")
-        : ftTaslakDugmesi(x.id, bulucuSuruyor)));
+        : ftTaslakDugmesi(x, bulucuSuruyor)));
   });
-  const adsiz = !d.kendi_sanatcilar.length;
   doldur(ana,
     el("header", { class: "pano-ust" },
       el("div", {}, el("h1", {}, "Kalkmış yayınlarım"),
@@ -2006,20 +2000,15 @@ async function kendiGoster() {
     isSeridi(d.bulucu_is),
     el("div", { class: "pano-izgara" },
       el("div", { class: "pano-sol" },
-        adsiz ? el("section", { class: "cam kendi-tara" }, el("h2", { class: "bolum-baslik" }, "Önce yayın adını kaydet"),
-          el("p", { class: "ipucu" }, "Yalnız kendi adınla yayınlanmış kalkmış şarkılar listelenir; Orvane'in AI cover'ları bu yüzde yok."),
-          kendiAdlarFormu(d.kendi_sanatcilar, kendiGoster)) : null,
         tara,
         el("section", { class: "bolum", "aria-label": "Kalkmış yayınların" },
           el("h2", { class: "bolum-baslik" }, "Kalkmış yayınların", el("span", { class: "g-sayi" }, satirlar.length ? String(satirlar.length) : "")),
           satirlar.length ? el("ul", { class: "kayitlar" }, ...satirlar)
-            : el("p", { class: "bos-kutu" }, adsiz ? "Yayın adını kaydedince taranan listelerdeki kalkmış yayınların burada görünür."
-              : d.listeler.length ? `Taranan listelerde ${d.kendi_sanatcilar.join(", ")} adıyla kalkmış şarkı yok.` : "Henüz playlist taranmadı: kendi şarkılarını topladığın listeyi yukarıdan tara."))),
+            : el("p", { class: "bos-kutu" }, "Henüz kalkmış yayın yok: kendi şarkılarını topladığın playlist'i yukarıdan tara. Bulucu'da taradığın listelerdeki kalkmış şarkılarda da \"FreshTunes taslağı\" düğmesi var."))),
       el("div", { class: "pano-sag" },
         d.freshtunes ? el("section", { class: "cam yan-panel", "aria-label": "FreshTunes hesabı" }, el("h2", {}, "FreshTunes hesabı"),
           ftHesapSeridi(d.freshtunes, kendiGoster),
           el("a", { class: "dugme ikincil kucuk", href: d.freshtunes_url, target: "_blank", rel: "noopener" }, "FreshTunes'u aç")) : null,
-        adsiz ? null : el("section", { class: "cam yan-panel", "aria-label": "Yayın adların" }, el("h2", {}, "Yayın adların"), kendiAdlarFormu(d.kendi_sanatcilar, kendiGoster)),
         baglantiPaneli(d.baglanti, bulucuSuruyor),
         d.listeler.length ? el("section", { class: "cam yan-panel", "aria-label": "Taranan listeler" }, el("h2", {}, "Taranan listeler"),
           el("ul", { class: "gecmis-liste" }, ...d.listeler.map((x) => el("li", {},

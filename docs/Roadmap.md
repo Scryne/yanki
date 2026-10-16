@@ -944,4 +944,8 @@ tema) canlı verinin kopyasıyla doğrulandı.
 - **Kalkmış yayınlarım** (`#_kendi`, `/api/kendi`, `yeniden_yayin.kalkmis_yayinlar`): playlist tara formu; taranan bütün
   listelerdeki kendi kalkmış yayınların (parça başına tek satır, taslaksız olanlar önce) ve taslak hâlleri; üç duraklı
   zincir (Kalkmış → Taslak → Gönderildi). Taslaklar sayfasında boş taslak temizliği (onay penceresiyle). 626 test.
+- (aynı gün, Scryne: "her zaman yayın adlarını girmek yorucu; Bulucu'da kalkmış şarkının yanında direkt FreshTunes
+  taslağı çıksın") Ayrı ad kutusu kalktı: düğme her kalkmış şarkıda, sanatçı ilk tıkta bir kez onaylanır ve kaydedilir.
+  Kalkmış yayınlarım'dan taranan liste kendi listesi sayılır (bütün kalkmışları listelenir). Taslağı olan şarkıda
+  "Taslağı aç"; sunucu aynı yayına ikinci taslak açmaz (denemede açılıyordu). 629 test.
 

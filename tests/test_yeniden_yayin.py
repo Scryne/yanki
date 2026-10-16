@@ -62,9 +62,9 @@ def test_taslak_parcanin_kunyesiyle_dolar(tmp_path, kok):
 
 def test_yalniz_kendi_katalogun(tmp_path, kok):
     c = tmp_path / "calisma"
-    with pytest.raises(yeniden_yayin.Hata, match="önce kendi sanatçı adını"):
+    with pytest.raises(yeniden_yayin.Hata, match="onaylanmadı"):
         yeniden_yayin.taslak_kur(c, kok, _parca(), [])
-    with pytest.raises(yeniden_yayin.Hata, match="kendi sanatçı adların arasında değil"):
+    with pytest.raises(yeniden_yayin.Hata, match="onaylanmadı"):
         yeniden_yayin.taslak_kur(c, kok, _parca(sanatci="Başkası", sanatcilar=[{"id": "x", "name": "Başkası"}]),
                                  ["Scryne"])
     with pytest.raises(yeniden_yayin.Hata, match="süresi"):
@@ -327,7 +327,7 @@ def test_kendi_yuzu_kalkmis_yayinlarini_toplar(tmp_path, kok, monkeypatch):
     bulucu.sonuc_yaz(c, {"tur": "playlist", "id": "2o8ZUUVGgRvoJx6Jx0i7EY", "ad": "İkinci liste", "toplam": 1,
                          "satirlar": [satir(PID, "Gece Yürüyüşü", "Scryne", 900)]})
     d = oda.get("/api/kendi").json()
-    assert d["kalkmis"] == [] and d["kendi_sanatcilar"] == []  # ad kaydedilmeden liste yok
+    assert d["kalkmis"] == [] and d["kendi_sanatcilar"] == []  # ne onaylı ad ne kendi listesi: boş
     elle.kendi_sanatcilar_yaz(c, ["Scryne"], kok)
     d = oda.get("/api/kendi").json()
     assert [x["id"] for x in d["kalkmis"]] == [PID, "y" * 22]  # dinlenmeye göre; başkasınınki yok
@@ -340,3 +340,58 @@ def test_kendi_yuzu_kalkmis_yayinlarini_toplar(tmp_path, kok, monkeypatch):
     assert ilk["taslak"]["kimlik"] == k and ilk["taslak"]["hal"] == "taslak"
     assert d["kalkmis"][0]["id"] == "y" * 22  # taslağı açılmamış olan önce
     assert d["sayilar"]["taslaksiz"] == 1 and d["sayilar"]["taslak"] == 1
+
+
+def test_sanatci_bir_kez_onaylanir(tmp_path, kok, monkeypatch):
+    """2026-10-16: ayrı "yayın adların" adımı kalktı; Bulucu'da her kalkmış şarkıda düğme, sanatçı ilk kez "bu benim"
+    denince kaydedilir ve bir daha sorulmaz. Onaysız istek taslak açmaz, Orvane onaylanamaz."""
+    c = tmp_path / "calisma"
+    monkeypatch.setattr(sanatci.Isci, "baslat", lambda self, ad, kimlik=None: {"ad": ad, "kimlik": kimlik})
+    oda = TestClient(sunucu.uygulama(replace(ayarlar.yukle(), kok=kok), c), base_url="http://127.0.0.1:8765")
+    bulucu.sonuc_yaz(c, _parca())
+    assert oda.post("/api/bulucu/freshtunes", json={"parca": PID}).status_code == 422  # onay yok
+    r = oda.post("/api/bulucu/freshtunes", json={"parca": PID, "kendi": True})
+    assert r.status_code == 200 and elle.kendi_sanatcilar(c) == ["Scryne"]
+    ikinci = _parca(id="z" * 22, ad="İkinci")
+    bulucu.sonuc_yaz(c, ikinci)
+    assert oda.post("/api/bulucu/freshtunes", json={"parca": "z" * 22}).status_code == 200  # artık sorulmaz
+    bulucu.sonuc_yaz(c, _parca(id="o" * 22, sanatci="Orvane", sanatcilar=[{"id": "x", "name": "Orvane"}]))
+    assert oda.post("/api/bulucu/freshtunes", json={"parca": "o" * 22, "kendi": True}).status_code == 422
+
+
+def test_kendi_listesinin_butun_kalkmislari(tmp_path, kok, monkeypatch):
+    """Kalkmış yayınlarım'dan taranan liste Scryne'ın kendi listesi: sanatçısı onaylanmamış kalkmış şarkılar da görünür
+    (düğme onları ilk tıkta sorar); başka listelerde yalnız onaylı sanatçılar."""
+    c = tmp_path / "calisma"
+    satir = lambda i, s: {"id": i, "ad": i[:3], "sanatci": s, "isrc": None, "dinlenme": 1, "kopyalar": []}  # noqa
+    bulucu.sonuc_yaz(c, {"tur": "playlist", "id": "1pXViTb7efviU11zRaVM2y", "ad": "Benim", "toplam": 2,
+                         "satirlar": [satir("a" * 22, "knownbyC"), satir("b" * 22, "Noctavel")]})
+    bulucu.sonuc_yaz(c, {"tur": "playlist", "id": "2o8ZUUVGgRvoJx6Jx0i7EY", "ad": "Başka", "toplam": 1,
+                         "satirlar": [satir("c" * 22, "Başkası")]})
+    assert yeniden_yayin.kalkmis_yayinlar(c, [], []) == []
+    elle.kendi_liste_ekle(c, "1pXViTb7efviU11zRaVM2y")
+    elle.kendi_liste_ekle(c, "1pXViTb7efviU11zRaVM2y")  # iki kez eklenmez
+    assert elle.kendi_listeler(c) == ["1pXViTb7efviU11zRaVM2y"]
+    x = yeniden_yayin.kalkmis_yayinlar(c, elle.kendi_sanatcilar(c), elle.kendi_listeler(c))
+    assert sorted(s["id"] for s in x) == ["a" * 22, "b" * 22] and not any(s["kendi"] for s in x)
+    elle.kendi_sanatci_ekle(c, "knownbyC", kok)
+    x = yeniden_yayin.kalkmis_yayinlar(c, elle.kendi_sanatcilar(c), elle.kendi_listeler(c))
+    assert {s["id"]: s["kendi"] for s in x} == {"a" * 22: True, "b" * 22: False}
+
+
+def test_ayni_yayina_ikinci_taslak_acilmaz(tmp_path, kok, monkeypatch):
+    """Denemede taslağı olan şarkıda Bulucu düğmesine yeniden basınca ikinci taslak açılıyordu."""
+    c = tmp_path / "calisma"
+    baslayan = []
+    monkeypatch.setattr(sanatci.Isci, "baslat", lambda self, ad, kimlik=None: baslayan.append(kimlik) or {"ad": ad})
+    oda = TestClient(sunucu.uygulama(replace(ayarlar.yukle(), kok=kok), c), base_url="http://127.0.0.1:8765")
+    bulucu.sonuc_yaz(c, _parca())
+    bulucu.sonuc_yaz(c, {"tur": "playlist", "id": "1pXViTb7efviU11zRaVM2y", "ad": "L", "toplam": 1,
+                         "satirlar": [{"id": PID, "ad": "Gece Yürüyüşü", "sanatci": "Scryne", "kopyalar": []}]})
+    ilk = oda.post("/api/bulucu/freshtunes", json={"parca": PID, "kendi": True}).json()
+    ikinci = oda.post("/api/bulucu/freshtunes", json={"parca": PID}).json()
+    assert ikinci == {"kimlik": ilk["kimlik"], "uyari": None, "mevcut": True} and baslayan == [ilk["kimlik"]]
+    assert len(elle.liste(c)) == 1
+    v = oda.get("/api/bulucu/sonuc/playlist-1pXViTb7efviU11zRaVM2y").json()
+    assert v["satirlar"][0]["taslak"] == ilk["kimlik"]
+

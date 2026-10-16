@@ -587,6 +587,26 @@ def kendi_sanatcilar(calisma: Path) -> list[str]:
     return [x for x in _ft_kayit(calisma).get("sanatcilar") or [] if isinstance(x, str) and x.strip()]
 
 
+def kendi_listeler(calisma: Path) -> list[str]:
+    """"Kendi müziğim → Kalkmış yayınlarım"dan taranan playlist'ler (Scryne'ın kendi yayınlarını topladığı listeler):
+    içlerindeki bütün kalkmış şarkılar o sayfada listelenir."""
+    return [x for x in _ft_kayit(calisma).get("listeler") or [] if isinstance(x, str)]
+
+
+def kendi_liste_ekle(calisma: Path, playlist: str) -> None:
+    listeler = kendi_listeler(calisma)
+    if playlist not in listeler:
+        dosya.json_yaz(_freshtunes_kayit_yolu(calisma), {**_ft_kayit(calisma), "listeler": [*listeler, playlist][-50:]})
+
+
+def kendi_sanatci_ekle(calisma: Path, ad: str, kok: Path | None = None) -> list[str]:
+    """Scryne bir kalkmış yayın için "bu sanatçı benim" dedi (odada bir kez sorulur): sonraki şarkılarında sorulmaz."""
+    mevcut = kendi_sanatcilar(calisma)
+    if any(x.casefold() == ad.strip().casefold() for x in mevcut):
+        return mevcut
+    return kendi_sanatcilar_yaz(calisma, [*mevcut, ad][-10:], kok)
+
+
 def kendi_sanatcilar_yaz(calisma: Path, adlar: list[str], kok: Path | None = None) -> list[str]:
     if not isinstance(adlar, list) or len(adlar) > 10 or any(not isinstance(x, str) or len(x) > 120 for x in adlar):
         raise Hata("en çok 10 sanatçı adı")

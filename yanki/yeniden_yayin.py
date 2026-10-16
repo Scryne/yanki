@@ -72,16 +72,18 @@ def _tarih(t: str | None) -> str:
     return t if t and re.fullmatch(r"\d{4}-\d{2}-\d{2}", t) else ""
 
 
-def taslak_kur(calisma: Path, kok: Path, parca: dict, kendi: list[str]) -> dict:
-    """Parça ayrıntısından (Bulucu `parca` sonucu) FreshTunes taslağı. Sanatçı kayıtlı kendi adlarından biri değilse
-    Hata (yalnız kendi kataloğun yeniden yayınlanır)."""
+def taslak_kur(calisma: Path, kok: Path, parca: dict, kendi: list[str], onay: bool = False) -> dict:
+    """Parça ayrıntısından (Bulucu `parca` sonucu) FreshTunes taslağı. Yalnız kendi kataloğun: sanatçı kayıtlı kendi
+    adlarından biri olmalı; değilse Scryne odada bir kez "bu sanatçı benim" der (`onay`) ve ad kaydedilir (2026-10-16:
+    "yayın adlarını girmek yorucu, Bulucu'da kalkmış şarkının yanında direkt çıksın")."""
     adlar = sanatci_adlari(parca.get("sanatci"), parca.get("sanatcilar"))
     sanatci = kendi_sanatci(adlar, kendi)
-    if not kendi:
-        raise Hata("önce kendi sanatçı adını kaydet (Yükle → FreshTunes → Kendi sanatçı adların)")
+    if sanatci is None and onay and adlar:
+        kendi = elle.kendi_sanatci_ekle(calisma, adlar[0], kok)
+        sanatci = kendi_sanatci(adlar, kendi)
     if sanatci is None:
-        raise Hata(f"{', '.join(adlar) or 'sanatçı'} kayıtlı kendi sanatçı adların arasında değil; yalnız kendi "
-                   "kalkmış yayınların yeniden yayınlanır")
+        raise Hata(f"{', '.join(adlar) or 'sanatçı'} kendi sanatçı adın olarak onaylanmadı; yalnız kendi kalkmış "
+                   "yayınların yeniden yayınlanır")
     if not parca.get("sure_ms"):
         raise Hata("parçanın süresi okunamadı (Bulucu'da parçayı yeniden oku)")
     m = elle.yeni(calisma, kok, parca.get("ad") or "", sablon="freshtunes", sanatci=sanatci)
@@ -359,15 +361,17 @@ def kaynak_doldur(calisma: Path, kimlik: str, ses=ses_indir, kapak=kapak_indir) 
 
 
 # ── "Kendi müziğim" yüzü (oda `#_kendi`) ─────────────────────
-def kalkmis_yayinlar(calisma: Path, kendi: list[str]) -> list[dict]:
-    """Taranan bütün playlist'lerdeki (Bulucu kayıtları) kendi kalkmış yayınların: parça başına tek satır, hangi
-    listelerde olduğu ve FreshTunes taslağının hâli (taslak `kaynak_parca.spotify_id` ya da ISRC'yle eşleşir).
+def kalkmis_yayinlar(calisma: Path, kendi: list[str], listeler: list[str] | None = None) -> list[dict]:
+    """Kendi kalkmış yayınların: Kalkmış yayınlarım'dan taranan listelerin (`listeler`) bütün kalkmış şarkıları ve
+    taranan diğer listelerde onaylı kendi sanatçı adlarının şarkıları. Parça başına tek satır, hangi listelerde olduğu,
+    sanatçısının onaylı olup olmadığı (`kendi`) ve FreshTunes taslağının hâli (`kaynak_parca.spotify_id` ya da ISRC).
     Ağa çıkmaz."""
     import json
 
     from yanki import bulucu
 
-    if not kendi:
+    listeler = set(listeler or [])
+    if not kendi and not listeler:
         return []
     taslaklar = {}
     for m in _taslak_metalari(calisma):
@@ -383,16 +387,29 @@ def kalkmis_yayinlar(calisma: Path, kendi: list[str]) -> list[dict]:
         except (OSError, ValueError):
             continue
         for s in v.get("satirlar") or []:
-            if not s.get("id") or kendi_sanatci(sanatci_adlari(s.get("sanatci")), kendi) is None:
+            onayli = kendi_sanatci(sanatci_adlari(s.get("sanatci")), kendi) is not None
+            if not s.get("id") or not (onayli or v.get("id") in listeler):
                 continue
             x = satirlar.setdefault(s["id"], {**{k: s.get(k) for k in ("id", "ad", "sanatci", "resim", "isrc", "cikis",
                                                                        "dinlenme", "neden", "distributor")},
-                                              "listeler": [], "taranma": v.get("zaman")})
+                                              "listeler": [], "taranma": v.get("zaman"), "kendi": onayli})
             x["listeler"].append({"id": v.get("id"), "ad": v.get("ad")})
             x["taranma"] = v.get("zaman") or x["taranma"]
     for x in satirlar.values():
         x["taslak"] = taslaklar.get(x["id"]) or (taslaklar.get(x["isrc"]) if x.get("isrc") else None)
     return sorted(satirlar.values(), key=lambda x: (x["taslak"] is not None, -(x.get("dinlenme") or 0)))
+
+
+def taslak_eslesmeleri(calisma: Path) -> dict[str, str]:
+    """Bulucu'dan açılmış taslaklar: Spotify parça kimliği ve ISRC → taslak kimliği (aynı yayın için ikinci taslak
+    açılmasın; Bulucu'da düğme "Taslağı aç"a döner)."""
+    sonuc: dict[str, str] = {}
+    for m in _taslak_metalari(calisma):
+        kp = m.get("kaynak_parca") or {}
+        for anahtar in (kp.get("spotify_id"), kp.get("isrc")):
+            if anahtar:
+                sonuc.setdefault(anahtar, m["kimlik"])
+    return sonuc
 
 
 def _taslak_metalari(calisma: Path) -> list[dict]:

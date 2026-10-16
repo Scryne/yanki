@@ -81,9 +81,9 @@ odası Spotify Web API'sine hiç istek atmaz.
 
 **Dinleme odasının iki yüzü** (kenar çubuğunun üstündeki düğme; her yüz son açtığın görünümü hatırlar):
 - **Orvane · AI cover hattı:** Pano, Karşılaştırma, Keşif, Yayın, Sanatçı ve kenarda şarkılar (aşağıdaki akışın tamamı).
-- **Kendi müziğim · FreshTunes:** *Kalkmış yayınlarım* (açılış): playlist linkini yapıştır → Tara; taranan bütün
-  listelerdeki kendi kalkmış yayınların tek listede, her birinde "FreshTunes taslağı" (taslağı varsa "Taslağı aç");
-  yanda FreshTunes hesabı, yayın adların, Spotify köprüsü, taranan listeler. *Taslaklar* (eski Yükle; boş taslaklar tek
+- **Kendi müziğim · FreshTunes:** *Kalkmış yayınlarım* (açılış): playlist linkini yapıştır → Tara; buradan taranan
+  listelerin bütün kalkmış şarkıları (ve onayladığın sanatçıların diğer listelerdeki şarkıları) tek listede, her birinde
+  "FreshTunes taslağı" (taslağı varsa "Taslağı aç"); yanda FreshTunes hesabı, Spotify köprüsü, taranan listeler. *Taslaklar* (eski Yükle; boş taslaklar tek
   tıkla silinir) ve *Bulucu*. Kenarda şarkılar yerine taslakların.
 
 **Bulucu (dinleme odası → Kendi müziğim → Bulucu, `yanki/bulucu.py`):** STILLMORE FINDER'ın motoru odada. Spotify linki, ISRC ya da
@@ -97,8 +97,10 @@ UPC yapıştırılır; okuma Spotify uygulamasının içinden yapılır (STILLMO
 - **Sanatçı:** dinleyici, şehirler ve yer aldığı listeler (her biri taranabilir); **Katalog**: her yayının
   distribütörü ve dinlenmesi, birden çok kez yüklenenler.
 - **Albüm**, **ISRC**, **UPC** araması.
-- **Kendi kalkmış yayınların → FreshTunes** (`yanki/yeniden_yayin.py`): Yükle'de "Kendi sanatçı adların" kaydedilince
-  Bulucu'da o adların kalkmış şarkılarına **FreshTunes taslağı** çıkar (yalnız kendi kataloğun; Orvane girmez). Tıklayınca
+- **Kendi kalkmış yayınların → FreshTunes** (`yanki/yeniden_yayin.py`): Bulucu'da her kalkmış şarkının yanında
+  **FreshTunes taslağı** (taslağı varsa **Taslağı aç**; aynı yayına ikinci taslak açılmaz). Bir sanatçı için ilk tıkta
+  "senin sanatçı adın mı?" sorulur (FreshTunes formundaki "haklar bende" beyanı); evet denince ad kaydedilir, o
+  sanatçının şarkılarında bir daha sorulmaz (Orvane onaylanamaz). Tıklayınca
   parçanın ayrıntısı okunur ve Yükle'de taslak açılır: ad, sanatçı, Spotify profilin, aynı ISRC ve UPC, ilk yayın tarihi,
   yazarlar, yapımcı, ©/℗, label, dil, açık içerik. Oda işi (`yanki elle-kaynak <kimlik>`) sesi YouTube'da Spotify'daki
   süreyle ±2 sn aynı kayıttan indirir (önce "- Topic" kanalı, sonra sanatçının/VEVO'nun kanalı; canlı, remix, orkestral
