@@ -12,9 +12,17 @@ import soundfile as sf
 from fastapi.testclient import TestClient
 from PIL import Image
 
-from yanki import ayarlar, elle, routenote, sanatci, sunucu
+from yanki import ayarlar, elle, routenote, sanatci, ses, sunucu
 
 KOK = Path(__file__).resolve().parents[1]
+
+try:  # sesi FLAC'a çeviren testler ffmpeg ister (CI makinesinde yok)
+    ses.arac("ffmpeg")
+    FFMPEG = True
+except FileNotFoundError:
+    FFMPEG = False
+
+ffmpeg_gerekli = pytest.mark.skipif(not FFMPEG, reason="ffmpeg gerekli")
 
 
 @pytest.fixture
@@ -65,6 +73,7 @@ def test_yeni_taslak_varsayilanlari_ve_dogrulama(tmp_path, kok):
         elle.oku(c, "../../etc")
 
 
+@ffmpeg_gerekli
 def test_ses_ve_kapak_dagitici_bicimine_cevrilir(tmp_path, kok):
     c = tmp_path / "calisma"
     k = elle.yeni(c, kok, "X")["kimlik"]
@@ -85,6 +94,7 @@ def test_ses_ve_kapak_dagitici_bicimine_cevrilir(tmp_path, kok):
         elle.kapak_kaydet(c, k, "k.png", _png(800, 800))
 
 
+@ffmpeg_gerekli
 def test_kontrol_eksikleri_ve_hazir(tmp_path, kok):
     c = tmp_path / "calisma"
     k = elle.yeni(c, kok, "")["kimlik"]
@@ -122,6 +132,7 @@ def test_routenote_alanlari_secimlerden(tmp_path, kok):
     assert routenote.yazarlar(rm) == [("A", "B")] and routenote.soz_yazarlari(rm) == [("C", "D")]
 
 
+@ffmpeg_gerekli
 def test_routenote_on_kontrolu_elle_paketi_gecer(tmp_path, kok):
     c = tmp_path / "calisma"
     k = _tam(c, kok)
@@ -132,6 +143,7 @@ def test_routenote_on_kontrolu_elle_paketi_gecer(tmp_path, kok):
         routenote.on_kontrol({**meta, "rn_tur": "Polka"}, p / "ses.flac", p / "kapak.jpg")
 
 
+@ffmpeg_gerekli
 def test_gonderilen_taslak_kilitlenir_zip_ve_silme(tmp_path, kok):
     c = tmp_path / "calisma"
     k = _tam(c, kok)
@@ -166,6 +178,7 @@ def oda(tmp_path, kok, monkeypatch):
     return TestClient(sunucu.uygulama(a, c), base_url="http://127.0.0.1:8765"), baslayan, c
 
 
+@ffmpeg_gerekli
 def test_odadan_taslak_doldurulur_ve_gonderilir(oda, kok):
     istemci, baslayan, c = oda
     d = istemci.get("/api/elle").json()
