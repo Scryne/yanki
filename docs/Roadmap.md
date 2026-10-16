@@ -923,3 +923,13 @@ tema) canlı verinin kopyasıyla doğrulandı.
 - **Açık:** FreshTunes formunun alan sırası, tür/dil listeleri giriş yapmadan görülemedi; ilk yüklemede formun ekran
   görüntüsüyle `elle.freshtunes_metni` sıkılaştırılacak. İlk gerçek FreshTunes yayını bekleniyor.
 
+## Bulucu'dan kendi kalkmış yayınını FreshTunes'a (2026-10-16, Scryne: "kendi yayınladığım kaldırılmış şarkıları playlistimde topladım; tıklayınca taslak dolsun, aynı saniyedeki şarkıyı indirsin, kapağı bulsun, aynı ISRC'yi girsin")
+
+- `yanki/yeniden_yayin.py`: yalnız kayıtlı kendi sanatçı adlarına (`elle.kendi_sanatcilar`, Yükle'den; Orvane
+  reddedilir; sunucu da denetler). Taslak parçanın Bulucu ayrıntısından; ses ve kapak oda işinde (`elle_kaynak`).
+- Canlı deneme (Mt. Eden — Sierra Leone, 292,9 sn, geçici klasörde): en yakın süre bir hayran yüklemesiydi, sanatçının
+  kanalında 292 sn'lik "Orchestral Version" vardı → kanal kademesi (Topic, sanatçı/VEVO, diğer) ve sürüm sözcüğü
+  süzgeci; seçilen sanatçının kanalı 293,7 sn (+0,8). YouTube sesi 0 dBFS'e dayanıyordu → −1 dB. iTunes'un asıl kapağı
+  1500 px'ti (büyütülür, uyarılır). Spotify o parçada yazar vermiyordu ("Not Documented"): besteci elle yazılır.
+- 619 test.
+

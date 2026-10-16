@@ -1435,6 +1435,21 @@ def _dagitim_red(args: argparse.Namespace) -> int:
     return 0
 
 
+def _elle_kaynak(args: argparse.Namespace) -> int:
+    """Bulucu'dan açılan kendi kalkmış yayınının FreshTunes taslağına ses ve kapak (`yanki/yeniden_yayin.py`):
+    YouTube'da Spotify'daki süreyle aynı kayıt, iTunes'ta 3000×3000 kapak. Ses bulunamazsa 1."""
+    from yanki import elle, yeniden_yayin
+
+    calisma = ayarlar.yukle().kok / "calisma"
+    try:
+        for satir in yeniden_yayin.kaynak_doldur(calisma, args.kimlik):
+            print(satir, flush=True)
+    except (yeniden_yayin.Hata, elle.Hata) as e:
+        print(f"✗ {args.kimlik}: {e}")
+        return 1
+    return 0 if (elle.klasor(calisma, args.kimlik) / "ses.flac").exists() else 1  # kapak elle de sürüklenebilir
+
+
 def _elle_yukle(args: argparse.Namespace) -> int:
     """Odada elle doldurulan taslak (`yanki/elle.py`) → RouteNote: dört adım tarayıcıyla, `--gonder` ile aynı oturumda
     "Distribute" (geri alınamaz)."""
@@ -1953,6 +1968,10 @@ def main(argv: list[str] | None = None) -> int:
     ey.add_argument("kimlik")
     ey.add_argument("--gonder", action="store_true", help="aynı oturumda Distribute (geri alınamaz)")
     ey.set_defaults(fn=_elle_yukle)
+    ek = alt.add_parser("elle-kaynak", help="kendi kalkmış yayınının FreshTunes taslağına sesi (YouTube) ve kapağı "
+                                           "(iTunes) bul")
+    ek.add_argument("kimlik")
+    ek.set_defaults(fn=_elle_kaynak)
     ep = alt.add_parser("eposta", help="RouteNote'un onay / düzeltme / red e-postalarını oku ve hatta işle")
     ep.add_argument("--gun", type=int, default=21, help="son kaç günün iletileri")
     ep.set_defaults(fn=_eposta)

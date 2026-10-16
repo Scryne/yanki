@@ -763,3 +763,5 @@ a.dugme.pasif { opacity: .45; pointer-events: none; }
 .ft-adimlar { margin: 0 0 var(--s2); padding-left: 1.2em; }
 .ft-adimlar li { margin: 2px 0; }
 .ft-serit { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); }
+.kendi-adlar { display: grid; gap: var(--s1); margin-bottom: var(--s4); max-width: 640px; }
+.kendi-adlar input { flex: 1; min-width: 0; }

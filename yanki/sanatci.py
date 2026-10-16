@@ -230,6 +230,8 @@ IS_KOMUTLARI = {  # ad → (yanki argümanları, kimlik gerekir mi)
     # elle taslak (yanki/elle.py): RouteNote'a aynı oturumda doldur + gönder; ya da yalnız taslak
     "elle_gonder": (["elle-yukle", "{kimlik}", "--gonder"], True),
     "elle_taslak": (["elle-yukle", "{kimlik}"], True),
+    # kendi kalkmış yayını (yanki/yeniden_yayin.py): FreshTunes taslağına ses (YouTube, aynı süre) ve kapak (iTunes)
+    "elle_kaynak": (["elle-kaynak", "{kimlik}"], True),
 }
 
 

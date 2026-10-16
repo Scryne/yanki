@@ -372,6 +372,8 @@ def kontrol(calisma: Path, kimlik: str) -> dict:
         eksik.append("Ana sanatçı")
     if not (k / "ses.flac").exists():
         eksik.append("Ses dosyası")
+    elif (meta.get("ses") or {}).get("youtube"):
+        uyari.append("Ses YouTube'dan (kayıplı): master dosyan (WAV/FLAC) varsa sürükle, kalite daha iyi olur")
     elif (meta.get("ses") or {}).get("kayipli"):
         uyari.append("Ses kayıplı biçimden (MP3/M4A) çevrildi; mümkünse WAV ya da FLAC yükle")
     if not (k / "kapak.jpg").exists():
@@ -560,9 +562,35 @@ def _freshtunes_kayit_yolu(calisma: Path) -> Path:
     return kok_klasor(calisma) / ".freshtunes.json"
 
 
+def _ft_kayit(calisma: Path) -> dict:
+    try:
+        v = json.loads(_freshtunes_kayit_yolu(calisma).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return v if isinstance(v, dict) else {}
+
+
 def freshtunes_girdim(calisma: Path, gun: date | None = None) -> None:
     """FreshTunes hesabına girildi (ya da yayın gönderildi): hareketsizlik sayacı sıfırlanır."""
-    dosya.json_yaz(_freshtunes_kayit_yolu(calisma), {"son_giris": (gun or date.today()).isoformat()})
+    dosya.json_yaz(_freshtunes_kayit_yolu(calisma), {**_ft_kayit(calisma),
+                                                     "son_giris": (gun or date.today()).isoformat()})
+
+
+def kendi_sanatcilar(calisma: Path) -> list[str]:
+    """Scryne'ın kendi yayın adları (Bulucu'daki kalkmış parçadan FreshTunes taslağı yalnız bunlara açılır,
+    `yeniden_yayin`). Orvane burada olamaz: AI cover sanatçısı RouteNote'ta."""
+    return [x for x in _ft_kayit(calisma).get("sanatcilar") or [] if isinstance(x, str) and x.strip()]
+
+
+def kendi_sanatcilar_yaz(calisma: Path, adlar: list[str], kok: Path | None = None) -> list[str]:
+    if not isinstance(adlar, list) or len(adlar) > 10 or any(not isinstance(x, str) or len(x) > 120 for x in adlar):
+        raise Hata("en çok 10 sanatçı adı")
+    temiz = list(dict.fromkeys(x.strip() for x in adlar if x.strip()))
+    varsayilan = varsayilanlar(kok)["sanatci"] if kok else None
+    if varsayilan and any(x.casefold() == varsayilan.casefold() for x in temiz):
+        raise Hata(f"{varsayilan} AI cover sanatçısı (RouteNote); kendi adların arasına girmez")
+    dosya.json_yaz(_freshtunes_kayit_yolu(calisma), {**_ft_kayit(calisma), "sanatcilar": temiz})
+    return temiz
 
 
 def freshtunes_durumu(calisma: Path, bugun: date | None = None) -> dict | None:
@@ -580,9 +608,8 @@ def freshtunes_durumu(calisma: Path, bugun: date | None = None) -> dict | None:
     if not gonderimler:
         return None
     try:
-        giris = date.fromisoformat(json.loads(_freshtunes_kayit_yolu(calisma).read_text(encoding="utf-8"))
-                                   ["son_giris"])
-    except (OSError, ValueError, KeyError, TypeError):
+        giris = date.fromisoformat(_ft_kayit(calisma)["son_giris"])
+    except (ValueError, KeyError, TypeError):
         giris = None
     son = max([*gonderimler, *([giris] if giris else [])])
     gun = (bugun - son).days
