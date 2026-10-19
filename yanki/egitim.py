@@ -66,6 +66,11 @@ class Ayar:
     deneme_olcekleri: tuple[float, ...] = (0.0, 0.5, 1.0)
     # son bağdaştırıcının yanında denenen ara kayıtlar (epoch; ölçek 1): kaç epoch'un iyi olduğunu kulak seçsin
     deneme_ara_kayitlar: tuple[int, ...] = ()
+    # kör testin güvenilirliği (S32: aynı dosya iki testte farklı not aldı, tek tohum gürültülü): her kol üretimin ilk
+    # `deneme_tohum_sayisi` tohumuyla; `deneme_uretim_kolu`: üretimdeki bağdaştırıcı (`motor.lora`) da aynı pod'da,
+    # aynı güncel tarifle üretilir (eski denemenin kayıtları o günün tarifiyle üretilmişti)
+    deneme_tohum_sayisi: int = 1
+    deneme_uretim_kolu: bool = False
     # örneklerin stili, eğitimden önce pod'da ACE-Step betimleyicisiyle (acestep-captioner) yazılır: üretim de betimden
     # stil kullandığı için (config/motor.toml [motor] betim) eğitim ile üretim aynı dili konuşur; listedeki stil yedek
     betim: bool = True
@@ -391,13 +396,19 @@ def deneme_kok(calisma: Path, kimlik: str) -> Path:
 
 
 def deneme_isleri(a: Ayarlar, calisma: Path, ayar: Ayar, ses_yolu, ara: dict[int, str] | None = None,
-                  son: str | None = None) -> list[tuple[motor.Is, durum.Durum, float | str | None]]:
-    """Karşılaştırmalı deneme: üretim tarifiyle (cover, güç, adım, ilk tohum) tek parça, her ölçek için bir iş; `ara`
-    (epoch → pod'daki bağdaştırıcı) verilirse her ara kayıt için de bir iş (ölçek 1, kol `ep<N>`). `son`: son
-    bağdaştırıcının pod'daki yolu (ara kayıt varken işçi bağdaştırıcıları değiştirir). `ses_yolu(yerel) → uzak yol`.
-    Sıra: önce betimler, sonra bağdaştırıcı başına işler (işçi her bağdaştırıcıyı bir kez takar)."""
+                  son: str | None = None, uretim_lora: str | None = None
+                  ) -> list[tuple[motor.Is, durum.Durum, float | str | None]]:
+    """Karşılaştırmalı deneme: üretim tarifiyle (cover, güç, adım, CFG ve diğer `cover.ek` ayarları) tek parça, her
+    ölçek için bir iş; `ara` (epoch → pod'daki bağdaştırıcı) verilirse her ara kayıt için de bir iş (ölçek 1, kol
+    `ep<N>`); `uretim_lora` (üretimdeki bağdaştırıcının pod'daki yolu) verilirse kol `uretim`. Her kol üretimin ilk
+    `deneme_tohum_sayisi` tohumuyla (birden çoksa iş kimliği `…|t<tohum>`). `son`: son bağdaştırıcının pod'daki yolu
+    (başka bağdaştırıcı varken işçi bağdaştırıcıları değiştirir). `ses_yolu(yerel) → uzak yol`. Sıra: önce betimler,
+    sonra bağdaştırıcı başına işler (işçi her bağdaştırıcıyı bir kez takar)."""
     from yanki import uretim
 
+    tohumlar = a.cover.tohumlar[:max(1, ayar.deneme_tohum_sayisi)]
+    coklu = len(tohumlar) > 1
+    degisen = bool(ara or uretim_lora)  # işçi bağdaştırıcı değiştirecek: son bağdaştırıcı da açıkça istenir
     isler, kollar = [], []
     for kimlik in ayar.deneme_sarkilari:
         kok = deneme_kok(calisma, kimlik)
@@ -409,16 +420,24 @@ def deneme_isleri(a: Ayarlar, calisma: Path, ayar: Ayar, ses_yolu, ara: dict[int
         if ayar.betim:  # üretim tarifi: stil şarkıyı dinleyen betimden (ölçek None: betim işi)
             betim = f"{kimlik}|betim"
             isler.append((motor.Is(id=betim, gorev="betimle", kaynak=ses_yolu(k / d.kaynak["dosya"])), d, None))
-        ortak = dict(gorev="cover", kaynak=ses_yolu(k / d.kaynak["dosya"]),
-                     soz=(k / d.soz["dosya"]).read_text(encoding="utf-8"), adim=a.cover.adim,
-                     tohum=a.cover.tohumlar[0], guc=a.cover.guc, stil_betimden=betim, **uretim._ortak(d))
-        for olcek in ayar.deneme_olcekleri:
-            i = motor.Is(id=f"{kimlik}|{olcek:g}", cikti_klasor=f"{UZAK}/deneme/{kimlik}/{olcek:g}", lora_olcek=olcek,
-                         lora=son if ara else None, **ortak)
-            kollar.append((son or "", i, d, olcek))
-        for ep, yol in sorted((ara or {}).items()):
-            kollar.append((yol, motor.Is(id=f"{kimlik}|ep{ep}", cikti_klasor=f"{UZAK}/deneme/{kimlik}/ep{ep}",
-                                         lora_olcek=1.0, lora=yol, **ortak), d, f"ep{ep}"))
+        kaynak_ = ses_yolu(k / d.kaynak["dosya"])
+        ortak = dict(gorev="cover", kaynak=kaynak_, soz=(k / d.soz["dosya"]).read_text(encoding="utf-8"),
+                     adim=a.cover.adim, guc=a.cover.guc, stil_betimden=betim,
+                     referans=kaynak_ if a.cover.referans else None, ek=dict(a.cover.ek), **uretim._ortak(d))
+        for tohum in tohumlar:
+            ek, alt = (f"|t{tohum}", f"/t{tohum}") if coklu else ("", "")
+            for olcek in ayar.deneme_olcekleri:
+                i = motor.Is(id=f"{kimlik}|{olcek:g}{ek}", cikti_klasor=f"{UZAK}/deneme/{kimlik}/{olcek:g}{alt}",
+                             lora_olcek=olcek, lora=son if degisen else None, tohum=tohum, **ortak)
+                kollar.append((son or "", i, d, olcek))
+            for ep, yol in sorted((ara or {}).items()):
+                i = motor.Is(id=f"{kimlik}|ep{ep}{ek}", cikti_klasor=f"{UZAK}/deneme/{kimlik}/ep{ep}{alt}",
+                             lora_olcek=1.0, lora=yol, tohum=tohum, **ortak)
+                kollar.append((yol, i, d, f"ep{ep}"))
+            if uretim_lora:
+                kollar.append((uretim_lora, motor.Is(
+                    id=f"{kimlik}|uretim{ek}", cikti_klasor=f"{UZAK}/deneme/{kimlik}/uretim{alt}",
+                    lora_olcek=a.motor.lora_olcek, lora=uretim_lora, tohum=tohum, **ortak), d, "uretim"))
     return isler + [(i, d, kol) for _, i, d, kol in sorted(kollar, key=lambda x: (x[0] != (son or ""), x[0]))]
 
 
@@ -582,8 +601,8 @@ def deneme_birlestir(yerel: Path, yeni: list[dict], usd: float) -> Sonuc:
     """Yeniden üretilen kolları eğitimin kaydına katar (aynı şarkı+kolun eskisi düşer, maliyet eklenir)."""
     yol = yerel / "egitim.json"
     eski = json.loads(yol.read_text(encoding="utf-8"))
-    anahtar = {(x["kimlik"], x.get("kol")) for x in yeni}
-    deneme = [x for x in eski.get("deneme", []) if (x["kimlik"], x.get("kol")) not in anahtar] + yeni
+    anahtar = {(x["kimlik"], x.get("kol"), x.get("tohum")) for x in yeni}
+    deneme = [x for x in eski.get("deneme", []) if (x["kimlik"], x.get("kol"), x.get("tohum")) not in anahtar] + yeni
     eski.update(deneme=deneme, usd=round(eski.get("usd", 0.0) + usd, 3))
     dosya.json_yaz(yol, eski)
     return Sonuc(yerel, yerel.parents[2] / "dinleme" / "lora" / yerel.name, yerel / "final", deneme, eski["usd"],
@@ -670,6 +689,42 @@ def kaydet(sonuc: Sonuc, ayar: Ayar, commit: str | None = None, ornek: int | Non
                          **({"ornek": ornek} if ornek is not None else {})})
 
 
+KOL_ADLARI = {"uretim": "şu anki model (üretimde)", "1": "yeni eğitim", "0": "LoRA'sız",
+              "0.5": "yeni eğitim, yarım güç"}
+
+
+def kulak_seti(sonuc: Sonuc, ayar: Ayar) -> list[dict]:
+    """Denemenin kör test setleri (dinleme odası → Karşılaştırma): tohum başına bir set, aynı şarkılar. İki tohumda
+    aynı kolu seçmek tek dinlemenin gürültüsünü ayıklar (S32). En az iki kolu inmiş şarkılar; set yoksa dosya
+    yazılmaz. Yollar `calisma`ya göre."""
+    calisma = sonuc.dinleme.parents[2]
+    tohumlar = sorted({x.get("tohum") for x in sonuc.deneme if x.get("dosya")}, key=lambda t: (t is None, t))
+    setler = []
+    for n, tohum in enumerate(tohumlar, 1):
+        satir = [x for x in sonuc.deneme if x.get("dosya") and x.get("tohum") == tohum]
+        kollar = sorted({x["kol"] for x in satir}, key=lambda k: (k != "uretim", k))
+        sarkilar = [k for k in dict.fromkeys(x["kimlik"] for x in satir)
+                    if sum(x["kimlik"] == k for x in satir) >= 2]
+        if len(kollar) < 2 or not sarkilar:
+            continue
+        ek = f"_t{tohum}" if len(tohumlar) > 1 or ayar.deneme_tohum_sayisi > 1 else ""
+        goreli = sonuc.dinleme.relative_to(calisma).as_posix()
+        setler.append({
+            "kimlik": f"egitim-{sonuc.dinleme.name}" + (f"-{n}" if len(tohumlar) > 1 else ""),
+            "ad": f"Yeni eğitim ({sonuc.dinleme.name})"
+                  + (f" · dinleme {n}/{len(tohumlar)}" if len(tohumlar) > 1 else "") + f" · {len(sarkilar)} şarkı",
+            "aciklama": "Aynı şarkılar, aynı güncel üretim tarifi ve tohum; yalnız model değişiyor. "
+                        + ("Aynı şarkıyı öbür dinlemede başka tohumla yeniden dinleyeceksin: iki dinlemede de aynı "
+                           "modeli seçmek tesadüf değil." if len(tohumlar) > 1 else ""),
+            "kollar": {k: KOL_ADLARI.get(k, f"yeni eğitim, {k[2:]} epoch" if k.startswith("ep") else k)
+                       for k in kollar},
+            "sarkilar": sarkilar,
+            "yollar": {k: [f"{goreli}/{{sarki}}/lora_{k}{ek}.flac"] for k in kollar}})
+    if setler:
+        dosya.json_yaz(sonuc.dinleme / "kulak_set.json", setler)
+    return setler
+
+
 def rapor(sonuc: Sonuc, ornek: int, dusen: int) -> str:
     """Dinleme notu (`calisma/dinleme/lora/<zaman>/OKU.md`): hangi dosya ne, kapı ölçüleri."""
     satirlar = [f"# LoRA karşılaştırması ({sonuc.klasor.name})", "",
@@ -700,7 +755,13 @@ def _deneme(a: Ayarlar, ayar: Ayar, p, hedef: str, calisma: Path, dinleme: Path,
     def ses_yolu(yerel: Path) -> str:
         return girdiler.setdefault(str(yerel), f"{UZAK}/girdi/{len(girdiler)}{yerel.suffix}")
 
-    isler = deneme_isleri(a, calisma, ayar, ses_yolu, ara, f"{UZAK}/cikti/final")
+    uretim_lora = None
+    if ayar.deneme_uretim_kolu and a.motor.lora is not None:
+        uretim_lora = f"{UZAK}/uretim_lora/{a.motor.lora.name}"
+        p.komut(f"mkdir -p {uretim_lora}")
+        for f in ("adapter_config.json", "adapter_model.safetensors"):
+            p.gonder(a.motor.lora / f, f"{uretim_lora}/{f}", zaman_asimi=1800)
+    isler = deneme_isleri(a, calisma, ayar, ses_yolu, ara, f"{UZAK}/cikti/final", uretim_lora)
     if not isler:
         return []
     for yerel_yol, uzak_yol in girdiler.items():
@@ -727,10 +788,10 @@ def _deneme(a: Ayarlar, ayar: Ayar, p, hedef: str, calisma: Path, dinleme: Path,
             continue
         ara_mi = isinstance(kol, str)  # "ep20": ara kayıt (ölçek 1)
         satir = {"kimlik": d.kimlik, "ad": d.ad, "olcek": 1.0 if ara_mi else kol, "kol": kol if ara_mi else f"{kol:g}",
-                 "basari": bool(r.get("basari")), "hata": r.get("hata"), "sure_sn": r.get("sure_sn")}
+                 "tohum": i.tohum, "basari": bool(r.get("basari")), "hata": r.get("hata"), "sure_sn": r.get("sure_sn")}
         if r.get("basari") and r.get("cikti"):
-            ad = f"lora_{kol}.flac" if ara_mi else f"lora_{kol:g}.flac"
-            satir["dosya"] = str(p.al(r["cikti"], dinleme / d.kimlik / ad))
+            ek = f"_t{i.tohum}" if "|t" in i.id else ""
+            satir["dosya"] = str(p.al(r["cikti"], dinleme / d.kimlik / f"lora_{satir['kol']}{ek}.flac"))
         sonuclar.append(satir)
     bildir(f"deneme: {sum(x['basari'] for x in sonuclar)}/{sum(o is not None for _, _, o in isler)} iş")
     return sonuclar

@@ -76,7 +76,8 @@ def kontroller(a: Ayarlar) -> list[Kontrol]:
     return sonuc
 
 
-DISK_EN_AZ_GB = 20  # şarkı başı ~300–450 MB ara ses; gece iki şarkıyla haftada ~6 GB (temizlik 14 gün sonra siler)
+DISK_EN_AZ_GB = 20  # şarkı başı ~300–450 MB ara ses; gece iki şarkıyla haftada ~6 GB (temizlik yüklenince ve retten
+# sonra siler)
 
 
 def disk_kontrolu(a: Ayarlar) -> Kontrol:

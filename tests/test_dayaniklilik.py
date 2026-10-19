@@ -299,7 +299,7 @@ def test_yedek_durumu_alir_ses_ve_sir_almaz_eskileri_budar(tmp_path):
 
 def test_operasyon_ayari_varsayilan_ve_dosya(tmp_path):
     op = ayarlar.operasyon_oku(tmp_path)
-    assert op.yedek_klasor == tmp_path / "calisma" / "yedek" and op.temizlik_gun == 14
+    assert op.yedek_klasor == tmp_path / "calisma" / "yedek" and op.temizlik_gun == 0
     (tmp_path / "config").mkdir()
     (tmp_path / "config" / "operasyon.toml").write_text('[yedek]\nklasor = "D:/Y"\nsakla = 0\n[temizlik]\ngun = 3\n',
                                                         encoding="utf-8")

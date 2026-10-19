@@ -11,8 +11,12 @@ gun = 7
 sakla = 8
 
 [temizlik]
+# Gece koşusunun disk temizliği (yanki/temizlik.py). Reddedilen şarkıların sesleri her temizlikte silinir.
 # Yüklenmiş şarkılarda seçilmeyen adayların ve ara seslerin silinmesi için yüklemenin üstünden geçmesi gereken gün
-gun = 14
+# (0: yüklenince ilk temizlikte; yüklemeden önce seçim değişebildiği için o aşamada silinmez)
+gun = 0
+# `calisma/_arsiv/<tarih>` (baştan üretime alınan şarkıların eski adayları) kaç gün sonra silinsin
+arsiv_gun = 7
 
 [gunduz]
 # `bosta_dk`: bilgisayar bu kadar dakikadır kullanılmıyorsa "boşta" sayılır. Sürekli koşu buna bakarak açık Spotify

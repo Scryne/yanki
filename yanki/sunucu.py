@@ -247,17 +247,20 @@ def _bolumler(satirlar: list, sure_sn: float | None, ad: str) -> list[dict]:
     return [{"ad": b.ad, "bas": b.bas, "satirlar": [[t, m] for t, m in b.satirlar]} for b in bolumler]
 
 
-def _oneri(d: durum.Durum) -> dict | None:
+def _oneri(d: durum.Durum, secici: str = "kural") -> dict | None:
     """Hattın önerdiği aday ve kısa gerekçesi (onay.oneri: söz WER'i en düşük iki aday arasından ACE-Step söz
-    hizalaması yüksek olan). Yalnız öneri: karar Scryne'ın kulağı."""
-    from yanki import onay
+    hizalaması yüksek olan, ya da ölçüde Scryne'ı daha iyi tutan estetik puanı). Yalnız öneri: karar Scryne'ın
+    kulağı."""
+    from yanki import estetik, onay
 
-    a = onay.oneri(d)
+    a = onay.oneri(d, secici)
     if a is None:
         return None
     wer = (a.kapilar.get("soz_wer") or {}).get("deger")
     hiz = onay._hizalama(a)
-    neden = [f"söz hatası {str(wer).replace('.', ',')}" if wer is not None else None,
+    puan = estetik.puan(a.estetik) if secici == "estetik" else None
+    neden = [f"estetik {puan:.2f}".replace(".", ",") if puan is not None else None,
+             f"söz hatası {str(wer).replace('.', ',')}" if wer is not None else None,
              f"söz hizalaması {hiz:.3f}".replace(".", ",") if hiz is not None else None]
     return {"aday": a.no, "neden": " · ".join(x for x in neden if x)}
 
@@ -459,17 +462,18 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None, gorev_ok
         from yanki import onay, takip
 
         try:
-            ayar = onay.ayar_oku(a.kok / "config" / "yayin.toml")
+            ayar = onay.ayar_oku(a.kok / "config" / "yayin.toml", calisma)
         except (OSError, ValueError):  # config/yayin.toml'da yazım hatası: otomatik onay bilgisi yok, şarkı açılır
             ayar = None
         oto = onay.onay_zamani(d, ayar) if ayar else None
-        oneri = onay.oneri(d) if oto else None
+        oneri = onay.oneri(d, ayar.secici) if oto else None
         try:
             kesitler = sozler.kesitler(satirlar, d.kaynak.get("sure_sn"))
         except (ValueError, TypeError, IndexError):
             kesitler = []
         return {**asdict(d), **_ozet(d, calisma), "kesitler": kesitler,
-                "bolumler": _bolumler(satirlar, d.kaynak.get("sure_sn"), d.ad), "oneri": _oneri(d),
+                "bolumler": _bolumler(satirlar, d.kaynak.get("sure_sn"), d.ad),
+                "oneri": _oneri(d, ayar.secici if ayar else "kural"),
                 "otomatik_onay": {"zaman": oto.isoformat(timespec="minutes"), "aday": oneri.no}
                 if oto and oneri else None,
                 "onay_engeli": onay.engel(d, ayar) if ayar and ayar.acik and d.asama == "uretildi" else None,
@@ -558,6 +562,8 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None, gorev_ok
         with guncelle(kimlik) as d:
             if d.asama != "reddedildi":
                 raise HTTPException(409, "yalnız reddedilmiş şarkı geri alınabilir")
+            if d.kaynak.get("dosya") and not (durum.klasor(calisma, kimlik) / d.kaynak["dosya"]).exists():
+                raise HTTPException(409, "bu şarkının sesleri temizlikte silindi; geri alınamaz")
             onceki = next((g["asama"] for g in reversed(d.gecmis[:-1]) if g.get("asama") != "reddedildi"), "yeni")
             d.notlar.append({"ret_geri_alindi": onceki})
             d.gec(onceki)
@@ -625,7 +631,7 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None, gorev_ok
 
     @app.get("/kulak-ses/{set_kimlik}/{sarki}/{kol}")
     def kulak_sesi(set_kimlik: str, sarki: str, kol: str):
-        s = kulak.setler().get(set_kimlik)
+        s = kulak.setler(calisma).get(set_kimlik)
         yol = kulak.dosya_yolu(calisma, s, sarki, kol) if s and _kimlik_gecerli(sarki) else None
         if yol is None:
             raise HTTPException(404, "dosya yok")
@@ -1083,7 +1089,7 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None, gorev_ok
         say = lambda *asamalar: sum(d.asama in asamalar for d in hepsi)  # noqa: E731
         uyarilar = []
         try:
-            ayar = onay.ayar_oku(yayin_yolu)
+            ayar = onay.ayar_oku(yayin_yolu, calisma)
             dagitimci = paket.yayin_ayarlari(yayin_yolu).dagitimci
         except (OSError, ValueError) as e:  # Scryne ayarı elle düzenlerken bıraktığı yazım hatası: pano yine açılır
             ayar, dagitimci = onay.Ayar(), None
@@ -1116,6 +1122,9 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None, gorev_ok
                        "oto_onay": ayar.acik, "oto_onay_saat": ayar.sure_saat,
                        # öneri kuralının Scryne'ın kulak seçimlerini tutma oranı (Faz 12, `yanki isabet`)
                        "oto_isabet": {k: isabet[k] for k in ("sarki", "isabet", "esik")},
+                       # öneriyi veren kural (otomatik: estetik ölçüde eşiği geçince) ve estetik seçicinin isabeti
+                       "oto_secici": ayar.secici,
+                       "oto_estetik": {k: isabet["estetik"][k] for k in ("sarki", "isabet")},
                        "uretim": (f"kiralık GPU ({a.uzak.gpu.replace('NVIDIA ', '')})" if a.uzak.acik
                                   else "evdeki GPU"),
                        "uzak_ay_usd": uzak.bu_ay_harcama(a.kok) if a.uzak.acik else None,

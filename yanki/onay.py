@@ -14,11 +14,11 @@ rastgele ~%29), parmak izi/dalga en iyi %47, tohum eşit dağılmış. Yani hiç
 
 import re
 import tomllib
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from yanki import durum
+from yanki import durum, estetik
 
 # Kulaktan geçmeden yayına girebilecek şarkı (2026-10-10, Scryne her şeyi bıraktı; hedef: dinlenme ve sağlıklı profil):
 # tarifi dinleme testiyle seçilmiş tür ve dil (piyano/akustik balad, pop, piyano rock; İngilizce) ve sözü anlaşılır
@@ -52,14 +52,37 @@ class Ayar:
     diller: tuple[str, ...] = ("en",)
     en_yuksek_wer: float = 0.15
     denenmemis_turler: tuple[str, ...] = DENENMEMIS_VARSAYILAN
+    # öneriyi hangi kural verir: "kural" (söz WER'i + hizalama), "estetik" (yanki/estetik.py puanı) ya da "otomatik"
+    # (estetik, Scryne'ın kulak seçimlerinde Faz 12 eşiğini ve kuralı geçince; `secici_coz`)
+    secici: str = "kural"
 
 
-def ayar_oku(yayin_yolu: Path) -> Ayar:
+SECICILER = ("kural", "estetik", "otomatik")
+ESTETIK_EN_AZ = 10  # otomatik geçiş için estetik puanı olan en az bu kadar kulak seçimi
+
+
+def ayar_oku(yayin_yolu: Path, calisma: Path | None = None) -> Ayar:
+    """`calisma` verilirse "otomatik" seçici ölçüye göre "kural" ya da "estetik"e çözülür."""
     with open(yayin_yolu, "rb") as f:
         d = tomllib.load(f).get("otomatik_onay", {})
-    return Ayar(bool(d.get("acik", False)), float(d.get("sure_saat", 72)), tuple(d.get("diller", ["en"])),
+    secici = str(d.get("secici", "kural"))
+    if secici not in SECICILER:
+        raise ValueError(f"otomatik_onay.secici {', '.join(SECICILER)} olmalı: {secici}")
+    ayar = Ayar(bool(d.get("acik", False)), float(d.get("sure_saat", 72)), tuple(d.get("diller", ["en"])),
                 float(d.get("en_yuksek_wer", 0.15)),
-                tuple(d.get("denenmemis_turler", DENENMEMIS_VARSAYILAN)))
+                tuple(d.get("denenmemis_turler", DENENMEMIS_VARSAYILAN)), secici)
+    return replace(ayar, secici=secici_coz(calisma, secici)) if calisma is not None else ayar
+
+
+def secici_coz(calisma: Path, secici: str) -> str:
+    """`otomatik`: estetik seçici en az `ESTETIK_EN_AZ` kulak seçiminde `ISABET_ESIGI`ni tutturup kuraldan iyiyse
+    `estetik`, değilse `kural` (Faz 12: öneri Scryne'ı ≥ %70 tutarsa veto penceresinde varsayılan)."""
+    if secici != "otomatik":
+        return secici
+    e = isabet(calisma)["estetik"]
+    if e["sarki"] >= ESTETIK_EN_AZ and e["oran"] >= ISABET_ESIGI and e["isabet"] > e["kural_isabet"]:
+        return "estetik"
+    return "kural"
 
 
 def _wer(a: durum.Aday) -> float | None:
@@ -73,7 +96,7 @@ def engel(d: durum.Durum, ayar: Ayar) -> str | None:
         return f"{m.group(1)}: bu türde tarif dinlenmedi"
     if (dil := d.analiz.get("dil", "en")) not in ayar.diller:
         return f"dil {dil}: bu dilde tarif dinlenmedi"
-    a = oneri(d)
+    a = oneri(d, ayar.secici)
     if a is not None and ((w := _wer(a)) is None or w > ayar.en_yuksek_wer):
         return f"en iyi aday söz WER {w if w is not None else '?'} > {ayar.en_yuksek_wer} (söz anlaşılmıyor olabilir)"
     return None
@@ -84,7 +107,9 @@ def _tarif_imzasi(a: durum.Aday) -> tuple:
     return (t.get("model"), t.get("lora"), tuple(sorted((t.get("ek") or {}).items())))
 
 
-def oneri(d: durum.Durum) -> durum.Aday | None:
+def oneri(d: durum.Durum, secici: str = "kural") -> durum.Aday | None:
+    """`secici` "estetik": en yüksek estetik puanlı aday (adaylardan birinin puanı yoksa kural: eksik bilgiyle
+    seçilmez); çözülmemiş "otomatik" kural sayılır."""
     adaylar = [a for a in d.adaylar if a.gecti and a.dosya
                and not any(o.get("durum") == "bekliyor" for o in a.onarimlar)]
     if not adaylar:
@@ -94,6 +119,8 @@ def oneri(d: durum.Durum) -> durum.Aday | None:
     if tarifli := [a for a in adaylar if a.tarif]:
         son = max(tarifli, key=lambda a: a.tarif.get("tarih") or "")
         adaylar = [a for a in tarifli if _tarif_imzasi(a) == _tarif_imzasi(son)]
+    if secici == "estetik" and all(estetik.puan(a.estetik) is not None for a in adaylar):
+        return max(adaylar, key=lambda a: (estetik.puan(a.estetik), -a.no))
     # Söz WER'i en düşük iki aday arasından ACE-Step söz hizalama puanı yüksek olan (S27, 2026-10-12: Scryne'ın 21
     # şarkıdaki seçimini 14 tuttu; yalnız WER 11, yalnız hizalama 9, rastgele 7,2). Puanı olmayan adayda yalnız WER.
     sirali = sorted(adaylar, key=lambda a: (_wer(a) if _wer(a) is not None else float("inf"), a.no))
@@ -129,15 +156,17 @@ def uygula(calisma: Path, ayar: Ayar, simdi: datetime | None = None) -> list[tup
     onaylanan = []
     for d in durum.hepsi(calisma):
         zaman = onay_zamani(d, ayar)
-        if zaman is None or zaman > simdi or oneri(d) is None:
+        if zaman is None or zaman > simdi or oneri(d, ayar.secici) is None:
             continue
         with durum.guncelle(calisma, d.kimlik) as taze:  # tam o anda Scryne karar verdiyse onunki geçerli
             zaman = onay_zamani(taze, ayar)
-            if zaman is None or zaman > simdi or (a := oneri(taze)) is None:
+            if zaman is None or zaman > simdi or (a := oneri(taze, ayar.secici)) is None:
                 continue
             taze.secilen = a.no
+            kural = ("en yüksek estetik puanı" if ayar.secici == "estetik" and a.estetik
+                     else "en düşük iki WER'den hizalaması yüksek")
             taze.notlar.append({"otomatik_onay": {"zaman": simdi.isoformat(timespec="seconds"), "aday": a.no,
-                                                  "kural": "en düşük iki WER'den hizalaması yüksek",
+                                                  "kural": kural,
                                                   "sure_saat": ayar.sure_saat}})
             taze.gec("onaylandi")
         onaylanan.append((taze, a))
@@ -180,22 +209,31 @@ def isabet(calisma: Path) -> dict:
     for d in durum.hepsi(calisma):
         if (secilen := _kulak_secimi(d)) is None:
             continue
-        gecen = [a for a in d.adaylar if a.gecti and a.dosya]
+        # dosyası temizlikte silinmiş aday da sayılır (`dosya` boşalır, kapı ölçüleri ve puan kalır): seçim o gün bütün
+        # adaylar dinlenerek yapıldı (2026-10-18: yüklenmiş şarkılar temizlenince ölçüm 12 şarkıdan 0'a düşmüştü)
+        gecen = [a for a in d.adaylar if a.gecti]
         if len(gecen) < 2 or secilen not in gecen:
             continue  # tek aday (seçim yok) ya da seçilen kapıdan geçmemiş: kuralın sınanacağı bir karar değil
         # bekleyen onarım seçimden sonra istenmiş olabilir: kural onarımsız hâli görür
-        kopya = durum.Durum(d.kimlik, d.sanatci, d.ad, adaylar=[durum.Aday(**{**a.__dict__, "onarimlar": []})
-                                                                  for a in gecen])
+        kopya = durum.Durum(d.kimlik, d.sanatci, d.ad, adaylar=[
+            durum.Aday(**{**a.__dict__, "onarimlar": [], "dosya": a.dosya or "temizlendi"}) for a in gecen])
         kural = oneri(kopya)
+        es = oneri(kopya, "estetik") if all(estetik.puan(a.estetik) is not None for a in gecen) else None
         wer_sirali = sorted(gecen, key=lambda a: (_wer(a) if _wer(a) is not None else float("inf"), a.no))
         satirlar.append({"kimlik": d.kimlik, "ad": d.ad, "aday_sayisi": len(gecen), "secilen": secilen.no,
                          "oneri": kural.no if kural else None, "en_dusuk_wer": wer_sirali[0].no,
-                         "stil": (d.analiz.get("stil") or "")[:80]})
+                         "estetik": es.no if es else None, "stil": (d.analiz.get("stil") or "")[:80]})
     n = len(satirlar)
     tutan = sum(s["oneri"] == s["secilen"] for s in satirlar)
+    puanli = [s for s in satirlar if s["estetik"] is not None]
+    es_tutan = sum(s["estetik"] == s["secilen"] for s in puanli)
     return {"sarki": n, "isabet": tutan, "oran": tutan / n if n else None,
             "yalniz_wer": sum(s["en_dusuk_wer"] == s["secilen"] for s in satirlar),
-            "rastgele": sum(1 / s["aday_sayisi"] for s in satirlar), "esik": ISABET_ESIGI, "satirlar": satirlar}
+            "rastgele": sum(1 / s["aday_sayisi"] for s in satirlar), "esik": ISABET_ESIGI, "satirlar": satirlar,
+            # estetik seçici yalnız bütün adayları puanlı şarkılarda, aynı şarkılarda kuralla yan yana
+            "estetik": {"sarki": len(puanli), "isabet": es_tutan, "oran": es_tutan / len(puanli) if puanli else 0.0,
+                        "kural_isabet": sum(s["oneri"] == s["secilen"] for s in puanli),
+                        "rastgele": sum(1 / s["aday_sayisi"] for s in puanli)}}
 
 
 ISABET_ESIGI = 0.70  # Faz 12: öneri bu oranda Scryne'ı tutarsa veto penceresinde varsayılan olur

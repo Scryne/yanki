@@ -51,7 +51,15 @@ deneme_sarkilari = ["bruno-mars-when-i-was-your-man", "coldplay-viva-la-vida", "
                     "burna-boy-last-last", "central-cee-doja"]
 # LoRA'sız ve yarım ölçek önceki testte hiç kazanmadı: yalnız tam ölçek; ara kayıt 20. epoch
 deneme_olcekleri = [1.0]
-deneme_ara_kayitlar = [10]
+# 2026-10-18: ara kayıt kör testten çıktı (S31'de ep20 = ep30; dinleme yükü). Kayıt yine iner, gerekirse:
+# yanki egit --deneme-yeniden <zaman> --ara 10
+deneme_ara_kayitlar = []
+# 2026-10-18: kör test iki tohumla (S32'de aynı dosya iki testte farklı not aldı); üretimdeki model (ep20) aynı pod'da,
+# aynı güncel tarifle (CFG 10) yeniden üretilir. Önce deneme CFG'yi (cover.ek) hiç geçmiyordu ve ep20'nin karşılaştırma
+# kaydı CFG 7 döneminden kalmaydı: yeni model üretimde olmayan bir tarifle ölçülürdü. 17 şarkı × 2 kol × 2 tohum = 68
+# iş (~2 dk/iş A40, ~1 $). Setler dinleme odasında Karşılaştırma'ya kendiliğinden gelir (kulak_set.json).
+deneme_tohum_sayisi = 2
+deneme_uretim_kolu = true
 
 # ── veri: kadın vokal ──
 [[sarki]]

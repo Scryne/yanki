@@ -12,6 +12,8 @@ Spotify'da çıkıp çıkmadığını ve adı arandığında kaçıncı sırada 
 durur ve "giriş yap" bildirilir. S34 (dikkat + MLP LoRA) Scryne söyleyince. Tunearo API'si 2026-10-12'de kapandı.
 2026-10-16: 12 şarkı RouteNote incelemesinde; RunPod bakiyesi 0,80 $ (`en_az_bakiye` 1 $), kredi yüklenene kadar üretim
 bekliyor (panoda görünür). Otomatik onayın öneri kuralı kulak seçimini 12'de 3 tutuyor (`yanki isabet`).
+2026-10-18: dinlemeye çıkan her aday hazır değerlendiricilerle (SongEval + Audiobox) puanlanıyor (`yanki estetik`, koşuda
+kendiliğinden); estetik seçici kulak seçimlerinde eşiği geçince öneriyi o veriyor (`[otomatik_onay] secici = "otomatik"`).
 
 ## Günlük akış
 
@@ -174,12 +176,15 @@ vb. aday Deezer türünden tanınır, puan almaz, kendiliğinden listeye girmez 
 `[otomatik_onay] denenmemis_turler`). Tür dışı şarkı üretilmez (`uretim.tur_disi`).
 
 Diğer komutlar: `yanki durum` (motor, model, araçlar, GPU, anahtarlar, disk, şarkıların aşaması), `yanki ozet` (tek satır),
-`yanki temizle [--uygula]` (yüklenmiş şarkıların ara sesleri; gece koşusu 14 günden eskileri kendisi siler),
+`yanki temizle [--uygula]` (yüklenmiş şarkılarda seçilmeyen adaylar, reddedilen şarkıların sesleri, 7 günden eski
+`_arsiv`; gece koşusu kendisi siler),
 `yanki yedekle [--zorla]` (seçimler, yükleme bilgisi — `bastan` arşivi ve eski paketin taslak UPC'si dahil —, elle
 taslakların bilgisi ve kapağı, RouteNote e-posta kaydı, kazanç raporları, keşif kaydı ve CSV'leri, liste, ayarlar; ses ve
 sır yok; gece haftada bir; üretimdeki LoRA yedek klasörüne bir kez kopyalanır),
 `yanki isabet [--ayrinti]` (otomatik onayın öneri kuralı Scryne'ın kulak seçimlerini ne sıklıkla tutuyor; Faz 12 eşiği
-%70; ölçüm `calisma/dinleme/isabet.json`'a, oran panoda "Otomatik onay" satırında),
+%70; ölçüm `calisma/dinleme/isabet.json`'a, oran panoda "Otomatik onay" satırında; estetik seçici yan yana),
+`yanki estetik [--en-cok N]` (dinlemedeki adaylara SongEval + Audiobox puanı, CPU'da ~80 sn/aday; koşu her seferinde
+en çok 8 aday puanlar; puan `durum.json`'da adayın `estetik` alanında, odada gösterilmez: seçimin kör kalması için),
 `yanki hazirla [--yeniden]` (onaylı/yüklenmiş şarkılara dokunmaz), `yanki uret`,
 `yanki yeniden <kimlik>` (onaylı şarkıya güncel hatla yeni adaylar), `yanki kunye [kimlik]` (yazarlar ve orijinal
 yılı yeniden çek), `yanki paketle [--yeniden]`.
@@ -200,6 +205,13 @@ powershell -File scripts/gorev_kur.ps1                     # \Yanki\Surekli (aç
 copy .env.example .env                                     # SPOTIFY_*, TYPESAFE_API_KEY, RUNPOD_API_KEY
 uv run yanki spotify-baglan                                # yalnız kendi playlist'lerini taramak için
 uv run yanki routenote giris                               # RouteNote oturumu (bir kez; düşünce yeniden)
+# Aday estetiği (SongEval + Audiobox, yanki/estetik.py; yoksa adım atlanır). Ayrı venv: motorun torch'una dokunmaz
+git clone --depth 1 https://github.com/ASLP-lab/SongEval araclar/degerlendirici/SongEval
+uv venv araclar/degerlendirici/.venv --python 3.12
+$py = "araclar/degerlendirici/.venv/Scripts/python.exe"
+uv pip install --python $py torch==2.7.1 torchaudio==2.7.1 --index-url https://download.pytorch.org/whl/cu128
+uv pip install --python $py muq==0.1.0 librosa==0.11.0 hydra-core==1.3.2 audiobox_aesthetics soundfile einops `
+  transformers==4.46.3                                     # 5.x MuQ'yu düşürüyor (_attn_implementation)
 ```
 
 ## Ayarlar

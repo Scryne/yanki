@@ -84,8 +84,26 @@ SETLER = (
 )
 
 
-def setler() -> dict[str, Set]:
-    return {s.kimlik: s for s in SETLER}
+SET_DOSYASI = "kulak_set.json"  # eğitimin dinleme klasöründe (`egitim.kulak_seti`): yeni deneme kendiliğinden gelir
+
+
+def bulunan_setler(calisma: Path) -> list[Set]:
+    """`calisma/dinleme/lora/<zaman>/kulak_set.json`'daki setler (eğitim denemesi bitince yazılır); okunamayan
+    atlanır."""
+    sonuc = []
+    for yol in sorted((calisma / "dinleme" / "lora").glob(f"*/{SET_DOSYASI}")):
+        try:
+            for x in json.loads(yol.read_text(encoding="utf-8")):
+                sonuc.append(Set(x["kimlik"], x["ad"], x.get("aciklama", ""), "", dict(x["kollar"]),
+                                 sarkilar=tuple(x["sarkilar"]),
+                                 yollar={k: tuple(v) for k, v in x["yollar"].items()}))
+        except (OSError, ValueError, KeyError, TypeError):
+            continue
+    return sonuc
+
+
+def setler(calisma: Path | None = None) -> dict[str, Set]:
+    return {s.kimlik: s for s in (*SETLER, *(bulunan_setler(calisma) if calisma else ()))}
 
 
 def _kaynak(calisma: Path, kimlik: str) -> Path | None:
@@ -144,7 +162,7 @@ def oylar(calisma: Path) -> dict:
 def oy_ver(calisma: Path, set_kimlik: str, sarki: str, en_iyi: str | None = None, yayinlanir: bool | None = None,
            notu: str | None = None) -> dict:
     """Bir şarkının oyunu günceller (verilen alanlar). `en_iyi`: kol adı, `fark_yok` ya da `hepsi_kotu`."""
-    s = setler().get(set_kimlik)
+    s = setler(calisma).get(set_kimlik)
     if s is None or sarki not in sarki_listesi(calisma, s):
         raise LookupError("sette böyle bir şarkı yok")
     if en_iyi is not None and en_iyi not in (*s.kollar, *SECIMLER):
@@ -170,7 +188,7 @@ def gorunum(calisma: Path) -> list[dict]:
     """Dinleme odasına: setler, şarkılar, kör kollar (oy verilmişse açık adlarıyla) ve setin özeti."""
     tum = oylar(calisma)
     sonuc = []
-    for s in SETLER:
+    for s in setler(calisma).values():
         sarkilar, sayim = [], {k: 0 for k in (*s.kollar, *SECIMLER)}
         yayinlanir = 0
         for sarki in sarki_listesi(calisma, s):

@@ -461,6 +461,50 @@ def test_deneme_isleri_ara_kayitla(tmp_path):
     assert all(x[0].lora is None for x in egitim.deneme_isleri(a, c, ayar, str)[2:])
 
 
+def test_deneme_uretim_tarifiyle_iki_tohum_ve_uretim_kolu(tmp_path):
+    """S34 öncesi (2026-10-18): deneme CFG'yi (cover.ek) geçmiyordu; üretimdeki model aynı pod'da aynı tarifle, kollar
+    iki tohumla."""
+    from dataclasses import replace
+
+    a = ayarlar.yukle()
+    c = tmp_path / "calisma"
+    d = durum.Durum("a-b", "A", "B", kaynak={"dosya": "kaynak.wav"}, soz={"dosya": "soz.txt"},
+                    analiz={"stil": "pop", "dil": "en"})
+    durum.yaz(c, d)
+    (c / "a-b" / "soz.txt").write_text("la", encoding="utf-8")
+    ayar = replace(egitim.Ayar(), deneme_sarkilari=("a-b",), deneme_olcekleri=(1.0,), deneme_tohum_sayisi=2,
+                   betim=False)
+    isler = egitim.deneme_isleri(a, c, ayar, str, None, "/final", "/uretim/ep20")
+    assert {(x[2], x[0].tohum) for x in isler} == {(kol, t) for kol in (1.0, "uretim") for t in a.cover.tohumlar[:2]}
+    assert all(x[0].ek == dict(a.cover.ek) and x[0].ek for x in isler)  # CFG 10 üretimdeki gibi
+    assert {x[0].lora for x in isler} == {"/final", "/uretim/ep20"}  # işçi bağdaştırıcı değiştirir: ikisi de açık
+    assert len({x[0].id for x in isler}) == 4 and [x[0].lora for x in isler][:2] == ["/final", "/final"]
+
+
+def test_kulak_seti_tohum_basina_set_ve_oda_bulur(tmp_path):
+    from yanki import kulak
+
+    c = tmp_path / "calisma"
+    dinleme = c / "dinleme" / "lora" / "20261020-0100"
+    deneme = []
+    for kimlik in ("a-b", "c-d"):
+        for kol in ("1", "uretim"):
+            for t in (42, 7):
+                yol = dinleme / kimlik / f"lora_{kol}_t{t}.flac"
+                yol.parent.mkdir(parents=True, exist_ok=True)
+                yol.write_bytes(b"x")
+                deneme.append({"kimlik": kimlik, "kol": kol, "tohum": t, "basari": True, "dosya": str(yol)})
+    deneme.append({"kimlik": "e-f", "kol": "1", "tohum": 42, "basari": False})  # tek kollu şarkı sete girmez
+    sonuc = egitim.Sonuc(c / "egitim" / "lora" / "20261020-0100", dinleme, deneme=deneme)
+    setler = egitim.kulak_seti(sonuc, egitim.Ayar(deneme_tohum_sayisi=2))
+    assert [s["kimlik"] for s in setler] == ["egitim-20261020-0100-1", "egitim-20261020-0100-2"]
+    assert setler[0]["sarkilar"] == ["a-b", "c-d"] and list(setler[0]["kollar"]) == ["uretim", "1"]
+    bulunan = kulak.setler(c)
+    s = bulunan["egitim-20261020-0100-2"]
+    assert kulak.dosya_yolu(c, s, "a-b", "uretim") == dinleme / "a-b" / "lora_uretim_t42.flac"
+    assert "egitim-20261020-0100-1" in {x["kimlik"] for x in kulak.gorunum(c)}
+
+
 def test_ara_kayit_bagdastirici_adi_noktasiz():
     # dördüncü eğitim: Side-Step'in klasör adı (epoch_20_loss_0.7381) PEFT'e modül adı olarak gitti, nokta reddedildi
     from yanki.motor_isci import lora_adi

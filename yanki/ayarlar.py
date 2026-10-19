@@ -138,7 +138,8 @@ class Operasyon:
     yedek_klasor: Path
     yedek_gun: int = 7
     yedek_sakla: int = 8
-    temizlik_gun: int = 14
+    temizlik_gun: int = 0
+    arsiv_gun: int = 7
     gunduz_acik: bool = True
     gunduz_bosta_dk: int = 20
     gunduz_sarki: int = 1
@@ -164,7 +165,7 @@ def operasyon_oku(kok: Path = KOK) -> Operasyon:
     if len(saatler) != 2:
         raise ValueError(f"gunduz.saatler [başlangıç, bitiş] olmalı: {g.get('saatler')}")
     return Operasyon(klasor if klasor.is_absolute() else kok / klasor, max(1, int(y.get("gun", 7))),
-                     max(1, int(y.get("sakla", 8))), max(0, int(t.get("gun", 14))), bool(g.get("acik", True)),
+                     max(1, int(y.get("sakla", 8))), max(0, int(t.get("gun", 0))), bool(g.get("acik", True)),
                      max(1, int(g.get("bosta_dk", 20))), max(1, int(g.get("sarki", 1))), saatler,
                      max(1, int(sk.get("uretim_sarki", 2))), bool(sk.get("bosta_bekle", False)),
-                     bool(sk.get("uretim", True)))
+                     bool(sk.get("uretim", True)), max(0, int(t.get("arsiv_gun", 7))))

@@ -24,7 +24,7 @@ Durum sütunu session-start hook'u tarafından otomatik okunur — format bozulm
 | 9 | Kaldırılmış şarkı keşfi ve yayın takibi | 🔄 Devam Ediyor | Spotify anahtarı bağlı; `yanki kesif` (STILLMORE CSV'si, kendi playlist ya da Deezer katalog farkı) ≥ 5 doğrulanmış (geri gelmemiş) aday buldu; en az biri üretilip yüklendi; `yanki takip` yüklenen parçaların canlılığını ve ad aramasındaki sırasını pazar pazar kaydetti |
 | 10 | Tam otomatik yayın (dağıtım) | 🔄 Devam Ediyor | Hattın RouteNote'ta doldurduğu bir paket odadan (ad yazılarak) gönderildi, RouteNote kabul etti ve parça Spotify'da canlı; yayın takvimi en az 2 hafta kesintisiz işledi; veto penceresi (otomatik onay) bir şarkıda uçtan uca çalıştı. (Tunearo API'si 2026-10-12'de kapandı; ölçüt RouteNote'a çevrildi, 2026-10-15) |
 | 11 | Öğrenen şarkı seçimi | ⏳ Bekliyor | Puan formülü en az 10 yayının ölçülen arama sırası/dinlenmesiyle karşılaştırılıp güncellendi; tür/dil başına üretilebilirlik çarpanı Scryne'ın onay/ret verisinden; en az bir yeni keşif kaynağı (YouTube'da olup Spotify'da olmayan) canlı aday üretti |
-| 12 | Kalite otomasyonu | ⏳ Bekliyor | Otomatik aday seçimi Scryne'ın geçmiş seçimleriyle ölçüldü (isabet kayıtlı) ve ≥ %70 ise veto penceresinde varsayılan; rap ve İngilizce dışı en az bir dil için tarif dinleme testiyle karara bağlandı |
+| 12 | Kalite otomasyonu | 🔄 Devam Ediyor | Otomatik aday seçimi Scryne'ın geçmiş seçimleriyle ölçüldü (isabet kayıtlı) ve ≥ %70 ise veto penceresinde varsayılan; rap ve İngilizce dışı en az bir dil için tarif dinleme testiyle karara bağlandı |
 | 13 | Operasyon ve dayanıklılık | 🔄 Devam Ediyor | Disk temizliği ve yedek işliyor; gece koşusu/Spotify kilidi/dağıtımcı reddi bildirim olarak geliyor; GPU boştayken gündüz üretimi kuyruğu eritiyor; bir haftalık kesintisiz otomatik koşu günlükte hatasız |
 
 ## Faz Detayları
@@ -417,7 +417,7 @@ dönüşür. Jev **metnin ne dediğini** yargılar (özgünlük, düzenleme, eş
 - **Jev genişletme (spike ile):** talep ölçümündeki "bu YouTube sonucu orijinal kayıt mı (cover/remix/canlı değil)"
   kararı regex `ISTENMEYEN` yerine; STILLMORE/Deezer adaylarında "bu bir düzenleme mi" (bugün ad regex'i).
 
-### Faz 12: Kalite otomasyonu ⏳
+### Faz 12: Kalite otomasyonu 🔄
 - **Seçim modeli:** Scryne'ın 17 şarkıdaki seçimleri (hangi aday) ile kapı ölçüleri (söz WER, parmak izi, dalga,
   tohum) arasındaki ilişki; otomatik seçimin isabeti kayıtlı. ≥ %70 ise veto penceresinde öneri bu model; değilse söz
   WER'i ve insan.
@@ -967,3 +967,21 @@ tema) canlı verinin kopyasıyla doğrulandı.
   yoksa "Pinterest'ten kapak bul"), Bulucu ve liste keşfi; başkalarının kalkmış şarkıları için yol AI cover hattı
   (Bulucu → Keşfe gönder → Orvane, RouteNote). Kaynak hatası düzeltmesi (boş YouTube araması aday sayılmaz) kaldı.
 
+
+## Profesyonellik turu (2026-10-18, Scryne: "AI cover hattını çok daha profesyonel hale getir; model eğitimi hariç her şey sende")
+
+- **Disk temizliği otomatik ve geniş** (`yanki/temizlik.py`): yüklenen şarkıda yalnız seçilen aday ve paket kalır
+  (yüklenince, `gun = 0`; önce 14 gün), reddedilen şarkının sesleri silinir (`durum.json` kalır: keşif yeniden önermez,
+  hazırlık yeniden indirmez), `_arsiv` 7 gün sonra. Reddedilenler odanın listesinde yok. Elle temizlikte 57 GB açıldı
+  (C: %95 → %83). Yan etki: eski deneme setlerinin ve seçilmeyen adayların sesi gitti; `yanki isabet` silinen adayları
+  saymıyordu, düzeltildi (12'de 3 geri geldi).
+- **Karşılaştırma** menüde yalnız oylanacak kayıt varken; eğitimin kör testi `kulak_set.json` ile kendiliğinden gelir.
+- **S34 denemesi düzeltildi** (eğitimsiz): deneme CFG 10'u (`cover.ek`) geçmiyordu ve karşılaştırma kaydı CFG 7
+  döneminin ep20'siydi. Artık üretimdeki model aynı pod'da aynı tarifle, kollar iki tohumla (`deneme_tohum_sayisi`,
+  `deneme_uretim_kolu`); ara kayıt kör testten çıktı. Eğitim yine Scryne'ın "başlat"ında.
+- **Aday estetiği** (`yanki/estetik.py`, `docs/arastirma/10`): SongEval + Audiobox, ayrı venv, CPU. Sınama: Scryne'ın
+  seçimini ve yayınlanabilirliği tesadüften iyi tutmuyor; SongEval orijinal ile cover'ı 16/17 ayırıyor. Seçici
+  `secici = "otomatik"` ile uykuda: kulak seçimlerinde eşiği geçmedikçe öneriyi almaz. 10 seçimden sonra ölçülür.
+- **Kuyruk:** 103 şarkının 82'si üretilecek, 75'i otomatik onaylanabilir türde; tür süzgeci çalışıyor.
+- **Dokunulmayan (Scryne'ın kararları):** otomatik onay açık, yayın tarihi "en erken" (editoryal pitch yok), aylık
+  bütçe 30 $, S34.

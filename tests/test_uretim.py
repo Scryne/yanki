@@ -342,6 +342,54 @@ def test_temizlik_yalniz_yuklenmis_ve_eski(tmp_path):
     assert temizlik.plan(tmp_path, d, 0, datetime(2026, 10, 20)) is None  # yüklenmemiş şarkıya dokunmaz
 
 
+def test_temizlik_reddedilenin_seslerini_siler_durumu_birakir(tmp_path):
+    from yanki import durum, temizlik
+
+    d = durum.Durum("a-b", "A", "B", asama="reddedildi", kaynak={"dosya": "kaynak.wav"})
+    d.adaylar = [durum.Aday(1, "adaylar/1/tam.flac", 42, {}, True)]
+    durum.yaz(tmp_path, d)
+    k = tmp_path / "a-b"
+    for yol in ("adaylar/1/tam.flac", "parcalar/p1.flac", "paket/x.flac", "kaynak.wav", "kaynak.wav.dalga.json",
+                "soz.txt", "kapak_pinterest.jpg"):
+        (k / yol).parent.mkdir(parents=True, exist_ok=True)
+        (k / yol).write_bytes(b"x" * 10)
+    p = temizlik.plan(tmp_path, d)
+    assert sorted(f.relative_to(k).as_posix() for f in p.dosyalar) == [
+        "adaylar/1/tam.flac", "kaynak.wav", "kaynak.wav.dalga.json", "paket/x.flac", "parcalar/p1.flac"]
+    assert temizlik.uygula(tmp_path, d, p) == 50
+    d = durum.oku(tmp_path, "a-b")
+    assert d.asama == "reddedildi" and d.adaylar[0].dosya == ""
+    assert sorted(f.name for f in k.iterdir() if not f.name.startswith(".")) == ["durum.json", "kapak_pinterest.jpg",
+                                                                                 "soz.txt"]
+    assert temizlik.plan(tmp_path, d) is None
+
+
+def test_temizlik_ret_geri_alindiysa_silmez(tmp_path):
+    from yanki import durum, temizlik
+
+    d = durum.Durum("a-b", "A", "B", asama="reddedildi")
+    durum.yaz(tmp_path, d)
+    (tmp_path / "a-b" / "kaynak.wav").write_bytes(b"x")
+    p = temizlik.plan(tmp_path, d)
+    with durum.guncelle(tmp_path, "a-b") as taze:
+        taze.asama = "uretildi"  # plan ile silme arasında oda reddi geri aldı
+    assert temizlik.uygula(tmp_path, d, p) == 0 and (tmp_path / "a-b" / "kaynak.wav").exists()
+
+
+def test_arsiv_plani_tarihe_bakar(tmp_path):
+    from datetime import datetime
+
+    from yanki import temizlik
+
+    for ad in ("2026-10-01", "2026-10-12-yayin-silindi", "2026-10-15", "notlar"):
+        (tmp_path / "_arsiv" / ad / "x").mkdir(parents=True)
+        (tmp_path / "_arsiv" / ad / "x" / "tam.flac").write_bytes(b"x" * 10)
+    eski = temizlik.arsiv_plani(tmp_path, 7, datetime(2026, 10, 20))
+    assert [k.name for k in eski] == ["2026-10-01", "2026-10-12-yayin-silindi"]
+    assert temizlik.arsiv_sil(eski[0]) == 10 and not eski[0].exists()
+    assert temizlik.arsiv_plani(tmp_path, 0, datetime(2026, 10, 20))[-1].name == "2026-10-15"
+
+
 class BetimliMotor(SahteMotor):
     """Betimle işine betim döner (ya da düşer); cover işleri SahteMotor gibi."""
 

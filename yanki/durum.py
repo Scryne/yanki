@@ -40,6 +40,9 @@ class Aday:
     # üretildiği tarif: {"model", "lora" (eğitim adı, yoksa None), "lora_olcek", "stil_kaynak", "tarih"}; eski
     # adaylarda yok. Hat değişince (yeni LoRA, betim) dinleme odası eski ve yeni adayları ayırt eder.
     tarif: dict | None = None
+    # hazır değerlendiricilerin puanı (yanki/estetik.py): {"songeval": {...}, "audiobox": {...}, "surum"}; dosya
+    # temizlikte silinse de kalır (seçici Scryne'ın sonraki seçimleriyle ölçülür)
+    estetik: dict | None = None
 
 
 @dataclass

@@ -224,7 +224,7 @@ async function sarkiGoster(kimlik) {
       el("button", { class: "dugme tehlike", type: "button", onclick: () => reddet(d) }, "Şarkıyı reddet")));
   } else if (d.asama === "reddedildi") {
     parcalar.push(el("div", { class: "alt-cubuk" },
-      el("span", { class: "ipucu" }, "Bu şarkıyı reddettin. Geri alırsan reddetmeden önceki aşamasına döner; adaylar yerinde."),
+      el("span", { class: "ipucu" }, "Bu şarkıyı reddettin. Sesleri gece temizliğinde silinir; o zamana kadar geri alırsan reddetmeden önceki aşamasına döner."),
       el("span", { class: "bosluk" }),
       el("button", { class: "dugme ikincil", type: "button",
         onclick: () => eylem(d, "geri-al", {}, `"${d.ad}" yeniden listede, reddetmeden önceki aşamasında.`) }, "Reddi geri al")));
@@ -847,6 +847,7 @@ async function gorunumSayilari() {
     const kalan = ku.reduce((n, x) => n + x.ozet.toplam - x.ozet.oylanan, 0);
     $("#g-kulak").textContent = kalan ? String(kalan) : "";
     $("#g-kulak").classList.toggle("dikkat", kalan > 0);
+    $("#g-kulak").closest("li").hidden = !kalan; // karşılaştırma yalnız dinlenecek kayıt varken menüde
     const bekleyen = p.kulak.length + p.hatada.length + (p.takvim?.yazarsiz?.length || 0);
     $("#g-pano").textContent = bekleyen ? String(bekleyen) : "";
     $("#g-pano").classList.toggle("dikkat", bekleyen > 0);
@@ -878,6 +879,8 @@ async function kulakGoster() {
   let setler;
   try { setler = await api("/api/kulak"); } catch (e) { doldur(ana, bosEkran("Karşılaştırma açılamadı", e.message)); return; }
   acikSarki = null;
+  setler = setler.filter((s) => s.sarkilar.length); // kayıtları silinmiş set (oylar kulak.json'da kalır)
+  if (!setler.length) { doldur(ana, bosEkran("Karşılaştırılacak kayıt yok", "Yeni bir deneme çıkınca burada ve menüde görünür.")); return; }
   const ozetler = new Map();
   const ozetCiz = (s) => {
     const o = s.ozet, yer = ozetler.get(s.kimlik);
@@ -1164,7 +1167,8 @@ function ayarPaneli(a, kota) {
       ...satir("Üretim", a.uretim_acik === false ? "duraklatıldı" : a.uretim || "—"),
       ...satir("Dağıtımcı", DAGITIMCI[a.dagitimci] || a.dagitimci || "seçilmedi"),
       ...satir("Takvim", !a.takvim_acik ? "kapalı" : a.haftada === 0 ? "açık · sınırsız" : a.haftada >= 7 ? "açık · her gün" : `açık · haftada ${a.haftada}`),
-      ...satir("Otomatik onay", (a.oto_onay ? `${a.oto_onay_saat} sa` : "kapalı") + (a.oto_isabet?.sarki ? ` · isabet ${a.oto_isabet.isabet}/${a.oto_isabet.sarki}` : "")),
+      ...satir("Otomatik onay", (a.oto_onay ? `${a.oto_onay_saat} sa` : "kapalı") + (a.oto_isabet?.sarki ? ` · isabet ${a.oto_isabet.isabet}/${a.oto_isabet.sarki}` : "")
+        + (a.oto_estetik?.sarki ? ` · estetik ${a.oto_estetik.isabet}/${a.oto_estetik.sarki}` : "") + (a.oto_secici === "estetik" ? " · öneri estetikten" : "")),
       ...satir("Kapak", a.kapak === "pinterest" ? "Pinterest" : "üretilen"),
       ...satir("Spotify", !kota?.bagli ? "bağlı değil" : kota.kilit_sn ? `kilitli · ${saatYazi(kota.kilit_sn)}` : `${kota.bugun}/${kota.tavan} istek`)));
 }
@@ -2299,7 +2303,7 @@ const GRUPLAR = [
   { k: "hata", ad: "Hata", asamalar: ["hata"], acik: true },
   { k: "hazirlik", ad: "Yayına hazırlanıyor", asamalar: ["onaylandi", "paketlendi"], acik: true },
   { k: "dagitim", ad: "Dağıtımda", asamalar: ["yuklendi", "yayinda"], acik: false },
-  { k: "red", ad: "Reddedilen", asamalar: ["reddedildi"], acik: false },
+  // reddedilenler listede yok (Scryne, 2026-10-18: "görmeyeyim"); sesleri gece temizliğinde silinir
 ];
 let sonListe = [], aramaMetni = "";
 const katla = (s) => s.toLocaleLowerCase("tr").normalize("NFD").replace(/\p{M}/gu, "");

@@ -40,6 +40,11 @@ ton_eslesme = true
 # Kendiliğinden onaylanan her şarkı bildirilir.
 acik = true
 sure_saat = 24
+# Öneriyi hangi kural verir (yanki/onay.py, yanki/estetik.py): "kural" (söz WER'i + hizalama, yukarıdaki ölçü), "estetik"
+# (hazır değerlendiricilerin puanı: SongEval + Audiobox, docs/arastirma/10) ya da "otomatik": estetik, Scryne'ın en az
+# 10 kulak seçiminde %70'i tutturup kuraldan iyi çıkınca kendiliğinden devreye girer (Faz 12 ölçütü; `yanki isabet`).
+# 2026-10-18: kural Scryne'ı 12'de 3 tuttu (rastgele 2,1) → otomatik.
+secici = "otomatik"
 # Yalnız tarifi dinlenmiş tür ve dil, sözü anlaşılır aday (yanki/onay.py → DENENMEMIS). Rap, metal vb. ve İngilizce
 # dışı Scryne'ın kulağına kalır (bildirilir). Ölçü: Scryne'ın onayladığı baladların en iyi söz WER'i çoğunlukla ≤ 0,1.
 diller = ["en"]

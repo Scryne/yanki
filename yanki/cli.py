@@ -758,7 +758,9 @@ BOS_CIKTI = ("üretilecek bir şey yok", "paketlenecek onaylı şarkı yok", "ta
              "liste boş", "tunearo: izlenen yükleme yok", "takip edilecek yüklenmiş şarkı yok", "toplam 0 MB",
              # bilinen bekleme hâlleri: her 30 dk'da günlüğe aynı blok yazılmasın
              "durum yoklaması yok", "üretim duraklatıldı", "e-posta: yeni RouteNote e-postası yok",
-             "e-posta ayarı yok")
+             "e-posta ayarı yok", "puanlanacak aday yok", "estetik değerlendirici kurulu değil")
+# Koşu başına en çok bu kadar aday puanlanır (CPU'da ~80 sn/aday: koşu kilidini ~10 dk'dan uzun tutmasın)
+ESTETIK_KOSU_BASI = 8
 # Bekleme hâlleri (kiralık GPU açılamıyor, pil, GPU dolu): hâl değişince bir kez yazılır, aynı hâl sürdükçe yazılmaz.
 # Hâl sayılardan arındırılarak karşılaştırılır: bakiye ya da sıradaki şarkı sayısı değişti diye yeniden yazılmasın
 # (2026-10-16: bakiye 0,80 $ iken her 30 dk'da "üretim bekliyor … (50 şarkı sırada)" bloğu, gün boyu).
@@ -945,6 +947,7 @@ def _calistir(args: argparse.Namespace) -> int:
             csv=[], playlist=[], pazar=None, ekle=gece_ekle, goster=10, katalogsuz=True, yeniden_olc=False,
             stillmoresuz=True, spotify_yeniden_baslat=False, spotifysiz=True))))
     adimlar += [("hazırlık", lambda: _hazirla(args)), ("üretim", lambda: _uret_surekli(kok, op)),
+                ("estetik", lambda: _estetik(argparse.Namespace(en_cok=ESTETIK_KOSU_BASI))),
                 ("veto penceresi", lambda: _otomatik_onay(kok)), ("paketleme", lambda: _paketle(args))]
     if zamani("dağıtım durumu"):  # takipten önce: kabul gelince Tunearo'nun atadığı ISRC takibe girsin
         adimlar.append(("dağıtım durumu", lambda: _dagitim_durum(argparse.Namespace())))
@@ -954,7 +957,8 @@ def _calistir(args: argparse.Namespace) -> int:
         adimlar.append(("takip", lambda: _takip(argparse.Namespace(kimlik=[], spotify_yeniden_baslat=True))))
     adimlar += [("takvim", lambda: _takvim_hatirlat(kok))]
     if zamani("temizlik"):
-        adimlar.append(("temizlik", lambda: _temizle(argparse.Namespace(uygula=True, gun=op.temizlik_gun))))
+        adimlar.append(("temizlik", lambda: _temizle(argparse.Namespace(uygula=True, gun=op.temizlik_gun,
+                                                                         arsiv_gun=op.arsiv_gun))))
     adimlar.append(("yedek", lambda: _yedekle(argparse.Namespace(zorla=False))))
 
     if ayarlar.yukle().uzak.acik:
@@ -1404,11 +1408,18 @@ def _isabet(args: argparse.Namespace) -> int:
         print(f"öneri kuralı {o['sarki']} şarkıda {o['isabet']} isabet (%{100 * o['oran']:.0f}); yalnız en düşük söz "
               f"WER'i {o['yalniz_wer']}, rastgele beklenen {o['rastgele']:.1f}. Faz 12 eşiği %{100 * o['esik']:.0f}: "
               + ("tuttu, veto penceresinde öneri varsayılan olabilir" if o["oran"] >= o["esik"] else "tutmadı"))
+        e = o["estetik"]
+        if e["sarki"]:
+            print(f"estetik seçici (bütün adayları puanlı {e['sarki']} şarkı): {e['isabet']} isabet "
+                  f"(%{100 * e['oran']:.0f}); aynı şarkılarda kural {e['kural_isabet']}, rastgele {e['rastgele']:.1f}. "
+                  f"Otomatik geçiş: en az {onay.ESTETIK_EN_AZ} şarkı, eşik ve kuraldan iyi")
+        else:
+            print("estetik seçici: henüz bütün adayları puanlı kulak seçimi yok (yanki estetik)")
         if args.ayrinti:
             for s in o["satirlar"]:
                 isaret = "✓" if s["oneri"] == s["secilen"] else "✗"
                 print(f"  {isaret} {s['ad'][:40]:40} seçilen {s['secilen']}, öneri {s['oneri']}, "
-                      f"en düşük WER {s['en_dusuk_wer']} ({s['aday_sayisi']} aday)")
+                      f"estetik {s['estetik'] or '—'}, en düşük WER {s['en_dusuk_wer']} ({s['aday_sayisi']} aday)")
     if o["sarki"]:
         yol = calisma / "dinleme" / "isabet.json"
         try:
@@ -1416,7 +1427,9 @@ def _isabet(args: argparse.Namespace) -> int:
         except (OSError, ValueError):
             seri = []
         kayit = {"zaman": datetime.now().isoformat(timespec="seconds"),
-                 **{k: o[k] for k in ("sarki", "isabet", "oran", "yalniz_wer", "rastgele")}}
+                 **{k: o[k] for k in ("sarki", "isabet", "oran", "yalniz_wer", "rastgele")},
+                 **({"estetik": {k: o["estetik"][k] for k in ("sarki", "isabet", "kural_isabet")}}
+                    if o["estetik"]["sarki"] else {})}
         if not seri or {k: seri[-1].get(k) for k in ("sarki", "isabet")} != {k: kayit[k] for k in ("sarki", "isabet")}:
             dosya.json_yaz(yol, [*seri, kayit][-200:])  # aynı ölçüm tekrar yazılmaz
     return 0
@@ -1696,7 +1709,7 @@ def _gunduz(args: argparse.Namespace) -> int:
 def _otomatik_onay(kok: Path) -> int:
     from yanki import onay
 
-    ayar = onay.ayar_oku(kok / "config" / "yayin.toml")
+    ayar = onay.ayar_oku(kok / "config" / "yayin.toml", kok / "calisma")
     bildir = _bildirici(kok / "calisma")
     for d, neden in onay.kulak_bekleyen(kok / "calisma", ayar):
         print(f"otomatik onay yok, kulak gerekiyor: {d.sanatci} — {d.ad} ({neden})")
@@ -1706,8 +1719,28 @@ def _otomatik_onay(kok: Path) -> int:
         print(f"otomatik onay ({ayar.sure_saat:g} sa veto penceresi doldu): {d.sanatci} — {d.ad}, aday {a.no}")
         # kulaktan geçmeden onaylandı: haberin olsun (yüklenmeden önce dinleme odasında geri alınabilir)
         bildir("onay", f"kendiliğinden onaylandı: {d.ad}",
-               f"{d.sanatci} — {d.ad}: {ayar.sure_saat:g} saatte karar gelmedi, sözü en net aday {a.no} onaylandı. "
-               "Yüklenmeden önce dinleyip değiştirebilirsin.", f"otomatik_onay:{d.kimlik}:{a.no}")
+               f"{d.sanatci} — {d.ad}: {ayar.sure_saat:g} saatte karar gelmedi, "
+               + ("estetik puanı en yüksek" if ayar.secici == "estetik" else "sözü en net")
+               + f" aday {a.no} onaylandı. Yüklenmeden önce dinleyip değiştirebilirsin.",
+               f"otomatik_onay:{d.kimlik}:{a.no}")
+    return 0
+
+
+def _estetik(args: argparse.Namespace) -> int:
+    """Dinlemedeki adaylara SongEval + Audiobox puanı (`yanki/estetik.py`); öneri ve isabet ölçüsü bunu kullanır."""
+    from yanki import estetik
+
+    a = ayarlar.yukle()
+    calisma = a.kok / "calisma"
+    if not estetik.hazir(a.kok):
+        print("estetik değerlendirici kurulu değil (README → Aday estetiği)")
+        return 0
+    bekleyen = len(estetik.bekleyenler(calisma))
+    if not bekleyen:
+        print("puanlanacak aday yok")
+        return 0
+    n = estetik.puanla(a.kok, calisma, args.en_cok, bildir=lambda m: print(m, flush=True))
+    print(f"estetik: {n} aday puanlandı" + (f", {bekleyen - n} sırada" if bekleyen > n else ""))
     return 0
 
 
@@ -1748,7 +1781,12 @@ def _temizle(args: argparse.Namespace) -> int:
             continue  # plan yapılınca şarkı değişti ya da hiçbir dosya silinemedi
         toplam += mb
         eylem = "silindi" if args.uygula else "silinecek"
-        print(f"{eylem}: {d.sanatci} — {d.ad}: {len(p.dosyalar)} dosya, {mb:,.0f} MB")
+        neden = " (reddedildi)" if d.asama == "reddedildi" else ""
+        print(f"{eylem}: {d.sanatci} — {d.ad}{neden}: {len(p.dosyalar)} dosya, {mb:,.0f} MB")
+    for k in temizlik.arsiv_plani(calisma, args.arsiv_gun):
+        mb = (temizlik.arsiv_sil(k) if args.uygula else temizlik.boyut(k)) / 1e6
+        toplam += mb
+        print(f"{'silindi' if args.uygula else 'silinecek'}: arşiv {k.name}: {mb:,.0f} MB")
     if toplam or not args.uygula:
         print(f"toplam {toplam:,.0f} MB" + ("" if args.uygula else " (silmek için --uygula)"))
     return 0
@@ -1800,10 +1838,11 @@ def _egit(args: argparse.Namespace) -> int:
     from yanki import dosya
 
     dosya.yaz(sonuc.dinleme / "OKU.md", egitim.rapor(sonuc, len(ornekler), len(dusen)))
+    egitim.kulak_seti(sonuc, ayar)  # dinleme odasında Karşılaştırma kendiliğinden açılır
     print(f"LoRA: {sonuc.lora}\ndinleme: {sonuc.dinleme}\nmaliyet: {sonuc.usd:.2f} $")
     bildir("dinleme", "LoRA eğitimi bitti, karşılaştırma hazır",
-           f"{len(ornekler)} şarkıyla eğitildi ({sonuc.usd:.2f} $). LoRA'sız ve LoRA'lı aynı şarkılar: "
-           f"{sonuc.dinleme.relative_to(a.kok).as_posix()}/OKU.md")
+           f"{len(ornekler)} şarkıyla eğitildi ({sonuc.usd:.2f} $). Yeni ve şu anki model aynı şarkılarda, kör: "
+           f"dinleme odası → Karşılaştırma ({sonuc.dinleme.relative_to(a.kok).as_posix()}/OKU.md)")
     return 0
 
 
@@ -1827,6 +1866,7 @@ def _deneme_yeniden(a, ayar, klasor: str, epochlar: list[int]) -> int:
     birlesik = egitim.deneme_birlestir(yerel, sonuc.deneme, sonuc.usd)
     ornek = json.loads((yerel / "egitim.json").read_text(encoding="utf-8")).get("ornek", 0)
     dosya.yaz(birlesik.dinleme / "OKU.md", egitim.rapor(birlesik, ornek, 0))
+    egitim.kulak_seti(birlesik, ayar)
     print(f"deneme: {sum(x['basari'] for x in sonuc.deneme)}/{len(sonuc.deneme)} · maliyet {sonuc.usd:.2f} $")
     return 0
 
@@ -1930,9 +1970,14 @@ def main(argv: list[str] | None = None) -> int:
     tk = alt.add_parser("takip", help="yüklenenler Spotify'da mı, adı arandığında kaçıncı sırada")
     tk.add_argument("kimlik", nargs="*", help="boşsa hepsi")
     tk.set_defaults(fn=_takip)
-    tm = alt.add_parser("temizle", help="yüklenmiş şarkılarda seçilmeyen adayların ve ara seslerin dosyaları")
+    es = alt.add_parser("estetik", help="dinlemedeki adaylara hazır değerlendirici puanı (SongEval, Audiobox; CPU)")
+    es.add_argument("--en-cok", type=int, default=50, help="en çok bu kadar aday")
+    es.set_defaults(fn=_estetik)
+    tm = alt.add_parser("temizle", help="yüklenmiş şarkılarda seçilmeyen adaylar, reddedilen şarkıların sesleri, "
+                                        "eski arşiv")
     tm.add_argument("--uygula", action="store_true", help="yalnız listelemek yerine sil")
-    tm.add_argument("--gun", type=int, default=14, help="yüklemenin üstünden en az kaç gün geçmiş olsun")
+    tm.add_argument("--gun", type=int, default=0, help="yüklemenin üstünden en az kaç gün geçmiş olsun")
+    tm.add_argument("--arsiv-gun", type=int, default=7, help="`calisma/_arsiv/<tarih>` kaç günden eskiyse silinsin")
     tm.set_defaults(fn=_temizle)
     tv = alt.add_parser("takvim", help="paketlenmiş şarkıların yükleme sırası ve önerilen yayın tarihleri")
     tv.set_defaults(fn=_takvim)
@@ -2018,7 +2063,7 @@ def main(argv: list[str] | None = None) -> int:
 
 YAZAN_KOMUTLAR = {"hazirla", "uret", "calistir", "yeniden", "kunye", "paketle", "yuklendi", "kesif", "takip",
                   "temizle", "yedekle", "dagitim-red", "geri-cek", "bastan", "gunduz", "yukle", "dagitim-durum",
-                  "kapak", "yapi", "routenote", "eposta", "elle-yukle"}
+                  "kapak", "yapi", "routenote", "eposta", "elle-yukle", "estetik"}
 
 
 if __name__ == "__main__":
