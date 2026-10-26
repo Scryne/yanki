@@ -101,6 +101,9 @@ ad = "Housewife"
 [[sarki]]  # YouTube 82,077,297 izlenme; trend:deezer:Australia,deezer:Canada,deezer:Germany,deezer:Ireland,deezer:Netherlands,deezer:UK,deezer:USA,deezer:Worldwide
 sanatci = "Tame Impala"
 ad = "Dracula (with JENNIE)"
+# 2026-10-26 yazarlar: Wikipedia (Tidal kredileri; JENNIE remix'i Gibert ve Jennie'yi ekler, sözümüz remix'in). Jennie'nin
+# kredi adı doğrulanmadı: yüklemeden önce Spotify "Show credits".
+yazarlar = ["Kevin Parker", "Sarah Aarons", "Carly Gibert", "Jennie Kim"]
 
 [[sarki]]  # YouTube 17,501,602 izlenme; trend:apple:au,apple:ca,apple:gb,apple:ie,apple:us,deezer:Germany,deezer:Ireland,deezer:Netherlands,deezer:UK
 sanatci = "Ashe"
@@ -113,7 +116,12 @@ ad = "Great Expectation"
 [[sarki]]  # YouTube 12,116,789 izlenme; trend:apple:au,apple:gb,apple:ie,deezer:Germany,deezer:Ireland,deezer:Netherlands,deezer:UK
 sanatci = "HUGEL"
 ad = "Movin' To The Sun"
+# 2026-10-26 yazarlar: Songfacts (yayıncı Kobalt); Ultra Naté vokalist, yazar değil
+yazarlar = ["Florent Hugel", "Imael Angel", "Loris Cimino", "Maximilian Riehl"]
 
 [[sarki]]  # YouTube 4,403,087 izlenme; trend:apple:au,apple:gb,apple:ie,deezer:Netherlands,deezer:UK
 sanatci = "Jamie Miller"
 ad = "Babydoll"
+# 2026-10-26 yazarlar: Songfacts (yayıncı UMPG)
+vokal = "erkek"
+yazarlar = ["Jamie Miller", "Hayley Warner", "Michael Blum"]
