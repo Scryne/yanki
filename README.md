@@ -10,16 +10,10 @@ Spotify'da çıkıp çıkmadığını ve adı arandığında kaçıncı sırada 
 **Şu an (2026-10-26, Denetim 7):** 2026-10-20'deki dondurma çözüldü. Dağıtımcı DistributeMusic.AI, panel kipi
 (`docs/arastirma/11`): paketler 16 bit WAV + panel alanlı `YUKLE.md`; cover kuralı destekten yazılı sorulana kadar API
 gönderimi kapalı (`[distributemusic] sozlesme_kabul = false`). Kuyrukta 143 şarkı üretim bekliyor; dondurmada silinen
-kaynak sesleri üretimden hemen önce kayıtlı videodan geri iner. Zamanlanmış görevler (`\Yanki\`) hâlâ kapalı.
+kaynak sesleri üretimden hemen önce kayıtlı videodan geri iner. Zamanlanmış görevler açık (`\Yanki\Surekli`
+30 dk'da bir, `\Yanki\Gece` 03:00; durumları pano ve `yanki durum`'da).
 
-**Önceki durum (2026-10-15 akşam, güncelleme 2026-10-16):** üretim açık, tarif ep20 + CFG 10, yalnız kör testlerde yayınlanabilir çıkan türlerde
-(balad, pop, rock, metal, pop-punk, country, dance-pop; tür dışı şarkı üretilmez, `uretim.tur_disi`). Otomatik onay
-(24 saat veto) ve RouteNote'a otomatik gönderim açık (`[routenote] gece = true`); RouteNote oturumu düşünce gönderim
-durur ve "giriş yap" bildirilir. S34 (dikkat + MLP LoRA) Scryne söyleyince. Tunearo API'si 2026-10-12'de kapandı.
-2026-10-16: 12 şarkı RouteNote incelemesinde; RunPod bakiyesi 0,80 $ (`en_az_bakiye` 1 $), kredi yüklenene kadar üretim
-bekliyor (panoda görünür). Otomatik onayın öneri kuralı kulak seçimini 12'de 3 tutuyor (`yanki isabet`).
-2026-10-18: dinlemeye çıkan her aday hazır değerlendiricilerle (SongEval + Audiobox) puanlanıyor (`yanki estetik`, koşuda
-kendiliğinden); estetik seçici kulak seçimlerinde eşiği geçince öneriyi o veriyor (`[otomatik_onay] secici = "otomatik"`).
+Eski durum notları (RouteNote otomatik gönderimi, RunPod bakiyesi) README'nin sonunda, **Geçmiş** başlığında.
 
 ## Günlük akış
 
@@ -270,3 +264,16 @@ uv pip install --python $py muq==0.1.0 librosa==0.11.0 hydra-core==1.3.2 audiobo
 - **Motor ayrı süreç:** hat torch yüklemez; ACE-Step işçisi (`yanki/motor_isci.py`) motorun kendi ortamında çalışır.
 
 Kararlar ve gerekçeler: `docs/Final-Dokuman.md`, yol haritası: `docs/Roadmap.md`.
+
+## Geçmiş
+
+Artık geçerli olmayan durum notları, iz kalsın diye. Güncel hâl en üstteki **Şu an** paragrafında.
+
+**2026-10-15 akşam (güncelleme 2026-10-16, 10-18):** üretim açık, tarif ep20 + CFG 10, yalnız kör testlerde yayınlanabilir çıkan türlerde
+(balad, pop, rock, metal, pop-punk, country, dance-pop; tür dışı şarkı üretilmez, `uretim.tur_disi`). Otomatik onay
+(24 saat veto) ve RouteNote'a otomatik gönderim açık (`[routenote] gece = true`); RouteNote oturumu düşünce gönderim
+durur ve "giriş yap" bildirilir. S34 (dikkat + MLP LoRA) Scryne söyleyince. Tunearo API'si 2026-10-12'de kapandı.
+2026-10-16: 12 şarkı RouteNote incelemesinde; RunPod bakiyesi 0,80 $ (`en_az_bakiye` 1 $), kredi yüklenene kadar üretim
+bekliyor (panoda görünür). Otomatik onayın öneri kuralı kulak seçimini 12'de 3 tutuyor (`yanki isabet`).
+2026-10-18: dinlemeye çıkan her aday hazır değerlendiricilerle (SongEval + Audiobox) puanlanıyor (`yanki estetik`, koşuda
+kendiliğinden); estetik seçici kulak seçimlerinde eşiği geçince öneriyi o veriyor (`[otomatik_onay] secici = "otomatik"`).

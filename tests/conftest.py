@@ -31,20 +31,85 @@ def _agsiz(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def _gercek_veriye_yazmaz(monkeypatch):
-    """Gerçek `calisma/` ve `girdi/` testte yazılmaz. Denetim 7'de bir test `ayarlar.yukle().kok`'la sahte motoru gerçek
-    kuyrukta koşturdu, 86 şarkıyı `hata`ya düşürdü (elle geri alındı); bu kapı aynısını hemen düşürür."""
-    from yanki import ayarlar, dosya
+    """Gerçek `calisma/`, `girdi/` ve `config/` testte yazılmaz, silinmez, taşınmaz. Denetim 7'de bir test
+    `ayarlar.yukle().kok`'la sahte motoru gerçek kuyrukta koşturdu, 86 şarkıyı `hata`ya düşürdü (elle geri alındı).
+    İlk kapı yalnız `dosya.yaz`'ı tutuyordu; `write_text`, `open(.., "w")`, `unlink`, `shutil` gibi 60'ı aşkın doğrudan
+    yazma yolu ondan geçmiyordu (2026-10-26 denetimi). Kapı artık alttaki yazma işlevlerinde: hangi yoldan gelirse
+    gelsin gerçek veriye dokunan test hemen düşer (`test_izolasyon.py` kapının kendisini sınar)."""
+    import builtins
+    import os
+    import shutil
 
-    korunan = [(ayarlar.KOK / ad).resolve() for ad in ("calisma", "girdi")]
-    asil = dosya.yaz
+    from yanki import ayarlar
 
-    def yaz(yol, metin):
-        tam = Path(yol).resolve()
+    korunan = [(ayarlar.KOK / ad).resolve() for ad in ("calisma", "girdi", "config")]
+
+    def denetle(yol):
+        if isinstance(yol, int):  # dosya tanımlayıcısı: yolu zaten açılırken denetlendi
+            return
+        try:
+            tam = Path(os.fspath(yol)).resolve()
+        except (TypeError, ValueError, OSError):
+            return
         if any(tam.is_relative_to(k) for k in korunan):
             raise AssertionError(f"test gerçek veriye yazıyor: {tam}")
-        return asil(yol, metin)
 
-    monkeypatch.setattr(dosya, "yaz", yaz)
+    def yazma_kipi(mode) -> bool:
+        return any(c in str(mode) for c in "wax+")
+
+    asil_open = builtins.open
+
+    def open_(file, mode="r", *a, **k):
+        if yazma_kipi(mode):
+            denetle(file)
+        return asil_open(file, mode, *a, **k)
+
+    monkeypatch.setattr(builtins, "open", open_)
+
+    asil_path_open = Path.open
+
+    def path_open(self, mode="r", *a, **k):
+        if yazma_kipi(mode):
+            denetle(self)
+        return asil_path_open(self, mode, *a, **k)
+
+    monkeypatch.setattr(Path, "open", path_open)
+
+    def sar_path(ad, *, hedef=False):
+        asil = getattr(Path, ad)
+
+        def sarili(self, *a, **k):
+            denetle(self)
+            if hedef and a:
+                denetle(a[0])
+            return asil(self, *a, **k)
+
+        monkeypatch.setattr(Path, ad, sarili)
+
+    for ad in ("write_text", "write_bytes", "unlink", "touch", "mkdir", "rmdir"):
+        sar_path(ad)
+    for ad in ("rename", "replace"):
+        sar_path(ad, hedef=True)
+
+    def sar_modul(modul, ad, *, konumlar=(0,)):
+        asil = getattr(modul, ad)
+
+        def sarili(*a, **k):
+            for i in konumlar:
+                if i < len(a):
+                    denetle(a[i])
+            return asil(*a, **k)
+
+        monkeypatch.setattr(modul, ad, sarili)
+
+    for ad in ("remove", "unlink", "rmdir", "makedirs", "mkdir"):
+        sar_modul(os, ad)
+    for ad in ("rename", "replace"):
+        sar_modul(os, ad, konumlar=(0, 1))
+    sar_modul(shutil, "rmtree")
+    for ad in ("copy", "copy2", "copyfile", "copytree"):
+        sar_modul(shutil, ad, konumlar=(1,))
+    sar_modul(shutil, "move", konumlar=(0, 1))
 
 
 @pytest.fixture(autouse=True)
