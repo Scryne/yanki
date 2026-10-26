@@ -13,3 +13,14 @@ jobs:
       - run: uv sync --locked
       - run: uv run ruff check .
       - run: uv run pytest -q
+      # dinleme odasının betiği ve zamanlanmış görev betikleri testlerin dışında: sözdizimi burada (Denetim 7)
+      - run: node --check yanki/sayfa/uygulama.js
+      - shell: pwsh
+        run: |
+          $hata = $false
+          foreach ($f in Get-ChildItem scripts/*.ps1) {
+            $e = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($f.FullName, [ref]$null, [ref]$e) | Out-Null
+            if ($e) { $hata = $true; $e | ForEach-Object { Write-Error "$($f.Name): $($_.Message)" } }
+          }
+          if ($hata) { exit 1 }

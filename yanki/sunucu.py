@@ -404,6 +404,12 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None, gorev_ok
             raise HTTPException(404, "dosya yok")
         return hedef
 
+    @app.get("/api/saglik")
+    def saglik_ucu():
+        """Canlılık: diske dokunmaz (`scripts/oda.ps1` 3 sn'de bunu sorar; `/api/sarkilar` bütün durumları okuyordu,
+        disk yoğunken "kapalı" sanılıp ikinci sunucu başlatılıyordu)."""
+        return {"tamam": True}
+
     @app.get("/api/sarkilar")
     def sarkilar():
         return [_ozet(d, calisma) for d in durum.hepsi(calisma)]
@@ -1217,7 +1223,8 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None, gorev_ok
         from yanki import paket, tunearo
 
         dagitimci = paket.yayin_ayarlari(a.kok / "config" / "yayin.toml").dagitimci
-        if dagitimci == "routenote":
+        # DistributeMusic API'sinde kazanç ucu yok; RouteNote'taki yayınların raporu (Scryne indirir) görünür kalır
+        if dagitimci in ("routenote", "distributemusic"):
             return _routenote_kazanc()
         if dagitimci != "tunearo":
             return {"bagli": False, "mesaj": "Dağıtımcı seçilmedi; kazanç dağıtımcı seçilince görünür."}

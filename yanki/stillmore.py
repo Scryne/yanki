@@ -36,11 +36,16 @@ def cdp_acik(port: int = PORT) -> bool:
 
 
 def _pencere_basliklari() -> list[str]:
+    # PowerShell çıktısı OEM kod sayfasında (cp857) geliyordu: başlıkta "Ş" olan şarkı çalarken UTF-8 çözümü düşüyor,
+    # `stdout` None kalıyor ve gece keşfi AttributeError'la çöküyordu (Denetim 7). Çıktı UTF-8'e zorlanır, bozuk bayt
+    # yer tutucuya döner.
     cikti = subprocess.run(
         ["powershell", "-NoProfile", "-Command",
+         "[Console]::OutputEncoding = [Text.Encoding]::UTF8; "
          "Get-Process Spotify -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowTitle } | "
-         "ForEach-Object { $_.MainWindowTitle }"], capture_output=True, text=True, encoding="utf-8", timeout=20)
-    return [x.strip() for x in cikti.stdout.splitlines() if x.strip()]
+         "ForEach-Object { $_.MainWindowTitle }"], capture_output=True, text=True, encoding="utf-8",
+        errors="replace", timeout=20)
+    return [x.strip() for x in (cikti.stdout or "").splitlines() if x.strip()]
 
 
 def calisiyor_mu() -> bool:
@@ -55,7 +60,7 @@ def caliyor_mu() -> bool:
     kesmesin."""
     try:
         basliklar = _pencere_basliklari()
-    except (OSError, subprocess.SubprocessError):
+    except (OSError, subprocess.SubprocessError, ValueError):
         return True
     if not basliklar:
         return calisiyor_mu()

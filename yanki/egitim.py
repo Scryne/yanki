@@ -525,7 +525,9 @@ def egit(a: Ayarlar, ayar: Ayar, veri_tar: Path, bildir=print, pod_sinifi=runpod
                 raise runpod.RunPodHatasi(f"eğitim bitti ama son bağdaştırıcı inmedi: {liste_[:10]}")
             sonuc.lora = final
             try:  # deneme düşse de eğitim (bağdaştırıcı inmiş, ücret ödenmiş) kaydedilir; deneme sonra yeniden koşar
-                sonuc.deneme = _deneme(a, ayar, p, hedef, calisma, sonuc.dinleme, zaman_asimi, bildir,
+                # kalan süreyle: tam zaman aşımı verilince takılan deneme 11 saat daha bekleyebiliyordu (~22 sa pod,
+                # `gereken` bakiye tek süreyi varsayıyor; Denetim 7)
+                sonuc.deneme = _deneme(a, ayar, p, hedef, calisma, sonuc.dinleme, kalan(), bildir,
                                        ara_kayitlar(liste_, ayar.deneme_ara_kayitlar))
             except Exception as e:  # noqa: BLE001
                 kayit["deneme_hata"] = f"{type(e).__name__}: {str(e)[:300]}"
@@ -791,7 +793,10 @@ def _deneme(a: Ayarlar, ayar: Ayar, p, hedef: str, calisma: Path, dinleme: Path,
                  "tohum": i.tohum, "basari": bool(r.get("basari")), "hata": r.get("hata"), "sure_sn": r.get("sure_sn")}
         if r.get("basari") and r.get("cikti"):
             ek = f"_t{i.tohum}" if "|t" in i.id else ""
-            satir["dosya"] = str(p.al(r["cikti"], dinleme / d.kimlik / f"lora_{satir['kol']}{ek}.flac"))
+            try:  # tek dosyanın kopan indirmesi önceki ödenmiş çıktıları kayıttan düşürmesin (Denetim 7)
+                satir["dosya"] = str(p.al(r["cikti"], dinleme / d.kimlik / f"lora_{satir['kol']}{ek}.flac"))
+            except (runpod.RunPodHatasi, OSError, subprocess.SubprocessError) as e:
+                satir.update(basari=False, hata=f"çıktı indirilemedi: {e}")
         sonuclar.append(satir)
     bildir(f"deneme: {sum(x['basari'] for x in sonuclar)}/{sum(o is not None for _, _, o in isler)} iş")
     return sonuclar

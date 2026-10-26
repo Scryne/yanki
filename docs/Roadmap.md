@@ -1,13 +1,13 @@
 ---
 proje: Yanki
 created: 2026-10-06
-modified: 2026-10-20
+modified: 2026-10-26
 type: roadmap
-status: donduruldu
+status: aktif
 ---
 # Yanki — Roadmap
 
-> **2026-10-20: proje donduruldu** (Scryne). Keşif, üretim, gece/sürekli koşu ve oda kapalı; Görev Zamanlayıcı'da `Yanki\Gece`, `Oda`, `Surekli` devre dışı. 🔄 fazlar olduğu yerde duruyor. Çözmek: `Enable-ScheduledTask -TaskPath \Yanki\` ve `state.json` → `asama: uygulama`.
+> 2026-10-20'de donduruldu, **2026-10-26'da çözüldü** (Scryne: "devam edicez", yeni dağıtımcı DistributeMusic.AI). Ayrıntı: en alttaki "Denetim 7".
 
 Durum sütunu session-start hook'u tarafından otomatik okunur — format bozulmasın:
 ⏳ Bekliyor / 🔄 Devam Ediyor / ✅ Tamamlandı / ⛔ Engelli.
@@ -24,7 +24,7 @@ Durum sütunu session-start hook'u tarafından otomatik okunur — format bozulm
 | 7 | Gerçek kullanım | 🔄 Devam Ediyor | Scryne listeden bir şarkıyı yükledi, dağıtımcı kabul etti, parça Spotify'da dinlenebilir; bulgular roadmap'e işlendi |
 | 8 | Kalite ve düzenli yayın | 🔄 Devam Ediyor | En az 3 parça Spotify'da; yükleme takvimi işliyor; vokal son işlemi ve LoRA dinleme testiyle karara bağlandı; ≥ 10 onarım etiketiyle otomatik kusur işaretleme denendi (sonuç kayıtlı) |
 | 9 | Kaldırılmış şarkı keşfi ve yayın takibi | 🔄 Devam Ediyor | Spotify anahtarı bağlı; `yanki kesif` (STILLMORE CSV'si, kendi playlist ya da Deezer katalog farkı) ≥ 5 doğrulanmış (geri gelmemiş) aday buldu; en az biri üretilip yüklendi; `yanki takip` yüklenen parçaların canlılığını ve ad aramasındaki sırasını pazar pazar kaydetti |
-| 10 | Tam otomatik yayın (dağıtım) | 🔄 Devam Ediyor | Hattın RouteNote'ta doldurduğu bir paket odadan (ad yazılarak) gönderildi, RouteNote kabul etti ve parça Spotify'da canlı; yayın takvimi en az 2 hafta kesintisiz işledi; veto penceresi (otomatik onay) bir şarkıda uçtan uca çalıştı. (Tunearo API'si 2026-10-12'de kapandı; ölçüt RouteNote'a çevrildi, 2026-10-15) |
+| 10 | Tam otomatik yayın (dağıtım) | 🔄 Devam Ediyor | Hattın paketlediği bir şarkı etkin dağıtımcıya (2026-10-26'dan beri DistributeMusic.AI) gönderildi, kabul edildi ve parça Spotify'da canlı; yayın takvimi en az 2 hafta kesintisiz işledi; veto penceresi (otomatik onay) bir şarkıda uçtan uca çalıştı. (Tunearo 2026-10-12'de kapandı; RouteNote 10-15–10-26; DistributeMusic API kipi `sozlesme_kabul` ve anahtar ister) |
 | 11 | Öğrenen şarkı seçimi | ⏳ Bekliyor | Puan formülü en az 10 yayının ölçülen arama sırası/dinlenmesiyle karşılaştırılıp güncellendi; tür/dil başına üretilebilirlik çarpanı Scryne'ın onay/ret verisinden; en az bir yeni keşif kaynağı (YouTube'da olup Spotify'da olmayan) canlı aday üretti |
 | 12 | Kalite otomasyonu | 🔄 Devam Ediyor | Otomatik aday seçimi Scryne'ın geçmiş seçimleriyle ölçüldü (isabet kayıtlı) ve ≥ %70 ise veto penceresinde varsayılan; rap ve İngilizce dışı en az bir dil için tarif dinleme testiyle karara bağlandı |
 | 13 | Operasyon ve dayanıklılık | 🔄 Devam Ediyor | Disk temizliği ve yedek işliyor; gece koşusu/Spotify kilidi/dağıtımcı reddi bildirim olarak geliyor; GPU boştayken gündüz üretimi kuyruğu eritiyor; bir haftalık kesintisiz otomatik koşu günlükte hatasız |
@@ -987,3 +987,49 @@ tema) canlı verinin kopyasıyla doğrulandı.
 - **Kuyruk:** 103 şarkının 82'si üretilecek, 75'i otomatik onaylanabilir türde; tür süzgeci çalışıyor.
 - **Dokunulmayan (Scryne'ın kararları):** otomatik onay açık, yayın tarihi "en erken" (editoryal pitch yok), aylık
   bütçe 30 $, S34.
+
+## Denetim 7 (2026-10-26, Scryne: "dağıtıcı buldum, distributemusic.ai'den atıcaz; şarkıları üretmeden önce projedeki her şeyi baştan sona incele, eksik ve hatalıları kapat, iyileştir, yeni şeyler ekle")
+
+Dört alan paralel denetlendi (üretim/kiralık GPU, hazırlık/keşif, paket/dağıtım, işletim/oda). Başlıcaları:
+
+- **Ayarlar kaymıştı (10-18'den beri):** `operasyon_oku` alanları konumla veriyordu, 95b61be `arsiv_gun`'u sona koymuştu:
+  `arsiv_gun = 1`, `gunduz_bosta_dk = 1`, `surekli_uretim = 7` okundu. Sonuç: `_arsiv` bir günde bütünüyle silindi (üç
+  canlı RouteNote yayınının UPC kaydı dahil). Kayıtlar 10-16 yedeğinden geri yüklendi; okuma anahtar sözcükle; arşiv
+  temizliği artık yalnız sesleri siler (`durum.json`, paket metadata'sı, YUKLE.md, kapak kalır); kulak oyları yedekte.
+- **Kuyruktaki 143 şarkının kaynak sesi yok:** dondurmada (10-20 20:41) bütün sesler silinmiş; üretim hepsini `hata`ya
+  düşürürdü. Üretim artık şarkıyı işlemeden önce kaynak sesi kayıttaki aynı videodan (ya da `girdi/kaynak/`) geri indirir,
+  süresini kayıtla karşılaştırır (`hazirlik.kaynak_onar`). Pod açılmadan önce fpcalc/ffmpeg de yoklanır.
+- **Yanlış şarkı riski:** kaynak seçimi yalnız süreye bakıyordu (aynı süreli başka şarkı seçilebilirdi) → başlıkta
+  şarkının adı aranır; şarkının kendi adındaki "Live/Cover/Loop" sözcükleri artık eleme nedeni değil. LRCLIB `/get` ve
+  aramasında şarkı adı doğrulanır (aynı sanatçının başka şarkısının sözü zincirleniyordu). Latin dışı adlar birbirine
+  "eşit" çıkmıyor. Grup adları ("Simon & Garfunkel") eşleşiyor. Talep sanatçının kendi videosundan ölçülür.
+- **Keşif:** sözü/süresi/türü ölçülmemiş popüler aday puan almaz (November Rain, Feel böyle girmişti); türsüz (`[]`)
+  sanatçı "uygun" sayılmaz; iki kaynaktan gelen aynı aday birleştirilir; Spotify kota kaydı okunamazsa kilitli sayılır;
+  Türkçe başlıklı şarkı çalarken gece keşfi çökmüyor (PowerShell UTF-8).
+- **Kiralık GPU parası:** bakiye eşiği koşunun tahmini maliyetiyle (iş başı ~0,03 $, 1,5 kat pay; aylık bütçeye sığmalı);
+  harcama kaydı okunamazsa kapı kapalı (önce 0 $ sayılıyordu); açılış cevabı kaybolan hayalet pod silinir; 408/429 yeniden
+  denenir; 16 saati aşan pod sahibi "yaşıyor" görünse de silinir (PID yeniden kullanımı); silme sonrası kayıt dosyası
+  hatası sahte alarm vermez; işçinin son sonucu durdurmadan önce okunur; model yükleme hatası her işte yeniden denenmez;
+  eğitimin denemesi kalan süreyle; denemenin tek indirme hatası diğer çıktıları düşürmez.
+- **Üretim:** adayın sonundan sonraki onarım aralığı istekte reddedilir, bozuk onarım yalnız kendisi düşer (şarkı `hata`ya
+  gitmez); otomatik onay önerisi stil değişince eski stilin adayını yarıştırmaz.
+- **Dağıtım:** paket hangi dağıtımcı için hazırlandığını yazar, dağıtımcı değişince kendiliğinden yenilenir; `gece`
+  alanı unutulan dağıtımcı onaysız göndermez; panelden gönderilen RouteNote yayınına da `en_gec_yayin` yazılır (Lovely
+  geri dolduruldu); e-postadaki "declined" yalnız UPC eşleşince kendiliğinden red kaydı; açık içerik süzgeci bileşik
+  biçimleri yakalıyor; elle kapakta EXIF yönü ve renk profili; dil adları genişledi.
+- **Oda/işletim:** `/api/saglik` (oda.ps1 hafif uçla yoklar); yoklama art arda düşünce sayfa söyler; `yanki geri-cek`
+  kimliksiz `--hepsi` ister; CI JavaScript ve PowerShell sözdizimini de denetler; testler gerçek `calisma/`'ya yazamaz
+  (bu denetimde bir testim gerçek kuyrukta sahte motor koşturup 86 şarkıyı `hata`ya düşürdü, elle geri alındı).
+- **Yeni dağıtımcı: DistributeMusic.AI** (`yanki/distributemusic.py`, `docs/arastirma/11`). Panel kipi etkin: 16 bit WAV,
+  panel alanlı YUKLE.md (Single, Version type Cover, Composer/Lyricist ad + soyad, AI-generated Yes + araç bağlantısı),
+  sırası gelen bildirilir, `yanki yuklendi`. API kipi yazıldı ve sahte istemciyle sınandı (canlı değil): dosya yükleme,
+  yayın açma, cevabı kaybolan gönderimde ikinci yayın açmama, durum yoklama, UPC/ISRC. Gönderim `sozlesme_kabul`a bağlı.
+  RouteNote'taki 14 şarkı orada kalır (e-posta ve Spotify takibi sürer).
+- **Söküm geri gelmişti:** 10-16 gecesi sökülen Bulucu → FreshTunes yeniden yayın akışı (başkalarının kayıtlarını aynı
+  ISRC'yle yeniden yayınlamak) sökümden 8 dk sonra çalışma ağacına geri konmuş, üstüne FreshTunes formunu ISRC/UPC ile
+  dolduran bir eklenti eklenmişti; commit'lenmemişti. Geri getirilmedi: `git stash` (`yeniden-yayin geri konmasi`) içinde
+  duruyor. O akışın açtığı 18 taslak (`calisma/elle/`) hiçbir dağıtıcıya paketlenip gönderilemez (`elle.KOPYA_ENGELI`);
+  silmek Scryne'ın.
+- **Karar Scryne'da:** DistributeMusic'e cover kabulünü yazılı sormak (metin araştırma 11'de); Pro planı; RunPod bakiyesi
+  (0,80 $; 8 şarkılık koşu ~40 iş, en az ~2 $ ister); `calisma/elle/`'deki kopya taslakları silmek.
+

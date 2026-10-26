@@ -42,9 +42,16 @@ def _duz(s: str) -> str:
     return re.sub(r"[^a-z0-9]+", " ", s.lower()).strip()
 
 
+def _unicode_sozcukler(s: str) -> str:
+    return " ".join(re.findall(r"[^\W_]+", unicodedata.normalize("NFKC", s).casefold()))
+
+
 def sade_ad(ad: str) -> str:
-    """Parça adlarını karşılaştırmak için: parantez/köşeli ekler ve ' - …' sonekleri atılır, küçük harf, aksansız."""
-    return _duz(EK.sub("", PARANTEZ.sub("", ad)))
+    """Parça adlarını karşılaştırmak için: parantez/köşeli ekler ve ' - …' sonekleri atılır, küçük harf, aksansız.
+    Latin dışı ad (봄날, Кукла) ASCII'ye inince boş kalıyordu ve bütün Latin dışı adlar birbirine "eşit" çıkıyordu
+    (geri gelmiş sayılan aday, her başlıkla eşleşen talep; Denetim 7): o zaman Unicode sözcüklerle."""
+    ham = EK.sub("", PARANTEZ.sub("", ad))
+    return _duz(ham) or _unicode_sozcukler(ham)
 
 
 @dataclass
@@ -351,7 +358,8 @@ def talep_olc(a: Aday, arama=None) -> Aday:
     uyan: tuple[int, str, str | None] | None = None  # sanatçısı başlıkta geçenlerin en çok izleneni
     for baslik, izlenme, *kimlik in sonuclar:
         # YouTube başlığı "Sanatçı - Şarkı (Official Video)": sonek silinmeden, kelime sınırıyla aranır
-        if izlenme is None or kaynak._istenmeyen(baslik, a.ad) or not sade or f" {sade} " not in f" {_duz(baslik)} ":
+        if (izlenme is None or kaynak._istenmeyen(baslik, a.ad) or not sade
+                or f" {sade} " not in f" {_duz(baslik)} {_unicode_sozcukler(baslik)} "):
             continue
         aday = (izlenme, baslik, kimlik[0] if kimlik else None)  # kimlik: [video id, kanal]
         if en_iyi is None or izlenme > en_iyi[0]:
@@ -479,6 +487,20 @@ KIMLIK_ALANLARI = ("spotify_dinlenme", "isrc", "spotify_id", "album", "cikis", "
 UCRETSIZ_ALANLAR = ("youtube_izlenme", "youtube_baslik", "youtube_id", "youtube_kanit", "sanatci_uyusuyor", "soz_var",
                     "ingilizce", "sure_sn", "ozgunluk", "olcum", "turler")
 SPOTIFY_ALANLARI = ("geri_geldi", "geri_gelen", "rakip_cover", "kontrol", "bakilan_pazarlar", "kapali_pazarlar")
+
+
+def birlestir_aday(ilk: Aday, yeni: Aday) -> Aday:
+    """Aynı şarkı bu koşuda iki kaynaktan geldi (STILLMORE CSV'si ve katalog): yeni olan esas, boş alanları ilkinden;
+    talep ölçüleri büyüğü."""
+    import dataclasses
+
+    for f in dataclasses.fields(Aday):
+        if getattr(yeni, f.name) in (None, []) and getattr(ilk, f.name) not in (None, []):
+            setattr(yeni, f.name, getattr(ilk, f.name))
+    for alan in ("spotify_dinlenme", "youtube_izlenme"):
+        setattr(yeni, alan, max(getattr(yeni, alan) or 0, getattr(ilk, alan) or 0) or None)
+    yeni.elendi = yeni.elendi or ilk.elendi
+    return yeni
 
 
 def tasi(a: Aday, eski: Aday | None) -> Aday:

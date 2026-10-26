@@ -121,6 +121,17 @@ def dagitimci_kontrolu(a: Ayarlar, tunearo_anahtari: bool = False) -> Kontrol:
     if ad == "tunearo":
         return Kontrol("Tunearo anahtarı", tunearo_anahtari, "yükleme ve durum yoklaması" if tunearo_anahtari
                        else ".env → TUNEARO_API_KEY yok: yükleme otomatik değil")
+    if ad == "distributemusic":
+        from yanki import distributemusic
+
+        dm = distributemusic.DistributeMusic(a.kok)
+        if not dm.otomatik:
+            return Kontrol("DistributeMusic", True, "panel kipi: paketleri YUKLE.md ile panelden yükle, sonra "
+                                                    "`yanki yuklendi` (API anahtarı yok)")
+        return Kontrol("DistributeMusic", dm.ayar["sozlesme_kabul"],
+                       "API kipi: yükleme ve durum yoklaması" + ("" if dm.gece else " (gece yüklemesi kapalı)")
+                       if dm.ayar["sozlesme_kabul"] else "API anahtarı var ama [distributemusic] sozlesme_kabul = "
+                       "false: cover kuralı destekten yazılı sorulmadan gönderim yok")
     return Kontrol("dağıtımcı", True, f"{ad or 'seçilmedi'}: yükleme elle (YUKLE.md)")
 
 

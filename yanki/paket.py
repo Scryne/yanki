@@ -23,8 +23,11 @@ KUCUK_KAPAK = 1000  # bundan küçük özgün görsel 3000'e büyütülünce bul
 
 # Dağıtımcıya özel ayrıntılar: docs/arastirma/02-dagitimci-karsilastirmasi.md (2026-10-07). RouteNote WAV almıyor
 # (FLAC/MP3 44,1); bilgi 2023 tarihli, yükleme ekranında doğrulanır.
-SES_BICIMI = {"routenote": "flac", "distrokid": "wav", "tunearo": "wav", "": "wav"}  # Tunearo depoda WAV
-DAGITIMCI_ADI = {"distrokid": "DistroKid", "routenote": "RouteNote", "tunearo": "Tunearo"}
+# DistributeMusic: "sıkıştırılmamış WAV, 16/24 bit, ≥ 44,1 kHz; dışı QC'de reddedilir" (SSS, 2026-10-26)
+SES_BICIMI = {"routenote": "flac", "distrokid": "wav", "tunearo": "wav", "distributemusic": "wav", "": "wav"}
+DAGITIMCI_ADI = {"distrokid": "DistroKid", "routenote": "RouteNote", "tunearo": "Tunearo",
+                 "distributemusic": "DistributeMusic.AI"}
+DAGITIMCILAR = ("", "routenote", "distrokid", "tunearo", "distributemusic")
 DAGITIMCI_NOTU = {
     "distrokid": [
         "Yapay zekâ sorusu (\"Is any part of this track AI-generated?\"): **all of the audio**. Ardından sanatçının"
@@ -40,7 +43,9 @@ DAGITIMCI_NOTU = {
 DIL_ADI = {"en": "English", "tr": "Turkish", "fr": "French", "es": "Spanish", "pt": "Portuguese", "de": "German",
            "it": "Italian", "nl": "Dutch", "ru": "Russian", "ja": "Japanese", "ko": "Korean", "zh": "Chinese",
            "ar": "Arabic", "pl": "Polish", "sv": "Swedish", "id": "Indonesian", "hi": "Hindi", "az": "Azerbaijani",
-           "unknown": "Instrumental / Unknown"}
+           "tl": "Tagalog", "uk": "Ukrainian", "el": "Greek", "he": "Hebrew", "fa": "Persian", "ro": "Romanian",
+           "hu": "Hungarian", "cs": "Czech", "da": "Danish", "fi": "Finnish", "no": "Norwegian", "vi": "Vietnamese",
+           "th": "Thai", "yue": "Cantonese", "unknown": "Instrumental / Unknown"}
 
 
 @dataclass(frozen=True)
@@ -60,8 +65,8 @@ def yayin_ayarlari(yol: Path) -> Yayin:
     with open(yol, "rb") as f:
         d = tomllib.load(f)
     y, m = d["yayin"], d["master"]
-    if y["dagitimci"] not in ("", "routenote", "distrokid", "tunearo"):
-        raise ValueError(f"dagitimci tunearo, routenote, distrokid ya da boş olmalı: {y['dagitimci']}")
+    if y["dagitimci"] not in DAGITIMCILAR:
+        raise ValueError(f"dagitimci {', '.join(x for x in DAGITIMCILAR if x)} ya da boş olmalı: {y['dagitimci']}")
     kapak_kaynagi = d.get("kapak", {}).get("kaynak", "uretilen")
     if kapak_kaynagi not in ("pinterest", "uretilen"):
         raise ValueError(f"kapak.kaynak pinterest ya da uretilen olmalı: {kapak_kaynagi}")
@@ -182,7 +187,11 @@ def _sar(metin: str, font, ciz, en: int) -> list[str]:
 
 
 # Mağazaların "explicit" saydığı sözcükler; damn/hell gibi hafifler sayılmaz (drivers license: "fucking", 2026-10-08)
-ACIK_SOZ = re.compile(r"\b((?:mother)?fuck\w*|shit\w*|bitch\w*|cunt\w*|pussy|dick|cock|nigga\w*)\b", re.I)
+# Bileşik ve çoğul biçimler de (bullshit, assholes, dicks): yalnız sözcük başı eşleşince "Not Explicit" gidiyordu
+# (Denetim 7). "ass" tek başına yok (bass, class, glass); "dick"/"cock" sözcük sınırıyla (Dickens, peacock değil).
+ACIK_SOZ = re.compile(
+    r"\b((?:mother|bull|horse|dip|chicken)?(?:fuck|shit)\w*|bitch\w*|cunts?|puss(?:y|ies)|dicks?|cocks?|"
+    r"nigg(?:a|er)s?\w*|ass ?holes?|whores?|sluts?|twats?|motherfucker\w*)\b", re.I)
 
 
 def acik_sozler(metin: str) -> list[str]:
@@ -212,6 +221,10 @@ def metadata(d: durum.Durum, y: Yayin, master_olcum: dict, sure_sn: float, onizl
         "orijinal_eser_mbid": k.get("eser_mbid"),
         "orijinal_yil": (k.get("ilk_yayin") or "")[:4] or None,  # © satırı (besteci telifi) bu yılla
         "dil": d.analiz.get("dil", "en"),
+        "stil": d.analiz.get("stil"),  # dağıtımcının tür alanı bundan seçilir (DistributeMusic, Tunearo)
+        "sanatci_turleri": list(k.get("sanatci_turleri") or []),
+        # hangi dağıtımcı için paketlendi (ses biçimi, YUKLE.md): dağıtımcı değişince eski paket yenilenir
+        "paket_dagitimci": y.dagitimci,
         "sure_sn": round(sure_sn, 2),
         "onizleme_sn": onizleme_sn,
         "yapay_zeka": {"kullanildi": True, "arac": "ACE-Step 1.5 (XL-SFT)", "kapsam": "vokal ve enstrümantal üretim",
@@ -247,6 +260,8 @@ def yukle_md(meta: dict, y: Yayin, dosyalar: dict[str, str]) -> str:
         return "\n".join(satir + _routenote_formu(meta, dosyalar)) + "\n"
     if y.dagitimci == "tunearo":
         return "\n".join(satir + _tunearo_notu(meta, dosyalar)) + "\n"
+    if y.dagitimci == "distributemusic":
+        return "\n".join(satir + _distributemusic_formu(meta, dosyalar)) + "\n"
     satir += [
         "Form alanları yukarıdan aşağı, kopyala-yapıştır:", "",
         f"1. **Başlık (Title):** `{meta['baslik']}`",
@@ -397,6 +412,51 @@ def _tunearo_notu(meta: dict, dosyalar: dict[str, str]) -> list[str]:
     ]
 
 
+def _distributemusic_formu(meta: dict, dosyalar: dict[str, str]) -> list[str]:
+    """DistributeMusic.AI paneli. Alanlar API belgesinden (`yanki/distributemusic.py`, 2026-10-26); panelin ekranı
+    giriş yapmadan görülemedi: ilk yüklemede sıra ve etiketler ekranla karşılaştırılıp burası sıkılaştırılır."""
+    from yanki import distributemusic, tunearo
+
+    sanatci = meta["sanatci"] or "EKSİK"
+    yazan = distributemusic.yazarlar(meta) or "EKSİK: her yazarın ad + soyadı (girdi/liste.toml → yazarlar)"
+    tur = tunearo.tur_sec(meta.get("stil") or "", meta.get("sanatci_turleri"))
+    return [
+        "DistributeMusic.AI paneli (distributemusic.ai → giriş → yeni yayın). Kopyala-yapıştır:", "",
+        "## Yayın",
+        "1. **Release type:** Single",
+        f"2. **Title:** `{meta['baslik']}` (orijinal başlık; `(Cover)` ya da orijinal sanatçı adı eklenmez)",
+        f"3. **Artist name:** `{sanatci}`: mevcut Spotify profilini seç (Orvane'in profili varsa ona bağla; yeni "
+        "profil açılırsa diskografi bölünür)",
+        f"4. **Version type:** Cover (orijinal: {meta['orijinal_sanatci']})",
+        f"5. **Genre:** {tur} (şarkının türü; listede yoksa en yakını)",
+        f"6. **Song language:** {DIL_ADI.get(meta['dil'], meta['dil'])}",
+        f"7. **Composer:** `{yazan}`",
+        f"8. **Lyricist:** `{yazan}`",
+        "9. **Release date:** en erken (inceleme ~24 saat; Spotify 2–4 gün). Orvane'in Spotify for Artists'i yok, "
+        "pitch için öne almanın karşılığı yok",
+        f"10. **Explicit:** {_acik_satiri(meta)}",
+        "",
+        "## Dosyalar",
+        f"11. **Audio:** `{dosyalar['ses']}` (16 bit / 44,1 kHz WAV, {meta['master']['lufs']:.1f} LUFS, "
+        f"{meta['master']['gercek_tepe_dbtp']:.1f} dBTP, {_mmss(meta['sure_sn'])})",
+        f"12. **Cover art:** `{dosyalar['kapak']}` (3000×3000 JPG; orijinal sanatçının adı, fotoğrafı, logosu yok)"
+        f"{_kapak_notu(meta)}",
+        "",
+        "## Yapay zekâ beyanı (zorunlu: beyansız AI hesabı kapattırır, şartlar §4/§8)",
+        f"13. **AI-generated:** Yes · **AI music link:** `{distributemusic.AI_BAGLANTI}` (ACE-Step'in paylaşım "
+        "sayfası yok; destek başka bir şey isterse ona göre)",
+        "14. **Distribution agreement:** onay kutusu senin (hesap sahibinin) kabulündür",
+        "",
+        "## Dikkat",
+        "- Panelde bölge seçimi görülmedi: RouteNote'taki ABD/CA/MX/IN/PK hariç tutması burada yok.",
+        "- Şartlar §8: \"yazılı lisansı olmayan telifli melodi\" anında hesap kapatma nedeni sayılıyor, cover için ayrı"
+        " kural yok. Toplu yüklemeden önce destekten (support@distributemusic.ai) cover kabulünü yazılı sor",
+        "  (docs/arastirma/11).",
+        "",
+        "Yükledikten sonra: `yanki yuklendi <kimlik>` (kodlar çıkınca `--isrc … --upc …`)",
+    ]
+
+
 def _mmss(sn: float) -> str:
     dk, s = divmod(round(sn), 60)
     return f"{dk}:{s:02d}"
@@ -410,11 +470,16 @@ def ozel_kapak(kaynak: Path, hedef: Path, boyut: int = KAPAK_BOYUT) -> dict:
     """Scryne'ın seçtiği kapak. Zaten kare, `boyut` px, RGB JPEG ise bayt bayt kopyalanır; değilse ortadan kare
     kırpılır ve `boyut`'a getirilir (dağıtımcı en az 3000×3000 kare istiyor; 2026-10-08'de üç kapak elle böyle
     hazırlanmıştı). Görsel açılamazsa hata: bozuk kapakla paket çıkmaz."""
-    from PIL import Image
+    from PIL import Image, ImageOps
 
-    with Image.open(kaynak) as img:
+    with Image.open(kaynak) as ham:
+        # telefon fotoğrafı EXIF yönüyle saklanır: çevrilmeden paketlenince kapak yan yatık gidiyordu; renk profili
+        # (ICC, Display P3) sRGB'ye dönmeden bayt kopyası mağazada soluk görünebilir (Denetim 7)
+        donuk = ham.getexif().get(0x0112, 1) not in (None, 1)
+        img = ImageOps.exif_transpose(ham) if donuk else ham
         en, boy = img.size
-        hazir = img.format == "JPEG" and img.mode == "RGB" and en == boy == boyut
+        hazir = (img.format == "JPEG" and img.mode == "RGB" and en == boy == boyut and not donuk
+                 and not ham.info.get("icc_profile"))
         hedef.parent.mkdir(parents=True, exist_ok=True)
         if hazir:
             hedef.write_bytes(kaynak.read_bytes())
@@ -436,7 +501,11 @@ def paketle(calisma: Path, yayin_yolu: Path, kimlikler: list[str] | None = None,
     asamalar = ("onaylandi", "paketlendi") if yeniden else ("onaylandi",)
     islenen = []
     for d in durum.hepsi(calisma):
-        if d.asama not in asamalar or (kimlikler and d.kimlik not in kimlikler):
+        if kimlikler and d.kimlik not in kimlikler:
+            continue
+        # başka dağıtımcı için hazırlanmış paket (RouteNote'un FLAC'ı, onun YUKLE.md'si) yeni dağıtımcıya gitmesin:
+        # kendiliğinden yenilenir (Denetim 7). Açık RouteNote taslağı varsa `_paketle_kilitli` durdurur.
+        if d.asama not in asamalar and not (d.asama == "paketlendi" and bayat_mi(calisma, d, y)):
             continue
         try:
             islenen.append(_paketle_bir(calisma, d, y))
@@ -447,7 +516,17 @@ def paketle(calisma: Path, yayin_yolu: Path, kimlikler: list[str] | None = None,
     return islenen
 
 
-KALICI_ALANLAR = ("yukleme", "yukleme_gecmisi", "routenote", "routenote_gecmisi", "tunearo", "tunearo_gecmisi")
+KALICI_ALANLAR = ("yukleme", "yukleme_gecmisi", "routenote", "routenote_gecmisi", "tunearo", "tunearo_gecmisi",
+                  "distributemusic", "distributemusic_gecmisi")
+
+
+def bayat_mi(calisma: Path, d: durum.Durum, y: Yayin) -> bool:
+    """Paket etkin dağıtımcı için hazırlanmamış mı. Damgasız eski paketler RouteNote dönemindendir."""
+    try:
+        meta = json.loads((durum.klasor(calisma, d.kimlik) / "paket" / "metadata.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    return meta.get("paket_dagitimci", "routenote") != y.dagitimci
 
 
 def yukleme_kilidi(paket_klasoru: Path) -> Path:

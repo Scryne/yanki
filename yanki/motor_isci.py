@@ -240,7 +240,13 @@ def main() -> int:
                 yaz()
                 continue
             try:
-                dit_hazirla()
+                try:
+                    dit_hazirla()
+                except ModelYok:
+                    raise
+                except Exception as e:  # noqa: BLE001 — AceStepHandler/add_lora'nın kendi istisnası da kalıcı: her iş
+                    # modeli yeniden yüklemeyi denerse 40 iş × 1–2 dk boş pod yanardı (Denetim 7)
+                    raise ModelYok(f"model yüklenemedi: {type(e).__name__}: {str(e)[:500]}") from e
             except ModelYok as e:  # model yoksa kalan işlerin hiçbiri yapılamaz
                 sonuclar.append({"id": None, "basari": False, "hata": str(e)})
                 yaz()

@@ -284,15 +284,26 @@ def isle(calisma: Path, iletiler: list[Ileti], bildir=None) -> list[dict]:
                    f"gönder. E-posta: {_ozet(i)}", anahtar)
         else:  # red
             neden = _ozet(i, 300)
-            if sarki["asama"] in ("yuklendi", "yayinda"):
+            # red geri alınması zor bir kayıt (yükleme geçmişe, şarkı kuyruğa): yalnız iletide UPC'si geçen ve henüz
+            # canlı olmayan şarkıda kendiliğinden; adla eşleşen ya da yayındaki şarkıda Scryne doğrular (alt bilgi
+            # metnindeki "declined"/"taken down" yanlış red üretebiliyordu — Denetim 7)
+            upc_ile = bool(sarki["upc"]) and sarki["upc"].lstrip("0") in {
+                u.lstrip("0") for u in UPC.findall(f"{i.konu}\n{i.metin}")}
+            if sarki["asama"] == "yuklendi" and upc_ile:
                 try:
                     dagitim.red_kaydet(calisma, sarki["kimlik"], f"RouteNote: {neden}")
                     eylem = "red kaydedildi (paketlendi'ye döndü)"
                 except ValueError as e:
                     eylem = f"red kaydedilemedi: {e}"
-            bildir("kayip", f"RouteNote reddetti: {sarki['ad']}",
-                   f"Şarkı paketlendi'ye döndü; takvim sebep anlaşılıp düzeltilene kadar yeni yükleme açmaz. "
-                   f"E-posta: {neden}", anahtar)
+                bildir("kayip", f"RouteNote reddetti: {sarki['ad']}",
+                       f"Şarkı paketlendi'ye döndü; takvim sebep anlaşılıp düzeltilene kadar yeni yükleme açmaz. "
+                       f"E-posta: {neden}", anahtar)
+            else:
+                eylem = "red olabilir, doğrulama bekliyor"
+                bildir("kayip", f"RouteNote reddetmiş olabilir: {sarki['ad']}",
+                       f"E-posta {'UPC içermiyor' if not upc_ile else 'yayındaki şarkı hakkında'}: kendiliğinden "
+                       f"işlenmedi. Panelde bak; red ise `yanki dagitim-red {sarki['kimlik']}`. E-posta: {neden}",
+                       anahtar)
         kayit[i.kimlik] = {"tarih": i.tarih, "konu": i.konu, "sinif": tur, "sarki": sarki and sarki["kimlik"],
                            "eylem": eylem, "islendi": datetime.now().isoformat(timespec="seconds")}
         sonuc.append({"konu": i.konu, "sinif": tur, "kimlik": sarki and sarki["kimlik"], "eylem": eylem})

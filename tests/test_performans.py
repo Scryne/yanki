@@ -192,7 +192,8 @@ def test_eposta_hatta_islenir_bir_kez(tmp_path):
     _sarki(c, "elle", "Elle Gonderilen", asama="paketlendi", routenote={"upc": "5064150000000", "adim": "hazir"})
     bildirimler = []
     iletiler = [eposta.ayristir(_ileti("Release approved", "Numb has been approved", mid="<a>")),
-                eposta.ayristir(_ileti("Release declined", "lovely was declined: misleading artist name", mid="<b>")),
+                eposta.ayristir(_ileti("Release declined",
+                                       "lovely (UPC 5064149247325) was declined: misleading artist name", mid="<b>")),
                 eposta.ayristir(_ileti("Approved", "Elle Gonderilen is approved", mid="<c>")),
                 eposta.ayristir(_ileti("Profile Code", "Here is your access code: abc123", mid="<d>")),
                 eposta.ayristir(_ileti("Update", "We have news about your release", mid="<e>"))]
@@ -211,6 +212,18 @@ def test_eposta_hatta_islenir_bir_kez(tmp_path):
     assert eposta.isle(c, iletiler, bildir=lambda *a: bildirimler.append(a)) == []  # ikinci kez işlenmez
     ornekler = [p.read_text(encoding="utf-8") for p in (c / "eposta" / "ornek").glob("*.txt")]
     assert len(ornekler) == 4 and not any("abc123" in o for o in ornekler)  # giriş kodu diske yazılmaz
+
+
+def test_eposta_upcsiz_red_kendiliginden_islenmez(tmp_path):
+    """Denetim 7: yalnız adla eşleşen "declined" iletisi (alt bilgi, başka yayın) şarkıyı kuyruğa döndürmez."""
+    c = tmp_path / "calisma"
+    _sarki(c, "lovely", "lovely", asama="yuklendi", routenote={"upc": "5064149247325", "adim": "gonderildi"},
+           yukleme={"upc": "5064149247325", "dagitimci": "routenote"})
+    bildirimler = []
+    sonuc = eposta.isle(c, [eposta.ayristir(_ileti("Release declined", "lovely was declined", mid="<x>"))],
+                        bildir=lambda *a: bildirimler.append(a))
+    assert sonuc[0]["sinif"] == "red" and "doğrulama" in sonuc[0]["eylem"]
+    assert durum.oku(c, "lovely").asama == "yuklendi" and "dagitim-red lovely" in bildirimler[-1][2]
 
 
 class _Imap:

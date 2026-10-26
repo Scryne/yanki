@@ -433,7 +433,11 @@ def _kesif(args: argparse.Namespace) -> int:
     if args.yeniden_olc:  # kayıttaki adaylar da (kaynak o gece taranamasa bile) yeniden ölçülür
         adaylar += [x for x in kesif.oku(calisma).values() if not any(y.kimlik == x.kimlik for y in adaylar)]
     # aynı şarkı birden çok kaynaktan gelebilir: doğrulama tek kez; düzenlemeler (sped up, remix…) hiç sorulmaz
-    tekil = list({x.kimlik: x for x in adaylar}.values())
+    # aynı kimlik iki kaynaktan gelince sonuncusu öncekinin verisini (STILLMORE dinlenmesi, ISRC) siliyordu: birleştir
+    birlesik: dict[str, kesif.Aday] = {}
+    for x in adaylar:
+        birlesik[x.kimlik] = kesif.birlestir_aday(birlesik[x.kimlik], x) if x.kimlik in birlesik else x
+    tekil = list(birlesik.values())
     duzenleme = [x for x in tekil if x.duzenleme]
     tekil = [x for x in tekil if not x.duzenleme]
     if duzenleme:
@@ -1092,10 +1096,18 @@ def _bildirici(calisma: Path):
 
 def _erisim_yok(calisma: Path, e) -> None:
     """Tunearo hesap düzeyinde erişimi kapattı (`tunearo.ErisimYok`): kayda geçer (özet ve oda gösterir), günde bir
-    bildirilir. Yüklemeler ve yoklama erişim açılınca kendiliğinden sürer; yerel kayıtlara dokunulmaz."""
+    bildirilir. Yüklemeler ve yoklama erişim açılınca kendiliğinden sürer; yerel kayıtlara dokunulmaz.
+    DistributeMusic'te (401/403: anahtar geçersiz ya da Label + API planı yok) yalnız günde bir bildirilir."""
     from datetime import date
 
-    from yanki import tunearo
+    from yanki import distributemusic, tunearo
+
+    if isinstance(e, distributemusic.ErisimYok):
+        print(f"DistributeMusic API erişimi yok ({e}); otomatik yükleme ve yoklama bekliyor")
+        _bildirici(calisma)("kayip", "DistributeMusic API erişimi yok",
+                            f"{e}. Anahtar Settings → Developer API'den (Label + API planı gerekir); anahtarsız "
+                            "kipte paketler YUKLE.md ile panelden yüklenir.", f"distributemusic:erisim:{date.today()}")
+        return
 
     tunearo.erisim_kaydet(calisma, e)
     print(f"Tunearo API erişimi kapalı ({e}); yükleme ve durum yoklaması erişim açılana kadar bekliyor")
@@ -1133,7 +1145,7 @@ def _takvim_hatirlat(kok: Path) -> int:
 
     from playwright.sync_api import Error as TarayiciHatasi
 
-    from yanki import dagitim, paket, routenote, tunearo
+    from yanki import dagitim, distributemusic, paket, routenote, tunearo
 
     calisma = kok / "calisma"
     ad = paket.yayin_ayarlari(kok / "config" / "yayin.toml").dagitimci
@@ -1165,7 +1177,7 @@ def _takvim_hatirlat(kok: Path) -> int:
         print(f"takvim: sıradaki yükleme {ilk.yukleme:%d.%m} ({ilk.ad})" if ilk else "takvim: kuyruk boş")
         return 0
     d = dagitim.sec(ad, kok)
-    if not d.otomatik or not getattr(d, "gece", True):  # RouteNote: takvimde yükleme açık değilse yalnız bildir
+    if not d.otomatik or not getattr(d, "gece", False):  # gece yüklemesi açık değilse yalnız bildir
         s = sirasi_gelen[0]
         nasil = (f"Dinleme odası → Sanatçı → Gönder… (ya da yanki yukle {s.kimlik} --gonder)" if d.otomatik
                  else f"calisma/{s.kimlik}/paket/YUKLE.md ile yükle, sonra yanki yuklendi {s.kimlik} --isrc …")
@@ -1189,7 +1201,7 @@ def _takvim_hatirlat(kok: Path) -> int:
 
         try:
             bilgi = dagitim.otomatik_yukle(calisma, d, s.kimlik, s.yayin_tarihi)
-        except tunearo.ErisimYok as e:
+        except (tunearo.ErisimYok, distributemusic.ErisimYok) as e:
             _erisim_yok(calisma, e)
             print(f"takvim: {len(sirasi_gelen) - len(yuklenen)} paket kuyrukta bekliyor")
             break
@@ -1363,11 +1375,11 @@ def _dagitim_durum(args: argparse.Namespace) -> int:
     if not hasattr(d, "yokla"):  # RouteNote: yayın listesi okunmaz (şartlar: botla veri toplama yok)
         print(f"{d.ad or 'dağıtımcı'}: durum yoklaması yok, durum dağıtımcı panelinde")
         return 0
-    from yanki import tunearo
+    from yanki import distributemusic, tunearo
 
     try:
         sonuc = d.yokla(a.kok / "calisma", _bildirici(a.kok / "calisma"))
-    except tunearo.ErisimYok as e:  # hesap düzeyi: koşu hatası değil, Scryne'ın dağıtımcıyla çözeceği durum
+    except (tunearo.ErisimYok, distributemusic.ErisimYok) as e:  # hesap düzeyi: Scryne'ın dağıtımcıyla çözeceği
         _erisim_yok(a.kok / "calisma", e)
         return 0
     if d.ad == "tunearo":
@@ -1539,6 +1551,9 @@ def _geri_cek(args: argparse.Namespace) -> int:
 
     a = ayarlar.yukle()
     calisma = a.kok / "calisma"
+    if not args.kimlik and not args.hepsi:  # boş çağrı bütün yayınları geri çekiyordu (Denetim 7)
+        print("hangi şarkı? `yanki geri-cek <kimlik> …`; yüklenmiş hepsi için `--hepsi`")
+        return 1
     kimlikler = args.kimlik or [d.kimlik for d in durum.hepsi(calisma) if d.asama in ("yuklendi", "yayinda")]
     kod = 0
     for kimlik in kimlikler:
@@ -1643,11 +1658,11 @@ def _seyrek_yokla(kok: Path, simdi=None) -> None:
         return
     isaret.parent.mkdir(parents=True, exist_ok=True)
     isaret.touch()
-    from yanki import tunearo
+    from yanki import distributemusic, tunearo
 
     try:
         sonuc = d.yokla(calisma, _bildirici(calisma))
-    except tunearo.ErisimYok as e:
+    except (tunearo.ErisimYok, distributemusic.ErisimYok) as e:
         _erisim_yok(calisma, e)
         return
     except Exception as e:  # noqa: BLE001 — anahtar yok, ağ: gündüz üretimini etkilemez
@@ -2008,7 +2023,8 @@ def main(argv: list[str] | None = None) -> int:
     dr.add_argument("--neden", required=True, help="dağıtımcının red gerekçesi (ör. kapak, AI içerik)")
     dr.set_defaults(fn=_dagitim_red)
     gc = alt.add_parser("geri-cek", help="yüklenmiş şarkıyı dağıtımcıdan geri çek (yeniden paketlenip kuyruğa döner)")
-    gc.add_argument("kimlik", nargs="*", help="boşsa yüklenmiş hepsi")
+    gc.add_argument("kimlik", nargs="*", help="geri çekilecek şarkılar")
+    gc.add_argument("--hepsi", action="store_true", help="kimlik yerine yüklenmiş bütün şarkılar")
     gc.add_argument("--neden", default="baştan yayın (Scryne, 2026-10-10)")
     gc.add_argument("--kaldirildi", action="store_true",
                     help="elle dağıtımcıda (RouteNote) yayın panelden kaldırıldı, kaydet")

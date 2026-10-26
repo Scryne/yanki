@@ -732,9 +732,9 @@ def gonderim_sonucu(calisma: Path, kimlik: str, gonderildi: bool) -> str:
                 f"{kimlik}` (sonraki koşu yeniden açıp tek oturumda gönderir)")
     rn.update(adim="gonderildi", gonderim=rn.get("gonderim") or date.today().isoformat())
     dosya.json_yaz(yol, {**meta, "routenote": rn})
-    takip.yukleme_kaydet(calisma, kimlik, {"upc": rn.get("upc"), "isrc": rn.get("isrc"),
-                                           "yayin_tarihi": rn.get("yayin_tarihi"), "dagitimci": "routenote"},
-                         "routenote")
+    # otomatik gönderimle aynı alanlar: `en_gec_yayin` yazılmayınca panelden gönderilen tarihsiz yayının "onay
+    # gecikti" uyarısı hiç gelmiyordu (Lovely, Denetim 7)
+    takip.yukleme_kaydet(calisma, kimlik, {**_bilgi(meta, rn), "dagitimci": "routenote"}, "routenote")
     with durum.guncelle(calisma, kimlik) as d:
         if d.asama == "paketlendi":
             d.gec("yuklendi")

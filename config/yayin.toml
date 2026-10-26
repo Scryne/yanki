@@ -11,7 +11,9 @@ sanatci_adi = "Orvane"  # Scryne, 2026-10-07
 # paketler YUKLE.md ile hazır bekler).
 # 2026-10-15 (Scryne: "RouteNote'a otomatik yüklemeyi yapmanı istiyorum"): RouteNote, formu hat dolduruyor
 # (yanki/routenote.py, tarayıcı; API yok, docs/arastirma/08).
-dagitimci = "routenote"
+# 2026-10-26 (Scryne: "dağıtıcı buldum, distributemusic.ai'den atıcaz"): DistributeMusic.AI. Yeni paketler 16 bit WAV ve
+# panel alanlı YUKLE.md ile; RouteNote'a yüklenmiş 14 şarkı orada kalır, takipleri (e-posta, Spotify) sürer.
+dagitimci = "distributemusic"
 # Kapakta ve metadata'da: plak şirketi yoksa sanatçı adı kullanılır
 etiket = ""
 
@@ -78,7 +80,8 @@ haftada = 0
 # RouteNote yükleyicisi 10 günden yakın tarihi 10'a çeker (routenote.YAYIN_ASGARI_GUN).
 # 0 = tarihsiz: "Sales Start Date" boş, RouteNote onaylar onaylamaz mağazalara gider (formdaki kural). Scryne
 # 2026-10-15: "şarkı yayınlanma takvimini en erken olarak ayarla" → 0.
-yayin_on_gun = 0
+# 2026-10-26: DistributeMusic'te tarih zorunlu, inceleme ~24 sa, Spotify 2–4 gün → en erken anlamlı tarih 2 gün sonrası.
+yayin_on_gun = 2
 # "surekli": kabul beklenmez, her gün yüklenir; dağıtımcı bir parçayı reddederse neden anlaşılıp düzeltilene kadar
 # yeni yükleme yok (reddedilen yayın aynı kayıtla düzeltilir, parça kotası yanmaz). "ilk_kabul": ilk kabule kadar
 # incelemede tek parça (Faz 7 kararı; Scryne 2026-10-10 "sürekli" deyince bırakıldı). "hemen": kapı yok.
@@ -97,6 +100,20 @@ gece = true
 spotify_sanatci_id = ""
 # false: tarayıcı görünmeden çalışır (gece koşusu). Giriş sayfası Cloudflare arkasında; görünmezde sınanmadı.
 gorunur = true
+
+[distributemusic]
+# yanki/distributemusic.py, docs/arastirma/11. Anahtarsızken panel kipi: hat paketler ve sırası geleni bildirir, Scryne
+# panelden yükleyip `yanki yuklendi <kimlik>` der. `.env` → DISTRIBUTEMUSIC_API_KEY (Label 50 $/yıl + API 99 $/ay)
+# eklenirse API kipi: hat yükler ve durumu yoklar.
+# Şartlar §8 "yazılı lisansı olmayan telifli melodi"yi anında hesap kapatma nedeni sayıyor, cover için ayrı kural yok:
+# destekten cover kabulü yazılı alınmadan API gönderimi yapılmaz. Cevap olumluysa Scryne true yapar.
+sozlesme_kabul = false
+# API kipinde takvim sırası gelen paketi koşuda kendisi göndersin mi (sozlesme_kabul da gerekir)
+gece = false
+# API `version_type` (belgedeki örnek "Original"; izinli değerler yayımlanmamış, blog "Cover"ı sayıyor)
+surum_turu = "Cover"
+# `ai_music_link`: ACE-Step'in şarkı başına paylaşım sayfası yok, aracın sayfası verilir (destek başka şey isteyebilir)
+ai_baglanti = "https://github.com/ace-step/ACE-Step-1.5"
 
 [tunearo]
 # Tunearo API (yanki/tunearo.py; anahtar .env → TUNEARO_API_KEY). Doküman: https://api.tunearo.com/

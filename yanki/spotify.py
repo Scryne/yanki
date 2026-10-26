@@ -95,10 +95,21 @@ class Spotify:
 
     # ── Kota ────────────────────────────────────────────────
     def kota(self) -> dict:
-        try:
-            k = json.loads(self.kota_yolu.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            k = {}
+        """Okunamayan kota kaydı kilit sayılır: boş sayılınca 23 saatlik kilit yok sayılıyor, ilk yazım da kilidi
+        kalıcı siliyordu (Windows'ta `replace` anına denk gelen PermissionError; Denetim 7)."""
+        k = None
+        for i in range(3):
+            try:
+                k = json.loads(self.kota_yolu.read_text(encoding="utf-8"))
+                break
+            except FileNotFoundError:
+                k = {}
+                break
+            except (OSError, ValueError):
+                time.sleep(0.3 * (i + 1))
+        if k is None:  # 10 dk kilitli say (yazılmaz): istek atılmaz, oda ve özet "kilitli" gösterir
+            return {"gun": time.strftime("%Y-%m-%d"), "sayi": 0, "kilit": time.time() + 600,
+                    "neden": "kota kaydı okunamadı (calisma/.spotify_kota.json)"}
         bugun = time.strftime("%Y-%m-%d")
         if k.get("gun") != bugun:
             k = {"gun": bugun, "sayi": 0, "kilit": k.get("kilit", 0), "neden": k.get("neden", "")}

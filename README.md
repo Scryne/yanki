@@ -2,11 +2,17 @@
 
 Listeye yazılan yabancı şarkıların cover'ını kiralık GPU'da [ACE-Step 1.5](https://github.com/ace-step/ACE-Step-1.5)
 ile (kendi eğittiğimiz cover LoRA'sıyla) üretir, yayınlanamayacak adayları otomatik eler, dinleme odasında onaya sunar,
-onaylananı paketler ve RouteNote'a tarayıcıyla yükler (son "Distribute" Scryne'ın tıklaması). Şarkı kaynağı Spotify'dan
+onaylananı paketler ve dağıtımcıya hazırlar: 2026-10-26'dan beri DistributeMusic.AI (panelden Scryne yükler; API
+anahtarı eklenirse hat yükler), önceki 14 şarkı RouteNote'ta (tarayıcı otomasyonu, takibi sürüyor). Şarkı kaynağı Spotify'dan
 kaldırılmış, hâlâ aranan şarkılar ve hattın iyi yaptığı türlerde popüler şarkılar (`yanki kesif`); yüklenen parçanın
 Spotify'da çıkıp çıkmadığını ve adı arandığında kaçıncı sırada olduğunu `yanki takip` izler.
 
-**Şu an (2026-10-15 akşam, güncelleme 2026-10-16):** üretim açık, tarif ep20 + CFG 10, yalnız kör testlerde yayınlanabilir çıkan türlerde
+**Şu an (2026-10-26, Denetim 7):** 2026-10-20'deki dondurma çözüldü. Dağıtımcı DistributeMusic.AI, panel kipi
+(`docs/arastirma/11`): paketler 16 bit WAV + panel alanlı `YUKLE.md`; cover kuralı destekten yazılı sorulana kadar API
+gönderimi kapalı (`[distributemusic] sozlesme_kabul = false`). Kuyrukta 143 şarkı üretim bekliyor; dondurmada silinen
+kaynak sesleri üretimden hemen önce kayıtlı videodan geri iner. Zamanlanmış görevler (`\Yanki\`) hâlâ kapalı.
+
+**Önceki durum (2026-10-15 akşam, güncelleme 2026-10-16):** üretim açık, tarif ep20 + CFG 10, yalnız kör testlerde yayınlanabilir çıkan türlerde
 (balad, pop, rock, metal, pop-punk, country, dance-pop; tür dışı şarkı üretilmez, `uretim.tur_disi`). Otomatik onay
 (24 saat veto) ve RouteNote'a otomatik gönderim açık (`[routenote] gece = true`); RouteNote oturumu düşünce gönderim
 durur ve "giriş yap" bildirilir. S34 (dikkat + MLP LoRA) Scryne söyleyince. Tunearo API'si 2026-10-12'de kapandı.
@@ -47,10 +53,20 @@ kendiliğinden); estetik seçici kulak seçimlerinde eşiği geçince öneriyi o
    **Bu aralığı onar**; iyi olanı **Bu adayı onayla**. Yanlışlıkla reddedilen şarkı **Reddi geri al** ile döner.
 4. Onarım istendiyse bir sonraki `yanki calistir` (ya da `yanki uret`) iki onarım sürümü üretir; dinleme odasında iyisini
    **Bunu kabul et**.
-5. Onaylanan şarkı paketlenir: `calisma/<kimlik>/paket/` (FLAC, 3000×3000 JPG, `metadata.json`, `YUKLE.md`). Kapak
+5. Onaylanan şarkı paketlenir: `calisma/<kimlik>/paket/` (dağıtımcının biçiminde ses: DistributeMusic WAV, RouteNote
+   FLAC; 3000×3000 JPG, `metadata.json`, `YUKLE.md`). Dağıtımcı değişince eski paket kendiliğinden yenilenir. Kapak
    şarkının moduna göre Pinterest'ten (insansız, yazısız; her yeni kapak bildirilir); beğenmezsen `yanki kapak
    <kimlik> --yeni`, kendi görselin için şarkı klasörüne `kapak_ozel.jpg`.
-6. **RouteNote'a yükleme (`yanki/routenote.py`, tarayıcıyla; API yok):** dinleme odası → **Sanatçı**: "Yükle ve
+6. **DistributeMusic.AI'ye yükleme (`yanki/distributemusic.py`, 2026-10-26'dan beri etkin):** panel kipinde takvim
+   sırası geleni bildirir; `YUKLE.md`'deki alanlarla distributemusic.ai panelinden yükle (Release type Single,
+   Version type Cover, Composer/Lyricist orijinal yazarlar ad + soyad, **AI-generated: Yes**), sonra `yanki yuklendi
+   <kimlik>` (kodlar çıkınca `--isrc … --upc …`). Plan: Pro (10–20 $/yıl; Starter yılda yalnız 1 single). `.env` →
+   `DISTRIBUTEMUSIC_API_KEY` (Label + API planı) eklenirse API kipi: hat dosyaları ve yayını kendisi gönderir, durumu
+   yoklar (`yanki dagitim-durum`; red/düzeltme isteği şarkıyı `paketlendi`ye döndürür), ama yalnız
+   `[distributemusic] sozlesme_kabul = true` iken. Şartlar "yazılı lisanssız telifli melodi"yi anında hesap kapatma
+   nedeni sayıyor ve cover için kural yazmıyor: toplu yüklemeden önce destekten yazılı sor (soru metni araştırma
+   11'de). Bölge hariç tutma burada yok.
+   **RouteNote (önceki dağıtımcı; `yanki/routenote.py`, tarayıcıyla; API yok):** dinleme odası → **Sanatçı**: "Yükle ve
    gönder…" formun dört adımını (albüm, ses + parça, kapak, mağaza/bölge) doldurur ve şarkının adı yazılınca aynı
    oturumda "Distribute"a basar (geri alınamaz). RouteNote'un yayın sayfası yalnız taslağı dolduran tarayıcı
    oturumunda dolu: önceki oturumda hazırlanmış taslak panelden elle gönderilir, sonra odada **Panelde gönderdim**
@@ -68,10 +84,12 @@ kendiliğinden); estetik seçici kulak seçimlerinde eşiği geçince öneriyi o
    yayın tarihinin üstünden 3 gün geçtiği halde yok (dağıtımcı reddi şüphesi). Reddedildiyse
    `yanki dagitim-red <kimlik> --neden "…"`: şarkı `paketlendi`ye döner, düzeltip `yanki paketle --yeniden`.
 8. **Takvim:** `yanki takvim` paketleri yükleme sırasıyla gösterir (keşif puanı önce; yayın tarihi yüklemeden
-   `yayin_on_gun` gün sonra, RouteNote incelemesi için en az 10; `config/yayin.toml` → `[takvim]`). Dağıtımcı bir
+   `yayin_on_gun` gün sonra: DistributeMusic'te 2, RouteNote incelemesi için en az 10; `config/yayin.toml` →
+   `[takvim]`). Dağıtımcı bir
    parçayı reddederse neden anlaşılıp düzeltilene kadar yeni yükleme yok. `[routenote] gece = false` iken sırası gelen
    paket yalnız bildirilir; odadan açmak sanatçı adını yazdırır. Dinleme odası **Yayın** ve **Sanatçı**'da da görünür.
-9. **Geri çekme:** RouteNote'ta önce panelden kaldır, sonra `yanki geri-cek <kimlik> --kaldirildi`: şarkı `onaylandi`ya
+9. **Geri çekme:** panelden kaldır (DistributeMusic'te takedown 5 $, API'de ucu yok; RouteNote'ta ücretsiz), sonra
+   `yanki geri-cek <kimlik> --kaldirildi` (hepsi için `--hepsi`): şarkı `onaylandi`ya
    döner, RouteNote kaydı geçmişe taşınır, gece güncel ayarlarla yeniden paketlenip kuyruğa girer.
 
 Spotify kotası dar (geliştirici API'si, 2026-10-09'da ~1.000 istekte 23 saatlik ceza): uzun 429 alınırsa kilit

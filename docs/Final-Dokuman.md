@@ -1,7 +1,7 @@
 ---
 proje: Yanki
 created: 2026-10-06
-modified: 2026-10-10
+modified: 2026-10-26
 type: final-dokuman
 status: onaylandi
 ---
@@ -40,6 +40,7 @@ Aşağıdaki tablo ve mimari ilk kararları tarihiyle korur; bunlar onların yer
 | Zamanlama | `\Yanki\Gece` 03:00 | `\Yanki\Surekli` bilgisayar açıkken her 30 dk (adımlar kendi aralığıyla), `\Yanki\Gece` 03:00'te uyandırır, `\Yanki\Oda` oturum açılışında | "Açıkken hep çalışsın" (2026-10-10) |
 | Yayın takibi | Spotify Web API | Canlılık ve TR sırası Spotify istemcisinin kendi aramasıyla (kotasız), diğer pazarlar haftada bir Web API | Web API kotası (2026-10-09 kilidi) |
 | Keşif çizgisi | Her tür | Hattın tarifi dinlenmiş türler (balad, pop, piyano/akustik, rock); rap/metal/elektronik vb. kendiliğinden girmez; sanatçı başına sırada bir şarkı | Rap adaylarının hepsi söz kapısında kaldı; Denetim 2–3 |
+| Dağıtım (2026-10-26) | Tunearo → RouteNote (tarayıcı otomasyonu, 10-15) | DistributeMusic.AI: panel kipi (hat paketler, Scryne panelden yükler), API kipi hazır ama `sozlesme_kabul` ve anahtar ister; RouteNote'taki 14 şarkı orada kalır | Scryne: "distributemusic.ai'den atıcaz"; AI kabulü açık, cover kuralı yazılı değil (`docs/arastirma/11`) |
 | Dinleme odası güvenliği | Yalnız 127.0.0.1 | + Host yerel olmalı, yazan istek başka kökenden gelemez | Denetim 3 |
 
 ## Teknoloji Stack

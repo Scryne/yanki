@@ -386,6 +386,7 @@ def uret(a: Ayarlar, calisma: Path, kimlikler: list[str] | None = None,
          betimle: bool = False, orijinal_wer: Callable[..., float | None] | None = None) -> list[durum.Durum]:
     """`tek_parca_sn`: bundan kısa şarkı tek parça üretilir (evde 110 sn; kiralık GPU'da 480, `uzak.motor_sec`).
     `betimle`: betimi olmayan şarkının stili önce dinlenip betimden kurulur (yalnız kiralık GPU'da)."""
+    degerlendir_kendi = degerlendir is None
     degerlendir = degerlendir or (lambda aday, kaynak, soz, dil="en", orijinal_wer=None:
                                   kapilar.degerlendir(aday, kaynak, soz, a.fpcalc, dil=dil, orijinal_wer=orijinal_wer))
     orijinal_wer = orijinal_wer or kapilar.orijinal_wer
@@ -395,6 +396,12 @@ def uret(a: Ayarlar, calisma: Path, kimlikler: list[str] | None = None,
     from yanki import ayarlar
 
     ayarlar.lora_denetle(a)  # bağdaştırıcısız üretim sessizce başka tarif olurdu
+    if degerlendir_kendi:  # kapı araçları yoksa her aday kapıda düşer: ücretli üretim boşa gitmesin, pod açılmadan dur
+        from yanki import ses
+
+        if not a.fpcalc.exists():
+            raise FileNotFoundError(f"parmak izi aracı yok: {a.fpcalc} (README: fpcalc kurulumu); üretim başlamadı")
+        ses.arac("ffmpeg")
 
     def motor_turu(isler: list[motor.Is], ad: str) -> dict[str, motor.Sonuc]:
         if not isler:

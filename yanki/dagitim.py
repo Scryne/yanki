@@ -32,6 +32,9 @@ from yanki import durum
 class Dagitimci(Protocol):
     ad: str
     otomatik: bool  # True: hat yükler (API); False: insan yükler, hat sırası geleni bildirir
+    # takvim (gece/sürekli koşu) sırası geleni kendisi göndersin mi; yoksa yalnız bildirilir. Varsayılan kapalı: yeni
+    # bir dağıtımcı sınıfı alanı unutursa geri alınamaz gönderim onaysız başlamasın (Denetim 7)
+    gece: bool
 
     def yukle(self, calisma: Path, d: durum.Durum, yayin_tarihi: date, gonder: bool = True) -> dict:
         """Paketi yükler, yükleme bilgisini (`takip.yukleme_kaydet` alanları) döner."""
@@ -41,6 +44,7 @@ class Dagitimci(Protocol):
 class Elle:
     """Formu insanın doldurduğu herhangi bir dağıtımcı (DistroKid, boş ayar)."""
     otomatik = False
+    gece = False
 
     def __init__(self, ad: str):
         self.ad = ad
@@ -58,6 +62,10 @@ def sec(ad: str, kok: Path | None = None) -> Dagitimci:
         from yanki import ayarlar, routenote
 
         return routenote.RouteNote.ayardan(kok or ayarlar.KOK)
+    if ad == "distributemusic":
+        from yanki import ayarlar, distributemusic
+
+        return distributemusic.DistributeMusic(kok or ayarlar.KOK)
     return Elle(ad)
 
 
@@ -224,7 +232,7 @@ def plan(calisma: Path, t: Takvim, bugun: date | None = None, puanlar: dict[str,
     yazarsiz = tuple(d.kimlik for d in hepsi if d.asama == "paketlendi" and d.kimlik not in reddedilen
                      and (meta := _meta(calisma, d)) and not yazarlar(meta))
     elle_bekleyen = tuple(d.kimlik for d in hepsi if d.asama == "paketlendi" and d.kimlik not in reddedilen
-                          and _routenote_adim(_meta(calisma, d)) in ELLE_ADIMLAR)
+                          and dagitimci in (None, "routenote") and _routenote_adim(_meta(calisma, d)) in ELLE_ADIMLAR)
     # yarım kalan API yüklemesi önce: aynı yayın tamamlanır, açılmış taslak ve parça sahipsiz kalmaz
     kuyruk = sorted((d for d in hepsi if d.asama == "paketlendi" and d.kimlik not in reddedilen
                      and d.kimlik not in yazarsiz and d.kimlik not in elle_bekleyen),

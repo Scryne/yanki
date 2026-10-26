@@ -89,17 +89,20 @@ def gql(api_anahtari: str, sorgu: str, degiskenler: dict | None = None, deneme: 
     istek = urllib.request.Request(API, data=govde, headers={
         "Content-Type": "application/json", "Authorization": f"Bearer {api_anahtari}", "User-Agent": "Yanki/0.1"})
     for i in range(deneme):
+        bekle = 5.0 * (i + 1)
         try:
             with urllib.request.urlopen(istek, timeout=60) as r:
                 cevap = json.load(r)
             break
         except urllib.error.HTTPError as e:
-            if e.code < 500 or i == deneme - 1:
+            # 408/429 da geçici: SSH beklenirken tek bir hız sınırı cevabı pod'u silip yeniden açtırıyordu (Denetim 7)
+            if (e.code < 500 and e.code not in (408, 429)) or i == deneme - 1:
                 raise RunPodHatasi(f"RunPod {e.code}: {e.read()[:300]!r}") from e
+            bekle = max(bekle, ag.bekleme_sn(e, i, tavan=60))
         except (*ag.GECICI, ValueError) as e:  # ValueError: yarım JSON
             if i == deneme - 1:
                 raise RunPodHatasi(f"RunPod'a ulaşılamadı: {type(e).__name__}: {e}") from e
-        time.sleep(5 * (i + 1))
+        time.sleep(bekle)
     if cevap.get("errors"):
         raise RunPodHatasi("; ".join(x.get("message", "?") for x in cevap["errors"]))
     return cevap["data"]
@@ -161,6 +164,10 @@ def ssh_anahtari(klasor: Path) -> tuple[Path, str]:
 # dokunulmaz: kilitsiz koşan bir deney (`spikes/`) ya da eğitim sürerken başlayan üretim koşusu onu silmesin.
 # Hiç kaydı olmayan pod (açılış cevabı zaman aşımına düştü, kimlik hiç gelmedi) ilk görülüşünden ARTIK_SN sonra silinir.
 ARTIK_SN = 900
+# Sahibi "yaşıyor" görünse de bu kadar açık kalan pod silinir: Windows PID'i yeniden kullanır, bilgisayar koşu ortasında
+# kapanıp açılınca sahibin pid'i başka bir süreçte olabilir ve pod bakiye bitene kadar yanardı (Denetim 7). En uzun iş
+# eğitim (zaman aşımı 11 sa) + deneme; üretim koşusu en çok 10 sa.
+EN_UZUN_POD_SN = 16 * 3600
 
 
 def _sahip_yolu(klasor: Path, pod_id: str) -> Path:
@@ -207,9 +214,9 @@ def kapat_artiklari(api_anahtari: str, klasor: Path, kayit_adi: str = "acik_pod"
         if not (p["id"] == kayitli or (p.get("name") or "").startswith(on_ek)):
             continue
         sahip = sahip_oku(klasor, p["id"])
-        if _sahibi_yasiyor(sahip):
-            continue
         sure = float(((p.get("runtime") or {}).get("uptimeInSeconds")) or 0)
+        if _sahibi_yasiyor(sahip) and sure < EN_UZUN_POD_SN:
+            continue
         if sahip is None and p["id"] != kayitli:
             ilk = gorulen.setdefault(p["id"], simdi)
             if simdi - ilk < ARTIK_SN and sure < ARTIK_SN:  # az önce açılmış olabilir: sahibi kaydı yazmak üzere
@@ -256,9 +263,13 @@ class Pod:
                  "env": [{"key": "PUBLIC_KEY", "value": acik}], "allowedCudaVersions": ["12.8", "12.9", "13.0"]}
         if self.veri_merkezi:  # evden yükleme yolu veri merkezine göre değişiyor (2026-10-13: _hiz_kontrol)
             girdi["dataCenterId"] = self.veri_merkezi
-        d = gql(self.api, """mutation($girdi: PodFindAndDeployOnDemandInput) {
-            podFindAndDeployOnDemand(input: $girdi) { id costPerHr machineId } }""", {"girdi": girdi},
-                deneme=1)["podFindAndDeployOnDemand"]
+        try:
+            d = gql(self.api, """mutation($girdi: PodFindAndDeployOnDemandInput) {
+                podFindAndDeployOnDemand(input: $girdi) { id costPerHr machineId } }""", {"girdi": girdi},
+                    deneme=1)["podFindAndDeployOnDemand"]
+        except RunPodHatasi:
+            self._hayalet_sil()
+            raise
         if not d or not d.get("id"):
             raise StokYok(f"{self.gpu} açılamadı (stok yok olabilir)")
         self.id, self.saatlik = d["id"], float(d.get("costPerHr") or 0)
@@ -382,6 +393,20 @@ class Pod:
             raise RunPodHatasi(f"alınamadı ({uzak}, {r.returncode}): {r.stderr[-500:]}")
         return yerel
 
+    def _hayalet_sil(self, en_yeni_sn: float = 300) -> None:
+        """Açma isteğinin cevabı gelmedi (zaman aşımı) ama sunucuda pod açılmış olabilir: kimliğini bilmediğimiz için
+        yeniden denenen açılışla iki pod yanardı (sonraki koşunun artık temizliği ancak 15 dk sonra siliyordu). Bu adla
+        az önce açılmış, sahipsiz pod'lar silinir; en iyi çaba (sorgu da düşerse sonraki koşu temizler)."""
+        try:
+            pods = gql(self.api, "query { myself { pods { id name runtime { uptimeInSeconds } } } }")["myself"]["pods"]
+            for p in pods or []:
+                yas = float(((p.get("runtime") or {}).get("uptimeInSeconds")) or 0)
+                if p.get("name") == self.ad and yas < en_yeni_sn and sahip_oku(self.klasor, p["id"]) is None:
+                    gql(self.api, "mutation($id: String!) { podTerminate(input: {podId: $id}) }", {"id": p["id"]})
+                    print(f"cevabı gelmeyen açılışın pod'u silindi: {p['id']}")
+        except (RunPodHatasi, KeyError, TypeError):
+            pass
+
     def maliyet(self) -> float:
         """Açılıştan silinişe (silinemediyse bırakılışa; kalanını artık temizliği yazar). Önce koşu sonuna kadar
         sayılıyordu: hazır olmayıp silinen pod, yerine açılanın bütün süresini de ödemiş görünüyordu."""
@@ -397,13 +422,19 @@ class Pod:
             for _deneme in range(KAPATMA_DENEME):
                 try:
                     gql(self.api, "mutation($id: String!) { podTerminate(input: {podId: $id}) }", {"id": self.id})
-                    self.kapanis = time.time()
-                    (self.klasor / self.kayit_adi).unlink(missing_ok=True)
-                    _sahip_yolu(self.klasor, self.id).unlink(missing_ok=True)
-                    return
                 except (RunPodHatasi, OSError):
                     if _deneme < KAPATMA_DENEME - 1:
                         time.sleep(KAPATMA_BEKLEME_SN)
+                    continue
+                self.kapanis = time.time()
+                # silme tamam; kayıt dosyası silinemezse (Windows kilidi) yeniden "terminate" denenmez: önce 5 dk
+                # boşuna deniyor, "silinemedi" acil bildirimi gidiyor ve maliyet fazla yazılıyordu (Denetim 7)
+                for f in (self.klasor / self.kayit_adi, _sahip_yolu(self.klasor, self.id)):
+                    try:
+                        f.unlink(missing_ok=True)
+                    except OSError:
+                        pass
+                return
             self.kapanis = time.time()
             try:
                 sahip_yaz(self.klasor, self.id, ad=self.ad, terk=True, sayilan_sn=round(self.kapanis - self.acilis))

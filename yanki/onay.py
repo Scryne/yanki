@@ -103,8 +103,10 @@ def engel(d: durum.Durum, ayar: Ayar) -> str | None:
 
 
 def _tarif_imzasi(a: durum.Aday) -> tuple:
+    """Model, LoRA, ek ayarlar ve stil: stil değiştirilip yeniden üretilen şarkıda eski stilin adayı da aynı tarifle
+    yarışıyor, veto penceresi bozuk stilin adayını onaylayabiliyordu (Denetim 7)."""
     t = a.tarif or {}
-    return (t.get("model"), t.get("lora"), tuple(sorted((t.get("ek") or {}).items())))
+    return (t.get("model"), t.get("lora"), tuple(sorted((t.get("ek") or {}).items())), a.stil or None)
 
 
 def oneri(d: durum.Durum, secici: str = "kural") -> durum.Aday | None:

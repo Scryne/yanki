@@ -65,10 +65,10 @@ def ilgili(a: Aday, ad: str | None) -> bool:
     Hangul) karar verilmez."""
     if not ad:
         return True
-    from yanki.kesif import _duz, sade_ad
+    from yanki.kesif import _duz, _unicode_sozcukler, sade_ad
 
     sade = sade_ad(ad)
-    return not sade or f" {sade} " in f" {_duz(a.baslik)} "
+    return not sade or f" {sade} " in f" {_duz(a.baslik)} {_unicode_sozcukler(a.baslik)} "
 
 
 def sec(adaylar: list[Aday], beklenen_sn: float | None, ad: str | None = None) -> Aday:

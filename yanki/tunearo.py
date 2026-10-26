@@ -297,7 +297,7 @@ def _meta_yaz(yol: Path, alan: str, deger: dict) -> None:
 
 
 class Tunearo:
-    ad, otomatik = "tunearo", True
+    ad, otomatik, gece = "tunearo", True, True
 
     def __init__(self, kok: Path, istemci: Istemci | None = None, ayar: dict | None = None):
         self.kok = kok

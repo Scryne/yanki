@@ -38,7 +38,7 @@ const KAPI_ACIKLAMA = {
 };
 const DAGITIM = { draft: "taslak", pending: "incelemede", gonderildi: "incelemede", action_needed: "düzeltme istiyor", approved: "onaylandı", live: "mağazalarda", rejected: "reddedildi",
   takedown: "kaldırıldı", takedown_requested: "kaldırılıyor", taken_down: "kaldırıldı" };
-const DAGITIMCI = { tunearo: "Tunearo", routenote: "RouteNote", distrokid: "DistroKid" };
+const DAGITIMCI = { tunearo: "Tunearo", routenote: "RouteNote", distrokid: "DistroKid", distributemusic: "DistributeMusic.AI" };
 const DIL = { en: "İngilizce", es: "İspanyolca", ko: "Korece", ja: "Japonca", tl: "Tagalogca", tr: "Türkçe", pt: "Portekizce",
   fr: "Fransızca", de: "Almanca", it: "İtalyanca", zh: "Çince", yue: "Kantonca", th: "Tayca", hi: "Hintçe", id: "Endonezce" };
 const BOLUM = { Intro: "Giriş", Verse: "Kıta", "Pre-Chorus": "Ön nakarat", Chorus: "Nakarat", "Post-Chorus": "Nakarat sonu",
@@ -2407,10 +2407,13 @@ $("#ara").addEventListener("keydown", (e) => {
 if (!location.hash && depo.oku("yuz", "orvane") === "kendi") history.replaceState(null, "", `#${depo.oku("yuz.son.kendi", "_yukle")}`);
 yenile().catch((e) => bildir(`Sunucuya ulaşılamadı: ${e.message}`, true));
 // arka planda ilerleyen aşamalar: liste her 30 sn; açık şarkı değiştiyse (yeni adaylar) ve bir şey çalmıyorsa sayfa da
+let yoklamaHatasi = 0; // art arda düşen yoklama: sunucu kapandıysa sayfa eski veriyi sessizce göstermesin
 setInterval(async () => {
   const kimlik = acikKimlik();
   try {
     const liste = await listeGoster(kimlik);
+    if (yoklamaHatasi >= 2) bildir("Sunucuya yeniden bağlanıldı.");
+    yoklamaHatasi = 0;
     gorunumSayilari();
     if (sesCaliyor() || document.querySelector("dialog[open]") || document.activeElement?.closest?.("form, textarea, input")) return;
     if (acikSarki && acikSarki.kimlik === kimlik) {
@@ -2420,5 +2423,10 @@ setInterval(async () => {
         bildir(s.asama === "uretildi" ? `"${s.ad}" için yeni adaylar geldi.` : `"${s.ad}" güncellendi: ${ASAMA[s.asama] || s.asama}.`);
       }
     } else if (kimlik === "_pano" && !anadaOdak()) { const y = scrollY; await panoGoster(); scrollTo(0, y); }
-  } catch { /* sunucu kısa süre yoksa sonraki turda */ }
+  } catch (e) {
+    // tek düşüş geçici sayılır (sunucu yeniden başlıyor); ikinci kez üst üste olunca bir kez söylenir
+    yoklamaHatasi += 1;
+    console.warn("yoklama düştü:", e);
+    if (yoklamaHatasi === 2) bildir("Dinleme odası sunucusuna ulaşılamıyor; gösterilen bilgiler eski olabilir. Oda kapandıysa: yanki dinle", true);
+  }
 }, 30000);
