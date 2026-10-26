@@ -1246,8 +1246,10 @@ function defterSatiri(x, s, isSuruyor) {
     eylem.push(el("button", { class: "dugme ikincil kucuk", type: "button", disabled: isSuruyor,
       onclick: isBaslat(`/api/sanatci/${x.kimlik}/taslak`, `"${x.ad}" için RouteNote taslağı tamamlanıyor; bir tarayıcı penceresi açılabilir.`) },
       "Taslağı tamamla"));
-  if (x.kimlik && x.hal === "kuyruk")
+  if (x.kimlik && x.hal === "kuyruk" && s.otomatik)
     eylem.push(el("button", { class: "dugme tehlike kucuk", type: "button", disabled: isSuruyor, onclick: () => gonderPenceresi(x, s) }, "Yükle ve gönder…"));
+  if (x.kimlik && x.hal === "kuyruk" && !s.otomatik)  // panel kipi: Scryne dağıtımcının panelinden yükler
+    eylem.push(el("button", { class: "dugme kucuk", type: "button", onclick: () => panelYuklendiPenceresi(x, s) }, "Panelden yükledim…"));
   const sonuc = (gonderildi) => () => gonderimSonucuSor(x.ad, gonderildi, async () => {
     try { const r = await api(`/api/sanatci/${x.kimlik}/gonderim-sonucu`, { gonderildi }); bildir(r.mesaj); } catch (err) { bildir(err.message, true); }
     sanatciGoster();
@@ -1304,6 +1306,28 @@ function gonderPenceresi(x, s) {
       el("dt", {}, "Kapalı mağaza"), el("dd", {}, "Amazon, Kore mağazaları, YouTube Content ID")),
     x.eski_tarif ? el("p", { class: "uyari" }, "Bu paket bugünkü üretim tarifinden önce üretildi. Yeni modeli beklemek istiyorsan şimdilik gönderme.") : null,
     el("label", { for: "gonder-onay", class: "onay-etiket" }, "Onaylamak için şarkının adını yaz: ", el("b", {}, x.ad)), kutu,
+  ], [el("button", { class: "dugme", type: "button", onclick: () => dlg.close() }, "Vazgeç"), dugme], "gonder-pencere");
+  kutu.focus();
+}
+
+function panelYuklendiPenceresi(x, s) {
+  const adi = DAGITIMCI[s.dagitimci] || s.dagitimci || "dağıtımcı";
+  const kutu = el("input", { id: "yuklendi-onay", type: "text", autocomplete: "off", spellcheck: "false", placeholder: x.ad });
+  const dugme = el("button", { class: "dugme dolu", type: "button", disabled: true, onclick: async () => {
+    dugme.setAttribute("aria-busy", "true"); dugme.disabled = true;
+    try {
+      const r = await api(`/api/sanatci/${x.kimlik}/yuklendi`, { onay: kutu.value });
+      dlg.close(); bildir(r.mesaj);
+    } catch (e) { dugme.removeAttribute("aria-busy"); dugme.disabled = false; bildir(e.message, true); return; }
+    sanatciGoster();
+  } }, "Yüklendi olarak kaydet");
+  const sade = (t) => t.trim().replace(/[Iİı]/g, "i").toLowerCase();
+  kutu.addEventListener("input", () => { dugme.disabled = sade(kutu.value) !== sade(x.ad); });
+  const dlg = pencere(`"${x.ad}" ${adi} panelinden yüklendi mi?`, [
+    el("p", {}, `Paketi ${adi} panelinden yükleyip incelemeye gönderdiysen kaydet: şarkı kuyruktan çıkar, Spotify'a çıkınca takip görür. `,
+      "Alanlar paketteki YUKLE.md'de (Version type Cover, yazarlar ad + soyad, AI beyanı Yes)."),
+    el("p", { class: "ipucu" }, `Paket: calisma/${x.kimlik}/paket/`),
+    el("label", { for: "yuklendi-onay", class: "onay-etiket" }, "Onaylamak için şarkının adını yaz: ", el("b", {}, x.ad)), kutu,
   ], [el("button", { class: "dugme", type: "button", onclick: () => dlg.close() }, "Vazgeç"), dugme], "gonder-pencere");
   kutu.focus();
 }

@@ -224,3 +224,27 @@ def test_cok_parcali_govde():
     sinir = tur.split("boundary=")[1]
     assert govde.startswith(f"--{sinir}\r\n".encode()) and govde.endswith(f"--{sinir}--\r\n".encode())
     assert b'name="kind"\r\n\r\naudio' in govde and b'filename="a.wav"' in govde and b"\r\n\r\nRIFF\r\n" in govde
+
+
+def test_oda_panel_kipinde_yuklendi_kaydi(tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from yanki import ayarlar, sunucu
+
+    monkeypatch.delenv("DISTRIBUTEMUSIC_API_KEY", raising=False)
+    (tmp_path / "config").mkdir()
+    (tmp_path / "config" / "yayin.toml").write_text(
+        '[yayin]\nsanatci_adi = "Orvane"\ndagitimci = "distributemusic"\n'
+        '[master]\nlufs = -14.0\ngercek_tepe_dbtp = -1.2\nornekleme = 44100\n', encoding="utf-8")
+    from dataclasses import replace
+
+    a = replace(ayarlar.yukle(), kok=tmp_path)
+    c = tmp_path / "calisma"
+    _paketli(c)
+    istemci = TestClient(sunucu.uygulama(a, c, tmp_path / "liste.toml"), base_url="http://127.0.0.1:8765")
+    assert istemci.get("/api/saglik").json() == {"tamam": True}
+    assert istemci.post("/api/sanatci/adele-hello/yuklendi", json={"onay": "Başka"}).status_code == 422
+    r = istemci.post("/api/sanatci/adele-hello/yuklendi", json={"onay": "hello"})
+    assert r.status_code == 200 and durum.oku(c, "adele-hello").asama == "yuklendi"
+    assert takip.yukleme_bilgisi(c, "adele-hello")["dagitimci"] == "distributemusic"
+    assert istemci.post("/api/sanatci/adele-hello/yuklendi", json={"onay": "hello"}).status_code == 409

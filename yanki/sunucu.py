@@ -677,7 +677,11 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None, gorev_ok
 
         yayin_yolu = a.kok / "config" / "yayin.toml"
         y = paket.yayin_ayarlari(yayin_yolu)
-        return {"ad": y.sanatci_adi, "dagitimci": y.dagitimci, "ayar": sanatci.ayar_oku(a.kok),
+        from yanki import dagitim
+
+        # panel kipi (DistributeMusic anahtarsız, DistroKid): "Yükle ve gönder" yerine "Panelden yükledim"
+        otomatik = bool(getattr(dagitim.sec(y.dagitimci, a.kok), "otomatik", False))
+        return {"ad": y.sanatci_adi, "dagitimci": y.dagitimci, "otomatik": otomatik, "ayar": sanatci.ayar_oku(a.kok),
                 "katalog": sanatci.katalog(calisma, _kapak_url, sanatci.guncel_tarif(a)),
                 "profiller": sorted(takip.profil_kimlikleri(calisma)), "oturum": sanatci.oturum(calisma),
                 "is": isci.durum(), "takvim": _takvim(a.kok, calisma),
@@ -741,6 +745,26 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None, gorev_ok
         if not sanatci.onay_tutar(istek.onay, d.ad):
             raise HTTPException(422, "onay için şarkının adını aynen yaz")
         return is_baslat("gonder", kimlik)
+
+    @app.post("/api/sanatci/{kimlik}/yuklendi")
+    def sanatci_yuklendi(kimlik: str, istek: GonderOnayi):
+        """Panel kipinde Scryne paketi dağıtımcının panelinden yükledi (`yanki yuklendi`): aşama `yuklendi`, takip
+        başlar. Onay için şarkının adı elle yazılır (yanlış satıra basılırsa kuyruktan sessizce düşmesin)."""
+        from yanki import dagitim, paket, takip
+
+        d = oku(kimlik)
+        if d.asama != "paketlendi":
+            raise HTTPException(409, f"yalnız paketlenmiş şarkı (aşama: {d.asama})")
+        if not sanatci.onay_tutar(istek.onay, d.ad):
+            raise HTTPException(422, "onay için şarkının adını aynen yaz")
+        ad = paket.yayin_ayarlari(a.kok / "config" / "yayin.toml").dagitimci
+        if getattr(dagitim.sec(ad, a.kok), "otomatik", False):
+            raise HTTPException(409, "bu dağıtımcıya hat kendisi yüklüyor: Yükle ve gönder")
+        takip.yukleme_kaydet(calisma, kimlik, {}, ad)
+        with durum.guncelle(calisma, kimlik) as taze:
+            if taze.asama == "paketlendi":
+                taze.gec("yuklendi")
+        return {"mesaj": f"\"{d.ad}\" yüklendi olarak kaydedildi; Spotify'a çıkınca takip görür."}
 
     @app.post("/api/sanatci/{kimlik}/gonderim-sonucu")
     def sanatci_gonderim_sonucu(kimlik: str, istek: GonderimSonucu):

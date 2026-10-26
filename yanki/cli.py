@@ -1040,7 +1040,17 @@ def _uret_surekli(kok: Path, op) -> int:
         print(f"üretim bekliyor: kiralık GPU kullanılamıyor, evde üretim kapalı ({len(hedef)} şarkı sırada)")
         return 0
     if uzak_mi:  # kiralık GPU: evdeki kart, priz ve kullanıcı etkinliği önemsiz
-        return _uret_ve_bildir(a, hedef[: a.uzak.sarki], len(hedef), calistir, tek_parca_sn, "kiralık GPU")
+        # ayın kalan bütçesine sığan kadar şarkı: koşu tahmini bütçeyi aşınca hiç başlamıyordu (28,51 / 30 $'da 8
+        # şarkı ~1,3 $); şarkı başı aday + betim işi
+        kalan = a.uzak.aylik_butce - uzak.bu_ay_harcama(a.kok)
+        is_basi = a.cover.aday_sayisi + 1
+        sigan = int((kalan - uzak.KURULUM_USD) // (is_basi * uzak.IS_BASI_USD)) if kalan > 0 else 0
+        adet = max(0, min(a.uzak.sarki, sigan))
+        if adet == 0:
+            print(f"üretim bekliyor: bu ayın kiralık GPU bütçesi doldu (kalan {max(kalan, 0):.2f} $; "
+                  f"{len(hedef)} şarkı sırada)")
+            return 0
+        return _uret_ve_bildir(a, hedef[:adet], len(hedef), calistir, tek_parca_sn, "kiralık GPU")
     if not sistem.prizde_mi():
         print(f"üretim bekliyor: pilde ({len(hedef)} şarkı sırada)")
         return 0
