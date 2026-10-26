@@ -25,7 +25,7 @@ import json
 import re
 import unicodedata
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 from yanki import liste
@@ -95,6 +95,9 @@ class Aday:
     sayac_duruyor: bool | None = None
     # yayınlanmış şarkılarımızda bu türün dinlenme çarpanı (yanki/performans.py; None: veri yok, puan değişmez)
     performans: float | None = None
+    # gündem (yanki/trend.py): {skor, en_iyi, listeler, ilk_gorulme, yukselis, gunluk_dinlenme, tarih}; trend adayının
+    # puanı bundan. Listeden düşen şarkının kaydı `TREND_GECERLI_GUN` sonra puan almaz
+    trend: dict | None = None
 
     @property
     def kimlik(self) -> str:
@@ -120,6 +123,8 @@ class Aday:
             # ölçülmemiş söz (LRCLIB o gece düştü) ya da bilinmeyen tür/süre puan almaz: November Rain ve Feel
             # sözsüz, süresiz, türsüz listeye girmişti (Denetim 7)
             return 0.0
+        if self.neden == "trend":  # gündem puanı belirler; talep (YouTube) yalnız eşitlikte
+            return TREND_OLCEK * self.trend_skoru * (self.performans or 1.0) + min(self.talep, TREND_OLCEK) / 1e3
         if self.populer:  # boşluk yok: aynı talepte kaldırılmış şarkı önce gelir
             kapsam = POPULER_KAPSAM
         else:  # global çalışılıyor (Scryne, 2026-10-09): boşluk ne kadar çok pazarda açıksa o kadar değerli
@@ -130,7 +135,19 @@ class Aday:
 
     @property
     def populer(self) -> bool:
-        return self.neden == "populer"
+        """Spotify'da duran şarkı (boşluk aranmaz, Spotify'a sorulmaz, yalnız İngilizce): evergreen popüler ya da
+        gündemdeki (trend)."""
+        return self.neden in ("populer", "trend")
+
+    @property
+    def trend_skoru(self) -> float:
+        """Güncel gündem puanı; son görülmesi `TREND_GECERLI_GUN`den eskiyse 0 (listeden düştü)."""
+        t = self.trend or {}
+        try:
+            guncel = date.fromisoformat(t.get("tarih") or "") >= date.today() - timedelta(days=TREND_GECERLI_GUN)
+        except ValueError:
+            guncel = False
+        return float(t.get("skor") or 0) if guncel else 0.0
 
     @property
     def talep(self) -> int:
@@ -188,7 +205,7 @@ def hal(a: Aday) -> str:
     if a.geri_geldi is None:
         return "doğrulanmadı"
     return {"kaldirildi": "kaldırılmış", "kismi": "kısmen kapalı", "spotify_yok": "Spotify'da yok",
-            "populer": "popüler"}.get(a.neden, a.neden)
+            "populer": "popüler", "trend": "gündemde" if a.trend_skoru else "gündemden düştü"}.get(a.neden, a.neden)
 
 
 # ── Bulma ───────────────────────────────────────────────────
@@ -405,6 +422,10 @@ SURE_SINIRI_SN = 420  # hattın parçalı üretimi ölçüldüğü aralığın �
 POPULER_KAPSAM = 0.2
 # Sayacı hâlâ görünen (son 90 günde kalkmış) şarkı: dinleyicisi yeni kaybetti, arıyor. Aynı talepte bu kadar önde.
 TAZELIK_CARPANI = 1.3
+# Gündem adayı: puan = TREND_OLCEK × trend skoru (1 liste başı ~1; on listede üstlerde ~15). Popüler (evergreen) ve
+# kaldırılmış adayların puanıyla aynı ölçekte; gündemdeki şarkı öne geçer (Scryne 2026-10-26).
+TREND_OLCEK = 1e8
+TREND_GECERLI_GUN = 3
 INGILIZCE_ESIGI = 0.15  # yanki/hazirlik.py ile aynı: İngilizce sözde sık kelimelerin payı ~0,3–0,5, başka dilde ~0
 
 

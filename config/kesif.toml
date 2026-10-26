@@ -10,11 +10,8 @@
 pazarlar = ["GB", "DE", "FR", "BR", "JP", "TR"]
 # Web API ile taranacak playlist'ler: yalnız Scryne'ın kendi ya da ortak olduğu playlist'ler (başkasınınki 403).
 # Hem çalınamayan parçaları verir hem de sanatçıları katalog farkına tohum olur. STILLMORE CSV'leri: girdi/kesif/.
-playlistler = [
-  "1qzTZyjCtqgHCcqaWnqgfU", "3PMsSWdcfg8X6JdEMlcBpB", "7edy7Tl0r0lOd5aNvVOEGG", "4BONsw2IXNq17K1CQhqWem",
-  "6Rp2bOX82WJkjktyU9pj73", "7ffIJHtd8eCIkWq3ZPTlWd", "391psXFUqyFfH0oxfBXuOa", "6h9eeEai5OtAz7E2dIsyCj",
-  "6mvt34Rhj8gA1oH1Il8tVZ", "2iNydjURFzLC0TBIy3kkBW", "0Loby2EIKtoTBUFTYaTPed", "1iOlJtQ1C2hK8M3zVKBkeT",
-]
+# 2026-10-26: boş (kaldırılmış şarkı taraması yerine gündem, [trend]). Önceki 12 playlist git geçmişinde (2026-10-26 öncesi).
+playlistler = []
 # Gece koşusu her gece en iyi kaç doğrulanmış adayı listeye eklesin (0 = eklemesin; elle: `yanki kesif --ekle N`).
 # Şarkı başı ~30 dk GPU; dinleme yükü de Scryne'da.
 # 0 → 10 (2026-10-13, Scryne: "üretimi yeniden aç ve çok kapsamlı olsun"; S31'de model yayınlanabilir 9/17). Keşif
@@ -39,12 +36,31 @@ haric_turler = [
   "indian", "bollywood", "j-?pop", "anime", "gospel", "opera", "classical", "kids", "films", "games",
 ]
 
+[trend]
+# Gündem keşfi (yanki/trend.py, docs/arastirma/12). Scryne 2026-10-26: "gündemde hangi popüler şarkılar varsa, trendde ve
+# çok dinleniyorsa ... daha fazla dinlenme alabiliriz"; "yabancı şarkılar atıcaz". Bu yüzden Türkiye listeleri yok; aday
+# ayrıca İngilizce söz şartından geçer (popüler adaylar gibi). Puan: listelerdeki sıra + yeni giriş + yükseliş + Spotify
+# günlük dinlenmesi. Listeler günlük güncellenir; keşif günde bir (Spotify'lı) ve 12 saatte bir (Spotify'sız) bakar.
+acik = true
+# Deezer "Top <Ülke>" listeleri (Deezer Charts kullanıcısının adlarıyla)
+deezer = ["Worldwide", "USA", "UK", "Canada", "Australia", "Ireland", "Germany", "Netherlands"]
+# Apple Music en çok çalınanlar (ülke kodu)
+apple = ["us", "gb", "ca", "au", "ie"]
+# Spotify Top 50'ler: Spotify uygulamasının içinden (STILLMORE köprüsü) okunur, toplam dinlenme gelir; Spotify çalıyorsa
+# ya da köprü yoksa atlanır (Deezer ve Apple yeter)
+spotify = { "Top 50 - Global" = "37i9dQZEVXbMDoHDwVN2tF", "Top 50 - USA" = "37i9dQZEVXbLRQDuF5jeBp", "Top 50 - UK" = "37i9dQZEVXbLnolsZ8PSNw", "Top 50 - Canada" = "37i9dQZEVXbKj23U1GF4IR", "Top 50 - Australia" = "37i9dQZEVXbJPcfkRz0wJ0" }
+# Bir koşuda en çok kaç yeni aday ölçülsün (YouTube + Jev + LRCLIB, aday başına birkaç saniye)
+yeni_aday = 60
+# Tek bir listenin dibindeki şarkı aday sayılmaz
+en_az_puan = 0.5
+
 [populer]
 # Kaldırılmamış popüler şarkılar (yanki/katalog.py → populer; Scryne 2026-10-13: "kaldırılmamış bile olsa elimizdeki
 # şarkı üretmenin en iyi sonuç verdiği tarzda popüler şarkılar üret, kapsamı olabildiğince genişlet"). Deezer'da bu
 # sorgularla aranan listelerin (editörlerinki önce) parçaları; tür süzgeci (haric_turler) ve yalnız İngilizce söz.
 # Sorgular kulaktan geçen türlerden (S31 kör test: balad/pop, rock, metal, pop-punk, country).
-acik = true
+# 2026-10-26: kapalı, yerini gündem ([trend]) aldı (Scryne: "keşfi gündeme göre ayarla").
+acik = false
 sorgular = [
   "10s Ballads", "00s Ballads", "90s Ballads", "80s Ballads", "Piano ballads", "Love Classics", "Acoustic Covers Pop",
   "10s Pop", "00s Pop", "90s Pop", "Pop Essentials", "Singer Songwriter", "Sad Songs", "Breakup Songs",
@@ -63,7 +79,8 @@ yeni_aday = 60
 # Spotify istemcisinin içindeki STILLMORE ile playlist taraması (yanki/stillmore.py): başkasının ve editoryal
 # playlist'leri de okur, kaldırılmadan önceki Spotify dinlenmesini verir. Gece koşusu Spotify'ı CDP bayrağıyla açar
 # (çalıyorsa dokunmaz). Her gece en uzun süredir taranmamış `gece_playlist` tanesi.
-acik = true
+# 2026-10-26: kapalı (kaldırılmış şarkı stratejisi yerine gündem, [trend]).
+acik = false
 # Elle eklenen playlist'ler (Scryne'ın takip ettikleri: Web API bunları okuyamıyordu)
 playlistler = [
   "5qdc2RpU1touPQlNSK5tee", "7cSXOMRAjzI4F8KNLDj377", "3vAnSIcOBOBbzAQElt7cSq", "1pXViTb7efviU11zRaVM2y",
@@ -95,7 +112,8 @@ havuz_en_cok = 400
 
 [katalog]
 # Kendi keşfimiz (STILLMORE'suz): Deezer'da çok dinlenen ama Spotify'da kapalı/olmayan şarkılar (yanki/katalog.py).
-acik = true
+# 2026-10-26: kapalı (gündem, [trend]).
+acik = false
 # Elle tohumlar (rank eşiği yok, sorma sırasında önce). Boş (Denetim 3, 2026-10-10): önceki tohumlar kataloğunu
 # Spotify'dan 2025'te protestoyla çeken sanatçılardı (Massive Attack, King Gizzard, Godspeed You! Black Emperor,
 # Deerhoof, Xiu Xiu, Hotline TNT). Keşfin puanlı 29 adayının 26'sı onlardan geldi; hepsi deneysel/enstrümantal,

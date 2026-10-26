@@ -3,8 +3,8 @@
 Listeye yazılan yabancı şarkıların cover'ını kiralık GPU'da [ACE-Step 1.5](https://github.com/ace-step/ACE-Step-1.5)
 ile (kendi eğittiğimiz cover LoRA'sıyla) üretir, yayınlanamayacak adayları otomatik eler, dinleme odasında onaya sunar,
 onaylananı paketler ve dağıtımcıya hazırlar: 2026-10-26'dan beri DistributeMusic.AI (panelden Scryne yükler; API
-anahtarı eklenirse hat yükler), önceki 14 şarkı RouteNote'ta (tarayıcı otomasyonu, takibi sürüyor). Şarkı kaynağı Spotify'dan
-kaldırılmış, hâlâ aranan şarkılar ve hattın iyi yaptığı türlerde popüler şarkılar (`yanki kesif`); yüklenen parçanın
+anahtarı eklenirse hat yükler), önceki 14 şarkı RouteNote'ta (tarayıcı otomasyonu, takibi sürüyor). Şarkı kaynağı 2026-10-26'dan
+beri gündem: şu an listelerde olan, yükselen yabancı şarkılar (`yanki kesif`, `yanki/trend.py`); yüklenen parçanın
 Spotify'da çıkıp çıkmadığını ve adı arandığında kaçıncı sırada olduğunu `yanki takip` izler.
 
 **Şu an (2026-10-26, Denetim 7):** 2026-10-20'deki dondurma çözüldü. Dağıtımcı DistributeMusic.AI, panel kipi
@@ -23,10 +23,14 @@ kendiliğinden); estetik seçici kulak seçimlerinde eşiği geçince öneriyi o
 
 ## Günlük akış
 
-0. **Keşif (kendiliğinden):** gece koşusu üç kaynaktan kaldırılmış şarkı arar: Deezer katalog farkı (Deezer'da
-   dinlenen ama Spotify'da kapalı/olmayan), `config/kesif.toml` → `playlistler`, ve varsa `girdi/kesif/`'teki STILLMORE
-   CSV'leri. Adaylar ücretsiz elemelerden (düzenleme, YouTube talebi, sanatçı, söz) sonra Spotify'da doğrulanır
-   (geri gelmiş mi, hangi pazarlarda kapalı, kaç rakip cover) ve en iyi `gece_ekle` tanesi listeye girer (sırada bekleyen şarkısı olan sanatçıdan yenisi eklenmez). Dinleme
+0. **Keşif (kendiliğinden, gündem):** gece koşusu günlük listeleri okur: Deezer ülke Top-100'leri, Apple Music en çok
+   çalınanlar ve (Spotify uygulaması köprüyle açılabiliyorsa) Spotify Top 50'ler; yalnız yabancı pazarlar
+   (`config/kesif.toml` → `[trend]`, kaynaklar `docs/arastirma/12`). Puan: kaç listede ve kaçıncı sırada, son 3 günde
+   yeni girdi mi, yükseliyor mu, Spotify'da günde kaç dinleniyor (anlık görüntüler `calisma/kesif/trend/`). Adaylar
+   ücretsiz elemelerden geçer (düzenleme, YouTube'da sanatçının kendi kaydı, LRCLIB'de İngilizce söz, hattın iyi yaptığı
+   tür) ve en iyi `gece_ekle` tanesi listeye girer (sırada bekleyen şarkısı olan sanatçıdan yenisi eklenmez). Eski
+   kaldırılmış şarkı kaynakları (katalog farkı, STILLMORE havuzu, popüler listeler) kapalı ama duruyor; Bulucu'dan
+   keşfe gönderilenler (`girdi/kesif/*.csv`) yine okunur. Dinleme
    odasında **Keşif**: adayı dinle, listeye ekle ya da ele. Elle: `uv run yanki kesif [--ekle N]`.
 1. `girdi/liste.toml`'a şarkı ekle (sanatçı + şarkı adı yeter) ya da 0. adımdaki gibi keşiften.
 2. **Sürekli koşu:** bilgisayar açıkken her 30 dk `\Yanki\Surekli` (`scripts/surekli.ps1`) `yanki calistir`

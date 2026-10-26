@@ -782,3 +782,18 @@ a.dugme.pasif { opacity: .45; pointer-events: none; }
 .ft-adimlar li { margin: 2px 0; }
 .ft-serit { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); }
 
+
+/* Sanatçı → DistributeMusic: yükleme öncesi kontrol listesi (amber nokta: senden beklenen) */
+.kontrol-listesi { list-style: none; margin: var(--s3) 0; padding: 0; display: grid; gap: var(--s2); font-size: 13px; }
+.kontrol-listesi li { display: grid; grid-template-columns: 8px minmax(0, 1fr); gap: var(--s2); align-items: baseline; }
+.kontrol-listesi .nokta { width: 8px; height: 8px; border-radius: 50%; background: var(--gecti); transform: translateY(-1px); }
+.kontrol-listesi .nokta.sorun { background: var(--primary); }
+.kontrol-listesi small { display: block; color: var(--metin-2); font-size: 12px; margin-top: 2px; }
+.olay-tekrar { display: block; margin-top: 2px; font: 500 11px var(--f-zaman); color: var(--gumus-koyu); }
+
+/* Keşif → gündem: kaynak şeridi ve satırdaki sıra, yeni giriş, yükseliş */
+.gundem-serit { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s3); margin: 0 0 var(--s4); font-size: 13px; color: var(--metin-2); }
+.gundem-serit .nokta { width: 8px; height: 8px; border-radius: 50%; background: var(--gecti); flex: none; }
+.trend-sira { font: 600 13px var(--f-zaman); color: var(--gumus-acik); min-width: 3ch; }
+.olculer .rozet.yeni { color: var(--oynatma); background: color-mix(in srgb, var(--oynatma) 12%, transparent); }
+.olculer .yukselis { font: 600 12px var(--f-zaman); color: var(--gecti); }

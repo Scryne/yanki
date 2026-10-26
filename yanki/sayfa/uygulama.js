@@ -53,6 +53,14 @@ function kapakImg(url, sinif = "kapak-kucuk", boyut = 96) {
   if (!url) return el("span", { class: `${sinif} bos`, "aria-hidden": "true" }, dalgaIsareti());
   return el("img", { class: sinif, src: `${url}&boyut=${boyut}`, alt: "", loading: "lazy", decoding: "async", width: 32, height: 32 });
 }
+// dosyası olmayan kapak (arşivdeki eski yayın, silinmiş görsel): kırık resim simgesi yerine aynı boyda boş kare.
+// error olayı kabarmaz, yakalama evresinde bütün sayfa için bir kez dinlenir
+document.addEventListener("error", (e) => {
+  const img = e.target;
+  if (!(img instanceof HTMLImageElement) || img.dataset.yedek) return;
+  img.dataset.yedek = "1";
+  img.replaceWith(el("span", { class: `${img.className} bos`.trim(), "aria-hidden": "true" }, dalgaIsareti()));
+}, true);
 function dalgaIsareti(boyut = 16) {
   const ns = "http://www.w3.org/2000/svg", svg = document.createElementNS(ns, "svg");
   svg.setAttribute("viewBox", "0 0 32 32"); svg.setAttribute("width", boyut); svg.setAttribute("height", boyut);
@@ -652,7 +660,9 @@ function kotaSatiri(k) {
 
 const SUZGEC = {
   oneri: { ad: "Önerilen", f: (x) => x.puan > 0 && !x.listede && !x.elendi,
-    bos: "Şu an önerilecek aday yok. Gece koşusu keşfe devam ediyor; Tümü'nde elenenlerin nedenini görebilirsin." },
+    bos: "Şu an önerilecek aday yok. Gündem her gün yeniden okunur; Tümü'nde elenenlerin nedenini görebilirsin." },
+  gundem: { ad: "Gündemde", f: (x) => x.neden === "trend" && x.hal === "gündemde",
+    bos: "Gündem henüz okunmadı. İlk keşif koşusundan sonra burada listelerdeki şarkılar görünür." },
   listede: { ad: "Listede", f: (x) => x.listede, bos: "Keşiften listeye eklenmiş şarkı yok." },
   elenen: { ad: "Elenen", f: (x) => x.elendi && !x.listede, bos: "Elediğin aday yok." },
   hepsi: { ad: "Tümü", f: () => true, bos: "Keşif henüz çalışmadı: uv run yanki kesif" },
@@ -664,7 +674,7 @@ async function kesifGoster() {
   let d;
   try { d = await api("/api/kesif"); } catch (e) { doldur(ana, bosEkran("Keşif açılamadı", e.message)); return; }
   // ilk açılışta öneri yoksa boş ekran yerine tüm kayıtlar (neden elendikleri görünsün)
-  if (!kesifGoster.acildi && !d.adaylar.some(SUZGEC.oneri.f)) suzgec = "hepsi";
+  if (!kesifGoster.acildi && !d.adaylar.some(SUZGEC.oneri.f)) suzgec = d.adaylar.some(SUZGEC.gundem.f) ? "gundem" : "hepsi";
   kesifGoster.acildi = true;
   const tur = (x) => (x.turler?.[0] || "").toLocaleLowerCase("tr");
   const ciz = () => {
@@ -675,8 +685,8 @@ async function kesifGoster() {
     const gorunen = suzulen.filter((x) => !turSuzgec || tur(x) === turSuzgec);
     doldur(ana, 
       el("header", { class: "sayfa-ust" }, el("h1", {}, "Keşif"),
-        el("p", { class: "ipucu" }, "Spotify'dan kalkmış ama hâlâ aranan şarkılar. Puan = talep (YouTube ya da eski Spotify dinlenmesi) × kapalı pazar oranı ÷ (1 + rakip cover).")),
-      kotaSatiri(d.kota),
+        el("p", { class: "ipucu" }, "Şu an listelerde olan yabancı şarkılar. Puan: kaç listede ve kaçıncı sırada, yeni mi girdi, yükseliyor mu, Spotify'da günde kaç dinleniyor. Aday YouTube'da sanatçının kendi kaydıyla eşleşmeli, İngilizce sözlü ve hattın iyi yaptığı türde olmalı.")),
+      gundemSeridi(d.gundem),
       el("div", { class: "kesitler", role: "group", "aria-label": "Süzgeç" }, ...Object.entries(SUZGEC).map(([k, s]) =>
         el("button", { class: "kesit", type: "button", "aria-pressed": k === suzgec ? "true" : "false", onclick: () => { suzgec = k; ciz(); } },
           s.ad, el("span", { class: "kesit-zaman" }, String(d.adaylar.filter(s.f).length))))),
@@ -691,6 +701,29 @@ async function kesifGoster() {
   ciz();
 }
 
+// gündemin kaynağı: son okuma zamanı ve hangi listelerden kaç satır
+const KAYNAK_ADI = { deezer: "Deezer", apple: "Apple Music", spotify: "Spotify" };
+function gundemSeridi(g) {
+  if (!g) return el("p", { class: "ipucu kota" }, "Gündem listeleri henüz okunmadı; ilk keşif koşusu Deezer, Apple Music ve Spotify Top 50'leri okur.");
+  return el("p", { class: "gundem-serit" },
+    el("span", { class: "nokta", "aria-hidden": "true" }),
+    el("span", {}, `Gündem ${saatDakika(g.zaman)} okundu`),
+    ...Object.entries(g.kaynaklar).map(([k, n]) => el("span", { class: "rozet" }, `${KAYNAK_ADI[k] || k} · ${n}`)),
+    el("span", { class: "ipucu" }, `${g.liste} liste · ${g.gun} günlük geçmiş`));
+}
+
+function trendCipleri(x) {
+  const t = x.trend || {};
+  const yeni = t.ilk_gorulme && Date.now() - new Date(t.ilk_gorulme) < 3 * 864e5;
+  return [
+    el("span", { class: "trend-sira", title: "Listelerdeki en iyi sırası" }, `#${t.en_iyi ?? "—"}`),
+    el("span", { title: (t.listeler || []).map((l) => `${l.liste.replace(":", " ")} #${l.sira}`).join("\n") }, el("b", {}, String((t.listeler || []).length)), " liste"),
+    yeni ? el("span", { class: "rozet yeni" }, "yeni") : null,
+    t.yukselis > 0 ? el("span", { class: "yukselis", title: "Son 3 günde kazandığı sıra" }, `↑${t.yukselis}`) : null,
+    t.gunluk_dinlenme ? el("span", { title: "Spotify'da günlük dinlenme (Top 50 listelerinden)" }, el("b", {}, kisaSayi(t.gunluk_dinlenme)), "/gün") : null,
+  ];
+}
+
 function kesifSatiri(x, guncelle) {
   const iyi = x.puan > 0 && !x.elendi;
   const pazar = x.bakilan_pazarlar?.length ? `${x.kapali_pazarlar.length}/${x.bakilan_pazarlar.length}` : "—";
@@ -703,10 +736,11 @@ function kesifSatiri(x, guncelle) {
     el("div", { class: "kayit-ad" }, el("span", { class: "ad" }, x.ad), el("span", { class: "sanatci" }, x.sanatci)),
     el("div", { class: "olculer" },
       el("span", { class: "rozet " + (iyi ? "ok" : "no") }, x.elendi ? "elendi" : x.hal),
-      iyi ? el("span", { title: "Keşif puanı" }, "puan ", el("b", {}, kisaSayi(x.puan))) : null,
+      ...(x.neden === "trend" ? trendCipleri(x) : [
+        iyi ? el("span", { title: "Keşif puanı" }, "puan ", el("b", {}, kisaSayi(x.puan))) : null,
+        el("span", { title: "Aynı adla Spotify'da çalınabilen başka parça sayısı" }, "rakip ", el("b", {}, x.rakip_cover ?? "—")),
+        el("span", { title: "Kapalı olduğu pazar / bakılan pazar" }, "pazar ", el("b", {}, pazar))]),
       el("span", { title: "YouTube'daki orijinal yüklemenin izlenmesi" }, "YouTube ", el("b", {}, kisaSayi(x.youtube_izlenme))),
-      el("span", { title: "Aynı adla Spotify'da çalınabilen başka parça sayısı" }, "rakip ", el("b", {}, x.rakip_cover ?? "—")),
-      el("span", { title: "Kapalı olduğu pazar / bakılan pazar" }, "pazar ", el("b", {}, pazar)),
       x.turler?.length ? el("span", { title: "Sanatçının Deezer türleri; hattın denemediği türdeki aday kendiliğinden listeye girmez" },
         "tür ", el("b", {}, x.turler[0])) : null),
     el("div", { class: "kayit-eylem" },
@@ -736,7 +770,7 @@ async function yayinGoster() {
   if (d.profiller.length > 1) parcalar.push(el("p", { class: "uyari", role: "alert" },
     `Sanatçı profili bölünmüş: parçalar ${d.profiller.length} ayrı Spotify profilinde. Dağıtımcıdan birleştirme iste.`));
   parcalar.push(d.sarkilar.length ? el("ul", { class: "kayitlar" }, ...d.sarkilar.map(yayinSatiri))
-    : el("p", { class: "bos-kutu" }, "Henüz yüklenmiş şarkı yok. Paketler Sanatçı görünümünden RouteNote'a gönderilir."));
+    : el("p", { class: "bos-kutu" }, "Henüz yüklenmiş şarkı yok. Paketler hazır olunca Sanatçı görünümünde kuyrukta görünür."));
   if (p) parcalar.push(performansBolumu(p));
   parcalar.push(takvimBolumu(d.takvim));
   if (d.olaylar?.length) parcalar.push(olayBolumu(d.olaylar));
@@ -755,7 +789,7 @@ function performansBolumu(p) {
   const tutar = (n, birim) => { try { return new Intl.NumberFormat("tr-TR", { style: "currency", currency: birim }).format(n); } catch { return `${virgul(n, 2)} ${birim}`; } };
   return el("section", { class: "bolum", "aria-label": "Performans" },
     el("h2", { class: "bolum-baslik" }, "Performans"),
-    el("p", { class: "ipucu bolum-not" }, "Hangi türde şarkılarımız dinleniyor: keşif o türdeki adayları öne alır. Dinlenme her gece Spotify uygulamasından, kazanç RouteNote'un aylık raporundan."),
+    el("p", { class: "ipucu bolum-not" }, "Hangi türde şarkılarımız dinleniyor: keşif o türdeki adayları öne alır. Dinlenme her gece Spotify uygulamasından; kazanç RouteNote'taki eski yayınların aylık raporundan."),
     el("div", { class: "sonuc-olcu cam" },
       el("div", {}, el("span", { class: "olcu-sayi" + (toplam ? " gumus-yazi" : "") }, kisaSayi(toplam)), el("span", { class: "olcu-ad" }, `toplam dinlenme · ${olculen.length} şarkı ölçüldü`)),
       el("div", {}, el("span", { class: "olcu-sayi" + (para ? " gumus-yazi" : "") }, para ? tutar(para[1], para[0].length === 3 ? para[0] : "USD") : "—"),
@@ -828,12 +862,19 @@ function yayinSatiri(s) {
 
 // bildirimler: metin iki satırda kesilir, tıklayınca açılır
 function olayBolumu(olaylar, tamZaman = false) {
+  // aynı başlıklı bildirim (ör. her gün "üretim bekliyor") tek satırda: en yenisi ve kaç kez geldiği
+  const gruplu = [];
+  for (const o of olaylar) {
+    const onceki = gruplu.find((g) => g.baslik === o.baslik);
+    if (onceki) onceki.sayi += 1; else gruplu.push({ ...o, sayi: 1 });
+  }
   return el("section", { class: "bolum", "aria-label": "Son bildirimler" },
     el("h2", { class: "bolum-baslik" }, "Son bildirimler"),
-    el("ul", { class: "olaylar" }, ...olaylar.map((o) => {
+    el("ul", { class: "olaylar" }, ...gruplu.slice(0, 12).map((o) => {
       const metin = el("span", { class: "olay-metin" }, o.metin);
       return el("li", {},
-        el("span", { class: "olay-zaman" }, tamZaman ? saatDakika(o.zaman) : tarih(o.zaman)),
+        el("span", { class: "olay-zaman" }, tamZaman ? saatDakika(o.zaman) : tarih(o.zaman),
+          o.sayi > 1 ? el("span", { class: "olay-tekrar", title: `${o.sayi} kez bildirildi` }, `×${o.sayi}`) : null),
         el("button", { class: "olay-govde", type: "button", "aria-expanded": "false", onclick: (e) => {
           const b = e.currentTarget, acik = b.getAttribute("aria-expanded") !== "true";
           b.setAttribute("aria-expanded", acik ? "true" : "false");
@@ -1032,7 +1073,7 @@ async function panoGoster() {
 
   const ayar = p.ayarlar || {};
   const ozet = [ayar.uretim_acik === false ? "üretim duraklatıldı" : null,
-    !ayar.dagitimci ? "dağıtımcı seçilmedi: paketler bekler" : ayar.takvim_acik === false ? "yayın takvimi kapalı" : ayar.haftada === 0 ? "sırası gelen her paket hemen yüklenir" : ayar.haftada ? `haftada ${ayar.haftada} yayın` : null,
+    !ayar.dagitimci ? "dağıtımcı seçilmedi: paketler bekler" : ayar.takvim_acik === false ? "yayın takvimi kapalı" : !ayar.yukleme_otomatik ? `paketler hazırlanır, ${DAGITIMCI[ayar.dagitimci] || "dağıtımcı"} paneline sen yüklersin` : ayar.haftada === 0 ? "sırası gelen her paket hemen yüklenir" : ayar.haftada ? `haftada ${ayar.haftada} yayın` : null,
     ayar.oto_onay ? `${ayar.oto_onay_saat} saatte karar yoksa kendiliğinden onay` : "onay sende"].filter(Boolean).join(" · ");
   const saat = new Date().getHours();
   const selam = saat < 6 ? "İyi geceler" : saat < 12 ? "Günaydın" : saat < 18 ? "İyi günler" : "İyi akşamlar";
@@ -1175,12 +1216,13 @@ function ayarPaneli(a, kota) {
 
 // ---- Sanatçı (#_sanatci): Orvane'ın kataloğu dağıtımda, dağıtım ayarları, odadan başlatılan işler ----
 const RN = "https://www.routenote.com/rn";
+const DM = "https://distributemusic.ai/";
 const HAL = {
   kontrol: { ad: "Kontrol et", rozet: ["gönderim yarıda", "amber"], aciklama: "Son tıktan sonra iş yarıda kaldı. RouteNote panelinde yayına bak ve ne gördüğünü seç; hat yeniden göndermez." },
   taslak_hazir: { ad: "Gönderime hazır", rozet: ["taslak hazır", "gumus"], aciklama: "RouteNote'ta dört adımı tamam. Önceki oturumda hazırlandığı için otomasyon gönderemez: \"RouteNote\" ile taslağı aç, Distribute'a bas, sonra \"Panelde gönderdim\"." },
   taslak_yarim: { ad: "Yarım taslak", rozet: ["yarım", "amber"], aciklama: "Bir adımda kaldı; tamamlayınca aynı taslaktan sürer, yeni taslak açılmaz." },
-  kuyruk: { ad: "Kuyrukta", rozet: ["paket hazır", ""], aciklama: "Paketlendi, RouteNote'a dokunulmadı." },
-  inceleme: { ad: "İncelemede", rozet: ["incelemede", ""], aciklama: "RouteNote'a gönderildi; yayın tarihinde mağazalara çıkar." },
+  kuyruk: { ad: "Kuyrukta", rozet: ["paket hazır", ""], aciklama: "Paketlendi, henüz dağıtımcıya yüklenmedi." },
+  inceleme: { ad: "İncelemede", rozet: ["incelemede", ""], aciklama: "Dağıtımcıya gönderildi; onaylanınca yayın tarihinde mağazalara çıkar." },
   yayinda: { ad: "Yayında", rozet: ["yayında", "ok"], aciklama: "Spotify'da dinlenebilir." },
 };
 const ADIM = { olusturuldu: "taslak açıldı", album: "albüm bilgisi", ses_kaydedildi: "ses yüklendi", ses: "ses ve parça", kapak: "kapak", hazir: "dört adım tamam", gonderiliyor: "gönderiliyor", gonderildi: "gönderildi" };
@@ -1213,14 +1255,16 @@ async function sanatciGoster() {
         profil ? el("a", { class: "dugme ikincil kucuk", href: `https://open.spotify.com/artist/${profil}`, target: "_blank", rel: "noopener" }, "Spotify profilini aç") : null)),
     el("section", { class: "cam zincir zincir-4", "aria-label": "Katalog" },
       durak("Kuyruk", say("kuyruk"), "paket"),
-      durak("Taslak", say("taslak_hazir") + say("taslak_yarim"), "RouteNote'ta", say("taslak_hazir") > 0),
+      durak("Taslak", say("taslak_hazir") + say("taslak_yarim"), "dağıtımcıda", say("taslak_hazir") > 0),
       durak("İnceleme", say("inceleme"), "gönderildi"),
       durak("Yayında", say("yayinda"), "Spotify")),
     el("div", { class: "pano-izgara" },
       el("div", { class: "pano-sol" },
         ...Object.keys(HAL).map((h) => [h, s.katalog.filter((x) => x.hal === h)]).filter(([, l]) => l.length).map(([h, l]) => defterBolumu(h, l, s, isSuruyor)),
         s.katalog.length ? null : el("p", { class: "bos-kutu" }, "Katalog boş. Onayladığın şarkılar paketlenince burada görünür.")),
-      el("div", { class: "pano-sag" }, isPaneli(s.is), oturumPaneli(s.oturum, isSuruyor), dagitimAyarPaneli(s))));
+      el("div", { class: "pano-sag" }, ...(s.dagitimci === "routenote"
+        ? [isPaneli(s.is), oturumPaneli(s.oturum, isSuruyor), dagitimAyarPaneli(s)]
+        : [dmPaneli(s), takvimAyarPaneli(s), oncekiDagitimPaneli(s)]))));
   isTakip(s.is);
 }
 
@@ -1260,8 +1304,10 @@ function defterSatiri(x, s, isSuruyor) {
     eylem.push(el("button", { class: "dugme kucuk", type: "button", onclick: sonuc(true), title: "Panelde incelemede görünüyor" }, "Gönderilmiş"),
       el("button", { class: "dugme ikincil kucuk", type: "button", onclick: sonuc(false), title: "Panelde hâlâ taslak" }, "Taslakta duruyor"));
   }
-  if (x.upc && x.hal !== "kuyruk")
+  if (x.upc && x.hal !== "kuyruk" && x.dagitimci === "routenote")
     eylem.push(el("a", { class: "dugme kucuk", href: x.hal.startsWith("taslak") || x.hal === "kontrol" ? `${RN}/editalbum/${x.upc}` : `${RN}/releases`, target: "_blank", rel: "noopener" }, "RouteNote"));
+  if (x.hal !== "kuyruk" && x.dagitimci === "distributemusic")
+    eylem.push(el("a", { class: "dugme kucuk", href: DM, target: "_blank", rel: "noopener" }, "DistributeMusic"));
   if (x.spotify_id)
     eylem.push(el("a", { class: "dugme kucuk", href: `https://open.spotify.com/track/${x.spotify_id}`, target: "_blank", rel: "noopener" }, "Spotify"));
   return el("li", { class: "kayit kapakli" + (x.uyari ? " uyarili" : "") },
@@ -1272,7 +1318,7 @@ function defterSatiri(x, s, isSuruyor) {
       x.adim && x.hal === "taslak_yarim" ? el("span", {}, "son adım ", el("b", {}, ADIM[x.adim] || x.adim)) : null,
       x.yayin_tarihi ? el("span", {}, "çıkış ", el("b", {}, tarih(x.yayin_tarihi))) : null,
       x.upc ? el("span", { title: "UPC" }, "UPC ", el("b", {}, x.upc)) : null,
-      x.isrc ? el("span", { title: "ISRC (RouteNote'un atadığı)" }, "ISRC ", el("b", {}, x.isrc)) : null,
+      x.isrc ? el("span", { title: "ISRC (dağıtımcının atadığı)" }, "ISRC ", el("b", {}, x.isrc)) : null,
       x.eski_tarif ? el("span", { class: "rozet", title: "Bu paket bugünkü üretim tarifinden (CFG 10) önce üretildi" }, "eski tarif") : null,
       x.arsiv ? el("span", { class: "rozet", title: "Hat 10 Ekim'de baştan kurulurken arşive alındı; yayın RouteNote'ta sürüyor" }, "arşivden") : null),
     el("div", { class: "kayit-eylem" }, ...eylem),
@@ -1417,6 +1463,47 @@ function dagitimAyarPaneli(s) {
     el("form", { class: "ayar-form", onsubmit: (e) => { e.preventDefault(); kaydet({ spotify_sanatci_id: kimlik.value.trim() }, kimlik.value.trim() ? "Spotify profili kaydedildi; yeni yüklemeler bu profile bağlanır." : "Spotify profili temizlendi."); } },
       el("label", { for: "spotify-kimlik" }, "Spotify sanatçı kimliği"), el("div", { class: "satir-ici" }, kimlik, el("button", { class: "dugme kucuk", type: "submit" }, "Kaydet")),
       el("p", { class: "ipucu" }, "İlk parça yayına girince profil adresindeki kimliği yaz; sonraki yüklemeler ayrı profil açmaz.")));
+}
+
+// DistributeMusic.AI: kip (panel ya da API), cover kabulünün yazılı onayı, yükleme kontrol listesi
+function dmPaneli(s) {
+  const dm = s.dm || {};
+  const madde = (tamam, metin, alt) => el("li", { class: tamam ? "tamam" : "" },
+    el("span", { class: "nokta" + (tamam ? "" : " sorun"), "aria-hidden": "true" }), el("span", {}, metin, alt ? el("small", {}, alt) : null));
+  return el("section", { class: "cam yan-panel", "aria-label": "DistributeMusic.AI" }, el("h2", {}, "DistributeMusic.AI"),
+    el("dl", { class: "ayar-listesi" },
+      el("dt", {}, "Yükleme"), el("dd", {}, dm.kip === "api" ? "API · hat yükler" : "panel · sen yüklersin"),
+      el("dt", {}, "Gece yüklemesi"), el("dd", {}, dm.gece ? "açık" : "kapalı")),
+    el("ul", { class: "kontrol-listesi" },
+      madde(dm.sozlesme_kabul, "Cover kabulü yazılı onaylandı", dm.sozlesme_kabul ? null : "Destekten sor; metin docs/arastirma/11'de. Onaylanmadan toplu yükleme yapma."),
+      madde(true, "Her yüklemede AI beyanı: Yes", "Beyansız AI hesabı kapattırır."),
+      madde(true, "Version type: Cover · yazarlar ad + soyad", "Alanlar paketteki YUKLE.md'de, sırasıyla.")),
+    el("p", { class: "ipucu" }, "Ücretsiz plan yılda 1 single; düzenli yayın için Pro gerekir. Panelden yükleyince satırdaki \"Panelden yükledim\" ile kaydet."),
+    el("a", { class: "dugme ikincil", href: DM, target: "_blank", rel: "noopener" }, "Paneli aç"));
+}
+
+// yayın tarihi (takvim): her dağıtımcıda aynı ayar
+function takvimAyarPaneli(s) {
+  const gun = el("input", { id: "yayin-gun", type: "number", min: 1, max: 120, step: 1, required: true, value: s.ayar.yayin_on_gun || 2, inputmode: "numeric", "aria-describedby": "yayin-gun-ipucu" });
+  return el("section", { class: "cam yan-panel", "aria-label": "Takvim" }, el("h2", {}, "Takvim"),
+    s.takvim?.beklemede ? el("p", { class: "ipucu" }, s.takvim.beklemede) : null,
+    el("form", { class: "ayar-form", onsubmit: async (e) => {
+      e.preventDefault();
+      try { await api("/api/sanatci/ayar", { yayin_on_gun: +gun.value }); bildir(`Yayın tarihi artık yüklemeden ${gun.value} gün sonra.`); } catch (err) { bildir(err.message, true); }
+      sanatciGoster();
+    } },
+      el("label", { for: "yayin-gun" }, "Yayın tarihi, yüklemeden"), el("div", { class: "satir-ici" }, gun, el("span", { class: "ipucu" }, "gün sonra"),
+        el("button", { class: "dugme kucuk", type: "submit" }, "Kaydet")),
+      el("p", { class: "ipucu", id: "yayin-gun-ipucu" }, "İnceleme ~24 saat, Spotify'a çıkış 2–4 gün: 2 gün en erken anlamlı tarih.")));
+}
+
+// önceki dağıtımcının (RouteNote) yayınları: takipleri sürer, yeni yükleme oraya gitmez
+function oncekiDagitimPaneli(s) {
+  const rn = s.katalog.filter((x) => x.dagitimci === "routenote");
+  if (!rn.length) return null;
+  return el("section", { class: "cam yan-panel", "aria-label": "RouteNote" }, el("h2", {}, "RouteNote · önceki"),
+    el("p", { class: "kazanc-alt" }, `${rn.length} yayın RouteNote'ta; onay e-postaları ve Spotify takibi sürüyor. Yeni paketler oraya gitmez.`),
+    el("a", { class: "dugme ikincil kucuk", href: `${RN}/releases`, target: "_blank", rel: "noopener" }, "RouteNote yayınları"));
 }
 
 // ---- bulucu: STILLMORE FINDER'ın motoruyla Spotify araması (yanki/bulucu.py; Spotify uygulamasının içinden okur) ----
@@ -1906,7 +1993,7 @@ async function yukleGoster() {
   doldur(ana,
     el("header", { class: "pano-ust" },
       el("div", {}, el("h1", {}, "Taslaklar"),
-        el("p", { class: "ipucu" }, "Kendi yayınlarının taslakları. Bilgileri doldur, sesi ve kapağı seç, FreshTunes paketini indir. Kalkmış yayınlarından açılan taslaklar sesi, kapağı ve ISRC'yi kendiliğinden bulur.")),
+        el("p", { class: "ipucu" }, "Kendi yayınlarının taslakları. Bilgileri doldur, sesi ve kapağı seç, FreshTunes paketini indir.")),
       el("div", { class: "satir-ici" }, yeni, kendi)),
     d.freshtunes?.hatirlat ? ftHesapSeridi(d.freshtunes, yukleGoster) : null,
     d.bos ? el("p", { class: "ipucu ft-serit" }, `${d.bos} taslak boş (adı, sesi, kapağı yok).`,

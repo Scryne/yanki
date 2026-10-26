@@ -129,6 +129,25 @@ def _kesif_ozet(a: kesif.Aday, listede: set[str]) -> dict:
             "listede": a.kimlik in listede}
 
 
+def _gundem_ozeti(calisma: Path) -> dict | None:
+    """Son gündem anlık görüntüsü: ne zaman, hangi listeler, kaç satır (yanki/trend.py)."""
+    from collections import Counter
+
+    from yanki import trend
+
+    son = sorted(trend.klasor(calisma).glob("????-??-??.json"))[-1:]
+    if not son:
+        return None
+    try:
+        veri = json.loads(son[0].read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    listeler = Counter(g.get("liste") for g in veri.get("girisler") or [])
+    kaynaklar = Counter((x or "").split(":")[0] for x in listeler.elements())
+    return {"zaman": veri.get("zaman"), "liste": len(listeler), "satir": sum(listeler.values()),
+            "kaynaklar": dict(kaynaklar), "gun": len(list(trend.klasor(calisma).glob("????-??-??.json")))}
+
+
 def _kota(kok: Path) -> dict:
     """Spotify kota durumu, yalnız dosyadan (istek atmaz)."""
     import time
@@ -580,7 +599,8 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None, gorev_ok
     def kesif_listesi():
         kayit = kesif.oku(calisma)
         listede = kesif.listedekiler(liste_yolu, calisma)
-        return {"adaylar": [_kesif_ozet(x, listede) for x in kesif.sirala(kayit)], "kota": _kota(a.kok)}
+        return {"adaylar": [_kesif_ozet(x, listede) for x in kesif.sirala(kayit)], "kota": _kota(a.kok),
+                "gundem": _gundem_ozeti(calisma)}
 
     def kesif_adayi(kayit: dict, kimlik: str) -> kesif.Aday:
         if kimlik not in kayit:
@@ -663,7 +683,7 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None, gorev_ok
                              "gunluk": performans.gunluk(d)})
         sarkilar.sort(key=lambda s: s["yayin_tarihi"] or "")
         return {"sarkilar": sarkilar, "kota": _kota(a.kok), "profiller": sorted(takip.profil_kimlikleri(calisma)),
-                "takvim": _takvim(a.kok, calisma), "olaylar": olay.oku(calisma, son=8)[::-1]}
+                "takvim": _takvim(a.kok, calisma), "olaylar": olay.oku(calisma, son=30)[::-1]}
 
     # ---- sanatçı (yanki/sanatci.py) ----
     from yanki import sanatci
@@ -681,7 +701,15 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None, gorev_ok
 
         # panel kipi (DistributeMusic anahtarsız, DistroKid): "Yükle ve gönder" yerine "Panelden yükledim"
         otomatik = bool(getattr(dagitim.sec(y.dagitimci, a.kok), "otomatik", False))
-        return {"ad": y.sanatci_adi, "dagitimci": y.dagitimci, "otomatik": otomatik, "ayar": sanatci.ayar_oku(a.kok),
+        dm = None
+        if y.dagitimci == "distributemusic":
+            from yanki import distributemusic
+
+            d_ = distributemusic.DistributeMusic(a.kok)
+            dm = {"kip": "api" if d_.otomatik else "panel", "sozlesme_kabul": d_.ayar["sozlesme_kabul"],
+                  "gece": d_.gece}
+        return {"ad": y.sanatci_adi, "dagitimci": y.dagitimci, "otomatik": otomatik, "dm": dm,
+                "ayar": sanatci.ayar_oku(a.kok),
                 "katalog": sanatci.katalog(calisma, _kapak_url, sanatci.guncel_tarif(a)),
                 "profiller": sorted(takip.profil_kimlikleri(calisma)), "oturum": sanatci.oturum(calisma),
                 "is": isci.durum(), "takvim": _takvim(a.kok, calisma),
@@ -1146,7 +1174,12 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None, gorev_ok
             from yanki import uzak
 
             isabet = onay.isabet(calisma)
+            from yanki import dagitim as dagitim_
+
+            d_ = dagitim_.sec(y.dagitimci, a.kok)
             ayarlar = {"dagitimci": y.dagitimci, "kapak": y.kapak,
+                       # hat sırası geleni kendisi mi gönderiyor (API + gece), yoksa yalnız bildiriyor mu (panel kipi)
+                       "yukleme_otomatik": bool(getattr(d_, "otomatik", False) and getattr(d_, "gece", False)),
                        "uretim_acik": ayarlar_.operasyon_oku(a.kok).surekli_uretim,
                        "takvim_acik": t.acik, "haftada": t.haftada,
                        "oto_onay": ayar.acik, "oto_onay_saat": ayar.sure_saat,
@@ -1198,7 +1231,7 @@ def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None, gorev_ok
                         if (z := onay.onay_zamani(d, ayar))],
             "hatada": [_ozet(d, calisma) for d in hepsi if d.asama == "hata"],
             "dagitim": dagitimda, "takvim": _takvim(a.kok, calisma), "ayarlar": ayarlar,
-            "olaylar": olay.oku(calisma, son=12)[::-1], "gece": _son_gece(calisma), "kota": _kota(a.kok),
+            "olaylar": olay.oku(calisma, son=40)[::-1], "gece": _son_gece(calisma), "kota": _kota(a.kok),
             "simdi": {**kosu_durumu(calisma), "uretimde": [_ozet(d, calisma) for d in hepsi
                                                            if d.asama in ("analiz", "onarim")],
                       "uretim_acik": ayarlar.get("uretim_acik", True),

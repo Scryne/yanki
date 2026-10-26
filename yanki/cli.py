@@ -430,6 +430,9 @@ def _kesif(args: argparse.Namespace) -> int:
                                        set(kesif.oku(calisma)) | {x.kimlik for x in adaylar})
         except (OSError, katalog.DeezerHatasi) as e:
             print(f"✗ popüler şarkılar: {e}")
+    tr = ayar.get("trend", {})
+    if tr.get("acik") and not getattr(args, "trendsiz", False):  # gündem: Spotify Web API gerektirmez
+        adaylar += _trend_tara(args, calisma, tr, set(kesif.oku(calisma)) | {x.kimlik for x in adaylar}, spotifysiz)
     if args.yeniden_olc:  # kayıttaki adaylar da (kaynak o gece taranamasa bile) yeniden ölçülür
         adaylar += [x for x in kesif.oku(calisma).values() if not any(y.kimlik == x.kimlik for y in adaylar)]
     # aynı şarkı birden çok kaynaktan gelebilir: doğrulama tek kez; düzenlemeler (sped up, remix…) hiç sorulmaz
@@ -540,6 +543,44 @@ def _kesif(args: argparse.Namespace) -> int:
         if not eklenen:
             print("listeye eklenecek doğrulanmış yeni aday yok")
     return 0
+
+
+def _trend_tara(args, calisma: Path, t: dict, bilinen: set[str], spotifysiz: bool) -> list:
+    """Gündem listeleri (`yanki/trend.py`): Deezer ve Apple her koşuda; Spotify Top 50'ler köprü açılabilirse (Spotify
+    çalıyorsa dokunulmaz). Bugünün anlık görüntüsü yazılır, puan geçmişle (yükseliş, yeni giriş, günlük dinlenme)
+    hesaplanır. Bilinen adayların trend bilgisi her koşuda tazelenir; yeni olanlardan en çok `yeni_aday`."""
+    import subprocess
+
+    from yanki import stillmore, trend
+
+    ayar = trend.Ayar.oku(t)
+    kopru_ctx = None
+    if ayar.spotify and not spotifysiz:
+        try:
+            kopru_ctx = stillmore.Oturum(yeniden_baslat=getattr(args, "spotify_yeniden_baslat", False))
+            kopru = kopru_ctx.__enter__()
+        except (stillmore.StillmoreYok, OSError, subprocess.SubprocessError, RuntimeError) as e:
+            print(f"gündem: Spotify listeleri atlandı ({e})")
+            kopru_ctx = kopru = None
+    else:
+        kopru = None
+    try:
+        girisler = trend.topla(calisma, ayar, kopru=kopru)
+    finally:
+        if kopru_ctx is not None:
+            kopru_ctx.__exit__(None, None, None)
+    if not girisler:
+        print("gündem: hiçbir listeye ulaşılamadı")
+        return []
+    puanlar = trend.puanla(girisler, trend.anliklar(calisma))
+    trend.anlik_yaz(calisma, girisler)
+    hepsi = trend.adaylar(puanlar, ayar, bilinen)
+    yeni = [x for x in hepsi if x.kimlik not in bilinen][: ayar.yeni_aday]
+    eski = [x for x in hepsi if x.kimlik in bilinen]
+    kaynaklar = sorted({g.liste.split(":")[0] for g in girisler})
+    print(f"gündem: {len(girisler)} liste satırı ({', '.join(kaynaklar)}), {len(puanlar)} şarkı; "
+          f"{len(yeni)} yeni aday ölçülecek, {len(eski)} bilinen tazelendi")
+    return yeni + eski
 
 
 def _stillmore_tara(args, kok: Path, calisma: Path, st: dict, sp, dogrula: bool, adaylar: list) -> None:
@@ -1979,13 +2020,14 @@ def main(argv: list[str] | None = None) -> int:
     rn.set_defaults(fn=_routenote)
     sb = alt.add_parser("spotify-baglan", help="Spotify hesabını bir kez bağla (kendi playlist'lerini taramak için)")
     sb.set_defaults(fn=_spotify_baglan)
-    ks = alt.add_parser("kesif", help="Spotify'dan kaldırılmış, hâlâ aranan şarkıları bul, doğrula, sırala")
+    ks = alt.add_parser("kesif", help="gündemdeki (trend) ve kaldırılmış şarkıları bul, ölç, sırala")
     ks.add_argument("--csv", nargs="*", default=[], help="STILLMORE CSV'si (varsayılan girdi/kesif/*.csv)")
     ks.add_argument("--playlist", nargs="*", default=[], help="kendi playlist'in (varsayılan config/kesif.toml)")
     ks.add_argument("--pazar", nargs="*", help="pazarlar, ilki ana (varsayılan config/kesif.toml)")
     ks.add_argument("--katalogsuz", action="store_true", help="Deezer katalog farkını atla")
     ks.add_argument("--stillmoresuz", action="store_true", help="STILLMORE playlist taramasını atla")
     ks.add_argument("--populersiz", action="store_true", help="popüler şarkıları (Deezer tür listeleri) atla")
+    ks.add_argument("--trendsiz", action="store_true", help="gündem listelerini (Deezer, Apple, Spotify Top 50) atla")
     ks.add_argument("--spotify-yeniden-baslat", action="store_true",
                     help="Spotify CDP'siz açıksa (çalmıyorsa) STILLMORE için yeniden başlat (gece koşusu bunu yapar)")
     ks.add_argument("--yeniden-olc", action="store_true", help="kayıtta ölçülmüş adayları da yeniden ölç")
