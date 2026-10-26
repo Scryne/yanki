@@ -314,6 +314,17 @@ def test_pano_ve_ozet_uretim_engelini_soyler(tmp_path):
     assert "kredi yükle" in cli.ozet(tmp_path)["uretim_engeli"]
 
 
+def _ffmpeg_var() -> bool:
+    from yanki import ses
+
+    try:
+        ses.arac("ffmpeg")
+        return True
+    except FileNotFoundError:
+        return False
+
+
+@pytest.mark.skipif(not _ffmpeg_var(), reason="ffmpeg gerekli")
 def test_silinmis_kaynak_kayitli_videodan_geri_gelir(tmp_path):
     """Denetim 7: dondurmada kuyruktaki bütün `kaynak.wav`'lar silinmişti; üretim hepsini `hata`ya düşürürdü."""
     import soundfile as sf
