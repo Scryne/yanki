@@ -20,6 +20,7 @@ Bulunan adaylar `kesif.Aday` olarak keşfin geri kalanına (rakip sayımı, YouT
 """
 
 import json
+import re
 import time
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta
@@ -74,11 +75,11 @@ class Kontrol:
 
 # ── Deezer ──────────────────────────────────────────────────
 def sanatci_bul(ad: str, json_al=ag.json_al) -> dict | None:
-    """Adı birebir (aksansız, büyük/küçük harfsiz) eşleşen ilk sanatçı; yoksa None (yanlış sanatçı tahmini yok)."""
-    for a in deezer("/search/artist", {"q": ad, "limit": 5}, json_al).get("data") or []:
-        if _duz(a.get("name") or "") == _duz(ad):
-            return a
-    return None
+    """Adı birebir (aksansız, büyük/küçük harfsiz) eşleşenlerden en çok hayranlısı; yoksa None (yanlış sanatçı tahmini
+    yok). İlk eşleşen alınmaz: 2026-10-26 "Michael Jackson" araması önce 227 hayranlı adaşı (rap single) döndürdü."""
+    eslesen = [a for a in deezer("/search/artist", {"q": ad, "limit": 5}, json_al).get("data") or []
+               if _duz(a.get("name") or "") == _duz(ad)]
+    return max(eslesen, key=lambda a: a.get("nb_fan") or 0, default=None)
 
 
 def liste_sanatcilari(tur: int, adet: int, json_al=ag.json_al) -> list[dict]:
@@ -93,6 +94,9 @@ def en_cok_dinlenenler(sanatci: dict, adet: int, json_al=ag.json_al) -> list[Par
     veri = deezer(f"/artist/{sanatci['id']}/top", {"limit": adet}, json_al).get("data") or []
     return [Parca(t["id"], (t.get("artist") or {}).get("name") or sanatci["name"], t.get("title_short") or t["title"],
                   int(t.get("rank") or 0), t.get("duration")) for t in veri if t.get("id") and t.get("title")]
+
+
+FILM = re.compile(r"\bfilm|\bgames?\b|soundtrack", re.I)
 
 
 def sanatci_turleri(ad: str, json_al=ag.json_al, album_adet: int = 3) -> list[str]:
@@ -111,6 +115,10 @@ def sanatci_turleri(ad: str, json_al=ag.json_al, album_adet: int = 3) -> list[st
         except ag.Bulunamadi:
             continue
         sayac.update(t["name"] for t in turler if t.get("name"))
+    # Film/oyun türü albümün soundtrack olduğunu söyler, sanatçının türünü değil (2026-10-26: Ariana Grande'nin son iki
+    # albümü Wicked soundtrack'i, "films, games" haric türüne düştü). Başka tür yoksa sayılır: soundtrack sanatçısı.
+    if any(not FILM.search(t) for t in sayac):
+        sayac = Counter({t: n for t, n in sayac.items() if not FILM.search(t)})
     return [", ".join(p.strip().lower() for p in ad_.split("/")) for ad_, _ in sayac.most_common(2)]
 
 

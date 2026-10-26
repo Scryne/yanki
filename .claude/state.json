@@ -3,5 +3,5 @@
   "asama": "uygulama",
   "guncellendi": "2026-10-26",
   "roadmap": "docs/Roadmap.md",
-  "not": "2026-10-26 akşam: keşif/üretim sıfırlandı (arşivde), gündem keşfi (yanki/trend.py) ve oda düzenlemeleri yarıda; Surekli/Gece görevleri kapalı. Sıradaki adımlar: Claude hafızası devam-2026-10-26."
+  "not": "2026-10-26: gündem keşfi ve sıfırlama tamam (Roadmap bölümü); Deezer tür eşleşmesi düzeltildi; oda doğrulandı; Surekli/Gece açık. Açık: Spotify Top 50 canlı denemesi, Scryne'ın kararları."
 }

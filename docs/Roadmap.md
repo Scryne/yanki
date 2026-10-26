@@ -1038,3 +1038,24 @@ Dört alan paralel denetlendi (üretim/kiralık GPU, hazırlık/keşif, paket/da
 - **Karar Scryne'da:** DistributeMusic'e cover kabulünü yazılı sormak (metin araştırma 11'de); Pro planı; RunPod bakiyesi
   (0,80 $; 8 şarkılık koşu ~40 iş, en az ~2 $ ister); `calisma/elle/`'deki kopya taslakları silmek.
 
+
+## Gündem keşfi ve sıfırlama (2026-10-26, Scryne: "keşfi ve üretimi sıfırla, AI cover keşfini gündeme göre kur, siteyi en profesyonel hale getir; yabancı şarkılar atıcaz")
+
+- **Sıfırlama:** 158 şarkı, eski keşif kaydı ve eski liste `calisma/_arsiv/2026-10-26-sifirlama/`'ya taşındı (silinmedi).
+  RouteNote'taki 14 yayın, Adele kaydı ve elenen 50 aday yerinde. 18 kopya taslak `calisma/_arsiv/kopya-taslaklar-2026-10-26/`.
+- **Gündem keşfi** (`yanki/trend.py`, `config/kesif.toml [trend]`, araştırma 12): Deezer ülke Top-100, Apple most-played,
+  Spotify Top 50 (STILLMORE köprüsüyle, CDP gerekir). Yalnız yabancı listeler. Puan: listelerdeki sıra + yeni giriş +
+  yükseliş + Spotify günlük dinlenmesi. Eski kaynaklar (popüler, katalog, STILLMORE, playlistler) kapalı. İlk koşu: 13
+  liste, 301 aday, 10 şarkı listeye girdi (commit bf05fcd).
+- **Tür eşleşmesi düzeltildi:** `katalog.sanatci_bul` aynı adlı ilk sanatçıyı alıyordu ("Michael Jackson" → 227 hayranlı
+  rap adaşı); artık en çok hayranlısını alır. Film/oyun türü yalnız başka tür yoksa sayılır (Ariana Grande'nin son
+  albümleri Wicked soundtrack'i, "films, games" haric türüne düşüyordu). Kayıttaki 6 aday yeniden türlendi; kalan 8
+  uymayan gerçekten rap/Latin/caz.
+- **Oda:** Keşif gündem şeridi ve trend çipleri; Sanatçı DistributeMusic'e göre (yükleme listesi, takvim, RouteNote
+  önceki); bildirim gruplama; kırık kapak yedeği.
+- **Doğrulama:** 649 test. Oda yeniden açılışta yeni kodla ayakta; Pano/Keşif/Sanatçı 1440 ve 390'da çekildi, yatay taşma
+  yok, tek konsol hatası arşivdeki 3 RouteNote yayınının olmayan kapağı (yedek kare gösteriliyor). Surekli/Gece görevleri
+  yeniden açıldı.
+- **Açık:** Spotify Top 50 kaynağı canlı denenmedi (Spotify CDP'siz açık; gece koşusu Spotify kapalıysa bayrakla açar).
+  Kararlar Scryne'da: DistributeMusic cover kabulü (yazılı sor), Pro plan, RunPod bakiyesi (~2 $), RouteNote'taki 14
+  şarkı, RouteNote ticket 14752428 cevabı (26 Eki 10:58, panelde okunacak).

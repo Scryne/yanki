@@ -262,3 +262,20 @@ def test_karisik_dilli_kpop_sozu_ceviri_sayilmaz(tmp_path):
     (tmp_path / "soz.txt").write_text("[Verse 1]\nBLACKPINK in your area\n보란 듯이 무너졌어\n바닥을 뚫고 저 지하까지\n"
                                       "[Chorus]\nHow you like that\nYou gon' like that that that", encoding="utf-8")
     assert hazirlik.soz_dili_uyumu(d, tmp_path, "ko", surumler=lambda *_: []) is None
+
+
+def test_deezer_adas_sanatci_en_cok_hayranlisi_soundtrack_turu_sayilmaz():
+    # 2026-10-26: "Michael Jackson" önce 227 hayranlı adaşı (rap), Ariana Grande'nin son albümleri Wicked soundtrack'i
+    from yanki import katalog
+
+    cevap = {"/search/artist": {"data": [{"id": 8, "name": "Ariana Grande", "nb_fan": 227},
+                                         {"id": 9, "name": "Ariana Grande", "nb_fan": 13_000_000}]},
+             "/artist/9/albums": {"data": [{"id": 1}, {"id": 2}, {"id": 3}]},
+             "/album/1": {"genres": {"data": [{"name": "Films/Games"}, {"name": "Film Scores"}]}},
+             "/album/2": {"genres": {"data": [{"name": "Films/Games"}]}},
+             "/album/3": {"genres": {"data": [{"name": "Pop"}]}}}
+    ja = lambda url, p=None: cevap[url.replace(katalog.DEEZER, "")]  # noqa: E731
+    assert katalog.sanatci_bul("ariana grande", ja)["id"] == 9
+    assert katalog.sanatci_turleri("Ariana Grande", ja) == ["pop"]
+    cevap["/album/3"] = {"genres": {"data": [{"name": "Film Scores"}]}}  # yalnız soundtrack: tür odur
+    assert katalog.sanatci_turleri("Ariana Grande", ja)[0] == "films, games"
