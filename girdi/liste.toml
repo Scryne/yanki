@@ -127,3 +127,44 @@ ad = "Babydoll"
 # 2026-10-26 yazarlar: Songfacts (yayıncı UMPG)
 vokal = "erkek"
 yazarlar = ["Jamie Miller", "Hayley Warner", "Michael Blum"]
+
+# kesif 2026-10-26: popüler şarkılar (yanki kesif)
+[[sarki]]  # YouTube 13,807,569 izlenme; trend:apple:au,apple:ca,apple:gb,apple:ie,apple:us,deezer:Australia,deezer:Canada,deezer:Germany,deezer:Ireland,deezer:Netherlands,deezer:UK,deezer:USA,deezer:Worldwide,spotify:Top 50 - Australia,spotify:Top 50 - Canada,spotify:Top 50 - UK,spotify:Top 50 - USA
+sanatci = "STELLA LEFTY"
+ad = "Boston"
+
+[[sarki]]  # YouTube 47,027,216 izlenme; trend:deezer:Australia,deezer:Ireland,spotify:Top 50 - Australia,spotify:Top 50 - Canada,spotify:Top 50 - Global,spotify:Top 50 - UK,spotify:Top 50 - USA
+sanatci = "Malcolm Todd"
+ad = "Earrings"
+
+[[sarki]]  # YouTube 50,006,414 izlenme; trend:apple:au,deezer:Australia,deezer:Canada,deezer:Germany,deezer:Ireland,deezer:Netherlands,deezer:UK,deezer:Worldwide,spotify:Top 50 - Australia,spotify:Top 50 - Canada,spotify:Top 50 - Global
+sanatci = "Temper City"
+ad = "Self Aware"
+
+[[sarki]]  # YouTube 56,528,932 izlenme; trend:deezer:Australia,deezer:Germany,deezer:Ireland,deezer:Netherlands,deezer:UK,spotify:Top 50 - Australia,spotify:Top 50 - Canada,spotify:Top 50 - Global,spotify:Top 50 - USA
+sanatci = "Dominic Fike"
+ad = "Babydoll"
+
+[[sarki]]  # YouTube 27,816,075 izlenme; trend:apple:au,apple:gb,apple:ie,deezer:Ireland,deezer:Netherlands,deezer:UK
+sanatci = "Sam Fender"
+ad = "Rein Me In"
+
+[[sarki]]  # YouTube 147,333,803 izlenme; trend:apple:au,apple:gb,apple:ie,deezer:Australia,deezer:Canada,deezer:Germany,deezer:Ireland,deezer:Netherlands,deezer:UK,spotify:Top 50 - Global
+sanatci = "KATSEYE"
+ad = "Animal"
+
+[[sarki]]  # YouTube 68,429,981 izlenme; trend:apple:au,apple:gb,apple:ie,deezer:Germany,deezer:Ireland,deezer:Netherlands,deezer:UK,spotify:Top 50 - Australia,spotify:Top 50 - UK
+sanatci = "sombr"
+ad = "12 to 12"
+
+[[sarki]]  # YouTube 40,982,456 izlenme; trend:apple:ca,apple:us,spotify:Top 50 - Australia,spotify:Top 50 - Canada,spotify:Top 50 - USA
+sanatci = "Whiskey Myers"
+ad = "Broken Window Serenade"
+
+[[sarki]]  # YouTube 1,028,538,773 izlenme; trend:apple:ca,apple:us,deezer:Germany,spotify:Top 50 - Canada,spotify:Top 50 - Global,spotify:Top 50 - UK,spotify:Top 50 - USA
+sanatci = "The Neighbourhood"
+ad = "Sweater Weather"
+
+[[sarki]]  # YouTube 19,009,581 izlenme; trend:deezer:Australia,deezer:Canada,deezer:Germany,deezer:Ireland,deezer:Netherlands,deezer:UK,deezer:USA,deezer:Worldwide
+sanatci = "Max McNown"
+ad = "Better Me For You (Brown Eyes)"
