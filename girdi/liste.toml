@@ -97,6 +97,8 @@ ad = "Ordinary"
 [[sarki]]  # YouTube 15,293,593 izlenme; trend:apple:au,apple:ca,apple:gb,apple:ie,apple:us,deezer:Germany,deezer:Ireland,deezer:Netherlands,deezer:UK
 sanatci = "Tate McRae"
 ad = "Housewife"
+# 2026-10-26: MusicBrainz "El Guincho"yu ad + soyada çeviremedi (gerçek adı Pablo Díaz-Reixa); diğerleri MusicBrainz'in
+yazarlar = ["Grant Joseph Boutin", "Pablo Díaz-Reixa", "Jasper Harris", "Tate McRae", "Julia Michaels", "Ryan Tedder"]
 
 [[sarki]]  # YouTube 82,077,297 izlenme; trend:deezer:Australia,deezer:Canada,deezer:Germany,deezer:Ireland,deezer:Netherlands,deezer:UK,deezer:USA,deezer:Worldwide
 sanatci = "Tame Impala"
