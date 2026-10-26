@@ -13,719 +13,107 @@
 # Kaynak sesi kendin vermek istersen: girdi/kaynak/<kimlik>.mp3  (kimlik: "adele-someone-like-you")
 # Sözleri kendin vermek istersen:     girdi/sozler/<kimlik>.txt
 
-# 2026-10-08: Scryne seçimi Claude'a bıraktı ("her şeyi sana bırakıyorum"). Ölçüt: hattın iyi çıktığı türe yakın
-# (Adele söz WER 0,015, Coldplay 0,032; Ed Sheeran zayıf): tek solo vokal, piyano/akustik, yavaş-orta balad, çok dinlenen.
-# Tarif "doğru stil + BPM + ton" (Final-Dokuman); en iyi sonuç (Adele) elle verilmiş stil/BPM/tonla alındı.
-# bpm/ton yalnız iki kaynak uyuşunca yazıldı: kaynak sesten librosa ölçümü (vuruş aralığı medyanı + Krumhansl
-# chroma; Someone Like You A major, Viva La Vida Ab major, Perfect Ab major ile sınandı) ve yaygın bilinen değer.
-# Uyuşmayan boş: You Are the Reason bpm (85–86 arası oynadı), Young and Beautiful bpm/ton (D major / B minor ayrışmadı).
+# 2026-10-26: keşif ve üretim sıfırlandı (Scryne: "dediğim dağıtıcıda sıfırdan başlıycaz"). Önceki liste ve
+# şarkılar: calisma/_arsiv/2026-10-26-sifirlama/. Aşağıdakiler RouteNote'ta (yayında ya da incelemede): takip ve
+# "aynı şarkının ikinci Orvane sürümü üretilmez" için listede kalır.
 
-[[sarki]]  # YouTube 3,699,812 izlenme, rakip cover 9; stillmore:2o8ZUUVGgRvoJx6Jx0i7EY
-sanatci = "Anise.K"
-ad = "Walking on Air"
-
-[[sarki]]  # YouTube 1,043,303 izlenme, rakip cover 9; stillmore:2RuZoZNM8Q5ZXNTYfFiqtT
-sanatci = "Nyoy Volante"
-ad = "Ipagpatawad Mo"
-
-# kesif 2026-10-12: Spotify'da kaldırılmış şarkılar (yanki kesif)
-[[sarki]]  # YouTube 22,210 izlenme, rakip cover 4; stillmore:2AVGveojYqGEtfWZHPC0gS
-sanatci = "Big Daddy Kane"
-ad = "Daddy's Home"
-
-# kesif 2026-10-13: popüler şarkılar (yanki kesif)
-[[sarki]]  # YouTube 6,823,449,010 izlenme; deezer-populer:139470659
-sanatci = "Ed Sheeran"
-ad = "Shape of You"
-
-[[sarki]]  # YouTube 3,172,445,257 izlenme; deezer-populer:602456552
-sanatci = "Post Malone"
-ad = "Sunflower"
-
-[[sarki]]  # YouTube 2,809,100,123 izlenme; deezer-populer:677232
-sanatci = "Linkin Park"
-ad = "Numb"
-
-[[sarki]]  # YouTube 2,806,838,552 izlenme; deezer-populer:136889400
-sanatci = "The Weeknd"
-ad = "Starboy"
-
-[[sarki]]  # YouTube 2,512,176,213 izlenme; deezer-populer:664107
-sanatci = "a-ha"
-ad = "Take on Me"
-
-[[sarki]]  # YouTube 2,505,668,833 izlenme; deezer-populer:486928932
-sanatci = "Billie Eilish"
-ad = "lovely"
-
-[[sarki]]  # YouTube 2,274,296,106 izlenme; deezer-populer:2184743
+[[sarki]]  # RouteNote
 sanatci = "4 Non Blondes"
 ad = "What's Up?"
 
-[[sarki]]  # YouTube 2,256,415,716 izlenme; deezer-populer:13791930
-sanatci = "Nirvana"
-ad = "Smells Like Teen Spirit"
+[[sarki]]  # RouteNote
+sanatci = "a-ha"
+ad = "Take on Me"
 
-[[sarki]]  # YouTube 2,096,907,228 izlenme; deezer-populer:60200391
-sanatci = "P!nk"
-ad = "Just Give Me a Reason"
-
-[[sarki]]  # YouTube 1,884,683,656 izlenme; deezer-populer:561856742
-sanatci = "Lady Gaga"
-ad = "Shallow"
-
-# kesif 2026-10-13: popüler şarkılar (yanki kesif)
-[[sarki]]  # YouTube 4,254,354,599 izlenme; deezer-populer:71645436
-sanatci = "Katy Perry"
-ad = "Dark Horse"
-
-[[sarki]]  # YouTube 3,977,873,420 izlenme; deezer-populer:113876568
-sanatci = "Major Lazer"
-ad = "Lean On"
-
-[[sarki]]  # YouTube 3,274,011,787 izlenme; deezer-populer:99976952
-sanatci = "Twenty One Pilots"
-ad = "Stressed Out"
-
-[[sarki]]  # YouTube 2,973,170,897 izlenme; deezer-populer:123883254
-sanatci = "Calvin Harris"
-ad = "This Is What You Came For"
-
-[[sarki]]  # YouTube 2,954,275,230 izlenme; deezer-populer:79587580
-sanatci = "Sia"
-ad = "Chandelier"
-
-[[sarki]]  # YouTube 2,296,739,188 izlenme; deezer-populer:114811546
-sanatci = "Coldplay"
-ad = "Hymn for the Weekend"
-
-[[sarki]]  # YouTube 1,910,438,856 izlenme; deezer-populer:70322130
-sanatci = "Arctic Monkeys"
-ad = "Do I Wanna Know?"
-
-[[sarki]]  # YouTube 1,882,436,860 izlenme; deezer-populer:17826508
-sanatci = "Carly Rae Jepsen"
-ad = "Call Me Maybe"
-
-[[sarki]]  # YouTube 1,817,221,394 izlenme; deezer-populer:13141170
-sanatci = "Backstreet Boys"
-ad = "I Want It That Way"
-
-[[sarki]]  # YouTube 1,798,409,724 izlenme; deezer-populer:80274512
-sanatci = "Evanescence"
-ad = "Bring Me To Life"
-
-# kesif 2026-10-13: popüler şarkılar (yanki kesif)
-[[sarki]]  # YouTube 4,530,323,371 izlenme; deezer-populer:78527795
-sanatci = "OneRepublic"
-ad = "Counting Stars"
-
-[[sarki]]  # YouTube 2,823,532,335 izlenme; deezer-populer:351594981
-sanatci = "Shawn Mendes"
-ad = "Treat You Better"
-
-[[sarki]]  # YouTube 2,722,503,385 izlenme; deezer-populer:14993990
-sanatci = "Gotye"
-ad = "Somebody That I Used To Know"
-
-[[sarki]]  # YouTube 2,579,219,197 izlenme; deezer-populer:8086136
+[[sarki]]  # RouteNote
 sanatci = "Adele"
 ad = "Someone Like You"
 
-[[sarki]]  # YouTube 2,552,226,316 izlenme; deezer-populer:70266756
-sanatci = "Avicii"
-ad = "Wake Me Up"
-
-[[sarki]]  # YouTube 2,221,278,080 izlenme; deezer-populer:8011850
-sanatci = "Bruno Mars"
-ad = "Just the Way You Are"
-
-[[sarki]]  # YouTube 2,082,755,203 izlenme; deezer-populer:447098092
-sanatci = "Camila Cabello"
-ad = "Havana"
-
-[[sarki]]  # YouTube 1,787,208,596 izlenme; deezer-populer:92720102
-sanatci = "AC/DC"
-ad = "Thunderstruck"
-
-[[sarki]]  # YouTube 1,776,122,927 izlenme; deezer-populer:2525864
-sanatci = "The Police"
-ad = "Every Breath You Take"
-
-[[sarki]]  # YouTube 1,759,223,784 izlenme; deezer-populer:72194071
-sanatci = "Cyndi Lauper"
-ad = "Girls Just Want to Have Fun"
-
-# kesif 2026-10-13: popüler şarkılar (yanki kesif)
-[[sarki]]  # YouTube 3,616,670,272 izlenme; deezer-populer:117797212
-sanatci = "Charlie Puth"
-ad = "We Don't Talk Anymore"
-
-[[sarki]]  # YouTube 1,851,759,881 izlenme; deezer-populer:2447443
-sanatci = "Nelly"
-ad = "Dilemma"
-
-[[sarki]]  # YouTube 1,726,692,980 izlenme; deezer-populer:533609232
-sanatci = "Drake"
-ad = "God's Plan"
-
-[[sarki]]  # YouTube 1,612,418,798 izlenme; deezer-populer:14525086
-sanatci = "George Michael"
-ad = "Careless Whisper"
-
-[[sarki]]  # YouTube 1,589,079,838 izlenme; deezer-populer:138547415
-sanatci = "Radiohead"
-ad = "Creep"
-
-[[sarki]]  # YouTube 1,513,610,527 izlenme; deezer-populer:538660022
-sanatci = "Bon Jovi"
-ad = "Livin' On A Prayer"
-
-[[sarki]]  # YouTube 1,481,751,524 izlenme; deezer-populer:136334560
-sanatci = "R.E.M."
-ad = "Losing My Religion"
-
-[[sarki]]  # YouTube 1,430,072,164 izlenme; deezer-populer:725274
-sanatci = "Red Hot Chili Peppers"
-ad = "Californication"
-
-[[sarki]]  # YouTube 1,416,762,363 izlenme; deezer-populer:532349
-sanatci = "Bonnie Tyler"
-ad = "Total Eclipse of the Heart"
-
-[[sarki]]  # YouTube 1,380,194,976 izlenme; deezer-populer:582143242
-sanatci = "Lewis Capaldi"
-ad = "Someone You Loved"
-
-# kesif 2026-10-13: popüler şarkılar (yanki kesif)
-[[sarki]]  # YouTube 4,045,391,201 izlenme; deezer-populer:140295501
-sanatci = "Alan Walker"
-ad = "Faded"
-
-[[sarki]]  # YouTube 3,338,081,039 izlenme; deezer-populer:366297921
-sanatci = "Dua Lipa"
-ad = "New Rules"
-
-[[sarki]]  # YouTube 2,432,841,568 izlenme; deezer-populer:403074632
-sanatci = "ZAYN"
-ad = "Dusk Till Dawn"
-
-[[sarki]]  # YouTube 1,336,151,521 izlenme; deezer-populer:398570642
-sanatci = "The Verve"
-ad = "Bitter Sweet Symphony"
-
-[[sarki]]  # YouTube 1,311,016,834 izlenme; deezer-populer:24246391
-sanatci = "No Doubt"
-ad = "Don't Speak"
-
-[[sarki]]  # YouTube 1,308,182,117 izlenme; deezer-populer:634445372
-sanatci = "Hoobastank"
-ad = "The Reason"
-
-[[sarki]]  # YouTube 1,290,671,877 izlenme; deezer-populer:63510361
-sanatci = "Imagine Dragons"
-ad = "Demons"
-
-[[sarki]]  # YouTube 1,274,782,931 izlenme; deezer-populer:15546830
-sanatci = "Foster The People"
-ad = "Pumped Up Kicks"
-
-[[sarki]]  # YouTube 1,254,786,141 izlenme; deezer-populer:927900
-sanatci = "Scorpions"
-ad = "Wind Of Change"
-
-[[sarki]]  # YouTube 1,230,811,493 izlenme; deezer-populer:15523793
-sanatci = "System of A Down"
-ad = "Toxicity"
-
-# kesif 2026-10-15: popüler şarkılar (yanki kesif)
-[[sarki]]  # YouTube 3,283,209,176 izlenme; deezer-populer:138545995
-sanatci = "Adele"
-ad = "Hello"
-
-[[sarki]]  # YouTube 2,496,727,118 izlenme; deezer-populer:1169683
-sanatci = "Guns N' Roses"
-ad = "November Rain"
-
-[[sarki]]  # YouTube 2,327,166,619 izlenme; deezer-populer:106506512
-sanatci = "The Weeknd"
-ad = "The Hills"
-
-[[sarki]]  # YouTube 1,904,159,809 izlenme; deezer-populer:131742260
-sanatci = "James Arthur"
-ad = "Say You Won't Let Go"
-
-[[sarki]]  # YouTube 1,366,195,811 izlenme; deezer-populer:16501728
-sanatci = "fun."
-ad = "We Are Young"
-
-[[sarki]]  # YouTube 1,228,879,290 izlenme; deezer-populer:561836
-sanatci = "Eurythmics"
-ad = "Sweet Dreams (Are Made of This)"
-
-[[sarki]]  # YouTube 1,225,850,597 izlenme; deezer-populer:540175
-sanatci = "Britney Spears"
-ad = "...Baby One More Time"
-
-[[sarki]]  # YouTube 1,199,936,076 izlenme; deezer-populer:65723649
-sanatci = "Tom Odell"
-ad = "Another Love"
-
-[[sarki]]  # YouTube 1,194,799,905 izlenme; deezer-populer:3129407
-sanatci = "Gorillaz"
-ad = "Feel Good Inc."
-
-[[sarki]]  # YouTube 1,194,052,608 izlenme; deezer-populer:67446406
-sanatci = "John Newman"
-ad = "Love Me Again"
-
-# kesif 2026-10-15: popüler şarkılar (yanki kesif)
-[[sarki]]  # YouTube 4,096,898,381 izlenme; deezer-populer:498130042
-sanatci = "Maroon 5"
-ad = "Girls Like You"
-
-[[sarki]]  # YouTube 1,590,615,115 izlenme; deezer-populer:851057
-sanatci = "Audioslave"
-ad = "Like a Stone"
-
-[[sarki]]  # YouTube 1,084,104,245 izlenme; deezer-populer:1161679
-sanatci = "Mary J. Blige"
-ad = "Family Affair"
-
-[[sarki]]  # YouTube 1,060,640,924 izlenme; deezer-populer:2317363
-sanatci = "Keane"
-ad = "Somewhere Only We Know"
-
-[[sarki]]  # YouTube 1,059,948,314 izlenme; deezer-populer:539562302
-sanatci = "Ava Max"
-ad = "Sweet but Psycho"
-
-[[sarki]]  # YouTube 1,023,505,015 izlenme; deezer-populer:66506871
-sanatci = "The Neighbourhood"
-ad = "Sweater Weather"
-
-[[sarki]]  # YouTube 1,005,918,108 izlenme; deezer-populer:7375556
-sanatci = "The Black Eyed Peas"
-ad = "Pump It"
-
-[[sarki]]  # YouTube 933,298,243 izlenme; deezer-populer:18190280
-sanatci = "Lana Del Rey"
-ad = "Summertime Sadness"
-
-[[sarki]]  # YouTube 870,420,267 izlenme; deezer-populer:104936008
-sanatci = "Kaleo"
-ad = "Way down We Go"
-
-[[sarki]]  # YouTube 862,877,814 izlenme; deezer-populer:516351532
-sanatci = "Panic! At The Disco"
-ad = "High Hopes"
-
-# kesif 2026-10-16: popüler şarkılar (yanki kesif)
-[[sarki]]  # YouTube 982,402,645 izlenme; deezer-populer:2659940
-sanatci = "James Blunt"
-ad = "You're Beautiful"
-
-[[sarki]]  # YouTube 929,841,769 izlenme; deezer-populer:3152791
-sanatci = "Culture Club"
-ad = "Karma Chameleon"
-
-[[sarki]]  # YouTube 835,905,833 izlenme; deezer-populer:350027751
-sanatci = "Bee Gees"
-ad = "How Deep Is Your Love"
-
-[[sarki]]  # YouTube 824,022,156 izlenme; deezer-populer:1483825212
-sanatci = "Metallica"
-ad = "Enter Sandman"
-
-[[sarki]]  # YouTube 795,035,237 izlenme; deezer-populer:3098100
-sanatci = "Kylie Minogue"
-ad = "Can't Get You out of My Head"
-
-[[sarki]]  # YouTube 785,076,168 izlenme; deezer-populer:72299954
-sanatci = "A Great Big World"
-ad = "Say Something"
-
-[[sarki]]  # YouTube 782,244,461 izlenme; deezer-populer:2430338
-sanatci = "Nelly Furtado"
-ad = "Promiscuous"
-
-[[sarki]]  # YouTube 779,212,997 izlenme; deezer-populer:624823
-sanatci = "Aerosmith"
-ad = "I Don't Want To Miss A Thing"
-
-[[sarki]]  # YouTube 751,187,050 izlenme; deezer-populer:994228
-sanatci = "The Calling"
-ad = "Wherever You Will Go"
-
-[[sarki]]  # YouTube 738,618,597 izlenme; deezer-populer:13791932
-sanatci = "Nirvana"
-ad = "Come As You Are"
-
-# kesif 2026-10-16: popüler şarkılar (yanki kesif)
-[[sarki]]  # YouTube 1,415,642,067 izlenme; deezer-populer:2441318935
-sanatci = "Marshmello"
-ad = "Happier"
-
-[[sarki]]  # YouTube 1,204,971,946 izlenme; deezer-populer:105765234
-sanatci = "Disturbed"
-ad = "The Sound of Silence"
-
-[[sarki]]  # YouTube 1,106,225,734 izlenme; deezer-populer:14495564
-sanatci = "Gym Class Heroes"
-ad = "Stereo Hearts"
-
-[[sarki]]  # YouTube 1,099,830,062 izlenme; deezer-populer:2172900
-sanatci = "3 Doors Down"
-ad = "Here Without You"
-
-[[sarki]]  # YouTube 856,069,205 izlenme; deezer-populer:121258078
-sanatci = "gnash"
-ad = "i hate u, i love u"
-
-[[sarki]]  # YouTube 800,274,326 izlenme; deezer-populer:2511970
-sanatci = "Mariah Carey"
-ad = "We Belong Together"
-
-[[sarki]]  # YouTube 729,513,903 izlenme; deezer-populer:3133738
-sanatci = "Spice Girls"
-ad = "Wannabe"
-
-[[sarki]]  # YouTube 680,437,027 izlenme; deezer-populer:2124371
-sanatci = "Ne-Yo"
-ad = "Miss Independent"
-
-[[sarki]]  # YouTube 679,012,046 izlenme; deezer-populer:7675055
-sanatci = "Berlin"
-ad = "Take My Breath Away"
-
-[[sarki]]  # YouTube 648,984,458 izlenme; deezer-populer:7818900
-sanatci = "The Rolling Stones"
-ad = "Paint It, Black"
-
-# kesif 2026-10-17: popüler şarkılar (yanki kesif)
-[[sarki]]  # YouTube 1,462,727,464 izlenme; deezer-populer:619310
-sanatci = "Europe"
-ad = "The Final Countdown"
-
-[[sarki]]  # YouTube 641,093,507 izlenme; deezer-populer:632447
-sanatci = "*NSYNC"
-ad = "Bye Bye Bye"
-
-[[sarki]]  # YouTube 640,587,964 izlenme; deezer-populer:4188437
-sanatci = "Owl City"
-ad = "Fireflies"
-
-[[sarki]]  # YouTube 619,730,799 izlenme; deezer-populer:2263033
-sanatci = "Dire Straits"
-ad = "Sultans Of Swing"
-
-[[sarki]]  # YouTube 610,444,614 izlenme; deezer-populer:71828723
-sanatci = "Nickelback"
-ad = "How You Remind Me"
-
-[[sarki]]  # YouTube 592,374,540 izlenme; deezer-populer:136710424
-sanatci = "Ben E. King"
-ad = "Stand By Me"
-
-[[sarki]]  # YouTube 586,279,568 izlenme; deezer-populer:15194531
-sanatci = "Wham!"
-ad = "Wake Me Up Before You Go-Go"
-
-[[sarki]]  # YouTube 586,193,816 izlenme; deezer-populer:468232772
-sanatci = "Calum Scott"
-ad = "Dancing On My Own"
-
-[[sarki]]  # YouTube 579,187,955 izlenme; deezer-populer:75981528
-sanatci = "Whitney Houston"
-ad = "I Wanna Dance with Somebody (Who Loves Me)"
-
-[[sarki]]  # YouTube 572,626,999 izlenme; deezer-populer:92198180
-sanatci = "M83"
-ad = "Midnight City"
-
-# kesif 2026-10-17: popüler şarkılar (yanki kesif)
-[[sarki]]  # YouTube 1,242,092,382 izlenme; deezer-populer:90248141
-sanatci = "One Direction"
-ad = "Night Changes"
-
-[[sarki]]  # YouTube 647,150,449 izlenme; deezer-populer:2438245
-sanatci = "Christina Aguilera"
-ad = "Lady Marmalade"
-
-[[sarki]]  # YouTube 572,076,977 izlenme; deezer-populer:68515055
-sanatci = "Depeche Mode"
-ad = "Enjoy the Silence"
-
-[[sarki]]  # YouTube 566,776,574 izlenme; deezer-populer:4116951
-sanatci = "Skillet"
-ad = "Monster"
-
-[[sarki]]  # YouTube 554,180,080 izlenme; deezer-populer:884756
-sanatci = "t.A.T.u."
-ad = "All The Things She Said"
-
-[[sarki]]  # YouTube 547,919,079 izlenme; deezer-populer:77861338
-sanatci = "Becky G"
-ad = "Shower"
-
-[[sarki]]  # YouTube 545,833,997 izlenme; deezer-populer:353398321
-sanatci = "Billy Idol"
-ad = "Eyes Without A Face"
-
-[[sarki]]  # YouTube 530,537,301 izlenme; deezer-populer:3098217
-sanatci = "Robbie Williams"
-ad = "Feel"
-
-[[sarki]]  # YouTube 527,588,743 izlenme; deezer-populer:1030221
-sanatci = "Men At Work"
-ad = "Down Under"
-
-[[sarki]]  # YouTube 485,870,645 izlenme; deezer-populer:90326361
-sanatci = "WALK THE MOON"
-ad = "Shut Up and Dance"
-
-# kesif 2026-10-18: popüler şarkılar (yanki kesif)
-[[sarki]]  # YouTube 493,628,016 izlenme; deezer-populer:882296
-sanatci = "Fergie"
-ad = "Big Girls Don't Cry (Personal)"
-
-[[sarki]]  # YouTube 483,598,438 izlenme; deezer-populer:580936
-sanatci = "Destiny's Child"
-ad = "Say My Name"
-
-[[sarki]]  # YouTube 477,054,928 izlenme; deezer-populer:786717
-sanatci = "Cher"
-ad = "Believe"
-
-[[sarki]]  # YouTube 475,264,480 izlenme; deezer-populer:79590714
-sanatci = "Charli xcx"
-ad = "Boom Clap"
-
-[[sarki]]  # YouTube 472,489,970 izlenme; deezer-populer:2794160
-sanatci = "Gnarls Barkley"
-ad = "Crazy"
-
-[[sarki]]  # YouTube 457,356,902 izlenme; deezer-populer:916496
-sanatci = "Blackstreet"
-ad = "No Diggity"
-
-[[sarki]]  # YouTube 437,319,306 izlenme; deezer-populer:127354207
-sanatci = "blink-182"
-ad = "All The Small Things"
-
-[[sarki]]  # YouTube 429,645,277 izlenme; deezer-populer:664507
-sanatci = "Madonna"
-ad = "Like a Prayer"
-
-[[sarki]]  # YouTube 425,123,512 izlenme; deezer-populer:371593461
-sanatci = "Portugal. The Man"
-ad = "Feel It Still"
-
-[[sarki]]  # YouTube 416,896,640 izlenme; deezer-populer:4288159
-sanatci = "Laura Branigan"
-ad = "Self Control"
-
-# kesif 2026-10-18: popüler şarkılar (yanki kesif)
-[[sarki]]  # YouTube 526,798,387 izlenme; deezer-populer:14876039
-sanatci = "Jordin Sparks"
-ad = "No Air"
-
-[[sarki]]  # YouTube 449,131,991 izlenme; deezer-populer:80276126
-sanatci = "Seether"
-ad = "Broken"
-
-[[sarki]]  # YouTube 444,457,581 izlenme; deezer-populer:5079647
-sanatci = "Simple Minds"
-ad = "Don't You (Forget About Me)"
-
-[[sarki]]  # YouTube 413,108,207 izlenme; deezer-populer:104011168
-sanatci = "Limp Bizkit"
-ad = "Rollin' (Air Raid Vehicle)"
-
-[[sarki]]  # YouTube 411,883,397 izlenme; deezer-populer:2675175
-sanatci = "Soulja Boy Tell'em"
-ad = "Kiss Me Thru The Phone"
-
-[[sarki]]  # YouTube 410,987,314 izlenme; deezer-populer:1138006
-sanatci = "Counting Crows"
-ad = "Mr. Jones"
-
-[[sarki]]  # YouTube 397,787,823 izlenme; deezer-populer:870041
-sanatci = "Wheatus"
-ad = "Teenage Dirtbag"
-
-[[sarki]]  # YouTube 393,063,133 izlenme; deezer-populer:68908956
-sanatci = "Train"
-ad = "Drops of Jupiter (Tell Me)"
-
-[[sarki]]  # YouTube 391,560,292 izlenme; deezer-populer:13128242
-sanatci = "Eric Carmen"
-ad = "Hungry Eyes"
-
-[[sarki]]  # YouTube 390,724,223 izlenme; deezer-populer:3142379
-sanatci = "Tina Turner"
-ad = "The Best"
-
-# kesif 2026-10-19: popüler şarkılar (yanki kesif)
-[[sarki]]  # YouTube 383,792,404 izlenme; deezer-populer:133577580
-sanatci = "Crowded House"
-ad = "Don't Dream It's Over"
-
-[[sarki]]  # YouTube 375,444,398 izlenme; deezer-populer:992131
-sanatci = "Natalie Imbruglia"
-ad = "Torn"
-
-[[sarki]]  # YouTube 363,962,804 izlenme; deezer-populer:3153065
-sanatci = "Kim Carnes"
-ad = "Bette Davis Eyes"
-
-[[sarki]]  # YouTube 363,340,472 izlenme; deezer-populer:7674865
-sanatci = "The Fray"
-ad = "How to Save a Life"
-
-[[sarki]]  # YouTube 362,590,445 izlenme; deezer-populer:62082829
-sanatci = "Rage Against the Machine"
-ad = "Killing In The Name"
-
-[[sarki]]  # YouTube 362,559,215 izlenme; deezer-populer:662879
-sanatci = "Pantera"
-ad = "Walk"
-
-[[sarki]]  # YouTube 358,550,522 izlenme; deezer-populer:518485472
-sanatci = "Dean Lewis"
-ad = "Be Alright"
-
-[[sarki]]  # YouTube 358,455,961 izlenme; deezer-populer:6276158
-sanatci = "Iyaz"
-ad = "Replay"
-
-[[sarki]]  # YouTube 354,373,377 izlenme; deezer-populer:3130319
-sanatci = "Spandau Ballet"
-ad = "True"
-
-[[sarki]]  # YouTube 353,432,649 izlenme; deezer-populer:943376
-sanatci = "M.I.A."
-ad = "Paper Planes"
-
-# kesif 2026-10-19: popüler şarkılar (yanki kesif)
-[[sarki]]  # YouTube 348,363,099 izlenme; deezer-populer:7193834
-sanatci = "John Lennon"
-ad = "Imagine"
-
-[[sarki]]  # YouTube 348,281,351 izlenme; deezer-populer:1015071
-sanatci = "Alice Cooper"
-ad = "Poison"
-
-[[sarki]]  # YouTube 327,129,508 izlenme; deezer-populer:4195713
-sanatci = "Muse"
-ad = "Uprising"
-
-[[sarki]]  # YouTube 326,920,713 izlenme; deezer-populer:983450
-sanatci = "Gwen Stefani"
-ad = "Hollaback Girl"
-
-[[sarki]]  # YouTube 326,349,693 izlenme; deezer-populer:3090875
-sanatci = "Thirty Seconds To Mars"
-ad = "The Kill"
-
-[[sarki]]  # YouTube 326,337,882 izlenme; deezer-populer:1855507607
-sanatci = "Estelle"
-ad = "American Boy"
-
-[[sarki]]  # YouTube 323,460,407 izlenme; deezer-populer:13144759
-sanatci = "Crazy Town"
-ad = "Butterfly"
-
-[[sarki]]  # YouTube 316,520,575 izlenme; deezer-populer:789250
-sanatci = "Alanis Morissette"
-ad = "Ironic"
-
-[[sarki]]  # YouTube 305,664,219 izlenme; deezer-populer:3611374
-sanatci = "Staind"
-ad = "It's Been Awhile"
-
-[[sarki]]  # YouTube 297,509,845 izlenme; deezer-populer:6685848
-sanatci = "Daniel Powter"
-ad = "Bad Day"
-
-# kesif 2026-10-20: popüler şarkılar (yanki kesif)
-[[sarki]]  # YouTube 677,108,716 izlenme; deezer-populer:3104484
-sanatci = "Blondie"
-ad = "Heart Of Glass"
-
-[[sarki]]  # YouTube 300,249,947 izlenme; deezer-populer:68976298
-sanatci = "The Smashing Pumpkins"
-ad = "1979"
-
-[[sarki]]  # YouTube 292,336,542 izlenme; deezer-populer:674711
-sanatci = "The Cars"
-ad = "Drive"
-
-[[sarki]]  # YouTube 289,938,098 izlenme; deezer-populer:94676704
-sanatci = "Ace of Base"
-ad = "Happy Nation"
-
-[[sarki]]  # YouTube 286,921,231 izlenme; deezer-populer:3155135
-sanatci = "The Animals"
-ad = "House of the Rising Sun"
-
-[[sarki]]  # YouTube 282,809,188 izlenme; deezer-populer:80274568
-sanatci = "Drowning Pool"
-ad = "Bodies"
-
-[[sarki]]  # YouTube 278,048,554 izlenme; deezer-populer:3012786851
-sanatci = "Gigi Perez"
-ad = "Sailor Song"
-
-[[sarki]]  # YouTube 277,140,800 izlenme; deezer-populer:2477001
-sanatci = "Simply Red"
-ad = "Holding Back the Years"
-
-[[sarki]]  # YouTube 269,930,157 izlenme; deezer-populer:14343282
-sanatci = "U2"
-ad = "One"
-
-[[sarki]]  # YouTube 266,881,190 izlenme; deezer-populer:3697671542
-sanatci = "Pink Floyd"
-ad = "Wish You Were Here"
+[[sarki]]  # RouteNote
+sanatci = "Backstreet Boys"
+ad = "I Want It That Way"
+
+[[sarki]]  # RouteNote
+sanatci = "Billie Eilish"
+ad = "lovely"
+
+[[sarki]]  # RouteNote
+sanatci = "Calvin Harris"
+ad = "This Is What You Came For"
+
+[[sarki]]  # RouteNote
+sanatci = "Carly Rae Jepsen"
+ad = "Call Me Maybe"
+
+[[sarki]]  # RouteNote
+sanatci = "Coldplay"
+ad = "Hymn for the Weekend"
+
+[[sarki]]  # RouteNote
+sanatci = "Ed Sheeran"
+ad = "Shape of You"
+
+[[sarki]]  # RouteNote
+sanatci = "Lady Gaga"
+ad = "Shallow"
+
+[[sarki]]  # RouteNote
+sanatci = "Linkin Park"
+ad = "Numb"
+
+[[sarki]]  # RouteNote
+sanatci = "Major Lazer"
+ad = "Lean On"
+
+[[sarki]]  # RouteNote
+sanatci = "P!nk"
+ad = "Just Give Me a Reason"
+
+[[sarki]]  # RouteNote
+sanatci = "Sia"
+ad = "Chandelier"
+
+[[sarki]]  # RouteNote
+sanatci = "Twenty One Pilots"
+ad = "Stressed Out"
 
 # kesif 2026-10-26: popüler şarkılar (yanki kesif)
-[[sarki]]  # YouTube 373,849,313 izlenme; deezer-populer:69982615
-sanatci = "Ciara"
-ad = "Like a Boy"
+[[sarki]]  # YouTube 39,264,877 izlenme; trend:apple:au,apple:ca,apple:gb,apple:ie,apple:us,deezer:Australia,deezer:Canada,deezer:Germany,deezer:Ireland,deezer:Netherlands,deezer:UK,deezer:USA,deezer:Worldwide
+sanatci = "ADÉLA"
+ad = "Nicole Kidman"
 
-[[sarki]]  # YouTube 351,393,092 izlenme; deezer-populer:483399272
-sanatci = "5 Seconds of Summer"
-ad = "Youngblood"
+[[sarki]]  # YouTube 42,192,937 izlenme; trend:apple:au,apple:ca,apple:gb,apple:ie,apple:us,deezer:Australia,deezer:Canada,deezer:Germany,deezer:Ireland,deezer:Netherlands,deezer:UK,deezer:USA,deezer:Worldwide
+sanatci = "Olivia Rodrigo"
+ad = "stupid song"
 
-[[sarki]]  # YouTube 306,211,454 izlenme; deezer-populer:75711295
-sanatci = "American Authors"
-ad = "Best Day Of My Life"
+[[sarki]]  # YouTube 124,661,581 izlenme; trend:apple:au,apple:ca,apple:gb,apple:ie,apple:us,deezer:Australia,deezer:Canada,deezer:Germany,deezer:Ireland,deezer:Netherlands,deezer:UK,deezer:USA,deezer:Worldwide
+sanatci = "Olivia Dean"
+ad = "Man I Need"
 
-[[sarki]]  # YouTube 266,177,810 izlenme; deezer-populer:373896581
-sanatci = "Jaymes Young"
-ad = "Infinity"
+[[sarki]]  # YouTube 482,087,276 izlenme; trend:apple:au,apple:ca,apple:gb,apple:ie,deezer:Australia,deezer:Canada,deezer:Germany,deezer:Ireland,deezer:Netherlands,deezer:UK,deezer:USA,deezer:Worldwide
+sanatci = "Alex Warren"
+ad = "Ordinary"
 
-[[sarki]]  # YouTube 261,273,605 izlenme; deezer-populer:1125953
-sanatci = "Ashanti"
-ad = "Foolish"
+[[sarki]]  # YouTube 15,293,593 izlenme; trend:apple:au,apple:ca,apple:gb,apple:ie,apple:us,deezer:Germany,deezer:Ireland,deezer:Netherlands,deezer:UK
+sanatci = "Tate McRae"
+ad = "Housewife"
 
-[[sarki]]  # YouTube 258,820,958 izlenme; deezer-populer:883648
-sanatci = "Creedence Clearwater Revival"
-ad = "Fortunate Son"
+[[sarki]]  # YouTube 82,077,297 izlenme; trend:deezer:Australia,deezer:Canada,deezer:Germany,deezer:Ireland,deezer:Netherlands,deezer:UK,deezer:USA,deezer:Worldwide
+sanatci = "Tame Impala"
+ad = "Dracula (with JENNIE)"
 
-[[sarki]]  # YouTube 257,487,038 izlenme; deezer-populer:14880812
-sanatci = "The Strokes"
-ad = "Reptilia"
+[[sarki]]  # YouTube 17,501,602 izlenme; trend:apple:au,apple:ca,apple:gb,apple:ie,apple:us,deezer:Germany,deezer:Ireland,deezer:Netherlands,deezer:UK
+sanatci = "Ashe"
+ad = "Stop The Wedding!"
 
-[[sarki]]  # YouTube 254,955,602 izlenme; deezer-populer:14876844
-sanatci = "Incubus"
-ad = "Drive"
+[[sarki]]  # YouTube 19,614,207 izlenme; trend:apple:au,apple:ca,apple:gb,apple:ie,apple:us,deezer:Germany,deezer:Ireland,deezer:Netherlands,deezer:UK
+sanatci = "SIENNA SPIRO"
+ad = "Great Expectation"
 
-[[sarki]]  # YouTube 250,024,994 izlenme; deezer-populer:546790
-sanatci = "Air Supply"
-ad = "All Out of Love"
+[[sarki]]  # YouTube 12,116,789 izlenme; trend:apple:au,apple:gb,apple:ie,deezer:Germany,deezer:Ireland,deezer:Netherlands,deezer:UK
+sanatci = "HUGEL"
+ad = "Movin' To The Sun"
 
-[[sarki]]  # YouTube 249,860,474 izlenme; deezer-populer:740318
-sanatci = "P.O.D"
-ad = "Youth of the Nation"
+[[sarki]]  # YouTube 4,403,087 izlenme; trend:apple:au,apple:gb,apple:ie,deezer:Netherlands,deezer:UK
+sanatci = "Jamie Miller"
+ad = "Babydoll"
