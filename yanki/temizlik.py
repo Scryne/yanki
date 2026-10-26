@@ -113,9 +113,13 @@ def arsiv_plani(calisma: Path, gun: int = 7, simdi: datetime | None = None) -> l
             tarih = date.fromisoformat(k.name[:10])
         except ValueError:
             continue
-        if k.is_dir() and tarih <= sinir:
-            sonuc.append(k)
+        if k.is_dir() and tarih <= sinir and any(_silinir(f) for f in k.rglob("*") if f.is_file()):
+            sonuc.append(k)  # yalnız kayıtları kalmış klasör her koşuda "0 MB silindi" yazmasın
     return sonuc
+
+
+def _silinir(f: Path) -> bool:
+    return not (f.name in KAYIT_DOSYALARI or (f.suffix.lower() == ".jpg" and f.parent.name == "paket"))
 
 
 def boyut(klasor: Path) -> int:
@@ -132,7 +136,7 @@ def arsiv_sil(klasor: Path) -> int:
     temizlikte. Dönen: silinen bayt."""
     once = boyut(klasor)
     for f in sorted(klasor.rglob("*")):
-        if f.is_file() and not (f.name in KAYIT_DOSYALARI or (f.suffix.lower() == ".jpg" and f.parent.name == "paket")):
+        if f.is_file() and _silinir(f):
             try:
                 f.unlink()
             except OSError:

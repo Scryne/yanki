@@ -248,3 +248,4 @@ def test_oda_panel_kipinde_yuklendi_kaydi(tmp_path, monkeypatch):
     assert r.status_code == 200 and durum.oku(c, "adele-hello").asama == "yuklendi"
     assert takip.yukleme_bilgisi(c, "adele-hello")["dagitimci"] == "distributemusic"
     assert istemci.post("/api/sanatci/adele-hello/yuklendi", json={"onay": "hello"}).status_code == 409
+

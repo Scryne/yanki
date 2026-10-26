@@ -1030,6 +1030,11 @@ Dört alan paralel denetlendi (üretim/kiralık GPU, hazırlık/keşif, paket/da
   dolduran bir eklenti eklenmişti; commit'lenmemişti. Geri getirilmedi: `git stash` (`yeniden-yayin geri konmasi`) içinde
   duruyor. O akışın açtığı 18 taslak (`calisma/elle/`) hiçbir dağıtıcıya paketlenip gönderilemez (`elle.KOPYA_ENGELI`);
   silmek Scryne'ın.
+- **Doğrulama:** 640 test, CI yeşil (JS/PS sözdizimi dahil). Gerçek veriyle: `yanki durum` (DistributeMusic panel kipi
+  görünüyor), Adele — Hello'nun kaynağı kayıtlı videodan geçici klasöre 8 sn'de indi (süre birebir), gerçek paket
+  verisiyle DistributeMusic YUKLE.md üretildi, oda `/api/saglik` ve `/api/pano` 200. Görevler yeniden açıldı; ilk sürekli
+  koşu (10:48) kod 0: 10 şarkı keşfedilip hazırlandı, üretim RunPod bakiyesinde (0,80 $) bekledi, arşiv kayıtları (99
+  dosya) yerinde kaldı, yedek alındı.
 - **Karar Scryne'da:** DistributeMusic'e cover kabulünü yazılı sormak (metin araştırma 11'de); Pro planı; RunPod bakiyesi
   (0,80 $; 8 şarkılık koşu ~40 iş, en az ~2 $ ister); `calisma/elle/`'deki kopya taslakları silmek.
 
