@@ -103,7 +103,8 @@ def test_egitim_artik_podunun_suresi_butceye_yazilir(tmp_path, monkeypatch):
 def test_isci_kos_yarim_yoklama_ciktisinda_dusmez():
     class Pod:
         def __init__(self):
-            self.yokla = ['[{"id": "a", "basari": tr', json.dumps([{"id": "a", "basari": True}]) + "\n#DURUM#\nBITTI\n"]
+            self.yokla = ['SURUYOR\n#SONUC#\n[{"id": "a", "basari": tr',
+                          "BITTI\n#SONUC#\n" + json.dumps([{"id": "a", "basari": True}]) + "\n#GUNLUK#\n0\n"]
 
         def komut(self, betik, zaman_asimi=120, tekrar=True):
             if "motor_sonuc.json" not in betik or "cat " not in betik:
@@ -212,14 +213,27 @@ def test_dosyasiz_adaya_onarim_istenemez_olmayan_onarim_kabul_edilemez():
     assert d.asama == "onarim" and len(d.adaylar[1].onarimlar) == len(a.onarim.tohumlar)
 
 
-def test_aday_sonundan_sonraki_onarim_araligi_acik_hatayla_durur(tmp_path):
+def test_aday_sonundan_sonraki_onarim_araligi_yalniz_onarimi_dusurur(tmp_path):
+    """Denetim 7: önce bütün şarkı `hata`ya düşüyordu (tek çıkış `bastan`, iyi adaylar arşive). Şimdi yalnız o onarım
+    `hata`, şarkı dinlemeye döner."""
     c = tmp_path / "c"
     _sarki(c, "k", 30)
     uretim.uret(_ayar(), c, calistir=SahteMotor(), degerlendir=GECER)
     with durum.guncelle(c, "k") as d:
         uretim.onarim_iste(_ayar(), d, 1, 40, 45)
     d = uretim.uret(_ayar(), c, calistir=SahteMotor(), degerlendir=GECER)[0]
-    assert d.asama == "hata" and "sonundan" in d.hata
+    onarimlar = next(x for x in d.adaylar if x.no == 1).onarimlar
+    assert d.asama == "uretildi" and onarimlar and all(o["durum"] == "hata" and "sonundan" in o["hata"]
+                                                       for o in onarimlar)
+
+
+def test_onarim_istegi_aday_suresini_asamaz(tmp_path):
+    a = replace(_ayar(), kok=tmp_path)  # gerçek calisma/'ya dokunulmaz
+    c = tmp_path / "calisma"
+    _sarki(c, "k", 30)
+    uretim.uret(a, c, calistir=SahteMotor(), degerlendir=GECER)
+    with durum.guncelle(c, "k") as d, pytest.raises(ValueError, match="sonundan"):
+        uretim.onarim_iste(a, d, 1, 40, 45)
 
 
 
@@ -298,3 +312,32 @@ def test_pano_ve_ozet_uretim_engelini_soyler(tmp_path):
     assert "0.80" in u["metin"] and "aşamasındaki 1 şarkı" in u["metin"] and "13:30" in u["metin"]
     assert "kredi yükle" in p["simdi"]["engel"]  # "Şu an" şarkıları "üretiliyor" değil "sırada" gösterir
     assert "kredi yükle" in cli.ozet(tmp_path)["uretim_engeli"]
+
+
+def test_silinmis_kaynak_kayitli_videodan_geri_gelir(tmp_path):
+    """Denetim 7: dondurmada kuyruktaki bütün `kaynak.wav`'lar silinmişti; üretim hepsini `hata`ya düşürürdü."""
+    import soundfile as sf
+
+    from yanki import hazirlik
+
+    c = tmp_path / "calisma"
+    d = _sarki(c, "k", 30)
+    asil = c / "k" / "kaynak.wav"
+    yedek = tmp_path / "yedek.wav"
+    asil.replace(yedek)
+    d.kaynak["nereden"] = "youtube:abc"
+    istenen = []
+
+    def indir(vid, hedef):
+        istenen.append(vid)
+        hedef.write_bytes(yedek.read_bytes())
+        return hedef
+
+    assert hazirlik.kaynak_onar(c, d, tmp_path / "girdi", indir=indir) == asil and istenen == ["abc"]
+    assert abs(sf.info(str(asil)).duration - 30) < 0.1 and not (c / "k" / "kaynak_ham.indirilen").exists()
+    assert hazirlik.kaynak_onar(c, d, tmp_path / "girdi", indir=indir) is None  # yerindeyse dokunulmaz
+    asil.unlink()
+    d.kaynak["sure_sn"] = 200  # başka sürüm inerse kabul edilmez
+    with pytest.raises(hazirlik.kaynak.KaynakYok, match="kayıtta"):
+        hazirlik.kaynak_onar(c, d, tmp_path / "girdi", indir=indir)
+    assert not asil.exists()

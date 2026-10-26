@@ -114,8 +114,10 @@ def test_talep_istenmeyen_surumleri_atar():
 
 
 def test_puan_ve_siralama():
-    x = kesif.Aday("A", "1", "k", youtube_izlenme=1000, rakip_cover=1, geri_geldi=False, sanatci_uyusuyor=True)
-    y = kesif.Aday("B", "2", "k", youtube_izlenme=900, rakip_cover=0, geri_geldi=False, sanatci_uyusuyor=True)
+    x = kesif.Aday("A", "1", "k", youtube_izlenme=1000, rakip_cover=1, geri_geldi=False, sanatci_uyusuyor=True,
+                  soz_var=True)
+    y = kesif.Aday("B", "2", "k", youtube_izlenme=900, rakip_cover=0, geri_geldi=False, sanatci_uyusuyor=True,
+                  soz_var=True)
     z = kesif.Aday("C", "3", "k", youtube_izlenme=10**9, geri_geldi=True)
     assert [a.sanatci for a in kesif.sirala({a.kimlik: a for a in (x, y, z)})] == ["B", "A", "C"]
 
@@ -143,7 +145,7 @@ def test_listeye_ekle_dogrulanmisi_ekler_mevcudu_atlar(tmp_path):
         kesif.Aday("İkinci", "Y", "k", youtube_izlenme=4000, geri_geldi=False),
     ]
     for x in adaylar:
-        x.sanatci_uyusuyor = True
+        x.sanatci_uyusuyor = x.soz_var = True
     eklenen = kesif.listeye_ekle(adaylar, lyol, calisma, adet=1)
     assert [x.sanatci for x in eklenen] == ['Yeni "Tırnak"']
     metin = lyol.read_text(encoding="utf-8")
@@ -160,7 +162,7 @@ def test_listeye_ekle_egitim_sanatcisini_almaz(tmp_path):
     adaylar = [kesif.Aday("Dua Lipa", "New Rules", "k", youtube_izlenme=10**9, geri_geldi=False),
                kesif.Aday("ZAYN", "Dusk Till Dawn", "k", youtube_izlenme=10**8, geri_geldi=False)]
     for x in adaylar:
-        x.sanatci_uyusuyor = True
+        x.sanatci_uyusuyor = x.soz_var = True
     assert [x.sanatci for x in kesif.listeye_ekle(adaylar, lyol, calisma, 5, {"dua lipa"})] == ["ZAYN"]
 
 
@@ -310,7 +312,7 @@ def test_duzenleme_ve_takma_ad_eklenmez(tmp_path):
     a = kesif.Aday("Lizzy Rey", "Serial Killer", "k", geri_geldi=False)
     kesif.talep_olc(a, arama=lambda q: [("Lana Del Rey - Serial Killer (Unreleased)", 3_000_000)])
     assert a.youtube_izlenme == 3_000_000 and a.sanatci_uyusuyor is False and a.puan == 0
-    b = kesif.Aday("Sezen Aksu", "Gülümse", "k", geri_geldi=False)
+    b = kesif.Aday("Sezen Aksu", "Gülümse", "k", geri_geldi=False, soz_var=True)
     kesif.talep_olc(b, arama=lambda q: [("Sezen Aksu - Gülümse (Official Video)", 7_000_000)])
     assert b.sanatci_uyusuyor is True and b.puan == 7_000_000
     lyol = tmp_path / "liste.toml"
@@ -364,10 +366,19 @@ def test_soz_kontrol_sozsuz_ve_uzun():
     assert kesif.soz_kontrol(kesif.Aday("A", "B", "k"), yok).soz_var is False
 
 
+def test_olculmemis_aday_puan_almaz():
+    """LRCLIB o gece düşünce `soz_var`/`sure_sn` None kalıyordu; popüler aday yine de listeye giriyordu (November
+    Rain, Feel: sözsüz, süresiz, türsüz). Ölçülmemiş söz ve popülerde bilinmeyen tür/süre puan almaz."""
+    ortak = dict(youtube_izlenme=10**8, sanatci_uyusuyor=True, geri_geldi=False)
+    assert kesif.Aday("A", "B", "k", **ortak).puan == 0
+    pop = kesif.Aday("A", "B", "k", neden="populer", ingilizce=True, soz_var=True, sure_sn=280, turler=[], **ortak)
+    assert pop.uygun is None and pop.puan == 0
+
+
 def test_puan_kapali_pazar_orani():
-    tam = kesif.Aday("A", "1", "k", youtube_izlenme=1000, geri_geldi=False, sanatci_uyusuyor=True,
+    tam = kesif.Aday("A", "1", "k", youtube_izlenme=1000, geri_geldi=False, sanatci_uyusuyor=True, soz_var=True,
                      bakilan_pazarlar=["US", "GB", "DE", "TR"], kapali_pazarlar=["US", "GB", "DE", "TR"])
-    yarim = kesif.Aday("B", "2", "k", youtube_izlenme=1000, geri_geldi=False, sanatci_uyusuyor=True,
+    yarim = kesif.Aday("B", "2", "k", youtube_izlenme=1000, geri_geldi=False, sanatci_uyusuyor=True, soz_var=True,
                        bakilan_pazarlar=["US", "GB", "DE", "TR"], kapali_pazarlar=["DE", "TR"])
     assert (tam.puan, yarim.puan) == (1000, 500)
     assert (kesif.hal(tam), kesif.hal(yarim)) == ("kaldırılmış", "kaldırılmış")
@@ -640,6 +651,8 @@ def test_populer_deezer_listelerinden_editor_once_ve_bilinen_atlanir():
     a = adaylar[0]
     assert a.populer and a.geri_geldi is False and kesif.hal(a) == "talep yok"
     a.youtube_izlenme, a.sanatci_uyusuyor, a.soz_var, a.ingilizce = 10**8, True, True, True
+    assert a.puan == 0  # türü ve süresi bilinmeyen popüler aday puan almaz (Denetim 7)
+    a.turler, a.sure_sn = ["pop"], 285
     assert kesif.hal(a) == "popüler" and a.puan > 0
     assert not kesif.spotifya_sorulur(a)  # Spotify kotası kaldırılmış şarkılara
 
@@ -647,7 +660,7 @@ def test_populer_deezer_listelerinden_editor_once_ve_bilinen_atlanir():
 def test_populer_puani_kaldirilmistan_dusuk_ve_yalniz_ingilizce():
     ortak = dict(youtube_izlenme=10**6, sanatci_uyusuyor=True, soz_var=True, geri_geldi=False)
     kaldirilmis = kesif.Aday("A", "B", "k", bakilan_pazarlar=["GB"], kapali_pazarlar=["GB"], **ortak)
-    pop = kesif.Aday("C", "D", "k", neden="populer", ingilizce=True, **ortak)
+    pop = kesif.Aday("C", "D", "k", neden="populer", ingilizce=True, turler=["pop"], sure_sn=200, **ortak)
     assert kaldirilmis.puan == 10**6 and pop.puan == 10**6 * kesif.POPULER_KAPSAM
     pop.ingilizce = False
     assert pop.puan == 0 and kesif.hal(pop) == "İngilizce değil"

@@ -8,7 +8,7 @@ import json
 from dataclasses import asdict
 from pathlib import Path
 
-from yanki import ag, durum, kapilar, kaynak, kunye, motor, sozler
+from yanki import ag, durum, kapilar, kaynak, kunye, motor, ses, sozler
 from yanki.ayarlar import Ayarlar
 from yanki.liste import VOKAL, Sarki
 
@@ -72,6 +72,35 @@ def girdi_hazirla(a: Ayarlar, s: Sarki, calisma: Path, girdi: Path) -> durum.Dur
         return yaz("hata", f"kaynak ses: {neden}. `girdi/kaynak/{s.kimlik}.mp3` olarak bırakılabilir")
     alanlar["kaynak"] = {"dosya": kyn.wav.name, "nereden": kyn.nereden, "baslik": kyn.baslik, "sure_sn": kyn.sure_sn}
     return yaz("hazir")
+
+
+def kaynak_onar(calisma: Path, d: durum.Durum, girdi: Path | None = None, indir=None) -> Path | None:
+    """Analizi bitmiş ama kaynak sesi diskten silinmiş şarkı (2026-10-20 dondurmasında bütün sesler silindi: kuyruktaki
+    143 şarkının hiçbirinde `kaynak.wav` yoktu, üretim hepsini `hata`ya düşürürdü — Denetim 7): ses kayıttaki aynı
+    kaynaktan geri gelir (`girdi/kaynak/<kimlik>.*` ya da kayıtlı YouTube videosu; yeniden arama yok, seçim değişmez),
+    süresi kayıttakiyle ±`kaynak.TOLERANS_SN` tutmalı. Ses yerindeyse None; geri getirilemezse `kaynak.KaynakYok`."""
+    k = durum.klasor(calisma, d.kimlik)
+    dosya_adi = (d.kaynak or {}).get("dosya")
+    if not dosya_adi or (k / dosya_adi).exists():
+        return None
+    hedef, nereden = k / dosya_adi, (d.kaynak or {}).get("nereden") or ""
+    girdi = girdi or calisma.parent / "girdi"
+    if yerel := kaynak.klasorden(girdi / "kaynak", d.kimlik):
+        ses.wav48(yerel, hedef)
+    elif nereden.startswith("youtube:"):
+        ham = (indir or kaynak.youtube_indir)(nereden.split(":", 1)[1], k / "kaynak_ham.indirilen")
+        try:
+            ses.wav48(ham, hedef)
+        finally:
+            ham.unlink(missing_ok=True)
+    else:
+        raise kaynak.KaynakYok(f"kaynak ses silinmiş ve kaydı yok ({nereden or 'nereden boş'}): "
+                               f"`girdi/kaynak/{d.kimlik}.mp3` bırak")
+    beklenen = (d.kaynak or {}).get("sure_sn")
+    if beklenen and abs((sure := ses.sure(hedef)) - beklenen) > kaynak.TOLERANS_SN:
+        hedef.unlink(missing_ok=True)
+        raise kaynak.KaynakYok(f"geri indirilen kaynak {sure:.1f} sn, kayıtta {beklenen:.1f} sn")
+    return hedef
 
 
 def _surumler(s: Sarki) -> list[sozler.Soz]:

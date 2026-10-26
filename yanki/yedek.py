@@ -36,6 +36,7 @@ DESENLER = (
     "calisma/elle/*/kapak.jpg",
     "calisma/eposta/*.json",  # işlenmiş RouteNote e-postaları (karar bir kez uygulanır)
     "calisma/kesif/*.json",
+    "calisma/dinleme/*.json",  # Scryne'ın kulak oyları ve isabet ölçümü: yeniden üretilemez (seçici eşiği bunlardan)
     "calisma/olaylar.jsonl",  # bildirimlerin tekrar anahtarları: geri yüklemede eski olaylar yeniden bildirilmesin
     "calisma/gunluk/runpod.json",  # kiralık GPU harcaması: aylık bütçe sınırı bundan hesaplanıyor
     "girdi/liste.toml",

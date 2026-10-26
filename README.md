@@ -177,9 +177,10 @@ vb. aday Deezer türünden tanınır, puan almaz, kendiliğinden listeye girmez 
 
 Diğer komutlar: `yanki durum` (motor, model, araçlar, GPU, anahtarlar, disk, şarkıların aşaması), `yanki ozet` (tek satır),
 `yanki temizle [--uygula]` (yüklenmiş şarkılarda seçilmeyen adaylar, reddedilen şarkıların sesleri, 7 günden eski
-`_arsiv`; gece koşusu kendisi siler),
+`_arsiv`'in sesleri — yayın kayıtları kalır; gece koşusu kendisi siler),
 `yanki yedekle [--zorla]` (seçimler, yükleme bilgisi — `bastan` arşivi ve eski paketin taslak UPC'si dahil —, elle
-taslakların bilgisi ve kapağı, RouteNote e-posta kaydı, kazanç raporları, keşif kaydı ve CSV'leri, liste, ayarlar; ses ve
+taslakların bilgisi ve kapağı, RouteNote e-posta kaydı, kazanç raporları, keşif kaydı ve CSV'leri, kulak oyları, liste,
+ayarlar; ses ve
 sır yok; gece haftada bir; üretimdeki LoRA yedek klasörüne bir kez kopyalanır),
 `yanki isabet [--ayrinti]` (otomatik onayın öneri kuralı Scryne'ın kulak seçimlerini ne sıklıkla tutuyor; Faz 12 eşiği
 %70; ölçüm `calisma/dinleme/isabet.json`'a, oran panoda "Otomatik onay" satırında; estetik seçici yan yana),

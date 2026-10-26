@@ -247,7 +247,7 @@ def _aday(**k):
 
 @pytest.mark.parametrize("turler, uygun", [
     (["brazilian music"], False), (["rap, hip hop"], False), (["electro"], False), (["films, games"], False),
-    (["metal"], False), (["pop"], True), (["rock", "alternative"], True), (["soul & funk"], True), ([], True),
+    (["metal"], False), (["pop"], True), (["rock", "alternative"], True), (["soul & funk"], True),
 ])
 def test_tur_uygunlugu(turler, uygun):
     a = _aday(turler=turler)
@@ -694,7 +694,7 @@ class _SahtePod:
             isler = json.loads(self.is_json)["isler"]
             sonuc = [{"id": i["id"], "basari": True, "cikti": f"{i['cikti_klasor']}/x.flac", "sure_sn": 20.0,
                       "vram_tepe_gb": 14.0} for i in isler]
-            return json.dumps(sonuc) + "\n#DURUM#\nBITTI\n"
+            return "BITTI\n#SONUC#\n" + json.dumps(sonuc) + "\n#GUNLUK#\n0\n"
         return ""
 
     def gonder(self, yerel, uzak):

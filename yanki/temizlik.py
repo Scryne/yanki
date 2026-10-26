@@ -8,13 +8,13 @@ disk %95 doldu (`calisma` 72 GB); Scryne: "seçilen aday sadece kalır, reddedil
   parçaların sesleri silinir. Yüklemeden önce silinmez: veto penceresinde ve paketlenene kadar seçim değişebiliyor.
 - Reddedilmiş şarkı: bütün sesleri (kaynak, adaylar, parçalar, paket) silinir; `durum.json`, sözler ve kapak kalır.
   Durum kalmalı: klasörü olan şarkı keşifte yeniden önerilmez ve listede olsa hazırlık onu yeniden indirmez.
-- `_arsiv/<tarih>…/` (`uretim.bastan`'ın taşıdığı eski adaylar) tarihinden `arsiv_gun` gün sonra silinir.
+- `_arsiv/<tarih>…/` (`uretim.bastan`'ın taşıdığı eski adaylar) tarihinden `arsiv_gun` gün sonra seslerinden boşaltılır;
+  yayın kayıtları (durum, paket metadata'sı, YUKLE.md, paket kapağı) kalır.
 
 Silinen adayın `dosya` alanı boşaltılır (kapı ölçüleri kalır), dinleme odası onu "üretilmedi" gibi gösterir. Deney
 klasörleri (`_spike`, `dinleme`, `olcum`, `_referans`) dokunulmaz.
 """
 
-import shutil
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -122,8 +122,22 @@ def boyut(klasor: Path) -> int:
     return sum(f.stat().st_size for f in klasor.rglob("*") if f.is_file())
 
 
+KAYIT_DOSYALARI = ("durum.json", "metadata.json", "YUKLE.md")  # yayın kaydı: UPC/ISRC, künye (oda → Sanatçı)
+
+
 def arsiv_sil(klasor: Path) -> int:
-    """Silinen bayt; kilitli dosya (Windows) kalırsa geri kalanı silinir, kalan sonraki temizlikte."""
+    """`_arsiv/<tarih>` klasörünün sesleri ve ara dosyaları; yayın kayıtları (`durum.json`, `paket/metadata.json`,
+    `YUKLE.md`, paketin kapağı) kalır: dağıtımcıda yaşayan eski yayınların UPC'si yalnız orada (2026-10-18–20 arası
+    klasör bütünüyle silinmişti, kayıtlar yedekten döndü — Denetim 7). Kilitli dosya (Windows) kalırsa sonraki
+    temizlikte. Dönen: silinen bayt."""
     once = boyut(klasor)
-    shutil.rmtree(klasor, ignore_errors=True)
+    for f in sorted(klasor.rglob("*")):
+        if f.is_file() and not (f.name in KAYIT_DOSYALARI or (f.suffix.lower() == ".jpg" and f.parent.name == "paket")):
+            try:
+                f.unlink()
+            except OSError:
+                continue
+    for k in [*sorted(klasor.rglob("*"), key=lambda x: -len(x.parts)), klasor]:
+        if k.is_dir() and not any(k.iterdir()):
+            k.rmdir()
     return once - (boyut(klasor) if klasor.exists() else 0)

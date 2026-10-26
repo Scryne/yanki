@@ -363,11 +363,18 @@ def _dolu_kisiler(liste) -> list[list[str]]:
     return [x for x in liste or [] if (x[0] or x[1])]
 
 
+# Sökülen Bulucu → yeniden yayın akışının (c258c69) açtığı taslaklar: künye, ISRC ve ses başka bir yayından kopyalandı
+# (YouTube'dan inen kayıt). Paketlenmez, hiçbir dağıtıcıya gönderilmez; silmek Scryne'ın.
+KOPYA_ENGELI = "Bu taslak başka bir yayından kopyalandı (Bulucu yeniden yayın akışı, söküldü): gönderilemez, sil"
+
+
 def kontrol(calisma: Path, kimlik: str) -> dict:
     """{"eksik": [genel eksikler], "uyari": [...], "dagitici": {ad: [o dağıtıcıya özel eksikler]}}. Boş liste: hazır."""
     meta = oku(calisma, kimlik)
     k = klasor(calisma, kimlik)
     eksik, uyari = [], []
+    if meta.get("kaynak_parca"):
+        eksik.append(KOPYA_ENGELI)
     if not meta.get("baslik"):
         eksik.append("Şarkının adı")
     if not meta.get("sanatci"):
@@ -774,6 +781,8 @@ def paket_zip(calisma: Path, kimlik: str, dagitici: str = "elle") -> tuple[bytes
         raise Hata("bu dağıtıcının elle paketi yok")
     meta = oku(calisma, kimlik)
     k = klasor(calisma, kimlik)
+    if meta.get("kaynak_parca"):
+        raise Hata(KOPYA_ENGELI)
     if not (k / "ses.flac").exists() or not (k / "kapak.jpg").exists():
         raise Hata("önce ses ve kapak yükle")
     if dagitici == "freshtunes" and (eksik := hazir_mi(calisma, kimlik, "freshtunes")):

@@ -1,11 +1,13 @@
 ---
 proje: Yanki
 created: 2026-10-06
-modified: 2026-10-15
+modified: 2026-10-20
 type: roadmap
-status: aktif
+status: donduruldu
 ---
 # Yanki — Roadmap
+
+> **2026-10-20: proje donduruldu** (Scryne). Keşif, üretim, gece/sürekli koşu ve oda kapalı; Görev Zamanlayıcı'da `Yanki\Gece`, `Oda`, `Surekli` devre dışı. 🔄 fazlar olduğu yerde duruyor. Çözmek: `Enable-ScheduledTask -TaskPath \Yanki\` ve `state.json` → `asama: uygulama`.
 
 Durum sütunu session-start hook'u tarafından otomatik okunur — format bozulmasın:
 ⏳ Bekliyor / 🔄 Devam Ediyor / ✅ Tamamlandı / ⛔ Engelli.

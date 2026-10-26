@@ -6,6 +6,7 @@ Deezer'a gerçek istek atıyordu. Ağ gerektiren her yol sahte istemciyle ayrıc
 
 import urllib.error
 import urllib.request
+from pathlib import Path
 
 import pytest
 
@@ -16,9 +17,34 @@ def _agsiz(monkeypatch):
         raise urllib.error.URLError("testte ağ yok")
 
     monkeypatch.setattr(urllib.request, "urlopen", yok)
+    import yt_dlp
+    from curl_cffi import requests as curl_istek
+
     from yanki import runpod
 
+    # YouTube urllib kullanmıyor (yt-dlp, curl_cffi): ayrıca kapatılır; kendi sahtesini kuran test bunu ezer
+    monkeypatch.setattr(yt_dlp, "YoutubeDL", yok)
+    monkeypatch.setattr(curl_istek, "Session", yok)
+
     monkeypatch.setattr(runpod, "ssh_engeli", lambda: None)  # pod öncesi port denemesi (gerçek TCP bağlantısı)
+
+
+@pytest.fixture(autouse=True)
+def _gercek_veriye_yazmaz(monkeypatch):
+    """Gerçek `calisma/` ve `girdi/` testte yazılmaz. Denetim 7'de bir test `ayarlar.yukle().kok`'la sahte motoru gerçek
+    kuyrukta koşturdu, 86 şarkıyı `hata`ya düşürdü (elle geri alındı); bu kapı aynısını hemen düşürür."""
+    from yanki import ayarlar, dosya
+
+    korunan = [(ayarlar.KOK / ad).resolve() for ad in ("calisma", "girdi")]
+    asil = dosya.yaz
+
+    def yaz(yol, metin):
+        tam = Path(yol).resolve()
+        if any(tam.is_relative_to(k) for k in korunan):
+            raise AssertionError(f"test gerçek veriye yazıyor: {tam}")
+        return asil(yol, metin)
+
+    monkeypatch.setattr(dosya, "yaz", yaz)
 
 
 @pytest.fixture(autouse=True)

@@ -65,7 +65,7 @@ def test_isci_kos_biten_is_sayisini_yazar():
             if "motor_sonuc.json" not in betik or "cat " not in betik:
                 return ""
             s = self.yokla.pop(0)
-            return json.dumps(s) + "\n#DURUM#\n" + ("BITTI" if not self.yokla else "SURUYOR") + "\n"
+            return ("BITTI" if not self.yokla else "SURUYOR") + "\n#SONUC#\n" + json.dumps(s) + "\n#GUNLUK#\n0\n"
 
     satirlar = []
     sonuc = uzak.isci_kos(Pod(), "/root/ACE", 60, aralik_sn=0, toplam=2, bildir=satirlar.append)
@@ -247,7 +247,8 @@ def test_kesif_ayni_sanatcidan_bekleyen_varken_eklemez(tmp_path):
     calisma.mkdir()
 
     def aday(sanatci, ad, izlenme):
-        return kesif.Aday(sanatci, ad, "k", youtube_izlenme=izlenme, geri_geldi=False, sanatci_uyusuyor=True)
+        return kesif.Aday(sanatci, ad, "k", youtube_izlenme=izlenme, geri_geldi=False, sanatci_uyusuyor=True,
+                          soz_var=True)
 
     adaylar = [aday("Xiu Xiu", "Clowne Towne", 10**6), aday("Deerhoof", "A", 9 * 10**5),
                aday("Deerhoof", "B", 8 * 10**5), aday("Janice Javier", "Heaven Knows", 10**5)]
@@ -311,7 +312,7 @@ def test_isci_kos_kopuk_yoklamada_dusmez_isci_bitene_kadar_bekler():
             s = self.yokla.pop(0)
             if s == "kopuk":
                 raise runpod.RunPodHatasi("komut 255: ssh: connect to host 1.2.3.4 port 22: No route to host")
-            return json.dumps(s) + "\n#DURUM#\nBITTI\n"
+            return "BITTI\n#SONUC#\n" + json.dumps(s) + "\n#GUNLUK#\n0\n"
 
     satirlar = []
     sonuc = uzak.isci_kos(Pod(), "/root/ACE", 60, aralik_sn=0, toplam=1, bildir=satirlar.append)
@@ -329,7 +330,7 @@ def test_isci_kos_ilerlemeyen_isciyi_durdurur():
             self.betikler.append(betik)
             if "motor_sonuc.json" not in betik or "cat " not in betik:
                 return ""
-            return json.dumps([{"id": "a", "basari": True}]) + "\n#DURUM#\nSURUYOR\n#GUNLUK#\n4096\n"
+            return "SURUYOR\n#SONUC#\n" + json.dumps([{"id": "a", "basari": True}]) + "\n#GUNLUK#\n4096\n"
 
     p, satirlar = Pod(), []
     sonuc = uzak.isci_kos(p, "/root/ACE", 3600, aralik_sn=0, toplam=3, bildir=satirlar.append, sessiz_sn=0)

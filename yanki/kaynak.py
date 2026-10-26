@@ -48,9 +48,33 @@ class Aday:
     kanal: str = ""
 
 
-def sec(adaylar: list[Aday], beklenen_sn: float | None) -> Aday:
-    """İstenmeyen sürümleri (canlı, cover, remix…) at; beklenen süreye en yakın olanı seç."""
-    temiz = [a for a in adaylar if not ISTENMEYEN.search(a.baslik)]
+def _istenmeyen(baslik: str, ad: str | None) -> bool:
+    """Canlı, cover, remix… sürüm mü. Şarkının kendi adındaki sözcükler sayılmaz ("Live Forever", "Cover Me", "Loop"
+    adlı şarkılar her adayda eleniyordu — Denetim 7)."""
+    if ad:
+        from yanki.kesif import _duz, sade_ad
+
+        if sade := sade_ad(ad):
+            baslik = f" {_duz(baslik)} ".replace(f" {sade} ", " ")
+    return bool(ISTENMEYEN.search(baslik))
+
+
+def ilgili(a: Aday, ad: str | None) -> bool:
+    """Başlıkta şarkının adı bütün olarak geçiyor mu (Topic kanalında başlık yalnız şarkı adı). Süre tek başına
+    yetmiyor: aynı süreli başka bir şarkının sesi, doğru sözle cover'a gidiyordu (Denetim 7). Ad harfsizse (ör. yalnız
+    Hangul) karar verilmez."""
+    if not ad:
+        return True
+    from yanki.kesif import _duz, sade_ad
+
+    sade = sade_ad(ad)
+    return not sade or f" {sade} " in f" {_duz(a.baslik)} "
+
+
+def sec(adaylar: list[Aday], beklenen_sn: float | None, ad: str | None = None) -> Aday:
+    """İstenmeyen sürümleri (canlı, cover, remix…) ve başlığında şarkının adı geçmeyenleri at; beklenen süreye en
+    yakın olanı seç."""
+    temiz = [a for a in adaylar if not _istenmeyen(a.baslik, ad) and ilgili(a, ad)]
     if beklenen_sn is not None:
         temiz = [a for a in temiz if a.sure_sn is not None and abs(a.sure_sn - beklenen_sn) <= TOLERANS_SN]
         temiz.sort(key=lambda a: abs(a.sure_sn - beklenen_sn))
@@ -59,13 +83,13 @@ def sec(adaylar: list[Aday], beklenen_sn: float | None) -> Aday:
     return temiz[0]
 
 
-def surumle_sec(adaylar: list[Aday], sureler: list[float]) -> tuple[Aday, float]:
+def surumle_sec(adaylar: list[Aday], sureler: list[float], ad: str | None = None) -> tuple[Aday, float]:
     """`sec` beklenen süreye uyan aday bulamadığında: YouTube'un sırasıyla ilk temiz adayın süresine ±TOLERANS uyan
     LRCLIB sürümü. LRCLIB'in `/get`'i bazen başka sürümü veriyor (Dark Horse 297 sn, kayıt 216; Havana 172, kayıt 219;
     2026-10-15'te 6 şarkı bu yüzden `hata`daydı). Sıra YouTube'un: süre başka bir düzenlemeye (No Rap, radio edit)
     tesadüfen uyarsa resmî ses önce gelir."""
     for a in adaylar:
-        if ISTENMEYEN.search(a.baslik) or a.sure_sn is None:
+        if _istenmeyen(a.baslik, ad) or not ilgili(a, ad) or a.sure_sn is None:
             continue
         if yakin := [s for s in sureler if abs(a.sure_sn - s) <= TOLERANS_SN]:
             return a, min(yakin, key=lambda s: abs(a.sure_sn - s))
@@ -176,11 +200,11 @@ def hazirla(kimlik: str, sanatci: str, ad: str, beklenen_sn: float | None, klaso
             secilen = adaylar[0]
         else:
             try:
-                secilen = sec(adaylar, beklenen_sn)
+                secilen = sec(adaylar, beklenen_sn, ad)
             except KaynakYok:
                 if not yedek_sureler:
                     raise
-                secilen, beklenen_sn = surumle_sec(adaylar, yedek_sureler)
+                secilen, beklenen_sn = surumle_sec(adaylar, yedek_sureler, ad)
         ham = youtube_indir(secilen.id, calisma / "kaynak_ham.indirilen")  # Opus/WebM ya da AAC: ffmpeg içeriğe bakar
         ses.wav48(ham, hedef)
         ham.unlink(missing_ok=True)

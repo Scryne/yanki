@@ -32,12 +32,28 @@ def harcama_yolu(kok: Path) -> Path:
     return kok / "calisma" / "gunluk" / "runpod.json"
 
 
+def _harcama_oku(yol: Path, deneme: int = 3) -> list[dict]:
+    """Harcama kaydı. Dosya yoksa boş; okunamıyorsa (Windows'ta `replace` anına denk gelen PermissionError, bozuk JSON)
+    birkaç kez denenir, olmazsa `ButceYok`: okunamayan kayıt 0 $ sayılınca aylık bütçe kapısı açılıyor ve sonraki yazım
+    geçmişi tek kayda indiriyordu (Denetim 7)."""
+    for i in range(deneme):
+        try:
+            veri = json.loads(yol.read_text(encoding="utf-8"))
+            if not isinstance(veri, list):
+                raise ValueError("liste değil")
+            return veri
+        except FileNotFoundError:
+            return []
+        except (OSError, ValueError) as e:
+            if i == deneme - 1:
+                raise ButceYok(f"harcama kaydı okunamadı ({yol.name}: {e}); düzelene kadar kiralık GPU açılmaz") from e
+            time.sleep(0.5 * (i + 1))
+    return []
+
+
 def bu_ay_harcama(kok: Path, simdi: datetime | None = None) -> float:
     ay = (simdi or datetime.now()).strftime("%Y-%m")
-    try:
-        kayit = json.loads(harcama_yolu(kok).read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return 0.0
+    kayit = _harcama_oku(harcama_yolu(kok))
     return round(sum(x.get("usd", 0) for x in kayit if str(x.get("zaman", "")).startswith(ay)), 3)
 
 
@@ -63,19 +79,37 @@ def harcama_yaz(kok: Path, kayit: dict) -> None:
     yol.parent.mkdir(parents=True, exist_ok=True)
     with kilit.bekleyerek(yol.with_name(".runpod.kilit")):
         try:
-            liste = json.loads(yol.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
+            liste = _harcama_oku(yol)
+        except ButceYok:  # bozuk dosya ezilmez: kenara alınır (geçmiş elle kurtarılabilsin), yeni kayıt yine yazılır
+            yol.replace(yol.with_name(f"{yol.stem}.bozuk-{datetime.now():%Y%m%d%H%M%S}.json"))
             liste = []
         dosya.json_yaz(yol, _harcama_kirp([*liste, kayit]), indent=1)
 
 
-def butce_kontrol(a: Ayarlar, api_anahtari: str, bakiye: Callable[[str], float] = runpod.bakiye) -> float:
+# Bir üretim işinin (aday ya da onarım) ölçülen ortalama maliyeti: 2026-10-15, 33 iş 0,954 $ (A40, kurulum dahil).
+IS_BASI_USD = 0.03
+KURULUM_USD = 0.1
+
+
+def tahmini_maliyet(is_sayisi: int) -> float:
+    return round(is_sayisi * IS_BASI_USD + KURULUM_USD, 3)
+
+
+def butce_kontrol(a: Ayarlar, api_anahtari: str, bakiye: Callable[[str], float] = runpod.bakiye,
+                  is_sayisi: int = 0) -> float:
+    """Aylık bütçe ve bakiye. `is_sayisi` verilirse koşunun tahmini maliyeti de sığmalı: sabit 1 $ eşiği 8 şarkılık
+    (~33 iş, ~1 $) koşuyu yarıda bıraktırabiliyordu; bakiyesi biten pod kapanır, çıktılar kaybolur ve yeniden ödenir
+    (2026-10-14, S33). Bakiyede tahminin 1,5 katı aranır."""
     harcanan = bu_ay_harcama(a.kok)
-    if harcanan >= a.uzak.aylik_butce:
-        raise ButceYok(f"bu ay {harcanan:.2f} $ harcandı (sınır {a.uzak.aylik_butce:.2f} $)")
+    tahmin = tahmini_maliyet(is_sayisi) if is_sayisi else 0.0
+    if harcanan >= a.uzak.aylik_butce or (is_sayisi and harcanan + tahmin > a.uzak.aylik_butce):
+        raise ButceYok(f"bu ay {harcanan:.2f} $ harcandı (sınır {a.uzak.aylik_butce:.2f} $"
+                       + (f", bu koşu ~{tahmin:.2f} $" if is_sayisi else "") + ")")
     b = bakiye(api_anahtari)
-    if b < a.uzak.en_az_bakiye:
-        raise ButceYok(f"RunPod bakiyesi {b:.2f} $ (en az {a.uzak.en_az_bakiye:.2f} $): kredi yükle")
+    gereken = max(a.uzak.en_az_bakiye, 1.5 * tahmin)
+    if b < gereken:
+        raise ButceYok(f"RunPod bakiyesi {b:.2f} $ (en az {gereken:.2f} $"
+                       + (f": {is_sayisi} iş ~{tahmin:.2f} $" if is_sayisi else "") + "): kredi yükle")
     return b
 
 
@@ -120,21 +154,23 @@ def isci_kos(p: runpod.Pod, hedef: str, zaman_asimi_sn: float, aralik_sn: float 
     bitis, bas = time.monotonic() + zaman_asimi_sn, time.monotonic()
     sonuc: list[dict] = []
     iz, son_degisim = None, time.monotonic()
+    # durum sonuçtan önce okunur: son iş iki komutun arasında biterse "BITTI" eski sonuçla dönüyordu (Denetim 7)
+    yoklama = (f"kill -0 $(cat {UZAK_DIZIN}/motor.pid) 2>/dev/null && echo SURUYOR || echo BITTI; echo '#SONUC#'; "
+               f"cat {UZAK_DIZIN}/motor_sonuc.json 2>/dev/null || echo '[]'; echo; echo '#GUNLUK#'; "
+               f"stat -c %s {UZAK_DIZIN}/motor.log 2>/dev/null || echo 0")
     while time.monotonic() < bitis:
         time.sleep(aralik_sn)
         try:
-            cikti = p.komut(f"cat {UZAK_DIZIN}/motor_sonuc.json 2>/dev/null || echo '[]'; echo; echo '#DURUM#'; "
-                            f"kill -0 $(cat {UZAK_DIZIN}/motor.pid) 2>/dev/null && echo SURUYOR || echo BITTI; "
-                            f"echo '#GUNLUK#'; stat -c %s {UZAK_DIZIN}/motor.log 2>/dev/null || echo 0")
+            cikti = p.komut(yoklama)
         except runpod.RunPodHatasi as e:
             # evdeki ağ koptu (2026-10-14, S33: ~10 dk "No route to host"); işçi podda sürüyor, yoklamaya devam
             bildir(f"  yoklama kopuk: {str(e)[-120:]}")
             continue
-        govde, ayrac, hal = cikti.partition("#DURUM#")
-        if not ayrac:  # yarım çıktı (bağlantı çıktı ortasında kesildi): işçi sürüyor, kopuk yoklama gibi
+        hal, ayrac, govde = cikti.partition("#SONUC#")
+        govde, ayrac2, gunluk = govde.partition("#GUNLUK#")
+        if not ayrac or not ayrac2:  # yarım çıktı (bağlantı çıktı ortasında kesildi): işçi sürüyor
             bildir("  yoklama yarım geldi")
             continue
-        hal, _, gunluk = hal.partition("#GUNLUK#")
         if (yeni_iz := (len(govde), gunluk.strip())) != iz:
             iz, son_degisim = yeni_iz, time.monotonic()
         elif time.monotonic() - son_degisim >= sessiz_sn:
@@ -151,6 +187,12 @@ def isci_kos(p: runpod.Pod, hedef: str, zaman_asimi_sn: float, aralik_sn: float 
         sonuc = yeni
         if hal.strip() == "BITTI":
             return sonuc
+    try:  # süre doldu ya da işçi sustu: durdurmadan önce son bir okuma (biten, ödenmiş işler "sonuç yazmadı" olmasın)
+        son = json.loads(p.komut(f"cat {UZAK_DIZIN}/motor_sonuc.json 2>/dev/null || echo '[]'").strip() or "[]")
+        if isinstance(son, list) and len(son) >= len(sonuc):
+            sonuc = son
+    except (runpod.RunPodHatasi, ValueError):
+        pass
     try:
         p.komut(f"kill $(cat {UZAK_DIZIN}/motor.pid) 2>/dev/null || true")
     except runpod.RunPodHatasi:
@@ -194,8 +236,8 @@ def calistir(a: Ayarlar, isler: list[motor.Is], klasor: Path, zaman_asimi_sn: fl
     (sunucunun GPU'su bizim). Bütçe yoksa ya da pod açılamazsa `RunPodHatasi` (çağıran evdeki motora döner)."""
     if not isler:
         return []
-    api = runpod.anahtar(a.kok, a.uzak.en_az_bakiye, bakiye)
-    butce_kontrol(a, api, bakiye)
+    api = runpod.anahtar(a.kok, max(a.uzak.en_az_bakiye, 1.5 * tahmini_maliyet(len(isler))), bakiye)
+    butce_kontrol(a, api, bakiye, len(isler))
     # önceki koşudan açık kalan pod (bilgisayar koşu ortasında kapandı/uyudu) saatlik yanmasın: bu koşu kilitli, başka
     # bir koşunun pod'u olamaz. Her hesapta bakılır (pod önceki koşuda öbür hesapta açılmış olabilir).
     if artik := [p for k in dict.fromkeys([api, *runpod.anahtarlar(a.kok)])

@@ -164,8 +164,12 @@ def operasyon_oku(kok: Path = KOK) -> Operasyon:
     saatler = tuple(int(x) % 24 for x in g.get("saatler", (8, 1)))
     if len(saatler) != 2:
         raise ValueError(f"gunduz.saatler [başlangıç, bitiş] olmalı: {g.get('saatler')}")
-    return Operasyon(klasor if klasor.is_absolute() else kok / klasor, max(1, int(y.get("gun", 7))),
-                     max(1, int(y.get("sakla", 8))), max(0, int(t.get("gun", 0))), bool(g.get("acik", True)),
-                     max(1, int(g.get("bosta_dk", 20))), max(1, int(g.get("sarki", 1))), saatler,
-                     max(1, int(sk.get("uretim_sarki", 2))), bool(sk.get("bosta_bekle", False)),
-                     bool(sk.get("uretim", True)), max(0, int(t.get("arsiv_gun", 7))))
+    # anahtar sözcükle: alan eklenince konumlar kayıyordu (95b61be arsiv_gun'u sona koydu, dataclass'ta ortaya;
+    # 10-18–10-20 arası arsiv_gun = 1, gunduz_bosta_dk = 1, surekli_uretim = 7 okundu — Denetim 7)
+    return Operasyon(
+        yedek_klasor=klasor if klasor.is_absolute() else kok / klasor, yedek_gun=max(1, int(y.get("gun", 7))),
+        yedek_sakla=max(1, int(y.get("sakla", 8))), temizlik_gun=max(0, int(t.get("gun", 0))),
+        arsiv_gun=max(0, int(t.get("arsiv_gun", 7))), gunduz_acik=bool(g.get("acik", True)),
+        gunduz_bosta_dk=max(1, int(g.get("bosta_dk", 20))), gunduz_sarki=max(1, int(g.get("sarki", 1))),
+        gunduz_saatler=saatler, surekli_uretim_sarki=max(1, int(sk.get("uretim_sarki", 2))),
+        surekli_bosta_bekle=bool(sk.get("bosta_bekle", False)), surekli_uretim=bool(sk.get("uretim", True)))

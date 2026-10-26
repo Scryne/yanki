@@ -31,6 +31,7 @@ _ara_mi = yapi.ara_mi
 def etiketle(duz: str, ad: str = "") -> str:
     """Etiketsiz söze bölüm etiketleri (`yapi.coz`: nakarat, ön nakarat, köprü…). `♪`/boş satırlar bölüm sınırıdır.
     Var olan etiketlere dokunmaz (yalnız `♪` satırlarını çıkarır): Scryne'ın elle etiketlediği söz esastır."""
+    duz = duz.lstrip("﻿").strip()  # Not Defteri'nin BOM'u ve baştaki boş satır ilk satır sayılmasın
     satirlar = duz.replace("\r", "").split("\n")
     if "[" in duz and "]" in duz.split("\n", 1)[0]:
         return "\n".join(x for x in satirlar if not x.strip() or not _ara_mi(x)).strip()

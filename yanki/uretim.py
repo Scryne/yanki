@@ -91,6 +91,12 @@ def onarim_iste(a: Ayarlar, d: durum.Durum, aday_no: int, bas: float, son: float
         # dosyasız aday (motor düştü): onarımın temeli olmaz; kabul edilseydi sonraki üretim bütün şarkıyı `hata`ya
         # düşürürdü
         raise ValueError(f"aday {aday_no} onarılamaz: " + ("yok" if aday is None else "sesi yok"))
+    try:  # adayın sonundan sonraki aralık şarkıyı sonraki üretimde `hata`ya düşürüyordu (Denetim 7): istekte reddedilir
+        sure = sf.info(str(durum.klasor(a.kok / "calisma", d.kimlik) / aday.dosya)).duration
+    except (OSError, RuntimeError):
+        sure = None
+    if sure is not None and bas >= sure:
+        raise ValueError(f"aralık ({bas:.1f} sn) adayın sonundan ({sure:.1f} sn) sonra")
     sira = len(aday.onarimlar)
     for i, tohum in enumerate(a.onarim.tohumlar):
         aday.onarimlar.append({"id": f"{aday_no}-{sira + i + 1}", "bolge": [bas, son], "tohum": tohum,
@@ -200,12 +206,23 @@ def _onarim_isleri(a: Ayarlar, calisma: Path, d: durum.Durum, pencere_bas: dict[
             if o["durum"] != "bekliyor":
                 continue
             temel = k / o["temel"]
-            sure = sf.info(str(temel)).duration
             bas, son = o["bolge"]
-            if bas >= sure:
-                raise ValueError(f"onarım {o['id']}: aralık ({bas:.1f} sn) adayın sonundan ({sure:.1f} sn) sonra")
-            pb, ps = max(0.0, bas - PENCERE_PAYI), min(sure, son + PENCERE_PAYI)
-            pencere = _kes(temel, pb, ps, k / "onarimlar" / o["id"] / "pencere_temel.wav")
+            try:  # tek bozuk onarım (silinmiş temel, sondan sonraki aralık) yalnız kendisi düşer, şarkı ve diğer
+                # adaylar yerinde kalır (önce bütün şarkı `hata`ya gidiyordu, tek çıkış `bastan`dı — Denetim 7)
+                sure = sf.info(str(temel)).duration
+                if bas >= sure:
+                    raise ValueError(f"aralık ({bas:.1f} sn) adayın sonundan ({sure:.1f} sn) sonra")
+                pb, ps = max(0.0, bas - PENCERE_PAYI), min(sure, son + PENCERE_PAYI)
+                pencere = _kes(temel, pb, ps, k / "onarimlar" / o["id"] / "pencere_temel.wav")
+            except (OSError, RuntimeError, ValueError) as e:
+                hata = f"onarım hazırlanamadı: {type(e).__name__}: {e}"
+                o.update(durum="hata", hata=hata)
+                with durum.guncelle(calisma, d.kimlik) as taze:
+                    for x in taze.adaylar:
+                        for to in x.onarimlar:
+                            if to["id"] == o["id"] and to["durum"] == "bekliyor":
+                                to.update(durum="hata", hata=hata)
+                continue
             soz = sozler.aralik_sozu(satirlar, pb, ps, d.kaynak.get("sure_sn"), d.ad) or _soz(calisma, d)
             pencere_bas[o["id"]] = pb
             isler.append(motor.Is(
@@ -392,6 +409,10 @@ def uret(a: Ayarlar, calisma: Path, kimlikler: list[str] | None = None,
         n0 = len(d.notlar)
         try:  # bir şarkının hazırlığı (eksik dosya, bozuk söz zamanı) diğerlerini durdurmaz
             if d.asama == "analiz":
+                from yanki import hazirlik
+
+                if hazirlik.kaynak_onar(calisma, d):  # pod açılmadan: silinmiş kaynak ses yerine gelir
+                    print(f"kaynak ses geri indirildi: {d.sanatci} — {d.ad}")
                 planlar[d.kimlik], isler = _cover_isleri(a, calisma, d, tek_parca_sn)
                 if betimle and betim_gerekli(d, elle_stil):
                     betim = f"{d.kimlik}|betim"

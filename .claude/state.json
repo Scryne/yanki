@@ -1,6 +1,7 @@
 {
   "proje_adi": "Yanki",
   "asama": "uygulama",
-  "guncellendi": "2026-10-16",
-  "roadmap": "docs/Roadmap.md"
+  "guncellendi": "2026-10-26",
+  "roadmap": "docs/Roadmap.md",
+  "not": "2026-10-26 dondurma çözüldü (Scryne: 'devam edicez', yeni dağıtıcı distributemusic.ai). Görev Zamanlayıcı'daki Yanki/Gece, Oda, Surekli üretimden önceki denetim bitene kadar devre dışı kalır."
 }

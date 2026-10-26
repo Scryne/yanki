@@ -100,7 +100,7 @@ class Aday:
     @property
     def uygun(self) -> bool | None:
         """Tür hattın tarifi dinlenmiş türlerinden mi (balad, pop, piyano rock…). None: tür bilinmiyor."""
-        if self.turler is None:
+        if not self.turler:  # Deezer sanatçıyı bulamadı ya da türsüz döndü ([]): bilinmiyor, "uygun" sayılmaz
             return None
         kalip = haric_kalip()
         return not (kalip and kalip.search(" ".join(self.turler)))
@@ -108,8 +108,10 @@ class Aday:
     @property
     def puan(self) -> float:
         if (self.geri_geldi or not self.youtube_izlenme or self.sanatci_uyusuyor is not True or self.duzenleme
-                or self.soz_var is False or (self.sure_sn or 0) > SURE_SINIRI_SN or self.uygun is False
-                or (self.populer and self.ingilizce is False)):
+                or self.soz_var is not True or (self.sure_sn or 0) > SURE_SINIRI_SN or self.uygun is False
+                or (self.populer and (self.ingilizce is False or self.uygun is None or self.sure_sn is None))):
+            # ölçülmemiş söz (LRCLIB o gece düştü) ya da bilinmeyen tür/süre puan almaz: November Rain ve Feel
+            # sözsüz, süresiz, türsüz listeye girmişti (Denetim 7)
             return 0.0
         if self.populer:  # boşluk yok: aynı talepte kaldırılmış şarkı önce gelir
             kapsam = POPULER_KAPSAM
@@ -346,15 +348,21 @@ def talep_olc(a: Aday, arama=None) -> Aday:
     en_iyi: tuple[int, str, str | None] | None = None
     sonuclar = arama(f"{a.sanatci} {a.ad}")
     a.youtube_kanit = [{"title": r[0], "channel": r[3] if len(r) > 3 else None, "views": r[1]} for r in sonuclar[:5]]
+    uyan: tuple[int, str, str | None] | None = None  # sanatçısı başlıkta geçenlerin en çok izleneni
     for baslik, izlenme, *kimlik in sonuclar:
         # YouTube başlığı "Sanatçı - Şarkı (Official Video)": sonek silinmeden, kelime sınırıyla aranır
-        if izlenme is None or kaynak.ISTENMEYEN.search(baslik) or f" {sade} " not in f" {_duz(baslik)} ":
+        if izlenme is None or kaynak._istenmeyen(baslik, a.ad) or not sade or f" {sade} " not in f" {_duz(baslik)} ":
             continue
+        aday = (izlenme, baslik, kimlik[0] if kimlik else None)  # kimlik: [video id, kanal]
         if en_iyi is None or izlenme > en_iyi[0]:
-            en_iyi = (izlenme, baslik, kimlik[0] if kimlik else None)  # kimlik: [video id, kanal]
-    if en_iyi:
-        a.youtube_izlenme, a.youtube_baslik, a.youtube_id = en_iyi
-        a.sanatci_uyusuyor = sanatci_eslesir(a.sanatci, en_iyi[1])
+            en_iyi = aday
+        if sanatci_eslesir(a.sanatci, baslik) and (uyan is None or izlenme > uyan[0]):
+            uyan = aday
+    # talep sanatçının kendi yüklemesinden: aynı adlı başka şarkının (Rihanna "Stay" ↔ Bieber "Stay") izlenmesi
+    # aday elenmesine ya da şişmiş talebe yol açıyordu (Denetim 7); hiçbirinde sanatçı yoksa en çok izlenen kanıt kalır
+    if secilen := uyan or en_iyi:
+        a.youtube_izlenme, a.youtube_baslik, a.youtube_id = secilen
+        a.sanatci_uyusuyor = sanatci_eslesir(a.sanatci, secilen[1])
     return a
 
 
@@ -371,7 +379,8 @@ def sanatci_eslesir(sanatci: str, baslik: str) -> bool | None:
     # "A - B", "A- B", "A || B" (canlı başlıklarda görüldü); "Jay-Z" gibi boşluksuz tire ayraç değil
     parcalar = BASLIK_AYRAC.split(PARANTEZ.sub("", baslik))
     if len(parcalar) > 1:
-        return any(_duz(x) == sd for p in parcalar for x in SANATCI_AYRAC.split(p) if x)
+        # bütün parça da denenir: "Simon & Garfunkel", "Florence + The Machine" ayraçla bölünüp hiç eşleşmiyordu
+        return any(_duz(x) == sd for p in parcalar for x in [p, *SANATCI_AYRAC.split(p)] if x)
     # ayraçsız başlık: sanatçı başta, sonda ya da boşluksuz tireyle ayrılmış bir parça olarak bütün hâlde
     # ("Lana Del Rey-Mermaid Motel" → "Del" eşleşmez; "JAY-Z Empire State" eşleşir)
     tam = _duz(PARANTEZ.sub("", baslik))
