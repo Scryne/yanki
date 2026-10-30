@@ -107,12 +107,12 @@ gorunur = true
 # yanki/distributemusic.py, docs/arastirma/11. Anahtarsızken panel kipi: hat paketler ve sırası geleni bildirir, Scryne
 # panelden yükleyip `yanki yuklendi <kimlik>` der. `.env` → DISTRIBUTEMUSIC_API_KEY (Label 50 $/yıl + API 99 $/ay)
 # eklenirse API kipi: hat yükler ve durumu yoklar.
-# Şartlar §8 "yazılı lisansı olmayan telifli melodi"yi anında hesap kapatma nedeni sayıyor, cover için ayrı kural yok:
-# destekten cover kabulü yazılı alınmadan API gönderimi yapılmaz. Cevap olumluysa Scryne true yapar.
-sozlesme_kabul = false
+# Şartlar §8 "yazılı lisansı olmayan telifli melodi"yi anında hesap kapatma nedeni sayıyor, cover için ayrı kural yok.
+# 2026-10-29 Scryne: "ai cover izin veriyor merak etme"; panelin Version listesinde "Cover" var → açık.
+sozlesme_kabul = true
 # API kipinde takvim sırası gelen paketi koşuda kendisi göndersin mi (sozlesme_kabul da gerekir)
 gece = false
-# API `version_type` (belgedeki örnek "Original"; izinli değerler yayımlanmamış, blog "Cover"ı sayıyor)
+# API `version_type`; panelin Version listesinde "Cover" var (2026-10-29)
 surum_turu = "Cover"
 # `ai_music_link`: ACE-Step'in şarkı başına paylaşım sayfası yok, aracın sayfası verilir (destek başka şey isteyebilir)
 ai_baglanti = "https://github.com/ace-step/ACE-Step-1.5"

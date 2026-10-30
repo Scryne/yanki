@@ -413,45 +413,53 @@ def _tunearo_notu(meta: dict, dosyalar: dict[str, str]) -> list[str]:
 
 
 def _distributemusic_formu(meta: dict, dosyalar: dict[str, str]) -> list[str]:
-    """DistributeMusic.AI paneli. Alanlar API belgesinden (`yanki/distributemusic.py`, 2026-10-26); panelin ekranı
-    giriş yapmadan görülemedi: ilk yüklemede sıra ve etiketler ekranla karşılaştırılıp burası sıkılaştırılır."""
-    from yanki import distributemusic, tunearo
+    """DistributeMusic.AI paneli, ekrandaki sırayla (Releases → New Release; panel görüldü, 2026-10-29). Altı adım:
+    Type, Metadata, Audio, Cover Art, Platforms, Review. Starter planı yılda tek single açar, toplu yükleme Pro ister."""
+    from yanki import distributemusic
 
     sanatci = meta["sanatci"] or "EKSİK"
     yazan = distributemusic.yazarlar(meta) or "EKSİK: her yazarın ad + soyadı (girdi/liste.toml → yazarlar)"
-    tur = tunearo.tur_sec(meta.get("stil") or "", meta.get("sanatci_turleri"))
+    tur = distributemusic.tur(meta.get("stil") or "", meta.get("sanatci_turleri"))
+    dil = distributemusic.PANEL_DILI.get(meta["dil"]) or DIL_ADI.get(meta["dil"], meta["dil"])
     return [
-        "DistributeMusic.AI paneli (distributemusic.ai → giriş → yeni yayın). Kopyala-yapıştır:", "",
-        "## Yayın",
-        "1. **Release type:** Single",
-        f"2. **Title:** `{meta['baslik']}` (orijinal başlık; `(Cover)` ya da orijinal sanatçı adı eklenmez)",
-        f"3. **Artist name:** `{sanatci}`: mevcut Spotify profilini seç (Orvane'in profili varsa ona bağla; yeni "
-        "profil açılırsa diskografi bölünür)",
-        f"4. **Version type:** Cover (orijinal: {meta['orijinal_sanatci']})",
-        f"5. **Genre:** {tur} (şarkının türü; listede yoksa en yakını)",
-        f"6. **Song language:** {DIL_ADI.get(meta['dil'], meta['dil'])}",
-        f"7. **Composer:** `{yazan}`",
-        f"8. **Lyricist:** `{yazan}`",
-        "9. **Release date:** en erken (inceleme ~24 saat; Spotify 2–4 gün). Orvane'in Spotify for Artists'i yok, "
-        "pitch için öne almanın karşılığı yok",
-        f"10. **Explicit:** {_acik_satiri(meta)}",
+        "DistributeMusic.AI paneli (distributemusic.ai → Releases → New Release), ekrandaki sırayla. Kopyala-yapıştır:",
         "",
-        "## Dosyalar",
-        f"11. **Audio:** `{dosyalar['ses']}` (16 bit / 44,1 kHz WAV, {meta['master']['lufs']:.1f} LUFS, "
+        "## 1. Type",
+        "1. **Single**",
+        "",
+        "## 2. Metadata",
+        "2. **AI-generated track:** açık kalsın (varsayılan; tarayıcı AI'yı bulup beyan yoksa reddediyor)",
+        f"3. **Release title:** `{meta['baslik']}` (orijinal başlık; `(Cover)` ya da orijinal sanatçı adı eklenmez)",
+        f"4. **Version:** Cover (orijinal: {meta['orijinal_sanatci']})",
+        f"5. **Artist name:** `{sanatci}` · **Spotify profile:** Orvane'in profili çıkarsa onu seç, yoksa boş "
+        "(Settings → My Artists'e bir kez eklenince sonraki yayınlar kendiliğinden bağlanır)",
+        f"6. **Primary genre:** {tur} (varsayılan World'ü bırakma)",
+        f"7. **Composer:** `{yazan}` (Lyricist'i kendisi doldurur; doldurmazsa aynısı)",
+        "8. **Previously distributed:** kapalı",
+        f"9. **Song language:** {dil}",
+        "10. **Instrumental release:** kapalı · **Lyrics:** boş (isteğe bağlı)",
+        f"11. **Suno / AI music link:** `{distributemusic.AI_BAGLANTI}` (ACE-Step'in şarkı başına paylaşım sayfası yok)",
+        "",
+        "## 3. Audio",
+        f"12. **Track title:** `{meta['baslik']}` · **Explicit content:** {_acik_satiri(meta)}",
+        f"13. **Ses:** `{dosyalar['ses']}` (16 bit / 44,1 kHz WAV, {meta['master']['lufs']:.1f} LUFS, "
         f"{meta['master']['gercek_tepe_dbtp']:.1f} dBTP, {_mmss(meta['sure_sn'])})",
-        f"12. **Cover art:** `{dosyalar['kapak']}` (3000×3000 JPG; orijinal sanatçının adı, fotoğrafı, logosu yok)"
-        f"{_kapak_notu(meta)}",
         "",
-        "## Yapay zekâ beyanı (zorunlu: beyansız AI hesabı kapattırır, şartlar §4/§8)",
-        f"13. **AI-generated:** Yes · **AI music link:** `{distributemusic.AI_BAGLANTI}` (ACE-Step'in paylaşım "
-        "sayfası yok; destek başka bir şey isterse ona göre)",
-        "14. **Distribution agreement:** onay kutusu senin (hesap sahibinin) kabulündür",
+        "## 4. Cover Art",
+        f"14. **Kapak:** `{dosyalar['kapak']}` (3000×3000 JPG; orijinal sanatçının adı, fotoğrafı, logosu yok). "
+        f"\"Generate with AI\" kullanılmaz{_kapak_notu(meta)}",
         "",
-        "## Dikkat",
-        "- Panelde bölge seçimi görülmedi: RouteNote'taki ABD/CA/MX/IN/PK hariç tutması burada yok.",
-        "- Şartlar §8: \"yazılı lisansı olmayan telifli melodi\" anında hesap kapatma nedeni sayılıyor, cover için ayrı"
-        " kural yok. Toplu yüklemeden önce destekten (support@distributemusic.ai) cover kabulünü yazılı sor",
-        "  (docs/arastirma/11).",
+        "## 5. Platforms",
+        "15. **When:** ASAP (QC onayından hemen sonra; mağazalar 2–4 gün)",
+        "16. **Streaming stores:** 22'si de seçili kalır",
+        f"17. **UGC & Content ID, işareti kaldır:** {', '.join(distributemusic.PANEL_KAPAT)} (parmak izi hak kaydı "
+        "cover'ı orijinalle eşleştirir). Snapchat ve Resso kalır",
+        "",
+        "## 6. Review",
+        "18. Alanları kontrol et; **Distribution Agreement** kutusu (münhasır dağıtım) senin kabulündür → "
+        "**Submit for QC**",
+        "",
+        "Panelde bölge seçimi yok: RouteNote'taki ABD/CA/MX/IN/PK hariç tutması burada uygulanmaz.",
         "",
         "Yükledikten sonra: `yanki yuklendi <kimlik>` (kodlar çıkınca `--isrc … --upc …`)",
     ]

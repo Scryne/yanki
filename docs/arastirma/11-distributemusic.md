@@ -54,6 +54,32 @@ panel giriş arkasında, görülmedi). Hukuk analizi yok; platform kuralları ya
 - Sanatçı: mevcut Spotify profili seçilir ya da yenisi açılır. Orvane'in RouteNote'tan gelen bir profili olacaksa ona
   bağlanmalı (yoksa diskografi bölünür; takip bunu bildirir).
 
+## Panel (Scryne'ın hesabında görüldü, 2026-10-29)
+
+Scryne: "ai cover izin veriyor merak etme" → `sozlesme_kabul = true`. Panel Chrome'da gezildi, hiçbir şey gönderilmedi.
+
+- **Plan:** hesap Starter (0 $, yılda **1 single**, %85 telif). Pro 20 $/yıl (ilk yıl 10 $ indirimde): sınırsız yayın,
+  %100 telif, öncelikli QC. Label 50 $/yıl; API yalnız Label + 99 $/ay. Ödeme yıllık, Stripe; iptal destek üzerinden.
+- **Yayın formu**, altı adım: Type (Single; EP/Album Label planında) → Metadata → Audio → Cover Art → Platforms → Review.
+  `YUKLE.md` (`paket._distributemusic_formu`) bu sırayla.
+- **Metadata:** "AI-generated track" anahtarı varsayılan açık; her yükleme AI tarayıcısından geçiyor, beyansız AI
+  reddediliyor. Version listesi: Original, Remix, **Cover**, Live, Acoustic, Instrumental, Radio Edit, Extended Mix,
+  Sped Up, Slowed, Remastered, Other. Tür listesi 79 değer; RouteNote/Tunearo adlarından farkı `Hip-Hop`, `R&B`,
+  `Singer-Songwriter` (`distributemusic.PANEL_TURU`). Varsayılan tür World. Composer zorunlu ("gerçek yasal ad, ad +
+  soyad"), Lyricist'i kendisi doldurur. "Previously distributed" (eski UPC/ISRC) anahtarı var. Dil listesi 42 değer.
+  Sözler isteğe bağlı. "Suno / AI music link" zorunlu, herhangi bir AI aracının bağlantısı; ekran görüntüsü isteğe bağlı.
+  Plak şirketi/©/℗ yalnız Custom Label planında, diğerlerinde yayın "DistributeMusic.AI" etiketiyle çıkar.
+- **Audio:** parça başlığı, Explicit anahtarı, ses (her biçim kabul, kendisi dönüştürüyor).
+- **Cover Art:** her boyut kabul, sığdırıyor; AI kapak üretici var.
+- **Platforms:** ASAP (QC sonrası, mağazalar 2–4 gün) ya da belirli tarih. 22 mağaza + 6 UGC/Content ID hedefi (TikTok,
+  Instagram/Facebook Reels, YouTube Shorts + Content ID, Snapchat, Triller, Resso), hepsi varsayılan seçili. Bölge seçimi
+  yok (doğrulandı).
+- **Review:** onay kutusu "exclusive Distribution Agreement": aynı kayıt başka dağıtımcıdan da gönderilmez (RouteNote'taki
+  14 şarkı buraya yüklenmez).
+- **Sanatçı:** Settings → My Artists boş; bir kez Spotify profiline bağlanınca sonraki yayınlar ona bağlanıyor. Metadata'daki
+  Spotify aramasında "Orvane" sonuç vermedi.
+- **Ödeme:** PayPal. Destek: Distro AI sohbeti + 24 saatte insan cevabı (Tickets).
+
 ## Destek için soru (Scryne'ın hesabından, support@distributemusic.ai)
 
 > Hello, I release AI-generated cover versions of well-known songs under the artist name "Orvane". The vocals and

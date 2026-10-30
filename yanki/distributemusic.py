@@ -13,8 +13,8 @@ yayımlanmamış (yalnız örnek: `Electronic`, `en`, `Original`); `composer`/`l
 gönderimde 400 cevabının `detail`'i kayda geçer ve bildirilir, bu eşlemeler oradan sıkılaştırılır.
 
 Kurallar (ToS, 2026-07-31): AI beyanı zorunlu (`is_ai_generated` + `ai_music_link`; beyansız AI hesap kapatma
-nedeni). "Yazılı lisansı olmayan telifli melodi" §8'de anında kapatma nedeni ve cover için ayrı kural yok: bu yüzden
-`sozlesme_kabul` Scryne destekten yazılı cevap alıp açana kadar kapalıdır; kapalıyken API yolu hiç gönderim yapmaz.
+nedeni). `sozlesme_kabul` kapalıyken API yolu hiç gönderim yapmaz; Scryne 2026-10-29'da cover'ın kabul edildiğini
+söyledi, açık.
 API'de bölge seçimi yok (RouteNote'taki ABD/CA/MX/IN/PK hariç tutması burada uygulanamaz).
 
 Yarıda kalan yükleme kaldığı yerden sürer: dosya yolları ve `release_id` adım adım `metadata.json` →
@@ -41,6 +41,13 @@ RED = ("rejected", "changes_requested")
 KALDIRMA = ("takedown", "taken_down", "removed")
 # ACE-Step'in paylaşım sayfası yok; "AI link" üretim aracını gösterir. Destekten yazılı cevapla değişebilir.
 AI_BAGLANTI = "https://github.com/ace-step/ACE-Step-1.5"
+# Panelin tür listesi Tunearo/RouteNote adlarından farklı yazılıyor (panel görüldü, 2026-10-29); diğerleri aynı ad
+PANEL_TURU = {"Hip Hop/Rap": "Hip-Hop", "R&B/Soul": "R&B", "Singer/Songwriter": "Singer-Songwriter"}
+# Panel dil listesinde farklı adlar (ISO kodu → panel)
+PANEL_DILI = {"zh": "Mandarin Chinese", "tl": "Filipino / Tagalog", "fa": "Persian / Farsi"}
+# Platformlar adımında varsayılan seçili UGC hedefleri: parmak izi hak kaydı yapanlar cover'da orijinalle eşleşir
+# (Tunearo'daki haric_magazalar kararıyla aynı gerekçe, docs/arastirma/04)
+PANEL_KAPAT = ("TikTok", "Instagram / Facebook Reels", "YouTube Shorts + Content ID", "Triller")
 
 
 class Hata(RuntimeError):
@@ -184,13 +191,18 @@ def ayar_oku(yayin_yolu: Path) -> dict:
             "api": bool(t.get("api", True))}
 
 
-def yayin_alanlari(meta: dict, d: durum.Durum, yayin_tarihi: date, ayar: dict, ses_yolu: str, kapak_yolu: str) -> dict:
+def tur(stil: str, sanatci_turleri: list | None = None) -> str:
     from yanki import tunearo
 
+    t = tunearo.tur_sec(stil, sanatci_turleri)
+    return PANEL_TURU.get(t, t)
+
+
+def yayin_alanlari(meta: dict, d: durum.Durum, yayin_tarihi: date, ayar: dict, ses_yolu: str, kapak_yolu: str) -> dict:
     yazan = yazarlar(meta)
     return {
         "title": meta["baslik"], "artist_name": meta["sanatci"], "release_type": "single",
-        "genre": tunearo.tur_sec(d.analiz.get("stil", ""), (d.kunye or {}).get("sanatci_turleri")),
+        "genre": tur(d.analiz.get("stil", ""), (d.kunye or {}).get("sanatci_turleri")),
         "release_date": yayin_tarihi.isoformat(), "song_language": meta.get("dil") or "en",
         "version_type": ayar["surum_turu"], "composer": yazan, "lyricist": yazan, "cover_path": kapak_yolu,
         "tracks": [{"title": meta["baslik"], "audio_path": ses_yolu, "explicit": bool(meta.get("acik_icerik"))}],

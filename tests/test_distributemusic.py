@@ -154,8 +154,14 @@ def test_paket_wav_ve_panel_alanlari(tmp_path):
     m = paket.metadata(d, y, {"lufs": -14.0, "gercek_tepe_dbtp": -1.2}, 295.0)
     assert m["paket_dagitimci"] == "distributemusic"
     md = paket.yukle_md(m, y, {"ses": "a.wav", "kapak": "a.jpg"})
-    assert "DistributeMusic.AI" in md and "Version type:** Cover" in md and "AI-generated:** Yes" in md
+    assert "DistributeMusic.AI" in md and "**Version:** Cover" in md and "AI-generated track:** açık" in md
     assert "`Adele Adkins`" in md and "16 bit / 44,1 kHz WAV" in md and "Eksik karar" not in md
+    assert "**Primary genre:** R&B" not in md and "YouTube Shorts + Content ID" in md  # soul ballad → Pop
+
+
+def test_panel_tur_adlari():
+    assert distributemusic.tur("rap, hip hop song") == "Hip-Hop"
+    assert distributemusic.tur("", ["neo soul"]) == "R&B" and distributemusic.tur("alternative rock") == "Alternative"
 
 
 def test_baska_dagitimci_paketi_bayat(tmp_path):
