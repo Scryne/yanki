@@ -478,6 +478,10 @@ a.durak:hover .durak-ad { color: var(--metin); text-decoration: underline; text-
 .simdi-liste .kapak-kucuk { grid-row: span 2; border-radius: 50%; }
 .simdi-liste .ad { font-size: 13px; font-weight: 500; line-height: 1.2; }
 .simdi-liste .ipucu { font-size: 11px; line-height: 1.2; }
+.simdi-devam { margin-top: var(--s3); }
+.simdi-devam > summary { cursor: pointer; font-size: 12px; color: var(--metin-2); padding: 6px 2px; width: fit-content; }
+.simdi-devam > summary:hover, .simdi-devam > summary:focus-visible { color: var(--metin); }
+.simdi-devam[open] > summary { margin-bottom: var(--s2); }
 
 .pano-izgara { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(280px, 1fr); gap: var(--s6); align-items: start; }
 @media (max-width: 1080px) { .pano-izgara { grid-template-columns: 1fr; } }

@@ -1096,14 +1096,24 @@ function simdiBolumu(s) {
     : s.uretim_acik === false ? "Üretim duraklatıldı; sırada bekliyor" : s.otomatik_kapali ? "Sırada; otomatik koşu kapalı"
     : s.engel ? "Kiralık GPU açılamıyor; sırada bekliyor (Senden beklenen)" : "Sırada, sonraki koşuyu bekliyor";
   const bekliyor = (s.uretim_acik === false || !!s.engel) && !s.suruyor && !s.pod;
+  const oge = (x) => el("li", {},
+    el("a", { href: `#${x.kimlik}` }, kapakImg(x.kapak), el("span", { class: "ad" }, x.ad),
+      el("span", { class: "ipucu" }, x.asama === "onarim" ? (bekliyor ? "onarım sırada" : "onarım")
+        : bekliyor ? "sırada" : x.gecen_aday ? "yeni adaylar üretiliyor" : "adaylar üretiliyor")));
+  // Uzun kuyruk ("Senden beklenen"i sayfanın altına itmesin): ilk ŞERIT_ILK parça görünür, kalanı açılır listede.
+  const liste = s.uretimde ?? [];
+  const ilk = liste.slice(0, SERIT_ILK);
+  const kalan = liste.slice(SERIT_ILK);
   return el("section", { class: "simdi-serit" + (s.suruyor || s.pod ? " canli" : ""), "aria-label": "Şu an" },
     el("div", { class: "simdi-baslik" }, s.suruyor || s.pod ? el("span", { class: "nabiz", "aria-hidden": "true" }) : el("span", { class: "nokta" }),
       el("div", {}, el("b", {}, "Şu an"), el("span", { class: "ipucu" }, durumYazi))),
-    s.uretimde?.length ? el("ul", { class: "simdi-liste" }, ...s.uretimde.map((x) => el("li", {},
-      el("a", { href: `#${x.kimlik}` }, kapakImg(x.kapak), el("span", { class: "ad" }, x.ad),
-        el("span", { class: "ipucu" }, x.asama === "onarim" ? (bekliyor ? "onarım sırada" : "onarım")
-          : bekliyor ? "sırada" : x.gecen_aday ? "yeni adaylar üretiliyor" : "adaylar üretiliyor"))))) : null);
+    ilk.length ? el("ul", { class: "simdi-liste" }, ...ilk.map(oge)) : null,
+    kalan.length ? el("details", { class: "simdi-devam" },
+      el("summary", {}, `Kuyruğun tümü (${liste.length} şarkı, ${kalan.length} tanesi gizli)`),
+      el("ul", { class: "simdi-liste" }, ...kalan.map(oge))) : null);
 }
+
+const SERIT_ILK = 12;
 
 function beklenenBolumu(p) {
   const satirlar = [
