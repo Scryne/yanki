@@ -414,7 +414,8 @@ def _tunearo_notu(meta: dict, dosyalar: dict[str, str]) -> list[str]:
 
 def _distributemusic_formu(meta: dict, dosyalar: dict[str, str]) -> list[str]:
     """DistributeMusic.AI paneli, ekrandaki sırayla (Releases → New Release; panel görüldü, 2026-10-29). Altı adım:
-    Type, Metadata, Audio, Cover Art, Platforms, Review. Starter planı yılda tek single açar, toplu yükleme Pro ister."""
+    Type, Metadata, Audio, Cover Art, Platforms, Review. Starter planı yılda tek single açar,
+    toplu yükleme Pro ister."""
     from yanki import distributemusic
 
     sanatci = meta["sanatci"] or "EKSİK"
@@ -438,7 +439,8 @@ def _distributemusic_formu(meta: dict, dosyalar: dict[str, str]) -> list[str]:
         "8. **Previously distributed:** kapalı",
         f"9. **Song language:** {dil}",
         "10. **Instrumental release:** kapalı · **Lyrics:** boş (isteğe bağlı)",
-        f"11. **Suno / AI music link:** `{distributemusic.AI_BAGLANTI}` (ACE-Step'in şarkı başına paylaşım sayfası yok)",
+        f"11. **Suno / AI music link:** `{distributemusic.AI_BAGLANTI}` "
+        "(ACE-Step'in şarkı başına paylaşım sayfası yok)",
         "",
         "## 3. Audio",
         f"12. **Track title:** `{meta['baslik']}` · **Explicit content:** {_acik_satiri(meta)}",
