@@ -78,8 +78,20 @@ function bildir(mesaj, hata = false) {
 }
 
 // gövde verilen her çağrı POST (boş gövde de: `{}`); verilmeyen GET
-async function api(yol, govde) {
-  const r = await fetch(yol, govde !== undefined && govde !== null ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(govde) } : {});
+// aynı anda giden aynı GET tek istek olur: açılışta pano iki yerden birden isteniyordu (her biri ~0,5 sn)
+const yoldakiGet = new Map();
+function api(yol, govde) {
+  if (govde !== undefined && govde !== null) return istek(yol, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(govde) });
+  let yolda = yoldakiGet.get(yol);
+  if (!yolda) {
+    yolda = istek(yol, {}).finally(() => yoldakiGet.delete(yol));
+    yoldakiGet.set(yol, yolda);
+  }
+  return yolda.then((d) => structuredClone(d)); // çağıranlar sonucu değiştirebilir, ortak nesne paylaşılmaz
+}
+
+async function istek(yol, ayar) {
+  const r = await fetch(yol, ayar);
   if (!r.ok) {
     const d = await r.json().catch(() => ({}));
     // 422: alan doğrulaması liste döner

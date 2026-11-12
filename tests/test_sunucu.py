@@ -375,3 +375,36 @@ def test_pano_kapali_otomatik_kosuyu_soyler(tmp_path):
     assert p["simdi"]["otomatik_kapali"] is True
     acik = TestClient(sunucu.uygulama(ayarlar.yukle(), c, gorev_oku=lambda: {"Surekli": "Ready"}), base_url=ODA)
     assert acik.get("/api/pano").json()["uyarilar"] == []
+
+
+def test_pano_suresi_dolan_gorev_hali_icin_beklemez(tmp_path, monkeypatch):
+    """Görev hâli PowerShell'le okunuyor (soğukta 3 sn): süresi dolunca pano eski değerle hemen döner, tazeleme arkada
+    yapılır; ilk değer gelince bir daha istek başına okuma olmaz."""
+    import threading
+    import time
+
+    c = tmp_path / "calisma"
+    c.mkdir()
+    okumalar, birak = [], threading.Event()
+
+    def oku():
+        okumalar.append(1)
+        if len(okumalar) > 1:  # ikinci okuma (arkada tazeleme) bırakılana kadar sürer
+            birak.wait(5)
+            return {"Surekli": "Ready"}
+        return {"Surekli": "Disabled"}
+
+    oda = TestClient(sunucu.uygulama(ayarlar.yukle(), c, gorev_oku=oku), base_url=ODA)
+    assert oda.get("/api/pano").json()["simdi"]["otomatik_kapali"] is True
+    assert oda.get("/api/pano").json()["simdi"]["otomatik_kapali"] is True and len(okumalar) == 1
+    monkeypatch.setattr(sunucu, "GOREV_ONBELLEK_SN", 0)
+    bas = time.monotonic()
+    assert oda.get("/api/pano").json()["simdi"]["otomatik_kapali"] is True  # eski değer, tazeleme beklenmedi
+    assert time.monotonic() - bas < 4
+    birak.set()
+    for _ in range(50):
+        if oda.get("/api/pano").json()["simdi"]["otomatik_kapali"] is False:
+            break
+        time.sleep(0.05)
+    else:
+        raise AssertionError("arkadaki tazeleme yeni görev hâlini panoya getirmedi")

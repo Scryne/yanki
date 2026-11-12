@@ -358,19 +358,39 @@ YEREL_HOSTLAR = ("127.0.0.1", "localhost", "::1")
 GUVENLI_YONTEMLER = ("GET", "HEAD", "OPTIONS")
 
 
-GOREV_ONBELLEK_SN = 600  # pano her 30 sn'de soruluyor; görev hâli PowerShell'le ~1 sn
+GOREV_ONBELLEK_SN = 600  # pano her 30 sn'de soruluyor; görev hâli PowerShell'le 1-3 sn (oturum açılışında daha uzun)
 
 
 def uygulama(a: Ayarlar, calisma: Path, liste_yolu: Path | None = None, gorev_oku=None, bulucu_isci=None) -> FastAPI:
+    import time
+
     app = FastAPI(title="Yanki dinleme", docs_url=None, redoc_url=None)
     gorev_onbellek: dict = {}
+    gorev_kilit = threading.Lock()
+
+    def gorev_tazele() -> None:
+        gorev_onbellek.update(deger=(gorev_oku or sistem.gorev_durumlari)(), zaman=time.monotonic())
+
+    def gorev_arkada() -> None:
+        try:
+            gorev_tazele()
+        finally:
+            gorev_kilit.release()
 
     def gorevler() -> dict[str, str]:
-        import time
-
-        if time.monotonic() - gorev_onbellek.get("zaman", -GOREV_ONBELLEK_SN) >= GOREV_ONBELLEK_SN:
-            gorev_onbellek.update(zaman=time.monotonic(), deger=(gorev_oku or sistem.gorev_durumlari)())
+        """Görev hâli panonun açılışını bekletmez (2026-11-13 ölçümü: soğuk `/api/pano` 3,2 sn, sıcak 0,5 sn; farkın
+        tamamı PowerShell). İlk değer sunucu açılırken arkada okunur; süresi dolan değer arkada tazelenir, o sırada
+        eskisi döner. Hiç değer yoksa (ısınma sürüyor) ilk istek onu bekler, ikinci PowerShell açılmaz."""
+        if "deger" not in gorev_onbellek:
+            with gorev_kilit:
+                if "deger" not in gorev_onbellek:
+                    gorev_tazele()
+        elif time.monotonic() - gorev_onbellek["zaman"] >= GOREV_ONBELLEK_SN and gorev_kilit.acquire(blocking=False):
+            threading.Thread(target=gorev_arkada, daemon=True, name="gorev-tazele").start()
         return gorev_onbellek["deger"]
+
+    if gorev_oku is None and gorev_kilit.acquire(blocking=False):  # gerçek oda ısınır (testler kendi okuyucusunu verir)
+        threading.Thread(target=gorev_arkada, daemon=True, name="gorev-isinma").start()
 
     liste_yolu = liste_yolu or a.kok / "girdi" / "liste.toml"
 
