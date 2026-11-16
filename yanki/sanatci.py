@@ -140,7 +140,9 @@ def arsivdekiler(calisma: Path) -> list[dict]:
         y = _routenote_yuklemesi(meta, upc)
         satirlar.append({
             "kimlik": None, "ad": meta.get("baslik"), "orijinal": meta.get("orijinal_sanatci"), "asama": "yuklendi",
-            "hal": "inceleme", "kapak": f"/api/sanatci/kapak/{upc}?v=1", "dagitimci": "routenote", "upc": upc,
+            "hal": "inceleme", "dagitimci": "routenote", "upc": upc,
+            # kapağı olmayan arşiv paketine adres verilmez: ön yüz 404 alıp kırık görsel çiziyordu (2026-11-16)
+            "kapak": f"/api/sanatci/kapak/{upc}?v=1" if arsiv_kapak(calisma, upc) else None,
             "isrc": y.get("isrc"), "adim": None, "yayin_tarihi": y.get("yayin_tarihi"), "taslak_tarihi": None,
             "hazirlanma": meta.get("hazirlanma"), "canli": False, "spotify_id": None, "arama_sirasi": None,
             "son_bakis": None, "eski_tarif": True, "arsiv": True,
